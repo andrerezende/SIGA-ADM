@@ -1,0 +1,324 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+/**
+ * Formulário de exibição dos dados de Provimento
+ */
+class frmVinculoProvimento extends MCSSForm
+{
+    /**
+     * Objeto Provimento
+     * @access protected
+     * @var BusinessRhProvimento
+     */
+     
+    protected $objProvimento;
+	 
+    /** 
+     * Objeto Vinculo
+     * @access protected
+     * @var BusinessRhVinculo
+     */
+    
+	protected $objVinculo;
+
+    function __construct($objProvimento)
+    {
+    	global $MIOLO;
+    	
+		$this->objProvimento = $objProvimento;
+		$this->objVinculo = $MIOLO->GetBusiness('rh','vinculo',$objProvimento->idVinculo);
+		parent::__construct('Dados do Provimento');
+        $this->SetAlternate(true);
+
+        $this->setClose($this->manager->getActionUrl('rh','main:vinculo',$objProvimento->idVinculo,array('form'=>'provimentos')));
+
+        $this->EventHandler();
+
+    }
+    function CreateFields()
+    {
+        global $MIOLO, $context;
+        
+        $ultimoProvimento = $this->objVinculo->getUltimoProvimento();
+        $numProv = count($this->objVinculo->provimentos);
+
+        $this->SetField(0,0,18,new MLabel('Ocorrência:'));
+        $this->SetField(0,1,100,new TextLabel('ocorrencia','','Ocorrencia'));
+        
+        $this->SetField(1,0,18,new MLabel('Data da Ocorrência:'));
+        $this->SetField(1,1,15,new MTextLabel('dataOcorrencia','','Data da Ocorrência'));
+        //$this->SetField(1,2,10,new MLabel('Data Fim:'));
+        //$this->SetField(1,3,15,new TextLabel('dataFim','','Data Fim'));
+        
+        $this->SetField(2,0,18,new MLabel('Excede Lotação:'));
+        $this->SetField(2,1,10,new TextLabel('excedeLotacao','','Excede Lotação'));
+        
+        $this->SetField(3,0,18,new MLabel('Regime Jurídico:'));
+        $this->SetField(3,1,100,new TextLabel('regimeJuridico','','Regime Jurídico'));
+        
+        $this->SetField(4,0,18,new MLabel('Classe Referência:'));
+        $this->SetField(4,1,10,new TextLabel('classeRef','','Classe/Referência'));
+        
+        $this->SetField(5,0,18,new MLabel('Jornada:'));
+        $this->SetField(5,1,100,new TextLabel('jornada','','Jornada'));
+        
+        $this->SetField(6,0,18,new MLabel('Situação:'));
+        $this->SetField(6,1,100,new TextLabel('situacao','','Situação'));
+
+        $this->SetField(7,0,18,new MLabel('Cargo:'));
+        $this->SetField(7,1,100,new TextLabel('cargo','','Cargo'));
+        
+        $this->SetField(8,0,18,new MLabel('Setor:'));
+        $this->SetField(8,1,100,new TextLabel('setor','','Setor'));
+        
+        $this->SetField(9,0,18,new MLabel('Ambiente Organizacional:'));
+        $this->SetField(9,1,100,new TextLabel('ambiente','',''));        
+
+        $this->SetField(10,1,18,new MLabel('Publicação:'));
+        $this->SetField(10,0,100,new TextLabel('publicacao','','Publicação'));
+        
+        $this->SetField(11,0,18,new MLabel('Observação'));
+        $this->SetField(11,1,100,new TextLabel('observacao','','Observação'));
+        
+        $action = $context->action;
+        $close = $MIOLO->GetActionURL('rh',$action, $this->objProvimento->idVinculo, array("form"=>"provimentos") );
+        $buttons = array(
+            new FormButton('btnClose','Fechar', $close),
+			new FormButton('btnDelete','Excluir'),
+        );
+        $this->SetButtons($buttons);
+        $this->SetData();
+        $this->setFieldAttr('dataOcorrencia','showLabel',true);
+		
+		if(($ultimoProvimento->dataInicio != $this->objProvimento->dataInicio) || ($numProv == 1))
+		{
+			$this->setFieldAttr('btnDelete', 'visible', false);
+		}
+    }
+
+    function SetData()
+    {   
+        global $MIOLO;
+        $provimento = $this->objProvimento;
+        $provimento->retrieveAssociation('publicacao');
+        $provimento->retrieveAssociation('setor');
+        $provimento->retrieveAssociation('ambiente');
+        $provimento->retrieveAssociation('ocorrencia');
+        $provimento->getClasse();
+        $provimento->getReferencia();
+        $provimento->getJornada();
+        $provimento->getSituacaoFuncional();
+        $provimento->getCargo();
+        $regimeJuridico = $MIOLO->GetBusiness('common','tabelageral');
+        $regimeJuridico->GetByItem('RH_REGIMEJUR', $provimento->regimeJuridico);
+        $this->SetFieldValue('dataOcorrencia',$provimento->dataInicio);
+        //$this->SetFieldValue('dataFim',$provimento->dataFim);
+        $this->SetFieldValue('excedeLotacao',($provimento->excedeLotacao == 'S' ? 'Sim' : 'Não'));
+        $this->SetFieldValue('regimeJuridico', $regimeJuridico->item1 . ' - ' . $regimeJuridico->item2);
+        $this->SetFieldValue('classeRef', $provimento->classe->nome . '/'. $provimento->referencia->nivelPadrao);
+        $this->SetFieldValue('jornada',$provimento->jornada->descricao);
+        $this->SetFieldValue('situacao',$provimento->situacaofuncional->descricao);
+        $this->SetFieldValue('ambiente',$provimento->ambiente->descricao);
+        $this->SetFieldValue('setor',$provimento->setor->sigla . ' - ' . $provimento->setor->nome);
+        $this->SetFieldValue('cargo',$provimento->cargo->descricao);
+        $this->SetFieldValue('ocorrencia',$provimento->ocorrencia->descricao);
+        if ($this->objProvimento->publicacao)
+            {
+                $this->SetFieldValue('publicacao',$provimento->publicacao->diplomaLegal->descricao.' '.
+                                            $provimento->publicacao->numero.' de '.
+                                            $provimento->publicacao->data.' - '.
+                                            $provimento->publicacao->autoridade);
+            }
+        $this->SetFieldValue('observacao',$provimento->obs);
+    }
+
+    public function btnClose_click()
+    {
+    }
+
+	public function btnDelete_click()
+    {
+		$action_sim = $this->manager->GetActionURL('rh','main:vinculo',$this->objProvimento->idVinculo,array('form'=>'provimentos','data'=>$this->objProvimento->dataInicio,'conf'=>'sim','event'=>'btnDelete:click'));
+		$action_nao = $this->manager->GetActionURL('rh','main:vinculo',$this->objProvimento->idVinculo,array('form'=>'provimentos','data'=>$this->objProvimento->dataInicio));
+
+		$conf = $this->GetFormValue('conf');
+
+		if ($conf == 'sim')
+		{
+  		$grupoOcorrencia = $this->objProvimento->idGrupoOcorrencia;
+			$k = new MKrono();
+			$this->objVinculo->getProvimentos();
+			$this->objVinculo->ordenaProvimentos();
+			$provimentoAnterior = $this->objVinculo->provimentos[1];
+			
+			try
+			{
+
+				if($grupoOcorrencia == 2)//Exclusão
+				{
+					//pega a ocupação vaga finalizada na exclusão e tira a data fim dela
+					$this->objVinculo->getOcupacaoVagas();
+				    if ( $this->objVinculo->ocupacaoVagas != NULL )
+				    {
+				        foreach ( $this->objVinculo->ocupacaoVagas as $o )
+				        {
+				            if ($k->CompareDate($o->dataFim,'=',$this->objProvimento->dataInicio))
+				            {
+				            	if($this->objVinculo->getTransaction())
+				            	{
+				            		$o->setTransaction($this->getTransaction());
+				            	}
+				                $o->finaliza(null);
+				            }
+				        }
+				    }
+					
+					//altera a Data Vacância do vínculo para nulo
+					$this->objVinculo->setDataVacancia(null);
+
+					$operacao  = OP_UPD;  
+					$descricao = 'Alterada a Data Vacância do vínculo para nulo - idVinculo: ' .
+												$this->objProvimento->idVinculo;
+					
+					$this->objVinculo->save();
+					$this->objVinculo->Log($operacao,$descricao);
+					
+					//se for docente alterar a situação para ATIVO
+					if ( $this->objProvimento->idGrupoCargo == 60 )
+					{
+						$docente = $this->manager->getBusiness('ensino','docente');
+						$docente->getByIdVinc($this->objVinculo->idVinculo);
+						if ( $docente->isPersistent() )
+						{
+							$data = $docente->getData();
+	                        $data->situacao = 'ATIVO';
+	                        $docente->setData($data);
+						}
+					}
+				}
+				elseif(($grupoOcorrencia == 6)&&($this->objProvimento->idOcorrencia == 18))
+				//Remoção
+				{
+					//Atualizar o departamento se for docente
+					if ( $this->objProvimento->idGrupoCargo == 60 )
+					{
+						$setor = $this->manager->getBusiness('common','setor');
+						$setor->getById($provimentoAnterior->idSetor);
+						
+						$departamento = $this->manager->getBusiness('ensino','departamento');
+						$departamento->getBySiglaSetor($setor->sigla);
+						
+						$docente = $this->manager->getBusiness('ensino','docente');
+
+						$docente->getByIdVinc($this->objVinculo->idVinculo);
+						
+						if ( $docente->isPersistent() )
+						{
+							$docente->updateDepto($departamento->iddepto);
+						}
+						else
+						{
+							$this->objVinculo->getFuncionario();
+							$data->idvinc = $this->objVinculo->idVinculo;
+							$data->situacao = 'Ativo';
+							$data->idpessoa = $this->objVinculo->funcionario->pessoa->idpessoa;
+							$data->iddepto = $departamento->iddepto;
+							
+							$docente->setData($data);							
+							$docente->save();
+							
+							
+						}
+					}
+				}
+				elseif(($grupoOcorrencia == 5)||($grupoOcorrencia == 11)||($grupoOcorrencia == 12)||($grupoOcorrencia == 13)||($grupoOcorrencia == 47))//Aposentadoria
+				{
+					$this->objVinculo->idSituacao = 1;
+					
+					//Desfinaliza a última ocupaçãovaga
+					$this->objVinculo->getOcupacaoVagas();
+				    if ( $this->objVinculo->ocupacaoVagas != NULL )
+				    {
+				        foreach ( $this->objVinculo->ocupacaoVagas as $o )
+				        {
+				            if ($k->CompareDate($o->dataFim,'=',$provimentoAnterior->dataFim))
+				            {
+				            	if($this->objVinculo->getTransaction())
+				            	{
+				            		$o->setTransaction($this->getTransaction());
+				            	}
+				                $o->finaliza(null);
+				            }
+				        }
+				    }
+					
+					//Desfinaliza qualquer licafast que tenha sido finalizada com a aposentadoria
+					$this->objVinculo->getLicAfasts();
+			        if ( $this->objVinculo->licAfast != NULL )
+			        {
+			            foreach ( $this->objVinculo->licAfast as $l )
+			            {
+			                if ($k->CompareDate($l->dataFim,'=',$provimentoAnterior->dataFim))
+			                {
+			                    $l->finaliza(null);			                    
+			                }
+			            }
+			        }
+					
+					$this->objVinculo->idGrupoOcorrenciaVacancia = null;
+			        $this->objVinculo->idOcorrenciaVacancia = null;
+			        $this->objVinculo->dataVacancia = null;
+			        $this->objVinculo->idPublicacaoVacancia = null;
+					
+	            	//se for docente alterar a situação para ATIVO
+					if ( $this->objProvimento->idGrupoCargo == 60 )
+	                {
+	                    $docente = $this->manager->getBusiness('ensino','docente');
+	                    $docente->getByIdVinc($this->objVinculo->idVinculo);
+	                    if ( $docente->isPersistent() )
+	                    {
+	                        $data = $docente->getData();
+	                        $data->situacao = 'ATIVO';
+	                        $docente->setData($data);
+	                    }
+	                }			        
+			        
+			        //Salva o objeto vínculo
+					$this->objVinculo->save();
+				}
+				$provimentoAnterior->setDataFim(null);
+				$provimentoAnterior->save();
+				$this->objProvimento->delete();
+				$this->manager->information('Provimento excluído com sucesso',$this->manager->GetActionURL('rh','main:vinculo',$this->objProvimento->idVinculo,array('form'=>'provimentos')));
+				
+			}
+            catch ( Exception $e )
+            {
+			   	$this->manager->error("Informe o seguinte erro à equipe do CGCO: ".$this->ocorrencia->GetErrors());
+            }
+	   }
+	   else
+	   {
+		   $this->manager->question("Tem certeza que deseja excluir o provimento?",$action_sim,$action_nao);
+		}
+    }
+
+ }
+?>

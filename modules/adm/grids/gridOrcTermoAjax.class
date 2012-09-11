@@ -1,0 +1,213 @@
+<?
+/**
+ * Grid Licitacao
+ * Grid de uso geral para selecionar licitacao
+ * @package br.org.miolo.ufjf.rh.grids
+ */
+/**
+ * Use Module Control
+ */
+global $MIOLO,$itens;
+
+class gridOrcTermoAjax extends MGridAJAX
+{
+
+	public function __construct($radioOpcoes)
+    {global $MIOLO,$module,$self,$itens;
+        
+        // get an MIOLO instance
+        //$MIOLO = MIOLO::getInstance();
+		//$MIOLO->Trace(implode($_REQUEST,','));
+
+        // register the methods callable by CPAINT
+        // methods with prefix 'ajax' really not need to be registered - it is registered automagically
+
+   $this->registerMethod('ajax_detail');
+
+        // testing if we have a AJAX call - if yes, return; cpaint already did the job...
+        if ($this->start()) 
+           return;
+
+        // well, it's not a AJAX call, let's build the grid
+        
+        // create the query to obtain the data
+        $curso = $MIOLO->GetBusiness($module,'orcamentotermo');
+        $processo = $MIOLO->getBusiness('protocolo', 'processo');
+     //  $login = $this->GetLogin();
+		//$idUsuario = $login->idkey;
+		//$IdUsuario = 240;
+        	$login = $MIOLO->GetLogin();
+        //id do usuário atual
+		$IdUsuario = $login->idkey;
+		//var_dump('Id do Usuário',$IdUsuario);
+  //  $IdUsuario = 240;
+
+            // TODOS
+			if ( $MIOLO->getPerms()->isMemberOf($MIOLO->getLogin()->id,'ADM_ADMINORCTERMO') /*or $MIOLO->getPerms()->isAdmin()*/)
+			{//var_dump('Funcionou!!');
+			$adm = true;
+			}else
+			{
+			$adm = false;
+			}			
+        	$query = $curso->listLicitaByUsuario($IdUsuario,$adm);
+        foreach ($query->result as $key => $rs)
+            {
+			$query->result[$key][2] = $processo->numProcessoFormatado($query->result[$key][2]);
+			}
+       
+        // define the grid's columns
+        $columns = array( new MGridColumn( '','center', true, '10%',true),
+                          new MGridColumn( 'Licitação','center', true, '10%',true),
+                          new MGridColumn( 'Nº do Processo','center', true, '20%',true),
+                          new MGridColumn( 'Titulo do Processo','left', true, '60%',true),
+                         );
+
+        // define the grid url
+        $href_grid = $MIOLO->getActionURL( $module, $self );
+		//$Idlicitacao = 
+
+		
+		
+        // call the parent's constructor
+        parent::__construct( $query->result, $columns, $href_grid, 50, 0, 'fullGrid');
+        $this->setClose(NULL);
+
+        // add javascript functions used by this grid
+        $url = $this->manager->getActionURL($module,'modules:grids:gridListItensALicitarAjax.js'); 
+        $this->page->addScriptURL($url);
+
+        // box title
+        $this->setTitle( 'Licitações' );
+
+        // create grid action - icons to Show/Hide Details 
+        // ajaxDetail.call is javascript function used by CPAINT
+        // %r% - replaced by rowNumber
+        // %0% - replaced by the value of column 0 at each row
+        // %s% - replaced by 0 or 1 to show/hide the details
+        $href_detail = "ajaxDetail.call(%r%,%0%,%s%)";
+        $this->addActionDetail( $href_detail );
+        
+       	//REFAZER
+        $href_dele = $MIOLO->getActionURL( $module, "main:orcamentotermo", '%r%' );
+        //$this->addActionIcon('%0%','select.gif',$href_dele );
+        
+        // Adicina uma informação extra como hint
+        //$this->AddActionIcon('%0%','select.gif',$action);
+
+        // put this grid in the theme
+       // $this->manager->getTheme()->InsertContent($this);
+    }
+
+    function ajax_detail($Idlicitacao)
+    {
+        global $MIOLO,$module,$itens;    	
+    	// var_dump($Idlicitacao);
+		// $IdUsuario = 240;
+	 	$login = $MIOLO->GetLogin();
+        //id do usuário atual
+		$IdUsuario = $login->idkey;
+	//	var_dump('Id do Usuário',$IdUsuario);
+    //$IdUsuario = 240;
+	
+	
+    	$objItemReq = $MIOLO->GetBusiness($module,'itemreq');
+  
+		$curso = $MIOLO->GetBusiness($module,'orcamentotermo');
+		
+		$tabelageral = $MIOLO->GetBusiness('common','tabelageral');
+		
+		if ( $MIOLO->getPerms()->isMemberOf($MIOLO->getLogin()->id,'ADM_ADMINORCTERMO') /*or $MIOLO->getPerms()->isAdmin()*/)
+				{//var_dump('Funcionou!!');
+				$adm = true;
+				}else
+				{
+				$adm = false;
+				}			  
+ 			$query = $curso->listItensByLicitacao($Idlicitacao,$IdUsuario,$adm);
+    	
+		if ( $query->result == null)
+		{
+		$query = $curso->listItensBibByLicitacao($Idlicitacao,$IdUsuario,$adm);
+		
+		}
+		
+    //	$totalGeral = 0;
+    	
+    	$cf = new MCurrencyFormatter();
+    	
+    	if (is_array($query->result))
+        {
+            foreach ($query->result as $key => $rs)
+            {
+                //$list[] = array($rs[0],$rs[1],$rs[2],$rs[3],$cf->formatWithSymbol($rs[3]*$cf->toDecimal($rs[4])));
+               if ($query->result[$key][4] == 1)
+			   {
+		//	   var_dump('status',$query->result[$key][4]);
+			   $totalOrc += $query->result[$key][2];
+			   }
+			   $query->result[$key][6] = $query->result[$key][5];			   
+				$query->result[$key][5] = $query->result[$key][4];
+				$query->result[$key][4] = ($query->result[$key][3]-$query->result[$key][2]);
+				$totalEst += $query->result[$key][3];
+				$query->result[$key][2] = $cf->formatWithSymbol($cf->toDecimal($query->result[$key][2]));
+                $query->result[$key][3] = $cf->formatWithSymbol($cf->toDecimal($query->result[$key][3]));
+				$query->result[$key][4] = $cf->formatWithSymbol($cf->toDecimal($query->result[$key][4]));
+             //   var_dump('Somado',$query->result[$key][3],'Somatorio',$totalEst,'iteração nº',$key); 
+			 
+			 //$query->result[$key][5] = 
+			//if ($query->result[$key][5] !== null)
+			//{
+			$desc = $tabelageral->GetDescricao('AD_STATUSORCTERM',$query->result[$key][5]);
+			 $query->result[$key][5] = $desc->result[0][0];
+			 // var_dump($query->result[$key]);			 
+			// var_dump($desc->result[0][0]);
+			 //}
+			// var_dump($desc->result);
+            }
+        }
+    	//var_dump($totalOrc);
+
+        // define columns for the grid
+        $columns2 = array(
+        			new MGridColumn('licitacao','left','','5%',false,'',true),
+					new MGridColumn('Item','center','','15%',true,'',true),
+					new MGridColumn('Valor Orçado','center','','20%',true,'',true),
+					new MGridColumn('Valor Estimado','center','','20%'),
+					new MGridColumn('Diferença','center','','20%'),
+					new MGridColumn('Status','center','','10%'),
+		            new MGridColumn('Requisição','center','','10%'),
+		        );
+				
+// var_dump($query->result);
+		$myGrid = new MGrid($query->result,$columns2,'',0);
+	//	$this->manager->getActionUrl('adm','main:requisicoes',$proximaRequisicao->idRequisicao,array("form"=>"item","tipoReq"=>$proximaRequisicao->idTipoReq)); 
+		//
+		$Saldo = ($totalEst+($totalEst/100*30));
+		
+		$href_sel = $MIOLO->getActionURL( $module, "main:orcamentotermo",'',array("form"=>"frmOrcamentoTermo","idlicitacao"=>$Idlicitacao,"item"=>'%0%',"saldo"=>$Saldo,"orcado"=>$totalOrc,"idrequisicao"=>'%6%',"event"=>'btnExibir_click'));
+        $myGrid->addActionIcon('Selecionar','select.gif', $href_sel);
+		      
+        $myGrid->SetWidth("100%");
+       	
+        $content = Array(
+        			new MSpacer(2),
+        			new MText('info','Itens do processo:'),
+        			$myGrid,
+        			new MSpacer(1),
+        			new MText('lblTotalEst',"Total Estimado: {$cf->formatWithSymbol($totalEst)}",'',true),
+        			new MSpacer(1),					
+        			new MText('lblTotalOrc',"Total Orçado: {$cf->formatWithSymbol($totalOrc)}",'',true),
+					new MSpacer(1),
+        			new MText('lblSaldo',"Limite: {$cf->formatWithSymbol($Saldo)}",'',true),
+					new MSpacer(2),
+        			);
+        
+        
+        // response_type = TEXT : set the content area of theme with the control
+        $MIOLO->getTheme()->setAjaxContent($content);        
+
+ 
+    }   	
+}
+

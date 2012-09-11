@@ -1,0 +1,101 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+MIOLO::Import('extensions::cpaint2.inc.php','cpaint'); 
+MIOLO::Import('extensions::class.phpmailer.php','PHPMailer'); 
+
+class gridHistUsuario extends MDataGrid
+{
+    var $listURL;
+    var $emprUsuario;
+    var $cp;  // the cpaint object
+
+    function __construct($emprUsuario)
+    {
+        global $MIOLO, $module, $item, $page, $context, $self, $action, $perms, $state;
+
+        $this->cp = new cpaint();
+        $this->cp->register(array($this,'ajax_detail'));
+        // testing if we have a AJAX call - if yes, return; cpaint already did the job...
+        if ($this->start()) 
+        {
+            return;
+        }
+
+        $this->emprUsuario = $emprUsuario;
+
+		$columns = array(
+				new MDataGridColumn('idemprestimo','Código do Empréstimo','center', true,'10%'),
+				new MDataGridColumn('numerodotombo','Código do Exemplar','center', true,'13%'),
+				new MDataGridColumn('datahoradoemprestimo','Data/Hora do Empréstimo','center', false,'20%'),
+				new MDataGridColumn('datahoraprevisaodevolucao','Data/Hora Previsão Devolução','center', false,'20%'),
+				new MDataGridColumn('datahoradadevolucao','Data/Hora Devolução','center', false,'20%'),
+				new MDataGridColumn('emprhoras','Empr. de Horas?','center', true,'8%'),
+				);
+
+		$href_grid = $MIOLO->GetActionURL($module,$action,$item, array('event'=>'btnProcurar_click'));
+	    parent::__construct($this->emprUsuario, $columns, $href_grid, 25);
+
+        $this->page->addScript('x/x_core.js');
+        $this->page->addScript('cpaint/cpaint2.inc.js');
+        $this->page->addScript('m_ajax.js');
+
+		if ( $perms->checkAccess('BIB_CIRCULACAO_TOT',A_ACCESS) )
+		{
+	        $href_edit = $MIOLO->GetActionURL($module,$action,"%0%", array('event'=>'btnEdit_click'));
+			$this->AddActionIcon('Editar', 'edit', $href_edit);
+		}
+
+        $this->SetFilter(false);
+        $this->SetIndex(0);
+        $this->SetWidth('99%');
+        $this->SetLinkType('hyperlink');
+
+        // add javascript functions used by this grid
+        $url = $this->manager->getActionURL($module,'modules:grids:gridHistEmpr.js'); 
+        $this->page->addScriptURL($url);
+
+        $href_detail = "ajaxDetail.call(%r%,%0%,%s%)";
+        $this->addActionDetail( $href_detail );
+        $this->eventHandler();
+    }
+
+
+    function start()
+    {
+        global $MIOLO;
+        $page = $MIOLO->getPage();
+        if ($ajax = ($page->request('cpaint_function') != "")) 
+        {
+            $MIOLO->getTheme()->clearContent();
+            $page->generateMethod = 'generateAJAX';
+            $page->cpaint = $this->cp;
+            $this->cp->start('UTF-8');
+        }
+        return $ajax;
+    }
+}
+?>

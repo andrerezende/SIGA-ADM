@@ -1,0 +1,169 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmProadesMembrosSubCoord extends MForm
+{
+    private $proades;
+    private $equipe;
+    
+	function __construct($proades)
+	{
+        $MIOLO = MIOLO::getInstance();
+        $this->proades = $proades; 
+        $idEquipe = MForm::getFormValue('idEquipe');
+
+        $this->equipe = $MIOLO->getBusiness('rh','equipe');
+        $this->equipe->getById($idEquipe);
+       
+		parent::__construct("Sub-coordena&ccedil;&atilde;o: ".$this->equipe->nome);
+		$this->EventHandler();
+	}
+    
+	function CreateFields()
+	{
+        $vinculos = $this->proades->getVinculoMembros();
+        
+        $setor = $this->manager->getBusiness('common','setor');
+        $session = $this->manager->session;
+        $idSetor = $setor->getSetoresFilhos($session->getValue('idSetor'));
+
+        if ( $session->getValue('idSetor') == 1337 )
+        {
+            //se for a chefia de gabinete entao tem que juntar com a secretaria geral
+            $idSetor[] = 1346;
+            $idSetor[] = 1306;
+        }
+
+        $funcionario = $this->manager->getBusiness('rh','funcionario');
+        $qryServidores = $funcionario->listBySetor($idSetor);
+
+        while ( ! $qryServidores->eof() )
+        {
+            $idVinculo = $qryServidores->fields('idvinculo');
+
+            $vinculo = $this->manager->getBusiness('rh','vinculo');
+            $vinculo->getById($idVinculo);
+            
+            if ( $vinculo->isAtivo() )
+            {
+                $membros[] = array($idVinculo,$qryServidores->fields('nome'));
+            }
+            $qryServidores->moveNext();
+        }
+        
+        if ( count($membros) > 0 )
+        {
+            $fields = array(
+                new MLabel('Cadastro dos membros da sub-coordena&ccedil;&atilde;o: '.$this->equipe->nome),
+                new MSelection('idVinculo','','TAE',$membros),
+                new MHiddenField('idEquipe',$this->equipe->idEquipe),
+                new MLink('lnkVoltar','',$this->manager->getActionUrl('rh','proades:main',$this->proades->idProades,array( 'form'=>'fase1', 'subform'=>'coord','cs'=>'subcoord')),'Voltar às sub-coordena&ccedil;&otilde;es.')
+            );
+
+            $buttons = array(
+                new MButton('btnSalvar','Enviar')
+            );
+        }
+        else
+        {
+            $fields = array(
+                    new MLabel("<b>Todos os TAE's j&aacute; est&atilde;o vinculados a uma equipe de trabalho.</b>")
+            );
+
+            $buttons = array(
+                new MButton('btnVoltar','Voltar',$this->manager->getActionUrl('rh','proades:main',$this->proades->idProades,array('form'=>'fase1', 'subform'=>'coord','cs'=>'subcoord')))
+            );
+
+        }
+        
+        $this->SetFields($fields);		
+        $this->setButtons($buttons);
+        $this->setButtonAccess();
+	}
+
+	function btnSalvar_click()
+	{
+		$data = $this->GetData();
+		try
+		{
+            $membroCoord = $this->manager->getBusiness('rh','membro');
+            $membroCoord->setData($data);
+            $membroCoord->beginTransaction();
+			$membroCoord->save();
+            //permitir o acesso ao proades
+            $usuario = $this->manager->getBusiness('common','usuario');
+            $usuario->getByLogin(trim($membroCoord->idVinculo));
+            $acesso = $this->manager->getBusiness('rh','acessoproades');
+            $acesso->getById($this->proades->idProades,$usuario->idUsuario);
+            if ( ! $acesso->isPersistent() )
+            {
+                $acesso->setTransaction($membroCoord->getTransaction());
+                $acesso->save();
+            }
+            $grupo = $this->manager->getBusiness('common','grupo');
+            $grupo->getByGroup('RH_PROADES');
+            if ( ! $usuario->hasGroup($grupo->idGrupo) )
+            {
+                $usuario->addGroup($grupo);
+                $usuario->setTransaction($membroCoord->getTransaction());
+                $usuario->save();
+            }
+
+            $membroCoord->endTransaction();
+
+            $go = $this->manager->getActionUrl('rh','proades:main',$this->proades->idProades,array('form'=>'fase1','subform'=>'coord','cs'=>'membrossubcoord','idEquipe'=>$membroCoord->idEquipe));
+            $this->page->redirect($go);
+		}
+		catch (Exception $e)
+		{
+			$this->AddError($e->GetMessage());
+		}
+	}
+
+	function btnExcluir_click()
+	{
+        $idMembro = $this->getFormValue('idMembro');
+        $membro = $this->manager->getBusiness('rh','membro');
+        $membro->getById($idMembro);
+
+        $idEquipe = $membro->idEquipe;
+		try
+		{
+            $this->proades->removeAcessoUsuario($membro,'RH_PROADES');
+			$membro->delete();
+            $go = $this->manager->getActionUrl('rh','main:proades:main',$this->proades->idProades,array('form'=>'fase1','subform'=>'coord','cs'=>'membrossubcoord','idEquipe'=>$idEquipe));
+            $this->page->redirect($go);
+		}
+		catch (Exception $e)
+		{
+			$this->AddError($e->GetMessage());
+		}
+	}
+
+
+    function setButtonAccess()
+    {
+        $perms = $this->manager->getPerms();
+        foreach ( $this->buttons as $button )
+        {
+            $this->setButtonAttr($button->name,'visible',$perms->checkAccess('rh_proadesexecute',A_ACCESS));
+        }
+    }
+}
+?>

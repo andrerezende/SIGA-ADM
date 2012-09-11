@@ -1,0 +1,173 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+class frmEmprUsuario extends Form
+{
+	var $objEmprestimo;
+//	var $objUsuario;
+
+	function __construct()
+    {  
+		global $MIOLO, $action;
+
+		$this->Form('Empréstimos');
+		$this->SetTitle(NULL);
+		$this->EventHandler();
+  		$this->defaultButton = false;
+  		
+	}
+
+
+    function CreateFields()
+	{	
+		global $MIOLO, $module, $self, $theme, $action, $page;
+
+		//Busca idusuario
+	    //$idusuario = $this->manager->GetLogin()->idkey;
+		$usuario = $this->manager->getBusiness('common','usuario');
+		$usuario->getByLogin($this->manager->GetLogin()->id);
+		$idusuario = $usuario->idUsuario;
+
+		//Datagrid de emprestimos regulares
+		$columns = array(
+		    new DataGridColumn('numerodotombo','Exemplar','center',true, '15%',true, null, false, false),
+			new DataGridColumn('titulo','Título','left',false, '45%',true, null, false, false),
+			new DataGridColumn('autor','Autor','left',false, '25%',true, null, false, false),
+			new DataGridColumn('datahoraprevisaodevolucao','Data para Devolução','center',true, '15%',true, null, false, false),
+			);
+
+		//Instancia o objeto emprestimo
+	    $this->objEmprestimo = $MIOLO->GetBusiness($module,'emprestimo');
+
+		$query = $this->objEmprestimo->ListEmprestimosRegularesPorUsuario($idusuario);
+		
+		//var_dump($query->result);
+		
+		$datagrid = new DataGrid2($query, $columns, '',0);
+
+		//nome do usuario
+		//$this->objUsuario = $MIOLO->GetBusiness($module,'usuario');
+		//$usuario = $this->objUsuario->GetById($this->manager->GetLogin()->idkey);
+	    
+		//$datagrid->SetTitle('Livros em Situação Regular - ' . $usuario[0][1]);
+	    $datagrid->SetTitle('Livros em Situação Regular - ' . $usuario->nome);
+		$datagrid->SetLinkType('linkbutton');
+		$datagrid->SetWidth('99%');
+		$datagrid->SetClose($MIOLO->GetActionURL($module,'main'));
+
+		$href_edit = $MIOLO->GetActionURL($module,$self,'%4%',Array('event'=>'btnRenovar:click'));
+		$datagrid->AddActionText('Renovar', 'Renovar', $href_edit);
+
+		//Datagrid de emprestimos irregulares
+		$columns2 = array(
+			new DataGridColumn('numerodotombo','Exemplar','center',true, '15%',true, null, false, false),
+			new DataGridColumn('titulo','Título','left',false, '40%',true, null, false, false),
+			new DataGridColumn('autor','Autor','left',false, '30%',true, null, false, false),
+			new DataGridColumn('datahoraprevisaodevolucao','Data para Devolução','center',true, '15%',true, null, false, false)
+			);
+
+		$query2 = $this->objEmprestimo->ListEmprestimosIrregularesPorUsuario($idusuario);
+		
+		$datagrid2 = new DataGrid2($query2, $columns2, '',0);
+		//$datagrid2->SetTitle('Livros com Atraso na Devolução - ' . $usuario[0][1]);
+		$datagrid2->SetTitle('Livros com Atraso na Devolução - ' . $usuario->nome);
+		$datagrid2->SetWidth('99%');
+		$datagrid2->SetClose($MIOLO->GetActionURL($module,'main'));
+
+		//Tabelas com as mensagens exibidas ao usuário
+		$table1 = new SimpleTable('st', "cellspacing=0 cellpadding=5 align=center border=1 width=99%", 1, 2);
+		$texto = array(
+						new Text('','<font size=2 ><font color=red><b>Atenção:</b></font>'),
+//						new Text('','renovação ','red'),
+						new Text('','<font size=2 >A renovação "on line" deve ser feita com 24 horas de antecedência ao prazo de devolução. A justificativa de atraso na entrega de material por impossibilidade de acesso à renovação "on line" não é aceita. Nesse caso, o usuário deve fazer a renovação pessoalmente, até a data prevista para a devolução. Pode ser feita na biblioteca de origem ou na Biblioteca Universitária, mediante apresentação da(s) obra(s) e respeitando-se o horário de funcionamento das bibliotecas. <b>A multa pelo atraso é irrevogável. O cálculo da multa é semelhante ao cálculo bancário, ou seja, consideram-se os dias de sábado, domingo e feriado.</b></font>')
+					);
+
+		$table1->SetCell(0,0,$texto);
+		$table1->SetCell(0,1,new Text('','<font size=2 >Clique sobre o link para renovar o item desejado.'));
+
+		$table2 = new SimpleTable('st', "cellspacing=0 cellpadding=5 align=center border=1 width=99%", 1, 1);
+		$table2->SetCell(0,0,'<font size=2 >Livros com atraso NÃO podem ser renovados via internet. Regularize sua situação na Biblioteca.');
+
+		$fields = array(
+						$datagrid,
+						$table1,
+						$datagrid2,
+						$table2,
+			);
+
+		$this->SetFields($fields);
+	}
+
+
+	function btnRenovar_click()
+	{
+		global $MIOLO, $module, $self, $theme, $action, $page,$item;
+
+		 //Instancia o objeto emprestimo
+	    $this->objEmprestimo = $MIOLO->GetBusiness($module,'emprestimo');
+
+	    //$idusuario = $this->manager->GetLogin()->idkey;
+	    $usuario = $this->manager->getBusiness('common','usuario');
+		$usuario->getByLogin($this->manager->GetLogin()->id);
+		$idusuario = $usuario->idUsuario;
+    	//var_dump($idusuario);
+    	           
+		$ok = $this->objEmprestimo->PodeRenovar($item,$idusuario);
+               
+		if ( $ok[0] )
+		{
+			//Abre novo empréstimo
+			//RenovaEmprestimo retorna array(idemprestimo, dataprevisaodevolucao)
+			//$oknovo = $this->objEmprestimo->RenovaEmprestimo($item,$this->manager->GetLogin()->idkey);
+			$oknovo = $this->objEmprestimo->RenovaEmprestimo($item,$idusuario);
+
+			if ( $oknovo )
+			{
+				$id = $oknovo[0];
+				$renovacoes = $this->objEmprestimo->GetById($id)->quantidadederenovacoes;
+				if($renovacoes >= 5)
+				{
+					$MIOLO->Prompt(Prompt::Information("Empréstimo renovado até ". $oknovo[1] . "<BR><BR>ATENÇÃO:<BR>Sua possibilidade de renovação desta obra está se esgotando!<BR>Devolva-a assim que for possível!", $MIOLO->GetActionURL ($module = $module, $action = $action)));
+				}
+				else
+				{
+					$MIOLO->Prompt(Prompt::Information("Empréstimo renovado até ". $oknovo[1], $MIOLO->GetActionURL ($module = $module, $action = $action)));
+				}
+			}
+			else
+			{
+				$MIOLO->Error("Empréstimo não foi renovado.", $MIOLO->GetActionURL($module = $module, $action = $action));
+			}
+		}
+		else
+		{
+			$MIOLO->Error($ok[1], $MIOLO->GetActionURL($module = $module, $action = $action));
+		}
+
+	}
+
+}
+?>

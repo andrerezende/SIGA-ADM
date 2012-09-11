@@ -1,0 +1,84 @@
+<?
+class FrmSessao extends Form
+{
+
+	function FrmSessao()
+    {   global $MIOLO, $module, $page, $context, $self;
+
+		parent::__construct('Sessões');
+	    $this->EventHandler();
+	}
+
+    function CreateFields()
+	{  
+
+        $action = $this->manager->getCurrentUrl();
+
+       $aOpcoes = array(
+           new MLinkButton('btnAll','[Todas as sessões]', $action),
+           new MLinkButton('btnActive','[Sessões ativas]', $action),
+           new MLinkButton('btnClosed','[Sessões fechadas]', $action)
+       );
+       $fields = Array(
+           new MLinkButtonGroup('lbGrpSessao','',$aOpcoes,'horizontal')
+       );
+	   $this->SetFields($fields);
+       $this->defaultButton = false;
+	}
+
+	function btnAll_click($filter='')
+	{   
+		global $MIOLO, $module, $self, $theme, $action;
+        $columns = array(
+           new MDataGridColumn('idsessao','Sessão','right', true, '10%',true),
+           new MDataGridColumn('login','Usuário','right', true, '10%',true, null, false, true),
+           new MDataGridColumn('tsin','Data/Hora Entrada','right', true, '20%',true),
+           new MDataGridColumn('tsout','Data/Hora Saída','right', true, '20%',true),
+           new MDataGridColumn('duracao','Duração (min)','right', true, '15%',true),
+           new MDataGridColumn('remoteaddr','Ip Address','left', true, '20%',true, null, false, true),
+           new MDataGridColumn('forced','Forced','left', true, '5%',true)
+        );
+        $fmtTsin = "TO_CHAR(s.tsin,'DD/MM/YYYY HH24:MI:SS') as tsin";
+        $fmtTsout = "TO_CHAR(s.tsout,'DD/MM/YYYY HH24:MI:SS') as tsout";
+        $fmtDuracao = "trunc(24*60*(s.tsout-s.tsin)) as duracao";
+        if ($filter == 'aberta')
+        {
+           $fmtDuracao = "trunc(24*60*(sysdate-s.tsin)) as duracao";
+        }
+        $sql = new Msql("s.idsessao, u.login, $fmtTsin, $fmtTsout, $fmtDuracao, ".
+                       "s.remoteaddr, s.forced",
+                       'cm_sessao s, cm_usuario u', '(s.idusuario=u.idusuario)', 's.tsin desc');
+        if ($filter == 'aberta')
+        {
+           $sql->where .= ' and s.tsout is null';
+        } 
+        elseif ($filter == 'fechada')
+        {
+           $sql->where .= ' and s.tsout is not null';
+        } 
+
+        
+        $db = $this->manager->getDatabase('sigaept');
+        $query = $db->query($sql->Select());
+
+		$href_datagrid = $MIOLO->GetActionURL($module,$self,'', Array('event'=>'btnAll_click'));              
+        $datagrid = new MDataGrid($query, $columns, $href_datagrid, 25);
+        $datagrid->SetTitle('Sessões');
+        $datagrid->SetLinkType('linkbutton');
+		$theme->InsertContent($datagrid);
+	}
+
+	function btnActive_click()
+	{   
+       $this->btnAll_click('aberta');
+    }
+
+	function btnClosed_click()
+	{   
+       $this->btnAll_click('fechada');
+    }
+
+
+}
+
+?>

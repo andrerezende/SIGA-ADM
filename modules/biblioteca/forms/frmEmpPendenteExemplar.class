@@ -1,0 +1,211 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+class frmEmpPendenteExemplar extends MFormAJAX
+{
+    public $objEmprestimo;
+    public $objExemplar;
+	public $tombo;
+	public $idexemplar;
+	public $idEmprestimo;
+	public $grid;
+
+
+	function __construct()
+    {   
+		global $MIOLO, $action, $module, $objExemplar;
+
+        $this->objExemplar = $MIOLO->getBusiness($module,'exemplar');
+        parent::__construct('Empréstimos Pendentes por Exemplar');
+        $this->box->AddStyle('padding',"10px");
+	    $this->eventHandler();
+		$this->defaultButton = false;
+		// Botão 'fechar', direcionando para o handler biblioteca/main/circulacao/emprestimo
+		$this->SetClose($this->manager->GetActionURL($module, 'main:circulacao:emprestimo'));
+	}
+
+
+	function CreateFields()
+	{
+		global $MIOLO, $action, $module, $item, $page;
+
+		if (! $this->page->IsPostBack()){
+			$fields = Array (
+				new MTextField('exemplar','','Código do Exemplar',25),
+			);
+			$this->SetFields($fields);
+
+			$buttons = Array(
+				new MButton('btnProcurar', 'Procurar'),
+			);
+			$this->SetButtons($buttons);
+
+			// validators
+			$this->AddValidator(new RequiredValidator('exemplar'));
+									
+			if (!$item){
+					$this->page->onLoad("MIOLO_GetElementById('exemplar').focus();");
+				}
+		}
+	}
+
+
+    function btnProcurar_click()
+    {
+		global $MIOLO, $module, $action, $item;
+
+		if ($item==null)
+		{
+			$this->tombo = $this->getFormValue('exemplar');
+			$item = $this->$tombo;
+		}
+		else
+		{
+			$this->tombo = $item;
+		}
+
+		$this->idexemplar = $this->objExemplar->GetIdByTombo($this->tombo);
+
+		$this->setTitle('Empréstimos Pendentes do Exemplar ' . $this->tombo);
+
+		$this->objEmprestimo = $MIOLO->GetBusiness($module,'emprestimo');
+		$query = $this->objEmprestimo->SelectEmprestimoPendenteExemplar($this->idexemplar);
+
+		$this->idEmprestimo = $query->idemprestimo;
+        $this->grid = $this->manager->getUI()->getGrid($module,'gridEmprPendExemp',$query);
+
+		$fields = array(
+			$this->grid,
+			new MHiddenField('exemplar',$this->tombo)
+		);
+		$this->setFields($fields);
+
+		$buttons = Array(
+			new MButton('btnVoltar', 'Voltar', $MIOLO->GetActionURL($module = $module, $action = $action)),
+   						);
+		$this->SetButtons($buttons);
+
+        $this->SetButtonAttr('btnProcurar','visible',false);
+    }
+
+
+    function ajax_detail($id)
+    {
+        // this method is called by CPAINT at doDetail execution
+
+		global $MIOLO, $module;
+        $log = $MIOLO->GetBusiness($module,'log');
+		$opempr = $log->GetOperadorEmprByOperacao($id);
+        $data = array();
+        $data[] = "Operador de Empréstimo: " . $opempr[0][0] . " - " . $opempr[0][1];
+        $control = new MTableRaw('',$data);
+        $control->setAlternate(true);
+        $MIOLO->getTheme()->setAjaxContent($control);
+	}
+
+
+	function btnEdit_click()
+	{
+		global $MIOLO, $module, $action, $item;
+
+		$fields = array(
+			new TextField('idemprestimo','','Código do Empréstimo',20),
+			new TextField('loginPessoa','','Login do Usuário',20),
+			new TextField('numerodotombo','','Número do Exemplar',20),
+			new TextField('datahoradoemprestimo','','Data/Hora do Empréstimo',20),
+			new TextField('datahoraprevisaodevolucao','','Data/Hora Previsão Devolução',20),
+		);
+		$this->SetFields($fields);
+
+		$this->setFieldAttr('idemprestimo','readonly',true);
+		$this->setFieldAttr('loginPessoa','readonly',true);
+		$this->setFieldAttr('numerodotombo','readonly',true);
+		
+		$this->objEmprestimo = $MIOLO->GetBusiness($module,'emprestimo');
+		$emprestimo = $this->objEmprestimo->GetEmprestimoById($item);
+		$this->setData($emprestimo);
+		
+		$go = $this->manager->GetActionURL($module, $action,$emprestimo->numerodotombo,array('event'=>'btnProcurar:click'));
+		
+		$buttons = Array(
+			new FormButton('btnSalvar', 'Salvar'),
+			new FormButton('btnVoltar', 'Voltar', $go),
+		);
+		$this->SetButtons($buttons);
+		$this->SetButtonAttr('btnProcurar','visible',false);
+	}
+
+
+	function getData()
+	{
+		$data = new FormData();
+		$data->idemprestimo = $this->GetFormValue('idemprestimo');
+		$data->login = $this->GetFormValue('loginPessoa');
+		$data->numerodotombo = $this->GetFormValue('numerodotombo');
+		$data->datahoradoemprestimo = $this->GetFormValue('datahoradoemprestimo');
+		$data->datahoraprevisaodevolucao = $this->GetFormValue('datahoraprevisaodevolucao');
+		return $data;
+	}
+
+
+	function setData($data)
+	{
+		$this->SetFieldValue('idemprestimo',$data->idemprestimo);
+		$this->SetFieldValue('loginPessoa',$data->login);
+		$this->SetFieldValue('numerodotombo', $data->numerodotombo);
+		$this->SetFieldValue('datahoradoemprestimo',$data->datahoradoemprestimo);
+		$this->SetFieldValue('datahoraprevisaodevolucao',$data->datahoraprevisaodevolucao);
+	}
+
+
+	function btnSalvar_click()
+	{
+		global $MIOLO,$self,$item,$action,$module;
+		$this->objEmprestimo = $MIOLO->GetBusiness($module,'emprestimo');
+		$data = $this->getData();
+		try
+		{
+			$result = $this->objEmprestimo->saveEmprestimo($data);
+
+			if($result === true)
+			{
+				
+				$go = $this->manager->GetActionURL($module, $action,$data->numerodotombo,array('event'=>'btnProcurar:click'));
+				
+				$MIOLO->Information("Empréstimo Modificado", $go );
+			}
+			else
+			{
+				$this->addError($result);
+			}
+		}
+		catch (Exception $e)
+		{
+			$this->addError($e->getMessage());
+		}
+	}
+}
+?>

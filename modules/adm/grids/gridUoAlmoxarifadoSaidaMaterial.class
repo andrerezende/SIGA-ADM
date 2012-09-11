@@ -1,0 +1,50 @@
+<?php
+global $MIOLO;
+
+class gridUoAlmoxarifadoSaidaMaterial extends MObjectGrid {
+
+	public function __construct($objRequisicao) {
+		global $MIOLO, $page, $action, $item;
+		$this->setTitle('Lista de materias requisitados');
+		$objRequisicao->retrieveAssociation('materialAlmoxarifado');
+		$objEstoque = $MIOLO->getBusiness('adm', 'estoque');
+		$cf = new MCurrencyFormatter();
+		$quantAutorizada = Form::getFormValue('quantAutorizada');
+		if ($objRequisicao->materialAlmoxarifado) {
+			foreach ($objRequisicao->materialAlmoxarifado as $material) {
+				$material->retrieveAssociation('material');
+				$objEstoque->getById($item, $material->idMaterial);
+				$material->quantDisponivel = (int) $objEstoque->estoque;
+				if ($quantAutorizada) {
+					$material->quantAutorizada = (int) $quantAutorizada[$material->idMaterial];
+				} else {
+					if ($material->quantPedida > $material->quantDisponivel) {
+						$material->quantAutorizada = (int) $material->quantDisponivel;
+					} else {
+						$material->quantAutorizada = (int) $material->quantPedida;
+					}
+				}
+				$material->quantPedida = (int) $material->quantPedida;
+			}
+		}
+		$quantAutorizada = new MTextField('quantAutorizada[%0%]', '%5%', '', '4');
+		$columns = array(
+			new MObjectGridColumn('idMaterial', 'IdMaterial', '', '', '', false),
+			new MObjectGridColumn('material->codmaterial', 'Código', 'center', false, '8%'),
+			new MObjectGridColumn('material->descricao', 'Material', 'left', false, '59%'),
+			new MObjectGridColumn('quantDisponivel', 'Quantidade Disponível', 'center', false, '11%'),
+			new MObjectGridColumn('quantPedida', 'Quantidade Pedida', 'center', false, '11%'),
+			new MObjectGridControl($quantAutorizada, 'quantAutorizada', 'Quantidade Autorizada', 'center', false, '11%'),
+		);
+		$this->SetFilter(false);
+		parent::__construct($objRequisicao->materialAlmoxarifado, $columns, $action, 0);
+		$this->setClose(null);
+		$this->SetLinkType('hyperlink');
+	}
+
+	public function GenerateFooter() {
+		$footer[] = new Separator();
+		return $footer;
+	}
+
+}

@@ -1,0 +1,843 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+class frmEmprestimo extends Form
+{
+
+	var $objEmprestimo;
+	var $objExemplar;
+	var $objusuario;
+	var $objUsuario;
+	var $objusuarioBib;
+	var $objRH;
+	var $objAcademico;  
+	var $objMulta;
+	var $objPermiteMulta; 
+
+    function frmEmprestimo()  // construtor da Classe
+    {
+		global $MIOLO,$module;
+
+		// Título do Formulário
+		$this->Form('Balcão de Empréstimos');
+
+        // MD5 da senha 	
+        $this->page->AddScript('m_md5.js');	
+        $this->AddJsCode($this->doPasswordMD5());
+        $this->OnSubmit('doPasswordMD5()');
+
+		//Chama o CreateFileds, etc.
+		$this->EventHandler();
+		
+		//$this->objExemplar = $MIOLO->GetBusiness($module,'exemplar');
+
+		// Botão "enviar" não aparece
+		$this->defaultButton = false;
+		
+		// Botão 'fechar', direcionando para o handler biblioteca/main/emprestimos
+		$this->SetClose($this->manager->GetActionURL($module, 'main:emprestimos'));
+	}
+	
+	   
+    function CreateFields()
+    {
+    		global $MIOLO,$module;
+		
+						
+		// Campos que aparecem no formulário
+			$fields = Array (
+			//new Text('','Use o formulário abaixo para cadastrar uma nova usuarioobservacoes da biblioteca'),
+			new TextField('edtCartaoAcesso','','Cartão de Acesso',15),
+			new TextField('edtNome','','Nome',60),
+			new TextField('edtExemplar','','Exemplar',30),
+			new PasswordField('edtSenha','','Senha de Acesso',6),
+			new HiddenField('hidIdusuario'),
+			new HiddenField('hidLogin'),
+			new HiddenField('hidKey'), // controla Incluir/Editar
+			new HiddenField('ListaExemplares','','',100), // é a lista de exemplares que aparece no GRID
+			);
+
+		// Insere os campos
+		$this->SetFields($fields);
+		
+						
+		// BotÃµes que aparecem no formulário
+		$buttons = Array(
+			new FormButton('btnConsulta', 'Consulta'),
+			new FormButton('btnVerificar', 'Verificar'),
+			new FormButton('btnRealizarEmprestimo', 'Realizar Empréstimo'),
+			
+			//alterações Barbacena
+			new FormButton('btnImprimirRecibo', 'Imprimir Recibo' ),
+			
+			new MButton('btnConfirmar', 'Confirmar Empréstimo'),
+			new MButton('btnVoltar', 'Voltar',$MIOLO->GetActionURL($module,$self)),
+			    		);
+
+		//Insere os Botões
+		$this->SetButtons($buttons);
+//retirar isso depois de resolver o problema do Mjasper
+        $this->SetButtonAttr('btnImprimirRecibo','visible', false );
+		//Esconde os campos 
+		$this->SetFieldAttr('edtNome','visible', false);
+		$this->SetFieldAttr('edtSenha','visible', false);
+		$this->SetFieldAttr('edtExemplar','visible', false);		
+		
+		// Atributo dos botões
+		$this->SetButtonAttr('btnConsulta','visible',true);
+		$this->SetButtonAttr('btnVerificar','visible',false);
+		$this->SetButtonAttr('btnRealizarEmprestimo','visible',false);
+		$this->SetButtonAttr('btnImprimirRecibo','visible',false);
+		$this->SetButtonAttr('btnConfirmar','visible',false);
+		$this->SetButtonAttr('btnVoltar','visible',false);
+		
+		
+		//se não houver nada preenchido no campo edtCartaoAcesso		
+		if (!($this->GetFieldValue('edtCartaoAcesso')))
+		{
+			//Definindo o foco
+			//$this->page->onLoad('document.'.$this->name.'.edtCartaoAcesso.focus();'); decripted
+			$this->page->onLoad("MIOLO_GetElementById('edtCartaoAcesso').focus();");
+			//$this->page->onLoad('document.'.$this->name.'.nome.focus();');
+		}
+		
+		//Validators - para garantir que o campo edtCartaoAcesso nao ficará em branco
+		$this->AddValidator(new RequiredValidator('edtCartaoAcesso'));
+		
+		
+		/*
+		$this->addListaExemplares(array(1,2,3));
+		$this->addListaExemplares(array(4,5,6));
+		
+		var_dump($this->getListaExemplares());
+		*/
+						
+   }
+
+	// pega os dados que estão no formuláio   
+    function GetData()
+    {
+    	$data = new FormData();
+       	$data->cartaoacesso = $this->GetFormValue('edtCartaoAcesso');
+		$data->nome = $this->GetFormValue('edtNome');
+       	$data->senha = $this->GetFormValue('edtSenha');
+		$data->idusuario = $this->GetFormValue('hidIdusuario');
+		$data->login = $this->GetFormValue('hidLogin');
+		$data->exemplar = $this->GetFormValue('edtExemplar');
+		$data->ListaExemplares = $this->GetFormValue('ListaExemplares');
+    	return $data;
+    }
+	
+	// usada para inserir valores no formulário
+	function SetData($data)
+	{
+		$this->SetFormValue('edtCartaoAcesso',$data->cartaoacesso);
+		$this->SetFormValue('edtNome',$data->nome);
+		$this->SetFormValue('edtSenha',$data->senha);
+        $this->SetFormValue('hidIdusuario',$data->idusuario);
+		$this->SetFormValue('hidLogin',$data->login);
+        $this->setFormValue('edtExemplar',$data->exemplar);
+        $this->setFormValue('ListaExemplares',$data->ListaExemplares);
+	}
+
+	
+	function btnConsulta_click()
+	{ 
+		global $MIOLO,$module,$item;
+		
+		// Atributo dos botões
+		$this->SetButtonAttr('btnVerificar','visible',true);
+		$this->SetButtonAttr('btnConsulta','visible',false);
+		$this->SetButtonAttr('btnRealizarEmprestimo','visible',false);
+		$this->SetButtonAttr('btnConfirmar','visible',false);
+		$this->SetButtonAttr('btnVoltar','visible',false);
+		
+		//variável $cartão recebendo o valor do codigo de acesso
+		$cartao = $this->GetData()->cartaoacesso;
+
+		//Verifica se o campo "Cartão de Acesso" está vazio.
+		if($cartao == null)
+		{
+		   $ok= $this->manager->GetActionURL($module, $self);
+		   $MIOLO->Error("Cartão de Acesso em branco!", $ok);
+		}
+				
+		//Instancia o objeto emprestimo
+		$this->objEmprestimo = $MIOLO->GetBusiness($module,'emprestimo');
+		
+		// ok retorna os dados de login
+		$query = $this->objEmprestimo->GetByCartao($cartao);
+		//var_dump($query->result);
+		if ($idusuario = $query->result[0][0])
+		{
+			//Instancia o objeto usuario
+			$this->objusuario = $MIOLO->GetBusiness($module,'usuario');
+			// ok retorna os dados de nome
+			$query = $this->objusuario->GetById($idusuario);	
+			$nome = $query[0][1];
+			$login = $query[0][2];
+			//var_dump($nome);
+			$this->SetFieldValue('edtNome',$nome);
+			$this->SetFieldValue('hidLogin',$login);
+			$this->SetFieldValue('hidIdusuario',$idusuario);
+				
+					
+			//Propriedades dos campos
+			$this->SetFieldAttr('edtCartaoAcesso','readonly',true);
+			$this->SetFieldAttr('edtNome','visible',true);
+			$this->SetFieldAttr('edtNome','readonly',true);
+			$this->SetFieldAttr('edtSenha','visible',true);
+					
+			
+			//Definindo o foco
+			//$this->page->onLoad('document.'.$this->name.'.edtSenha.focus();');
+			$this->page->onLoad("MIOLO_GetElementById('edtSenha').focus();");
+			
+		}
+		else 
+		{
+			$MIOLO->Prompt(Prompt::Error("<font color=red>Cartão de acesso não encontrado.</font>",$action));				
+		}
+						
+		
+	}
+	
+	function btnVerificar_click()
+	{ 
+		global $MIOLO,$module,$item,$self,$page,$theme;
+		
+		// Atributo dos botões
+		$this->SetButtonAttr('btnVerificar','visible',false);
+		$this->SetButtonAttr('btnRealizarEmprestimo','visible',true);
+		$this->SetButtonAttr('btnConsulta','visible',false);
+		//Atributo dos campos
+		$this->SetFieldAttr('edtExemplar','visible', false);
+		$this->SetButtonAttr('btnRealizarEmprestimo','visible',false);
+		
+		
+		$data = $this->GetData();
+		//var_dump($data);
+ 		 	   
+ 	   	//Instancia a classe usuario common 	   	
+		$objUsuario = $MIOLO->GetBusiness('common','usuario');
+		
+		$objEmprestimo = $MIOLO->GetBusiness($module,'emprestimo');
+		
+		//Instancia um objeto da classe PermiteMulta
+		$objPermiteMulta = $MIOLO->GetBusiness( $module, 'permitemulta' );
+		
+		$objUsuario->GetByLogin($data->login);
+		
+		//Verificar a senha do usuário, retorno boolean
+		$checkpass = $objUsuario->ValidateMD5Password($data->senha);
+//		$checkpass = $objUsuario->ValidatePassword($data->senha);
+		//var_dump( $checkpass );
+		
+		
+		if ($checkpass)
+		{
+			
+			//$this->page->onLoad('document.'.$this->name.'.edtExemplar.focus();');
+			//$this->page->onLoad("MIOLO_GetElementById('edtExemplar').focus();");
+		
+			//Retorna idgrupo de bt_vinculo ( desde que datavalidade >= data do sistema )  
+			$checkvinculo = $objEmprestimo->ValidateVinculo($data->idusuario);
+			$checkvinculo = $checkvinculo[0][0];
+
+			if ($checkvinculo)
+			{
+				if ($checkvinculo == 1) //se o usuário for um aluno
+				{
+					//$objAcademico = $MIOLO->GetBusiness($module,'aluno');
+				//	                                     // mudar $module para 'academico'
+					//$objAcademico->GetById($data->login);
+				//	$checkativo = $objAcademico->isSituacaoAtivo($data->login);
+
+					//$situacao = $objAcademico->GetSituacaoAluno($data->login);
+					//if($situacao == 'Ativo')
+					//{
+					//	$checkativo = true;
+					//}
+					//else
+					//{
+					//	$checkativo = false;
+					//}
+
+				}
+				//se o usuário não for um aluno, ele terá um vínculo como RH
+				else 
+				{
+					//$objRH = $MIOLO->GetBusiness('rh','vinculo');
+					//$objRH->GetById($data->login);
+					//$checkativo1 = $objRH->isAtivo();
+					//$checkativo2 = $objRH->isAposentado();
+					//$checkativo = $checkativo1 || $checkativo2;
+					
+				}
+				$checkativo = true;
+				//var_dump($checkativo);
+				
+				if ($checkativo)
+				{
+									
+					$checkinfracao = $objEmprestimo->GetInfracao($data->idusuario);
+					//	var_dump($checkinfracao->result);
+					// se o usuario tiver infrações, ele nao pode efetuar um empréstimo
+					if ($checkinfracao->result)
+					{
+						
+						//Grid
+						$columns = array(
+						new DataGridColumn(null),
+						
+						new DataGridColumn('descricao','Descrição','left', false, '20%',true, null, true,true),
+						new DataGridColumn('notainfracao','Nota da Infração','center', false, '60%',true, null, true,true),
+					
+						);
+	
+						$href_datagrid = $MIOLO->GetActionURL($module,$self,'', Array('event'=>'btnEmprestar_click'));
+						$page->SetAction($href_datagrid);
+	
+						$href_dele = $MIOLO->GetActionURL($module,$self,'%0%',Array('event'=>'btnExcluir:click'));
+	
+	
+						$datagrid = new DataGrid2($checkinfracao, $columns, $href_datagrid,20);
+						$datagrid->SetTitle('Infrações registradas para: '.$data->nome.' [ '.$data->login.' ]');
+						$datagrid->SetLinkType('linkbutton');
+						$datagrid->SetWidth('100%');
+						//$datagrid->AddActionIcon('Excluir', 'delete.gif', $href_dele);
+						$theme->AppendContent($datagrid);
+						
+					}
+					 // caso não haja infrações, o usuario está liberado pra realizar emprestimos
+					else
+					{
+						$this->SetFieldAttr('edtExemplar','visible', true);
+						$this->SetButtonAttr('btnRealizarEmprestimo','visible',true);
+                		
+					}
+									
+					//Retorna idemprestimo de bt_emprestimo ( desde que datahoradedevolucao >= datahoraprevisaodedevolucao )  
+					$checkemprestimosmulta = $objEmprestimo->GetEmprestimosMulta($data->idusuario);
+				
+					//Instancia o objeto multa
+				    $this->objMulta = $MIOLO->GetBusiness($module,'multa');
+			
+					$checkmulta = $this->objMulta->GetTotalMultasNaoPagas($data->idusuario);
+					
+					/* Verifica se é permitido cobrar multas ou se o administrador
+					 * ecolheu a opção de penalidade */
+					$permitemulta = $objPermiteMulta->CheckPermiteMulta();
+					if ( $permitemulta[ 0 ][ 0 ] == 'N' )
+					{
+						$checkmulta = null;
+						
+						/* Neste caso, deve-se apagar os registros
+						 * da tabela bt_multa, visto que esta não
+						 * terá nenhuma utilidade. */
+						$this->objMulta->LiquidaMultas();
+					}
+					elseif( $permitemulta[ 0 ][ 0 ] == 'P' )
+					{
+						$checkmulta = null;
+						$this->objMulta->LiquidaMultas();
+						$n = $objEmprestimo->verificaPenalidade( $data->cartaoacesso );
+						if(  $n > 0 )
+						{
+							$go = $this->manager->GetActionURL( $module, 'main:emprestimos' );
+							$this->manager->Information( "Este usuário só poderá fazer empréstimos depois de $n dia(s) a partir de hoje.", $go );
+						}
+					}
+					 
+					//$checkmulta = $objEmprestimo->GetMulta($checkemprestimosmulta);
+					if ( !$checkmulta )
+					{
+			
+						//Retorna idemprestimo de bt_emprestimo ( desde que datahoradedevolucao = NULL )  
+						$checkemprestimosopenandirreg = $objEmprestimo->GetEmprestimosOpenandIrregular($data->idusuario);
+	
+						if ($checkemprestimosopenandirreg->result)
+						{
+						
+							//Grid
+							$columns = array(
+							new DataGridColumn(null),
+							new DataGridColumn('numerodotombo','Exemplar','center',false, '10%',true, null, true,true),
+							//new DataGridColumn('numerodaobra','Obra','center', false, '10%',true, null, true,true),
+							new DataGridColumn('titulo','Título','left', false, '20%',true, null, true,true),
+							new DataGridColumn('autor','Autor','left', false, '10%',true, null, true,true),			
+							//new DataGridColumn('edicao','Edição','center', false, '10%',true, null, true,true),
+							new DataGridColumn('prevdev','Previsão de devolução.','center', false, '20%',true, null, true,true),
+							
+							);
+	
+							$href_datagrid = $MIOLO->GetActionURL($module,$self,'', Array('event'=>'btnVerificar_click'));
+							$page->SetAction($href_datagrid);
+							
+							//var_dump($checkemprestimosopenandirreg);
+							
+							$datagrid = new DataGrid2($checkemprestimosopenandirreg, $columns, $href_datagrid,20);
+							$datagrid->SetTitle('Usuário com empréstimos em ATRASO');
+							$datagrid->SetLinkType('linkbutton');
+							$datagrid->SetWidth('100%');
+								
+							$theme->AppendContent($datagrid);
+							
+							$this->SetFieldAttr('edtSenha','visible',false);
+							$this->SetFieldAttr('edtExemplar','visible', false);
+							$this->SetButtonAttr('btnVoltar','visible',true);
+							$this->SetButtonAttr('btnEmprestar','visible',false);	
+							$this->SetButtonAttr('btnVerificar','visible',false);
+							$this->SetButtonAttr('btnRealizarEmprestimo','visible',false);
+							$this->SetButtonAttr('btnConfirmar','visible',false);
+						}
+						
+						else  // filho
+						{
+							
+							//Propriedades dos campos
+							$this->SetFieldAttr('edtCartaoAcesso','readonly',true);
+							$this->SetFieldAttr('edtNome','readonly',true);
+							$this->SetFieldAttr('edtSenha','visible',false);
+							
+							//usuario nao tem multas nem infrações.
+							if ( !$checkinfracao->result )
+							{
+								$this->SetFieldAttr('edtExemplar','visible', true);
+								$this->page->onLoad("MIOLO_GetElementById('edtExemplar').focus();");
+							}
+							
+							
+						}
+					}
+					else
+					{
+						//$MIOLO->Prompt(Prompt::Error("USUÁRIO COM MULTA. VALOR R$ ". number_format($checkmulta[0][0],2,',',''),$action,$action));	
+						$msg = "USUÁRIO COM MULTA. <font color=red>VALOR R$ ". number_format(str_replace(',','.',$checkmulta),2,',','.')."</font><br><br>Deseja pagar a multa ?";
+        				$gotoYes = $MIOLO->GetActionURL($module,'main:emprestimos:multa',$data->cartaoacesso,array('event'=>'btnConsulta_click'));
+        				$gotoNo = $MIOLO->GetActionURL($module,$self);
+        				//$eventYes = "promptHandler;Question_Yes";
+        				$eventNo = "promptHandler;Question_No";
+        				$MIOLO->Question($msg, $gotoYes, $gotoNo, $eventYes, $eventNo);
+
+					}
+
+				}
+				else
+				//caso o usuário seja ativo, mas esteja com situação irregular
+				{
+					if ($checkvinculo == 1)
+					{
+						$MIOLO->Prompt(Prompt::Error("<font color=red>Aluno não está regularmente matriculado.<BR>Situação atual: $situacao.<BR>Procure a Central de Atendimento.</font>",$action));
+					}
+					else	
+					{
+						if (($checkvinculo == 2) or ($checkvinculo == 4)) 
+						{
+							$MIOLO->Prompt(Prompt::Error("<font color=red>Professor com provimento irregular. Regularize a sua situação na PRORH.</font>",$action));
+						}
+						else
+						{
+							if ($checkvinculo == 3)
+							{
+							$MIOLO->Prompt(Prompt::Error("<font color=red>Funcionário com provimento irregular. Regularize a sua situação na PRORH.</font>",$action));
+							}
+						}
+					}
+				}
+			}
+			else
+			{
+				$MIOLO->Prompt(Prompt::Error("<font color=red>Usuário sem grupro cadastrado</font>",$action));
+								
+			}
+			
+					
+						
+		}
+		else
+		{	
+			$MIOLO->Prompt(Prompt::Error("<font color=red>SENHA INVÁLIDA</font>",$action));
+		}
+		
+				
+		
+		//Propriedades dos campos
+		$this->SetFieldAttr('edtNome','visible',true);
+		$this->SetFieldAttr('edtNome','readonly',true);
+		$this->SetFieldAttr('edtCartaoAcesso','readonly',true);
+		//$this->SetFieldAttr('edtSenha','visible',true);
+
+	} 
+
+	
+	//Barbacena
+	function btnImprimirRecibo_click()
+	{
+		global $MIOLO, $module, $item;
+		$Exemplares =  array();
+		$Exemplares = $this->getListaExemplares();
+
+		$i = 0;
+		foreach ($Exemplares as $Exemplar)
+		$i++;
+			
+		$ui = $MIOLO->GetUI();
+        $report = new MJasperReport( 'sigabib' );
+        
+		$parameters[ 'str_CODIGOACESSO' ] = $this->getFieldValue( 'edtCartaoAcesso' );
+			
+		if ($i <= 2 )
+			$report->Execute('biblioteca','Ticket1_Emprestimo_UI',$parameters);
+		else
+			if ($i <= 4 )
+				$report->Execute('biblioteca','Ticket2_Emprestimo_UI',$parameters);
+			else
+				$report->Execute('biblioteca','Ticket3_Emprestimo_UI',$parameters);
+	}
+	
+	function btnRealizarEmprestimo_click()
+	{ 
+		global $MIOLO,$module,$item,$self, $theme, $action, $page,$datagrid;
+		
+		//$this->page->onLoad('document.'.$this->name.'.edtExemplar.focus();');
+		$this->page->onLoad("MIOLO_GetElementById('edtExemplar').focus();");
+
+		// Atributo dos botões
+		$this->SetButtonAttr('btnVerificar','visible',false);
+		$this->SetButtonAttr('btnRealizarEmprestimo','visible',true);
+		$this->SetButtonAttr('btnImprimirRecibo','visible', true );
+        //$this->SetButtonAttr('btnImprimirRecibo','visible', true );
+		$this->SetButtonAttr('btnConsulta','visible',false);
+		$this->SetButtonAttr('btnConfirmar','visible',false);
+		
+		$data = $this->GetData();
+ 	   	//var_dump($data);
+	    
+		//Instancia a classe Emprestimo	   	
+		$objEmprestimo = $MIOLO->GetBusiness($module,'emprestimo');
+		
+		//Propriedades dos campos
+		$this->SetFieldAttr('edtNome','visible',true);
+		$this->SetFieldAttr('edtSenha','visible',false);
+		$this->SetFieldAttr('edtCartaoAcesso','readonly',true);
+		$this->SetFieldAttr('edtNome','readonly',true);
+		$this->SetFieldAttr('edtSenha','readonly',true);
+		$this->SetFieldAttr('edtExemplar','visible', true);
+		
+		// Vamos Transformar a string em um Array de 1 elemento
+		$Exemplares =  array();
+		array_push($Exemplares,$data->exemplar);	
+		
+		
+		// o Resultado final do sistema
+		// Retirado para entrada do GRID
+		//$Resultado = " <BR><BR> Resultado: <BR><BR> ";
+		
+		//$objEmprestimo->BeginTransaction();
+		
+		if ($Exemplares)
+		{
+	              					
+		       	// Faz a mesma verificação dos exemplares
+
+                        //Se o campo "Exemplar" estiver vazio, não faz a pesquisa no banco.
+			if($Exemplares[0] != "")
+			     $Exemplares = $objEmprestimo->GetExemplares($Exemplares,$data->idusuario);
+
+			$Exemplares = $Exemplares->result;
+			
+			//var_dump($Exemplares);
+			$Resultado = Array();
+			$i = 0;		
+			//
+			//  $resultado[$i][0] = Numero Do Tombo
+			//  $resultado[$i][1] = Mensagem
+			//  $resultado[$i][2] = Data Prev Devolucao
+
+			foreach ($Exemplares as $Exemplar)
+			{
+				//$a = $data->exemplar;
+						
+				$EmprestimoOK = true;
+				
+				$Resultado[$i][0] = $Exemplar[0];
+				
+				$idusuario = $data->idusuario;
+				
+				if (!$Exemplar[6]) // Emprestimo impedido?
+				{
+
+					
+							// item 4.9
+							$query =$objEmprestimo->GetSituacao("ATENDIDA");
+							$idSituacaoAtendida = $query->result[0][0];
+
+                            // item 4.10
+							$query = $objEmprestimo->GetSituacao("CONFIRMADA");
+							$idSituacaoConfirmada = $query->result[0][0];
+
+							// item 4.11
+							$query = $objEmprestimo->EstaReservado($idSituacaoAtendida,$Exemplar[0]);
+							$idReserva = $query->result[0][0];
+							$usuarioReserva = $query->result[0][1];
+
+							$query = $objEmprestimo->NumeroTomboToIDExemplar($Exemplar[0]);
+							$idExemplar = $query->result[0][0];
+
+							$query = $objEmprestimo->EstaEmprestado($idExemplar);
+							$idEmprestimo = $query->result[0][0];
+
+							//var_dump($idReserva,$usuarioReserva);
+							
+							
+							
+
+                            if (!($idEmprestimo)) // exemplar já está emprestado (f5 na pagina)
+                            {
+
+    							if ($usuarioReserva) // existe alguma reserva !!
+    							{
+
+    								if ($usuarioReserva = $idusuario) // a reserva é do usuario !!
+    								{
+
+    									if ($objEmprestimo->ConfirmarReserva($idReserva,$idSituacaoConfirmada))
+    									{
+    										//$Resultado .= " $Exemplar[0]: Reserva atendida <BR>";
+    										$Resultado[$i][1] = " Reserva atendida ";
+    										if ($arrayEmp = $objEmprestimo->ConfirmarEmprestimo($Exemplar[0],$idusuario,$this->manager->GetLogin()->idkey))
+    										{
+    											$Resultado[$i][1] .= " - empréstimo confirmado ";
+    											$Resultado[$i][2] = $arrayEmp[1];   											
+    										}					
+    									}
+    								}
+
+    							}
+    							else
+    							{
+
+    								if ($arrayEmp = $objEmprestimo->ConfirmarEmprestimo($Exemplar[0],$idusuario,$this->manager->GetLogin()->idkey))
+    								{
+    									
+    								    $data = $this->GetData();
+    									$mumerodotombo = $data->exemplar;
+    									$this->objExemplar = $MIOLO->GetBusiness($module,'exemplar');
+    									$this->objEmprestimo = $MIOLO->GetBusiness($module,'emprestimo');
+    									//$notaCirculacao = $this->objExemplar->getNotaCirculacao($mumerodotombo)->result[0][0];
+    									
+    									
+    									//$exemplar recebe o objeto, de acordo com o nº do tombo inserido
+    									$exemplar = $this->objExemplar->GetByTombo($data->exemplar);
+    									//tem-se a 'notadecirculacao' do objeto
+										$notaCirculacao = $exemplar->getObject()->notacirculacao;		
+										
+										
+   									    									
+    									//$Resultado .= " $Exemplar[0]: Empréstimo Confirmado. Devolucao em:  " . $arrayEmp[1];
+    									if ($notaCirculacao != null)
+    									{
+    										$Resultado[$i][1] = "Empréstimo Confirmado - " . "<font color=red>Nota: $notaCirculacao </font>";
+   											$Resultado[$i][2] = $arrayEmp[1];
+    									}
+    									else 
+    									{
+    										$Resultado[$i][1] = "Empréstimo Confirmado";
+   											$Resultado[$i][2] = $arrayEmp[1];
+    									}
+    								}
+    								
+    								else
+    								{
+    									$Resultado[$i][1] = " <font color=red> Ocorreu algum problema ao realizar o empréstimo. </font>";
+    								}
+
+    							}
+                            }
+                            else
+                            {
+                                $Resultado[$i][1] = " <font color=red> Este exemplar está emprestado </font> ";
+                            }
+
+
+				} // fim do if not _ 
+				else
+				{
+					$Resultado[$i][1] = " Problemas com o Exemplar: " . $Exemplar[5];
+				}
+
+				
+			if (empty($Resultado[$i][2]))
+				$Resultado[$i][2] = 0;
+				
+			$i++;
+
+			}	
+
+		}
+		else				
+		{
+			$goto = $MIOLO->GetActionURL($module,$self);
+			$MIOLO->Error('<font color=red>Nenhum exemplar selecionado. Por favor, volte e selecione os exemplares.</font>', $goto,500);
+		}
+		
+		//$objEmprestimo->EndTransaction();
+		
+		//$this->objExemplar = $MIOLO->GetBusiness($module,'exemplar');
+		$this->objEmprestimo = $MIOLO->GetBusiness($module,'emprestimo');
+		
+		
+		// como é um exemplar mesmo, pode fazer essa lenha ae:
+		// adicionando o campo título
+		$Resultado[0][3] = $Resultado[0][2];
+		$Resultado[0][2] = $Resultado[0][1];
+
+		if ($Exemplar[2])
+		{		
+			$Resultado[0][1] = $this->objEmprestimo->getTitulo($Exemplar[0])->result[0][0];
+		}
+		else 
+			$Resultado[0][1] = "-";
+		
+		/*
+		if ( !$Exemplar[6] )
+			$Resultado[0][1] = $objEmprestimo->getTitulo($Exemplar[6])->result[0][0];
+		else 
+			$Resultado[0][1] = "-";
+		
+		*/
+		
+		
+		
+		 $columns = array(
+           new GridColumn('Exemplar', 'right', true, '10%',true,null,false,true),
+           new GridColumn('Título', 'left',  false, '30%',true,null,false,true),
+           new GridColumn('Mensagem', 'left', false, '44%',true,null,false,true),
+           new GridColumn('Prev Dev', 'left', true, '16%',true,null,false,true)
+          );
+          
+          //Não adiciona registro no grid, caso o exemplar não exista ou seja inválido. 
+          if($Exemplares !=  null)
+	  {
+              $this->addListaExemplares($Resultado[0]);
+	  }
+          
+          $data=$this->GetData();
+          
+          
+          $href_datagrid = $MIOLO->GetActionURL($module,$self);
+          $datagrid = new Grid($this->getListaExemplares(), $columns, $href_datagrid,50);
+          $datagrid->SetTitle('Resultado');
+		  $datagrid->SetWidth('99%');
+		 
+		    		  
+			//Esconde os campos 
+			$this->SetFieldAttr('edtNome','visible', true);
+			$this->SetFieldAttr('edtSenha','visible', false);
+			$this->SetFieldAttr('edtExemplar','visible',  true);
+			$this->SetFieldAttr('edtCartaoAcesso','visible', true);
+			
+			// Atributo dos botões
+			$this->SetButtonAttr('btnConsulta','visible',false);
+			$this->SetButtonAttr('btnVerificar','visible',false);
+			$this->SetButtonAttr('btnRealizarEmprestimo','visible',true);
+			$this->SetButtonAttr('btnConfirmar','visible',false);
+			$this->SetButtonAttr('btnVoltar','visible',true);
+
+		  	  
+		 
+		  $theme->AppendContent($datagrid);
+		  
+		  $this->SetFieldValue('edtExemplar','');
+	
+	} 
+	
+  
+
+	    
+    
+    function getDataLog($Emprestimo)
+	{
+		global $MIOLO;
+		$data = new FormData();
+		$data->data = date("d/m/Y H:i:s");
+		$data->identificador = $Emprestimo;
+		$data->idusuario = $MIOLO->GetLogin()->idkey;
+		$operacao = $MIOLO->GetBusiness('biblioteca','operacao');
+		$operacao = $operacao->GetIdoperacaoByMnemonico('EMPRESTIMO');
+		$data->idoperacao = $operacao->GetIdoperacao();
+		return $data;
+	}
+	
+	
+	function addListaExemplares($Exemplar)
+	{global $MIOLO,$module,$item,$self, $theme, $action, $page,$datagrid;
+	
+		$data = $this->GetData();
+	
+		$lista = $data->ListaExemplares;
+		
+		//
+		// $lista é uma grande string concatenada para exibição dos resultados dos campos
+		// onde:
+		//           @@@ separa os campos
+		//           @@@|-|@@@ separa os registros
+		$lista = $lista . '@@@|-|@@@' . $Exemplar[0] . '@@@' . $Exemplar[1] . '@@@' . $Exemplar[2] .'@@@' . $Exemplar[3];
+				
+		$this->SetFieldValue('ListaExemplares',$lista);
+	}
+
+	function getListaExemplares()
+	{
+		// pega $data->ListaExemplares retorna um array
+		
+		$lista = $this->GetFieldValue('ListaExemplares');
+		$registros = explode('@@@|-|@@@',$lista);
+	
+		$exemplares = array();
+		
+		foreach ($registros as $registro)
+		{
+			if ($registro)
+			 array_push($exemplares,explode('@@@',$registro));
+		}
+		
+		return $exemplares;
+	}
+
+    function doPasswordMD5()
+    {
+       $code = "function doPasswordMD5() { \n".
+               "  MIOLO_SetElementValueById('edtSenha',MD5(MIOLO_GetElementById('edtSenha').value));\n".
+               "  return true;\n".
+               "}\n";
+       return $code;
+    }
+
+
+}
+?>

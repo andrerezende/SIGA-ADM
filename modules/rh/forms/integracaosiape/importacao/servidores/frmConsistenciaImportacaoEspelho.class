@@ -1,0 +1,945 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+/*____________________________________________________________________________________________________________________________________
+|                                                                                                                                     |
+| Seqüência normal:                                                                                                                   |
+|                                                                                                                                     |
+| 1) menu Integração SIAPE :: Importação :: Servidores  (frio: frmServidores.class)                                                   |
+|      .busca o texto, AAAA_MM.txt ou AAAA_MM.zip (este melhor devido ao limite de tamanho para transmissão) do computador local      |
+|      .envia o texto para /home/USUARIO/miolo/modules/rh/files/integracaosiape/importacao/servidores/siapefitaesp_MM_AAAA.txt.gz     |
+|                                                                                                                                     |
+| 2) alterar miolo.conf: <level>0</level>                                                                                             |
+|                                                                                                                                     |
+| 3.1) crontab: php5 processaArquivos.php                                                                                             |
+|                                                                                                                                     |
+| 4) Integração SIAPE :: Importação :: Consistência e Importação (relatório comparando Espelho e SIGA)                                |
+|                                                                                                                                     |
+|_____________________________________________________________________________________________________________________________________|
+|                                                                                                                                     |
+| alternativa 3.2) putty:                                                                                                             |
+|      .cd  /home/USUARIO/miolo/modules/rh/offline                                                                                    |
+|      .php5 importServidor.php /home/batista/miolo/modules/rh/files/integracaosiape/importacao/servidores/siapefitaesp_M_AAAA.txt.gz |
+|                                                                                                                                     |
+| alternativa 3.3)                                                                                                                    |
+|      .copiar importServidor.php para F:\miolo\html                                                                                  |
+|      .http://miolo.ufjf.br:8540/importServidor.php  PORÉM FALTARIA O PARÂMETRO ARQUIVO                                              |
+|____________________________________________________________________________________________________________________________________*/
+
+
+/*>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+>>> RELATORIO de erros exclus_grupo , inclusive com publicacao para INSERT em rh_provimento <<<
+<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+/* sexo errado
+
+select sexo,nome from cm_pessoa where idpessoa =203792;
+
+S NOME
+- --------------------------------------------------------
+M EVILAZIA BUENO DA SILVA
+
+**********************************************************
+
+//__//__//__//__//__//__//__//__//__
+//__                            //__
+//__     INIBE SOBREPOSIÇÃO     //__
+//__                            //__
+//__//__//__//__//__//__//__//__//__
+
+/*         $this->page->refresh();
+
+Objetivo: consistência e importação de dados do arquivo-espelho
+
+Algoritmo:
+    -
+*/
+
+// observar que  ('01/01/2001' difere de '')  e  ('01/01/2001' difere de '1/01/2001' )
+
+class frmConsistenciaImportacaoEspelho extends MForm
+{
+    var $anomes, $siape,
+        $novosresult, $gravadosresult,
+        $objtipo1, $tipo1,
+        $objtipo2, $tipo2,
+        $vinculo, $provimento, $ultimoprovimento;
+
+    function __construct()
+    {
+        parent::__construct('Consistência e Importação do Espelho de Servidores');
+        $this->EventHandler();
+    } // __construct
+
+
+    function CreateFields()
+    {
+        /*echo intval('00');
+        echo "<BR>";
+        echo intval('  ');*/
+
+        $objtipo0 = $this->manager->GetBusiness('rh','tipo0');
+        $fanomes = $objtipo0->DefineUltimoMes();
+
+        $fields = array( 
+            new MLabel    ('limitado a 300','red',TRUE),
+            new MLabel    ('Ano Mês a processar','blue',TRUE),
+                         new MTextField('fanomes',$fanomes[0],'',8) );
+        $this->SetFields($fields);
+
+        $buttons = new MButton('btnPDF', 'Gerar Relatório', 'PDF');
+        $this->SetButtons($buttons);
+        $this->defaultButton = false;
+    } // CreateFields
+
+    function btnPDF_click()
+    {
+        global $module;
+
+        $this->VarreTipo1();
+        $array['title']        = array($this->GetTitle(), 'Ano/Mês:' . $this->anomes);
+
+        $array['novoslengths'   ] = array( 8            , 4                , 33   , 11  , 10         , 30  );
+        $array['novoslabels'    ] = array('SIAPE'       ,'DV'              ,'Nome','CPF','Nascimento','Mãe');
+        $array['novosresult'    ] = $this->novosresult;
+
+        $array['gravadoslengths'] = array( 14           , 24               , 30   , 30      );
+        $array['gravadoslabels' ] = array('SIAPE-pessoa','Ocorrência','SIGA','Espelho');
+        $array['gravadosresult' ] = $this->gravadosresult;
+
+        $ui = $this->manager->GetUI();
+        $report = $ui->GetReport($module,'repConsistenciaImportacaoEspelho',$array,'servidores');
+        $report->Generate();
+
+        //tvz usar $array para outras e tvz coloca-lo em $this
+
+    } // btnPDF_click
+
+
+    function VarreTipo1()
+    {
+        $data = $this->GetData();
+        $this->anomes = $data->fanomes;
+
+        $this->objtipo1 = $this->manager->GetBusiness('rh','tipo1');
+        $this->tipo1 = $this->objtipo1->listbyAnoMes($this->anomes);//$zz='- ';
+
+        //__TRY
+        //__{
+        //__    $this->objtipo1->beginTransaction();
+$ii=0;
+            while (! $this->tipo1->eof())
+            {
+                $ii++; if ($ii == 300) return;
+
+                $this->siape = $this->tipo1->fields('siape');
+                //echo '[' . $this->siape . "] \n";
+///if ( ($this->siape=='1150716') or ($this->siape=='0314487') )
+///{
+                $this->vinculo = $this->manager->GetBusiness('rh','vinculo');
+                $this->vinculo->GetById($this->siape);
+                if ($this->vinculo->isPersistent())
+                {                    //$zz[] = $this->siape;
+                    $this->GravaVerificaTipo1();
+                    $this->GetTipo2();
+                    //$this->ListTipo3();
+                    //$this->GetTipo4();
+                }
+                else
+                {                    //echo $this->siape . ' dest ';
+                    $this->novosresult[] = array($this->siape                         ,$this->tipo1->fields('dv_matricula' ),
+                                                 $this->tipo1->fields('nome_servidor'),$this->tipo1->fields('cpf'          ),
+                                                 $this->tipo1->fields('dt_nascimento'),$this->tipo1->fields('nome_mae'     ));
+                }
+                $this->tipo1->moveNext();
+            }
+
+        //__    $this->objtipo1->endTransaction();
+        //__} //TRY
+        //__CATCH ( Exception $e )
+        //__{
+        //__    $this->addError($e->getMessage());
+        //__}
+//$this->gravadosresult[] = $zz;//array($siape_branco, $erro, $siga, $espelho);
+    } // VarreTipo1
+
+    function GetTipo2()
+    {
+        $this->objtipo2 = $this->manager->GetBusiness('rh','tipo2');
+        $this->tipo2 = $this->objtipo2->getbySiapeAnoMes($this->siape, $this->anomes);
+
+        /*$this->vinculo = $this->manager->GetBusiness('rh','vinculo');
+        $this->vinculo->GetById($this->siape);
+        if ($this->vinculo->isPersistent())
+        {*/
+            $this->VerificaTipo2();//GravaVerificaTipo2
+        //}
+    } //GetTipo2
+
+
+    function VerificaTipo2()
+    {
+        /*carteira de trabalho está toda zerada no Espelho, exceto para um celetista
+          $this->Difere2('Carteira-Número'                                      ,
+                         trim($this->vinculo->funcionario->pessoa->numcartpro)  ,
+                         trim($this->tipo2->fields('cart_trab_num'))            );
+          $this->Difere2('Carteira-Série'                                       ,
+                         trim($this->vinculo->funcionario->pessoa->seriecartpro),
+                         trim($this->tipo2->fields('cart_trab_serie'))          );
+          $this->Difere2('Carteira-UF'                                          ,
+                         trim($this->vinculo->funcionario->pessoa->ufcartpro)   ,
+                         trim($this->tipo2->fields('cart_trab_uf'))             );
+        */
+
+        $this->Difere2('Banco'                                                ,
+                       intval($this->vinculo->funcionario->pessoa->idbanco)   ,
+                       intval($this->tipo2->fields('banco'))                  );
+        $this->Difere2('Agência'                                              ,
+                       intval($this->vinculo->funcionario->pessoa->idagencia) ,
+                       intval($this->tipo2->fields('agencia'))                );
+        $this->Difere2('Conta'                                                ,
+                       intval($this->vinculo->funcionario->pessoa->conta)     ,
+                       intval($this->tipo2->fields('conta'))                  );
+
+        $this->provimento = $this->manager->GetBusiness('rh','provimento');
+        $this->provimento->getUltimoProvimento($this->siape);
+        $this->ultimoprovimento = $this->provimento;
+
+        $this->Difere2('Regime Jurídico'                                      ,
+                       trim($this->ultimoprovimento->regimeJuridico)                ,
+                       trim($this->tipo2->fields('regime_juridico'))          );
+        $this->Difere2('Situação'                                             ,
+                       trim($this->ultimoprovimento->idSituacao)                    ,
+                       trim($this->tipo2->fields('cod_situacao'))             );
+        $this->Difere2('Jornada'                                              ,
+                       $this->ultimoprovimento->idJornada                           ,
+                       $this->tipo2->fields('jornada_trab')                   );
+        /*perc_tempo_serv
+          dt_cadast_serv
+          ind_supr_pagto
+          dt_supr_pagto
+          proporc_numerad
+          proporc_denomin
+        */
+
+        $this->Difere2('Grupo-Cargo'                                          ,
+                       $this->ultimoprovimento->idGrupoCargo                        ,
+                       $this->tipo2->fields('cargo_grupo')                    );
+        $this->Difere2('Cargo'                                                ,
+                       $this->ultimoprovimento->idCargo                             ,
+                       $this->tipo2->fields('cargo_nome')                     );
+        $this->ultimoprovimento->retrieveAssociation('classe');
+        $this->Difere2('Classe'                                               ,
+                       $this->ultimoprovimento->classe->classe                      ,
+                       $this->tipo2->fields('cargo_classe')                   );
+        $this->ultimoprovimento->retrieveAssociation('referencia');
+        $this->Difere2('Referência'                                           ,
+                       $this->ultimoprovimento->referencia->nivelPadrao             ,
+                       $this->tipo2->fields('cargo_ref_nivel')                );
+        /*cargo_dt_entrad: na maioria das vezes seriam as datas do primeiro provimento, ou de
+          cargo_dt_saida : um provimento de data mediana, no caso de ascensão, por exemplo
+
+          funcao_sigla
+          funcao_codnivel
+          funcao_escolar
+          funcao_opcao
+          funcao_dt_ingr
+          funcao_dt_saida
+          funcao_unid_org
+          nov_fc_sigla
+          nov_fc_codnivel
+          nov_fc_escolar
+          nov_fc_opcao
+          nov_fc_dt_ingr
+          nov_fc_dt_saida
+          nov_fc_unid_org
+          ativid_funcao
+
+          lotac_unid_org
+          lotac_unid_dt
+          local_orgao
+          local_unid_org
+        */
+
+        $this->Ingresso();
+
+        /*ing_sp_grupo
+          ing_sp_ocor
+          ing_sp_dt
+          ing_sp_dip_cod
+          ing_sp_dip_num
+          ing_sp_dip_dt
+        */
+
+        $this->Exclusão();
+        $this->Afastamento();
+        $this->Inatividade();
+
+        /*apos_num_proc
+          apos_ano_prev
+          apos_opcao_int
+          uorg_controle
+        */
+
+        $this->ModificacaoFuncional();
+
+        /*reg_jur_ant
+          sit_serv_ant
+          mud_org_destino
+          mud_org_dt_lib
+          mud_org_origem
+          orgao_anterior
+          matric_anterior
+          cod_org_extinto
+          mat_serv_extint
+          orgao_atual
+          matric_atual
+          mud_upag_codigo
+          mud_upag_dt_lib
+          mud_upag_motivo
+          indic_pag_serv
+          obito_cartori0
+          obito_livro
+          obito_folha
+          obito_registro
+          obito_dt
+          ind_exc_instit
+          dt_exc_instit
+          vale_al_tipo
+          vale_al_dt_inic
+          vale_al_dt_fim
+        */
+
+        $this->AdicionalRaioX();
+
+        /*orgao_requisit*/
+
+        if ( intval($this->tipo2->fields('codigo_vaga')) > 0 )  //CUIDADO COM TESTE COMO ESTE
+        {
+            $this->vinculo->retrieveAssociation('ocupacaoVagas');
+            $this->Difere2('Ocupação de vaga'                       ,
+                           $this->vinculo->ocupacaoVagas->numeroVaga,
+                           $this->tipo2->fields('codigo_vaga')      );
+        }
+
+        /*mes_anuenio 
+          perc_oper_raiox
+          posse_grupo
+          posse_ocor
+        */
+
+        $espelho = $this->tipo2->fields('posse_dt');
+        $this->Datas('Data de posse'          ,
+                     $this->vinculo->dataPosse,
+                     $espelho                 );
+        /*
+           rh_tipo2    COM posse_dt :   1454  (contemplado no teste acima)
+           rh_vinculo  COM DATAPOSSE:   3762  (reverso também está sendo verificado)
+
+           rh_tipo2    sem posse_dt :   4577  
+           rh_vinculo  sem DATAPOSSE:   1456
+
+          posse_dip_cod não existe em rh_vinculo
+          posse_dip_dt
+          posse_dip_num
+
+        if ( intval($espelho) > 0 )  //CUIDADO COM TESTE COMO ESTE
+        {
+            $this->Diploma($this->?? vinculo, 'Posse', 'posse');
+        }
+        */
+
+        $this->ReversaoAtividade();
+
+/*SQL> 
+
+select rev_ati_grupo, rev_ati_ocor, rev_ati_dt, rev_ati_dip_cod cod, rev_ati_dip_num num, rev_ati_dip_dt dt
+from rh_tipo2 where siape = 0314487;
+
+select IDPUBLICACAO, IDGRUPOOCORRENCIA, IDOCORRENCIA, datainicio
+from rh_provimento  where idvinculo= 0314487;
+
+RE REV REV_ATI_
+-- --- --------
+00 000 00000000
+01 116 22082005
+01 116 27032006
+
+SQL> select siape ,rev_ati_ocor,rev_ati_dip_cod,rev_ati_dip_num,rev_ati_dip_dt from rh_tipo2 where rev_ati_grupo = '01';
+
+SIAPE   REV RE REV_ATI_D REV_ATI_
+------- --- -- --------- --------
+1150716 116 00           00000000
+0314487 116 00           00000000
+
+select IDPUBLICACAO,datainicio from rh_provimento where  IDGRUPOOCORRENCIA=1 and IDOCORRENCIA=116;
+
+IDPUBLICACAO NuLa
+------------
+*/
+
+          /*ica_cargo
+          ica_funcao
+          ica_sal_familia
+          ica_adic_tempo
+          ica_fgts
+          ica_inss
+          ica_ir
+          ica_margem_cons
+          ica_cont_sind
+          ica_adiant_13
+          ica_abate_teto
+          ica_13_salario
+          ica_pss_6
+          ica_ferias
+          ica_pensao
+          ica_beneficios
+          ica_ipmf_cpmf
+          ica_rais
+          ica_dif_urv
+          ica_adiant
+          ica_rend_pasep
+          */
+
+
+} // VerificaTipo2
+
+
+    function GravaVerificaTipo1()
+    {
+        global $siape_branco;
+        $siape_branco = $this->siape;
+
+        //__$this->vinculo->setTransaction( $this->objtipo1->getTransaction() );
+
+        $this->DifereDVVinculo();
+        //__$this->vinculo->dvIdVinculo = $this->tipo1->fields('dv_matricula');
+
+        $this->vinculo->retrieveAssociation('funcionario');
+        /// tirado pela OBS abaixo        $this->vinculo->funcionario->retrieveAssociation('pessoa');
+
+        $objhisttitulacao = $this->manager->GetBusiness('rh','histtitulacao');
+
+        if ($this->vinculo->isDocente())
+        {
+            $this->Difere2('Última titulacão'                                             ,
+                           intval($objhisttitulacao->getUltimobyidFuncionario($this->vinculo->idFuncionario)),
+                           intval($this->tipo1->fields('titulacao'))                                );
+        }
+
+        //__$this->vinculo->funcionario->setTransaction        ( $this->objtipo1->getTransaction() );
+        //__$this->vinculo->funcionario->pessoa->setTransaction( $this->objtipo1->getTransaction() );
+
+        $this->DiferePessoa();
+        $this->DifereFuncionario();
+
+        //__$this->vinculo->funcionario->pessoa->nome    = substr($this->tipo1->fields('nome_servidor'),0,56);
+        //__$this->vinculo->funcionario->pessoa->nomemae = $this->tipo1->fields('nome_mae');
+
+        /// tirado pela OBS acima        $this->vinculo->funcionario->saveAssociation('pessoa');
+        //__$this->vinculo->saveAssociation('funcionario');
+        //__$this->vinculo->save();
+    } // GravaVerificaTipo1
+
+
+/*
+//-rw-r--r-- 1 www-data www-data     219 2007-12-16 04:12 siapefitaesp_10_2007.log.gz
+//-rw-r--r-- 1 www-data www-data 1833338 2007-12-13 15:46 siapefitaesp_10_2007.txt.gz
+
+/*func:pessoa       <retrieveAutomatic>true</retrieveAutomatic>
+                   <saveAutomatic>true</saveAutomatic>
+DEPENDENTE:        <retrieveAutomatic>true</retrieveAutomatic> para Pessoa
+
+select count(*)  from rh_funcionario where Escolaridade = 0;
+       63
+select count(*)  from  rh_tipo1 where Escolaridade = 0;
+      831
+*/
+
+    function Escolaridade()
+    {
+        //if ($this->vinculo->funcionario->escolaridade == '') '' '00'
+        {
+          //  $this->vinculo->funcionario->escolaridade = $this->tipo1->fields('escolaridade')
+        }
+        //else
+        {
+            $this->Difere2('Escolaridade'                                         ,
+                           $this->vinculo->funcionario->escolaridade                        ,
+                           $this->tipo1->fields('escolaridade')                             );
+        }
+    } // Escolaridade
+
+
+    function Dependentes()
+    {
+        $quant_dep_ir = 0;
+        $quant_dep_sf = 0;
+        $this->vinculo->funcionario->retrieveAssociation('dependentes');
+        if ($this->vinculo->funcionario->dependentes)
+        {
+            foreach( $this->vinculo->funcionario->dependentes as  $dependente)
+            {
+                $dependente->retrieveAssociation('dependencias');
+                if ( is_array($dependente->dependencias) )
+                {
+                    foreach( $dependente->dependencias as $dependencia )
+                    {
+                        if ($dependencia->idTipoDependencia == 'IR')
+                        {
+                            $quant_dep_ir ++;
+                        }
+                        if ($dependencia->idTipoDependencia == 'SF')
+                        {
+                            $quant_dep_sf ++;
+                        }
+                    }
+                }
+            }
+        }
+
+        $this->Difere2('Quantidade de dependentes IR'      ,
+                       $quant_dep_ir                       ,
+                       $this->tipo1->fields('quant_dep_ir'));
+        $this->Difere2('Quantidade de dependentes SF'      ,
+                       $quant_dep_sf                       ,
+                       $this->tipo1->fields('quant_dep_sf'));
+    } // Dependentes
+
+
+    function DifereDVVinculo()
+    {
+        global $siape_branco;
+
+        $this->Difere2('dígito verificador do vínculo'                            ,
+                       $this->vinculo->dvIdVinculo                                          ,
+                       $this->tipo1->fields('dv_matricula')                                 );
+    } // DifereDVVinculo
+
+
+    function DifereFuncionario()
+    {
+        $data = $this->vinculo->funcionario->dataPrimeiroEmprego;
+/*select dt_prim_emp         from rh_tipo1 where siape='0040485';
+select dataPrimeiroEmprego from rh_vinculo v, rh_funcionario f where v.idvinculo = '0040485' and v.idvinculo = f.idvinculo;
+select dataPrimeiroEmprego from rh_vinculo v, rh_funcionario f where v.idvinculo = '0040485' and v.idfuncionario = f.idfuncionario;
+*/
+        $this->Datas( 'Data do primeiro emprego'          ,
+                      $data                               ,
+                      $this->tipo1->fields('dt_prim_emp') );
+
+        $this->Dependentes();
+// NAO TEM identif_origem
+
+        $this->Escolaridade();
+    } // DifereFuncionario
+
+
+    function DiferePessoa()
+    {
+        global $siape_branco;
+        $this->Difere2('Nome'                                                               ,
+                       trim($this->vinculo->funcionario->pessoa->nome)                      ,
+                       trim($this->tipo1->fields('nome_servidor'))                          );
+        $this->Difere2('CPF'                                                                ,
+                       $this->vinculo->funcionario->pessoa->cpf                             ,
+                       $this->tipo1->fields('cpf')                                          );
+        $this->Difere2('PisPasep'                                                           ,
+                       $this->vinculo->funcionario->pessoa->pispasep                        ,
+                       $this->tipo1->fields('pis_pasep')                                    );
+        $this->Difere2('Nome da mãe'                                                        ,
+                       $this->vinculo->funcionario->pessoa->nomemae                         ,
+                       $this->tipo1->fields('nome_mae')                                     );  //podría ser 'nome_mae','tipo1', .., 'escolar','tipo2'
+        $this->Difere2('Sexo'                                                     ,
+                       $this->vinculo->funcionario->pessoa->sexo                            ,
+                       $this->tipo1->fields('sexo')                                         );
+        $data = $this->vinculo->funcionario->pessoa->datanasc;
+        $this->Datas('Data de nascimento'                                                 ,
+                     $data,
+                       $this->tipo1->fields('dt_nascimento')                                );
+        $this->Difere2('Estado civil'                                             ,
+                       $this->vinculo->funcionario->pessoa->idestadocivil                   ,
+                       $this->tipo1->fields('estado_civil')                                 );
+
+        $this->vinculo->funcionario->pessoa->retrieveAssociation('municipioNascimento');
+        $this->Difere2('UF de naturalidade'                                                     ,
+                       $this->vinculo->funcionario->pessoa->municipioNascimento->idUF     ,
+                       $this->tipo1->fields('naturalidade') );
+
+        $this->Difere2('País de nascimento'                                                             ,
+                       $this->vinculo->funcionario->pessoa->idpaisnascimento                            ,
+                       ( $this->tipo1->fields('pais') == '000' ) ? '024' : $this->tipo1->fields('pais') );
+        $this->Difere2('Ano de chegada ao Brasil'                                           ,
+                       intval($this->vinculo->funcionario->pessoa->anochegbrasil),
+                       intval($this->tipo1->fields('ano_chegada')               )                   );
+
+        /**/
+            $endereco    = trim($this->tipo1->fields('end_logradouro' ));
+            $numero      = trim($this->tipo1->fields('end_numero'     ));
+            $complemento = trim($this->tipo1->fields('end_complemento'));
+            //$separadordecomplemento = ', ';
+            if ($numero)
+            {
+                $endereco = $endereco . ', ' . $numero;
+                //$separadordecomplemento = '/';
+            }
+            if ($complemento)
+            {
+                //$endereco = $endereco . $separadordecomplemento . $complemento;
+                $endereco = $endereco . $complemento;
+            }
+        $this->Difere2('Endereço'                                               ,
+                       trim($this->vinculo->funcionario->pessoa->endereco)      ,
+                       $endereco                                                );
+        /**/
+        $this->Difere2('Bairro'                                                 ,
+                       trim($this->vinculo->funcionario->pessoa->bairro)              ,
+                       trim($this->tipo1->fields('end_bairro')         )              );
+        $this->vinculo->funcionario->pessoa->retrieveAssociation('municipio');
+        $this->Difere2('Município do Endereço'                                    ,
+                       $this->vinculo->funcionario->pessoa->municipio->municipio,
+                       //$this->vinculo->funcionario->pessoa->idmunicipio,
+                       $this->tipo1->fields('end_municipio')                    );
+        $this->Difere2('CEP'                                                    ,
+                       $this->vinculo->funcionario->pessoa->cep                 ,
+                       $this->tipo1->fields('end_cep')                          );
+        //$this->vinculo->funcionario->pessoa->retrieveAssociation('municipio');
+        $this->Difere2('UF do Endereço'                                                     ,
+                       $this->vinculo->funcionario->pessoa->municipio->idUF     ,
+                       $this->tipo1->fields('end_uf')                           );
+
+        $this->Difere2('Número do RG'                                                      ,
+                       ltrim($this->vinculo->funcionario->pessoa->numrg,'0')               ,
+                       ltrim($this->tipo1->fields('rg_numero')         ,'0')               );
+        $this->Difere2('Órgão do RG'                                                  ,
+                       trim($this->vinculo->funcionario->pessoa->orgaorg)             ,
+                       trim($this->tipo1->fields('rg_orgao'))                         );
+        $data = $this->vinculo->funcionario->pessoa->datarg;
+
+        $this->Datas('Data do RG'                                                         ,
+                       $data           ,
+                       $this->tipo1->fields('rg_dt_emissao')                                );
+        $this->Difere2('UF do RG'                                               ,
+                       $this->vinculo->funcionario->pessoa->ufrg                ,
+                       $this->tipo1->fields('rg_uf')                            );
+
+        $this->Difere2('Título de eleitor'                                      ,
+                       $this->vinculo->funcionario->pessoa->tituloeleitor       ,
+                       $this->tipo1->fields('tit_eleitor')                      );
+
+
+    } // DiferePessoa
+
+
+    function Difere2( $erro, $siga, $espelho)
+    {
+        global $siape_branco;
+
+if ($siape_branco <>'')
+   $siape_branco = $this->siape.'-'.$this->vinculo->funcionario->pessoa->idpessoa;
+
+        if ( trim($siga) <> trim($espelho) )  //ver se esse trim não atrapalha quando numérico, como em dep SF IR
+        {
+            $this->gravadosresult[] = array($siape_branco, $erro, $siga, $espelho);
+            $siape_branco = '';  //para em uma continuação do mesmo vínculo não reimprimi-lo
+        }
+    } // Difere2
+
+    function Ingresso()
+    {
+        $this->provimento->getPrimeiroProvimento($this->siape);
+        $this->Difere2('Ingresso Órgão, Grupo'                             ,
+                       trim($this->provimento->idGrupoOcorrencia)                ,
+                       trim($this->tipo2->fields('ing_org_grupo'))         );
+        $this->Difere2('Ingresso Órgão, Ocorrência'                        ,
+                       trim($this->provimento->idOcorrencia)                     ,
+                       trim($this->tipo2->fields('ing_org_ocor'))          );
+        $this->Datas('Ingresso Órgão, Data'                              ,
+                       $this->provimento->dataInicio,
+                       $this->tipo2->fields('ing_org_dt')       );
+
+        $this->Diploma($this->provimento, 'Ingresso', 'ing_org');
+    } // Ingresso
+
+    function Exclusão()
+    {   //certamente confuso: haverá tipo2.diploma em branco, ou provimento.grupo nao 2
+        //entao listar               diferenca                   inexistencia do grupo 2 (RELATORIO)
+//        global $ultimoprovimento;
+
+        IF ($this->tipo2->fields('exclus_grupo') == '02')
+        {
+            if ($this->ultimoprovimento->idGrupoOcorrencia == '02')    //exclusão está certa: no Espelho e no SIGA
+            {
+                $this->Difere2( 'Exclusão, ocorrência'                             ,
+                                $this->ultimoprovimento->idOcorrencia                    ,
+                                intval($this->tipo2->fields('exclus_ocor'))        );
+                $this->Datas( 'Exclusão, data fim'                               ,
+                                $this->ultimoprovimento->dataFim,
+                                $this->tipo2->fields('exclus_dt')       );
+
+                $this->Diploma($this->ultimoprovimento, 'Exclusão', 'exclus');
+            }
+            else                                                       //exclusão está só no Espelho
+            {
+                $this->gravadosresult[] = array( $siape_branco, 'Exclusão: grupo de ocorrência do provimento deveria ser 02',
+                                                 $this->ultimoprovimento->idGrupoOcorrencia, '' );
+                $siape_branco = '';  //para em uma continuação do mesmo vínculo não reimprimi-lo
+            }
+        }
+        ELSE
+        {
+            if ($this->ultimoprovimento->idGrupoOcorrencia == '02')    //exclusão está só no SIGA
+            {
+                $this->gravadosresult[] = array( $siape_branco, 'Exclusão: grupo de ocorrência do Espelho deveria ser 02',
+                                                 $this->ultimoprovimento->idGrupoOcorrencia, '' );
+                $siape_branco = '';  //para em uma continuação do mesmo vínculo não reimprimi-lo
+            }
+        }
+    } // Exclusão
+
+    function Afastamento()
+    {
+        if ( intval($this->tipo2->fields('afast_grupo')) > 0 )  //CUIDADO COM TESTE COMO ESTE
+        {
+            $this->vinculo->retrieveAssociation('licAfast');
+            if ($this->vinculo->licAfast)
+            {
+                $this->Difere2( 'Afastamento, grupo de ocorrência'               ,
+                                trim($this->vinculo->licAfast->idGrupoOcorrencia),
+                                trim($this->tipo2->fields('afast_grupo'))        );
+                $this->Difere2( 'Afastamento, ocorrência'                        ,
+                                trim($this->vinculo->licAfast->idOcorrencia)     ,
+                                trim($this->tipo2->fields('afast_ocor'))         );
+                $this->Datas  ( 'Afastamento, data de início'                    ,
+                                $this->vinculo->licAfast->dataInicio             ,
+                                $this->tipo2->fields('afast_dt_inic')            );
+                $this->Datas  ( 'Afastamento, data de término'                   ,
+                                $this->vinculo->licAfast->dataFim                ,
+                                $this->tipo2->fields('afast_dt_term')            );
+                if ($this->vinculo->licAfast->idPublicacao)
+                {
+                    $this->Diploma($this->vinculo->licAfast, 'Afastamento', 'afast');
+                }
+                else
+                {
+                    $this->gravadosresult[] = array( $siape_branco, 'Publicação do afastamento não encontrada',
+                                                     '', $this->tipo2->fields('afast_dip_cod') );
+                    $siape_branco = '';  //para em uma continuação do mesmo vínculo não reimprimi-lo
+                }
+            }
+            else
+            {
+                $this->gravadosresult[] = array( $siape_branco, 'Afastamento não encontrado',
+                                                 '', $this->tipo2->fields('afast_grupo') );
+                $siape_branco = '';  //para em uma continuação do mesmo vínculo não reimprimi-lo
+            }
+        }
+    } // Afastamento
+
+    function Datas($msg, $siape, $espelho)
+    {
+        if ($espelho == '00000000')
+        {
+            $espelho = '';
+        }
+        else
+        {
+            $espelho = substr($espelho,0,2) . '/' . substr($espelho,2,2) . '/' . substr($espelho,4,4);
+        }
+        $this->Difere2($msg, $siape, $espelho);
+    } // Datas
+
+    function Inatividade()
+    {
+        if ( intval($this->tipo2->fields('inativ_grupo')) > 0 )  //CUIDADO COM TESTE COMO ESTE
+        {
+            foreach( $this->provimento as $reg)
+            {
+                $d = substr($reg->dataInicio,0,2) . substr($reg->dataInicio,3,2) . substr($reg->dataInicio,6,4);
+                if ( ($reg->idGrupoOcorrencia == $this->tipo2->fields('inativ_grupo')) and
+                     ($reg->idOcorrencia      == $this->tipo2->fields('inativ_ocor' )) and
+                     ($d                      == $this->tipo2->fields('inativ_dt'   )) )
+                {
+                    $this->Diploma($reg, 'Inatividade', 'inativ');
+                    return;
+                }
+            }
+            $this->gravadosresult[] = array( $siape_branco, 'Inatividade não encontrada, ou não na mesma ocorrência ou data',
+                                             '', $this->tipo2->fields('inativ_grupo') );
+            $siape_branco = '';  //para em uma continuação do mesmo vínculo não reimprimi-lo
+        }
+    } // Inatividade
+
+    function AdicionalRaioX()
+    {
+        $objadicional = $this->manager->GetBusiness('rh','adicional');
+        $adicional = $objadicional->getbyVinculoAdicionalDataFim($this->siape, '3')->result;
+
+        if ( intval($this->tipo2->fields('ind_oper_raiox')) > 0 )  //CUIDADO COM TESTE COMO ESTE
+        {
+            if (! $adicional)
+            {
+                $this->gravadosresult[] = array($siape_branco, 'Adicional de Raio-x: faltou no SIGA','','');
+                $siape_branco = '';  //para em uma continuação do mesmo vínculo não reimprimi-lo
+            }
+        }
+        else
+        {
+            if ($adicional)
+            {
+                $this->gravadosresult[] = array($siape_branco, 'Adicional de Raio-x: faltou no Espelho',$adicional->dataInicio,'');
+                $siape_branco = '';  //para em uma continuação do mesmo vínculo não reimprimi-lo
+            }
+        }
+    } // AdicionalRaioX
+
+    function ModificacaoFuncional()
+    {
+        $mod_fun_grupo = $this->tipo2->fields('mod_fun_grupo');
+
+        if ( intval($mod_fun_grupo) > 0 )  //CUIDADO COM TESTE COMO ESTE
+        {
+            $d = $this->tipo2->fields('mod_fun_dt');
+            if ($d == '00000000')
+            {
+                $d = NULL;
+                $e = NULL;
+            }
+            else
+            {
+                $d = substr($d,4,4) . '/' . substr($d,2,2) . '/' . substr($d,0,2);
+                $e = substr($d,8,2) . '/' . substr($d,5,2) . '/' . substr($d,0,4);
+            }
+
+            $mod_fun = $this->provimento->getbyVinculoDataInicio( $this->siape                         ,
+                                                                  $mod_fun_grupo                       ,
+                                                                  $this->tipo2->fields('mod_fun_ocor' ),
+                                                                  $d )->result; //data do Espelho: existente ou nula
+            //$mod_fun = $this->provimento;
+            if ($mod_fun) //existe no SIGA com a mesma data do Espelho ou com a data válida mas a do Espelho nula
+            {
+                $this->Datas( 'Modificação Funcional, Data'      , //haverá diferença se a data do Espelho estiver nula
+                              $this->provimento->dataInicio      ,
+                              $this->tipo2->fields('mod_fun_dt') );//0053944 0040485 nao devera aparecer mais se update ocor
+
+                $this->Diploma($this->provimento, 'Modificação Funcional', 'mod_fun');
+            }
+            else
+            {
+                $this->gravadosresult[] = array($siape_branco, 'Modificação Funcional: não existe no SIGA ou data não encontrada','',$e);
+                $siape_branco = '';  //para em uma continuação do mesmo vínculo não reimprimi-lo
+            }
+        }
+        /*else
+        {
+            $mod_fun = $this->provimento->getbyVinculoDataInicio($this->siape                         ,
+                                                                   $mod_fun_grupo                       ,
+              NULL ou 18 27 29 33 36 200 996 997 998 [de select distinct IDOCORRENCIA from rh_provimento  where idgrupoocorrencia = 06;]);
+            para o ultimo encontrado (ou para cada ultimo IDOCORRENCIA encontrado) relata ERRO pois nao esteve em tipo2
+        }*/
+    } // ModificacaoFuncional()
+
+    function ReversaoAtividade()
+    {
+        $rev_ati_grupo = $this->tipo2->fields('rev_ati_grupo');
+        IF ( intval($rev_ati_grupo) > 0 )  //CUIDADO COM TESTE COMO ESTE
+        {
+            $rev_ati = $this->provimento->getbyVinculoDataInicio( $this->siape                          ,
+                                                                  $rev_ati_grupo                        ,
+                                                                  $this->tipo2->fields('rev_ati_ocor' ) )->result;
+            if ($rev_ati)
+            {
+                $this->Difere2( 'Reversão de atividade, grupo de ocorrência',
+                                trim($rev_ati_grupo)                        ,
+                                trim($this->tipo2->fields('rev_ati_grupo')) );
+                $this->Difere2( 'Reversão de atividade, ocorrência'         ,
+                                trim($this->provimento->idOcorrencia)       ,
+                                trim($this->tipo2->fields('rev_ati_ocor'))  );
+                $this->Datas  ( 'Reversão de atividade, data de início'     ,
+                                $this->provimento->dataInicio               ,
+                                $this->tipo2->fields('rev_ati_dt')          );
+                if ( intval($this->tipo2->fields('rev_ati_dip_cod') > 0) )
+                {
+                    $this->Diploma($this->provimento, 'Reversão de atividade', 'rev_ati');
+                }
+            }
+            else
+            {
+                $d = $this->tipo2->fields('rev_ati_dt');
+                $d = substr($d,0,2) . '/' . substr($d,2,2) . '/' . substr($d,4,4);
+                
+                $this->gravadosresult[] = array($siape_branco, 'Reversão de atividade: faltou no SIGA','',$d);
+                $siape_branco = '';  //para em uma continuação do mesmo vínculo não reimprimi-lo
+            }
+        } // IF
+        ELSE
+        {
+            $rev_ati = $this->provimento->getbyVinculoDataInicio( $this->siape  ,
+                                                                  '01'          ,
+                                                                  '116'         )->result;  //116: suposta ocorrência para reversão
+            if ($rev_ati)
+            {
+                $this->gravadosresult[] = array($siape_branco, 'Reversão de atividade: faltou no Espelho',$this->provimento->dataInicio,'');
+                $siape_branco = '';  //para em uma continuação do mesmo vínculo não reimprimi-lo
+            }
+        }
+    } // ReversaoAtividade
+
+    function Diploma($obj, $titulo, $espelho)
+    {
+        $obj->retrieveAssociation('publicacao');
+
+        $this->Difere2( $titulo . ': Diploma Legal, Código'                      ,
+                        $obj->publicacao->idDiplomaLegal                         ,
+                        intval($this->tipo2->fields($espelho . '_dip_cod'))      );
+
+        $this->Difere2( $titulo . ': Diploma Legal, Número'                      ,
+                        ltrim($obj->publicacao->numero                    ,'0 ') ,
+                        ltrim($this->tipo2->fields ($espelho . '_dip_num'),'0 ') );
+
+        $this->Datas  ( $titulo . ': Diploma Legal, Data'                        ,
+                        $obj->publicacao->data                                   ,
+                        $this->tipo2->fields       ($espelho . '_dip_dt')        );
+    } // Diploma
+
+/*
+
+select mod_fun_grupo, mod_fun_ocor, mod_fun_dt from rh_tipo2 where siape = '0040485' ;
+select idgrupoocorrencia, idocorrencia, datainicio from rh_provimento where idvinculo = '0040485' ;
+
+select *  from rh_ocorrencia  where idgrupoocorrencia ='06'
+and idocorrencia  in ('18','27','29','33','36','200','996','997','998')
+
+MAS SE parece que  6          998 MUDANCA DE AMBIENTE ORGANIZACIONAL
+nao esta no SIAPE
+
+procurar em provimento ida e volta 06033
+
+select * from rh_provimento where idgrupoocorrencia||idocorrencia = '06033'
+and idvinculo in (1476623,1476730,1477003,2146509,2146533);
+
+select * from rh_provimento where idgrupoocorrencia = 06 and idocorrencia = 033
+and idvinculo in (1476623,1476730,1477003,2146509,2146533);
+
+select siape,mod_fun_grupo,mod_fun_ocor from rh_tipo2 where mod_fun_grupo||mod_fun_ocor = '06033' and anomes = '200710';
+
+select distinct mod_fun_ocor from rh_tipo2 where mod_fun_grupo = '06' and anomes = '200710';
+*/
+
+}
+?>

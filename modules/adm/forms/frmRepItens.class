@@ -1,0 +1,148 @@
+<?
+class frmRepItens extends Form
+{
+	protected $licitacao;
+	function __construct()
+	{   
+		global $MIOLO;
+		// nome do formulário
+		$this->licitacao = $MIOLO->getBusiness('adm','licitacao');
+		parent::__construct('Itens Requisitados por UO');
+		// eventos
+		$this->EventHandler();
+	}
+
+	Function CreateFields()
+	{
+		global $MIOLO,$module,$item,$self;
+		$objLicitacao = $MIOLO->GetBusiness($module,'licitacao');
+		$list = $objLicitacao->ListAbertas();
+		$buttons = Array(
+	        	new FormButton('btnReport','Exibir Itens','pdf')
+	 	);
+		$this->SetButtons($buttons);
+	}
+	
+	function btnReport_click()
+	{
+		global $MIOLO,$module,$item;
+		$licitacao = $this->licitacao;	
+		
+		$objLicitacao = $MIOLO->GetBusiness($module,'licitacao');
+		$idLicitacao = $item;
+        $objLicitacao->GetById($idLicitacao);
+
+		$cf = new MCurrencyFormatter();
+		
+		$report = new MEzPDFReport('2','portrait');
+		$h  = $report->pdf->getFontHeight(10);
+		$ui = $this->manager->GetUI();
+		$report->pdf->ezImage($ui->GetImage('','logonet.png'),5,50,'none','left',0);
+		$report->pdf->addText(110,810       ,10,'UNIVERSIDADE FEDERAL DE JUIZ DE FORA - UFJF');
+		$report->pdf->addText(110,810-$h    ,10,'CENTRO DE GESTÃO DO CONHECIMENTO ORGANIZACIONAL - CGCO');
+		$report->pdf->addText(110,810-(2*$h),10,'SISTEMA INTEGRADO DE GESTÃO ACADÊMICA - SIGA');
+		$report->pdf->addText(110,810-(3*$h),10,'COORDENADORIA DE SUPRIMENTOS - COSUP');
+		$report->pdf->ezText('ITENS REQUISITADOS POR UO ',16,array('justification'=>'center'));
+		$report->pdf->ezText('LICITAÇÃO NÚMERO '.$objLicitacao->numero,10,array('justification'=>'center'));	
+		
+		$report->pdf->ezText('',20);
+		
+		$options['textCol']      = array(0,0,0);
+		$options['shaded']       = 1;
+		$options['showLines']    = 5;		
+		$options['fontSize']     = 10;
+		$options['width']        = 540;
+		$options['xPos']         = 'left';
+		$options['xOrientation'] = 'right';
+		
+		$consulta = $objLicitacao->GetItensRequisitados()->result;
+		$itemAnterior = 1;
+		$total = 0;
+		$totalQtd = 0;
+
+        $cf = new MCurrencyFormatter();
+		foreach ($consulta as $val)
+		{
+            if ($objLicitacao->idTipoLicitacao == '1' OR $objLicitacao->idTipoLicitacao == '4') //COMPRA PERMANENTE OU CONSUMO
+            {
+                $siglaUo = $val[0];
+                $codMat = $val[1];
+                $material = $val[2];
+                $unidade = $val[3];
+                $qtd = $val[4];
+                $item = $val[5];
+                $idReq = $val[6];
+                $preco = $cf->toDecimal($val[7]);
+                $precoTotal = $cf->toDecimal($preco*$qtd);
+                
+                if ($itemAnterior != $item)
+                {
+                    $dataRel[] = array('','','','','','','','');
+                }
+
+                $dataRel[] = array($item,$idReq, $siglaUo,$codMat, $material,$unidade, $qtd,$cf->formatWithSymbol($preco),$cf->formatWithSymbol($precoTotal));
+                $itemAnterior = $item;               
+            }
+            else if ($objLicitacao->idTipoLicitacao == '3') //LIVRO
+            {
+                $siglaUo = $val[0];
+                $codMat = $val[1];
+                $material = $val[2];
+                $unidade = $val[3];
+                $qtd = $val[4];
+                $item = $val[5];
+                $idReq = $val[6];
+                $preco = $cf->toDecimal($val[7]);
+                $precoTotal = $cf->toDecimal($preco*$qtd);
+                
+                if ($itemAnterior != $item)
+                {
+                    $dataRel[] = array('','','','','','','','');
+                }
+
+                $dataRel[] = array($item,$idReq, $siglaUo,$codMat, $material,$unidade, $qtd,$cf->formatWithSymbol($preco),$cf->formatWithSymbol($precoTotal));
+                $itemAnterior = $item;               
+            }
+            else if ($objLicitacao->idTipoLicitacao == '2') //SERVICO
+            {            
+                $siglaUo = $val[0];
+                $codMat = $val[1];
+                $material = $val[2];
+				$unidade = $val[7];
+                $qtd = $val[3];
+                $item = $val[4];
+                $idReq = $val[6];
+
+                $preco = $cf->toDecimal($val[5]);
+                $precoTotal = $cf->toDecimal($preco*$qtd);
+
+                if($itemAnterior != $item)
+                {
+                    $dataRel[] = array('','','','','','','','');                    
+                }
+                $dataRel[] = array($item,$idReq, $siglaUo,$codMat, $material,$unidade, $qtd, $cf->formatWithSymbol($preco),$cf->formatWithSymbol($precoTotal));			
+                $itemAnterior = $item;
+            }
+		
+            $total += $preco;
+            $totalPrecoTotal += $precoTotal;	
+		}
+	
+        if ($objLicitacao->idTipoLicitacao == '1')
+        {	
+            $cols = array('<b>ITEM</b>','<b>REQ</b>','<b>UO</b>','<b>COD</b>','<b>DESCRIÇÃO</b>','<b>UNIDADE</b>','<b>QTD</b>','<b>VALOR</b>','<b>TOTAL</b>');
+            $dataRel[] = array('','','','');			          
+            $dataRel[] = array('','','','','','','<b>TOTAL</b>',$cf->formatWithSymbol($total),$cf->formatWithSymbol($totalPrecoTotal));
+        }
+        else
+        {	
+            $cols = array('<b>ITEM</b>','<b>REQ</b>','<b>UO</b>','<b>COD</b>','<b>DESCRIÇÃO</b>','<b>UNIDADE</b>','<b>QTD</b>','<b>VALOR</b>','<b>TOTAL</b>');
+            $dataRel[] = array('','','','');			          
+            $dataRel[] = array('','','','','','','','<b>TOTAL</b>',$cf->formatWithSymbol($totalPrecoTotal));
+        }
+
+		$report->pdf->ezTable($dataRel,$cols,'',$options);
+		$report->Execute();
+	}
+}
+?>

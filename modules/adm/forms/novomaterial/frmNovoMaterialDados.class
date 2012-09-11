@@ -1,0 +1,201 @@
+<?
+class frmNovoMaterialDados extends MForm
+{
+    protected $objMaterial;
+    function __construct($objMaterial)
+    {
+        $this->objMaterial = $objMaterial;
+        parent::__construct('Dados do Material');
+        $this->EventHandler();
+    }
+    function CreateFields()
+    {    
+        $usuario = $this->manager->getBusiness('common','usuario');
+        $usuario->getById($this->objMaterial->idUsuario);
+        $fields = array(
+            new MMultiLineField('descricaoSug',$this->objMaterial->descricao,'Descrição',500,6,50,'Máximo 500'),
+            new MSeparator('Dados para contato'),
+            new MTextField('nome',$usuario->pessoa->nome,'Nome',52),
+            new MTextField('telefone',$this->objMaterial->telefone,'Telefone',12),
+            new MTextField('email',$usuario->pessoa->email,'Email',52),
+        );
+        $this->SetFields($fields);
+        $this->descricaoSug->setReadOnly(true);
+        $this->telefone->setReadOnly(true);
+        $this->email->setReadOnly(true);
+        $this->nome->setReadOnly(true);
+        $validators = array(
+			new MRequiredValidator('descricao'),
+            new MRegExpValidator('codmaterial','','(^-?[0-9][0-9]*$)'),
+		);
+        $this->defaultButton = false;
+        if ($this->manager->getPerms()->checkAccess("adm_cadastromaterial",A_EXECUTE))
+        {
+            $this->addField(new MSeparator('Dados do novo material'));
+            $this->addField(new MHiddenField('idMaterial',''));
+            $this->addField(new MLookupTextField('codmaterial',$this->objMaterial->codmaterial,'CATMAT',14));
+            $this->addField(new MMultiLineField('descricao',$this->objMaterial->descricao,'Descrição Detalhada',500,6,50,'Máximo 500'));
+	   // $this->addField(new MCurrencyField('precoestimado',$this->objMaterial->precoestimado,'Preço Estimado',14));
+		$this->addField(new MTextField('precoestimado',$this->objMaterial->precoestimado,'Preço Estimado',14,'Separado por ponto'));
+            $this->SetFieldAttr('codmaterial','module','adm');
+            $this->SetFieldAttr('codmaterial','item','material');
+            $this->SetFieldAttr('codmaterial','event','filler');
+            $this->SetFieldAttr('codmaterial','related','idMaterial,descricao,codmaterial');
+            $this->addValidator(new MRequiredValidator('codmaterial'));
+            $this->addValidator(new MRequiredValidator('descricao'));
+            $this->addButton(new MButton('btnAdicionar','Adicionar Material'));
+            switch ($this->objMaterial->status)
+            {
+                case 1:
+                    try
+                    {
+                        $this->objMaterial->setStatus(2);
+                        $this->objMaterial->save();
+                        $this->objMaterial->Log(OP_UPD,'Novo material analisado ['.$this->objMaterial->idNovoMaterial.']');
+                        $this->page->redirect($this->manager->getActionUrl('adm','main:novomaterial:main',$this->objMaterial->idNovoMaterial,array('form'=>'dados')));
+                    }
+                    catch (Exception $e)
+                    {
+                        $this->AddError($e->GetMessage());
+                    }
+                break;
+                case 3:
+                    $material = $this->manager->getBusiness('adm','material');
+                    $material->getByCod($this->objMaterial->codmaterial);
+                    $this->setFieldValue('idMaterial',$material->idMaterial);
+                    $this->setFieldValue('codmaterial',$material->codmaterial);
+                    $this->setFieldValue('descricao',$material->descricao);
+                break;
+            }
+        }
+        else
+        {
+            switch ($this->objMaterial->status)
+            {
+                case 1:
+                    if ($this->objMaterial->idUsuario == $this->manager->getLogin()->idkey)
+                    {
+                        $this->descricaoSug->setReadOnly(false);
+                        $this->telefone->setReadOnly(false);
+                        $this->email->setReadOnly(false);
+                        $this->nome->setReadOnly(false);
+                    }
+                    $this->setFieldAttr('codmaterial','visible',false);
+                    $this->setFieldAttr('descricao','visible',false);
+                    $this->addButton(new MButton('btnSalvar','Alterar'));
+                    $this->addButton(new MButton('btnVoltar','Voltar',$this->manager->getActionUrl('adm','main:novomaterial:find',$this->objMaterial->idNovoMaterial)));
+                break;
+                case 2:
+                case 3:
+                case 4:
+                    if ($this->objMaterial->codmaterial)
+                    {
+                        //$this->addField(new MSeparator('Dados do novo material'));
+			$this->addField(new MCurrencyField('precoestimado',$this->objMaterial->precoestimado,'Preço Estimado',14));
+                        $this->addField(new MTextField('codmaterial',$this->objMaterial->codmaterial,'CATMAT',14));
+			$this->precoestimado->setReadOnly(true);
+                        $this->codmaterial->setReadOnly(true);
+                        $this->setFieldAttr('btnSalvar','visible',false);
+                        $this->addButton(new MButton('btnVoltar','Voltar',$this->manager->getActionUrl('adm','main:novomaterial:find',$this->objMaterial->idNovoMaterial)));
+                    }
+                break;
+            }
+        }
+    }
+    public function btnSalvar_click()
+    {
+        $data = $this->GetData();
+        $usuario = $this->manager->getBusiness('common','usuario');
+        $usuario->getById($this->manager->GetLogin()->idkey);
+        try
+        {
+            $this->objMaterial->beginTransaction();
+            $this->objMaterial->SetData($data);
+            $this->objMaterial->descricao = $data->descricaoSug;
+            $this->objMaterial->dataPedido = date('d/m/Y');
+            $this->objMaterial->save();
+            if ($data->email != $usuario->pessoa->email)
+            {
+                $usuario->pessoa->setTransaction($this->objMaterial->getTransaction());
+                $usuario->pessoa->email = $data->email;
+                $usuario->pessoa->save();
+            }
+            $this->objMaterial->endTransaction();
+            $this->objMaterial->Log(OP_UPD,'Novo material alterado ['.$this->objMaterial->idNovoMaterial.']');
+            $this->manager->information("Novo material alterado com sucesso [".$this->objMaterial->idNovoMaterial."].",$this->manager->getActionUrl('adm','main:novomaterial:main',$this->objMaterial->idNovoMaterial,array("form"=>"dados")));
+        }
+        catch (Exception $e)
+        {
+             $this->AddError($e->GetMessage());
+        }
+    }
+    public function btnAdicionar_click()
+    {
+        $data = $this->GetData();
+        $usuario = $this->manager->getBusiness('common','usuario');
+        $usuario->getById($this->manager->GetLogin()->idkey);
+        if ($data->codmaterial && $data->descricao)
+        {
+            $material = $this->manager->getBusiness('adm','material');
+            $material->getByCod($data->codmaterial);
+            if ($material->isPersistent() && $material->descricao == $data->descricao)
+            {
+                $this->objMaterial->setStatus(3);
+                $this->objMaterial->codmaterial = Form::getFormValue('codmaterial');
+                $this->objMaterial->save();
+                $this->objMaterial->Log(OP_UPD,'Sugestão de material finalizada ['.$this->objMaterial->idNovoMaterial.']');
+            $this->manager->information("Sugestão de material finalizada com sucesso [".$this->objMaterial->idNovoMaterial."].",$this->manager->getActionUrl('adm','main:novomaterial:find',$this->objMaterial->idNovoMaterial));
+            }
+            else
+            {
+                $opcoes1 = array("S"=>"SIM","N"=>"NÃO",);
+                $opcoes2 = array("C"=>"CONSUMO","P"=>"PERMANENTE",);
+                $this->addInfo('Adição de novo material.');
+		$this->addField(new MMultiLineField('descresum',$this->objMaterial->descresum,'Descrição Resumida',100,4,50,'Máximo 100'));
+                $this->addField(new MTextField('unidade','KG','Unidade','10','Máximo 10 caracteres'));
+                $this->addField(new MSelection('permcons','C','Tipo',$opcoes2));
+                $this->addField(new MSelection('estocavel','S','Estocável',$opcoes1));
+                $this->addField(new MTextField('idelemento','','Elemento','6','Máximo 6 caracteres'));
+                $this->addField(new MTextField('idsubelemento','','Subelemento','2','Máximo 2 caracteres'));
+                $this->idelemento->addAttribute('maxlength','6');
+                $this->idsubelemento->addAttribute('maxlength','2');
+                $this->setButtonAttr('btnAdicionar','visible',false);
+                $this->addButton(new MButton('btnConfirmarAdicionar','Confimar'));
+            }
+        }
+    }
+    public function btnConfirmarAdicionar_click()
+    {
+        $data = $this->GetData();
+        $usuario = $this->manager->getBusiness('common','usuario');
+        $usuario->getById($this->manager->GetLogin()->idkey);
+        try
+        {
+            $material = $this->manager->getBusiness('adm','material');
+            $material->setData($data);
+            $material->unidade = Form::getFormValue('unidade');
+            $material->permcons = Form::getFormValue('permcons');
+            $material->estocavel = Form::getFormValue('estocavel');
+            $material->idelemento = Form::getFormValue('idelemento');
+            $material->idsubelemento = Form::getFormValue('idsubelemento');
+	    $material->precoestimado = Form::getFormValue('precoestimado');
+            $material->ativo = "S";
+            $material->beginTransaction();
+            $material->save();
+			$this->objMaterial->ativo = "N";
+            $this->objMaterial->setStatus(3);
+            $this->objMaterial->codmaterial = $material->codmaterial;
+            $this->objMaterial->setTransaction($material->getTransaction());
+            $this->objMaterial->save();
+            $this->objMaterial->Log(OP_UPD,'Sugestão de material finalizada ['.$this->objMaterial->idNovoMaterial.']');
+            $material->Log(OP_INS,'Novo material adicionado ['.$material->codmaterial.']');
+            $material->endTransaction();
+            $this->manager->information("Sugestão de material finalizada com sucesso [".$this->objMaterial->idNovoMaterial."].",$this->manager->getActionUrl('adm','main:novomaterial:find',$this->objMaterial->idNovoMaterial));
+        }
+        catch (Exception $e)
+        {
+            $this->AddError($e->GetMessage());
+        }
+    }
+}
+?>

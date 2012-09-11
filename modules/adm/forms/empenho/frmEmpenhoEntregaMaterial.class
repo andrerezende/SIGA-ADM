@@ -1,0 +1,96 @@
+<?
+class frmEmpenhoEntregaMaterial extends MForm
+{
+    protected $empenho;
+    function __construct($objEmpenho)
+    {
+        global $MIOLO;
+        $this->empenho = $objEmpenho;
+        parent::__construct('Entrega de Material');
+        $this->SetClose($this->manager->GetActionURL('adm','main:empenho'));
+        $this->eventHandler();
+    }
+    function CreateFields()
+    {
+        $cf = new MCurrencyFormatter();
+        $objEmpenho = $this->empenho;
+        $this->addField($this->manager->getUI()->getGrid('adm','gridEmpenhoEntregaMaterial',$objEmpenho));
+        if ($idRequisicao = Form::getFormValue('idRequisicao') && $idMaterial = Form::getFormValue('idMaterial'))
+        {
+            $this->empenho->retrieveAssociation('empenhado');
+            foreach ($this->empenho->empenhado as $empenhado)
+            {
+                if ($empenhado->idEmpenhado = Form::getFormValue('idEmpenhado'))
+                {
+                    foreach ($empenhado->itemreq as $material)
+                    {
+                        if ($material->idRequisicao == $idRequisicao && $material->idMaterial == $idMaterial)
+                        {
+                            $material->retrieveAssociation('movimento');
+                            if ($material->movimento)
+                            {
+                                $cols = array('Data','Quantidade','Valor');
+                                foreach ($material->movimento as $movimento)
+                                {
+                                    if ($movimento->tipoMovimento = 5)
+                                    {
+                                        $dados[] = array($movimento->dataMovimento,$movimento->quantidade,$cf->formatWithSymbol($movimento->valorTotal));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            $table = new MTableRaw('',$dados,$cols);
+            $this->addField($table);
+        }
+        $this->addButton(new MButton('btnPost','Entregar'));
+    }
+    function btnPost_click()
+    {
+        $cf = new MCurrencyFormatter();
+        $data = $this->getFormValue('quantAutorizada');
+        $this->empenho->retrieveAssociation('empenhado');
+        foreach ($this->empenho->empenhado as $empenhado)
+        {
+            foreach ($empenhado->itemreq as $material)
+            {
+                $quantEntregue[$material->idRequisicao] += $material->quantAutorizada;
+            }
+        }
+        foreach ($data as $idRequisicao=>$quantAutorizada)
+        {
+            foreach ($this->empenho->empenhado as $empenhado)
+            {
+                if ($empenhado->idEmpenhado = Form::getFormValue('idEmpenhado'))
+                {
+                    foreach ($empenhado->itemreq as $material)
+                    {
+                        if (array_sum($data) > ($empenhado->quantidadeEmp-$quantEntregue[$material->idRequisicao]))
+                        {
+                            $this->addError('Quantidade entregue insuficiente para a entrega.');
+                            return;
+                        }
+                        if ($material->idRequisicao = $idRequisicao)
+                        {
+                            if ($quantAutorizada)
+                            {
+                                $material->quantAutorizada += $quantAutorizada;
+                                $valor = $quantAutorizada * $cf->toDecimal($empenhado->valorEmp) / $empenhado->quantidadeEmp;
+                                try
+                                {
+                                    $material->save();
+                                    $material->addMovimento(5,$quantAutorizada,$valor);
+                                    $this->manager->Information('Entrega realizada com sucesso',$this->manager->GetActionURL('adm','main:empenho:main',$this->empenho->idEmpenho,array("form"=>"entrega","idEmpenhado"=>$empenhado->idEmpenhado)));
+                                }
+                                catch(Exception $e) {$this->manager->Error($e->getMessage());}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+?>

@@ -1,0 +1,1965 @@
+<?php
+define('MIOLO_VERSION','Miolo 2.0 beta1');
+define('MIOLO_AUTHOR','Miolo Team');
+
+define('OP_INS', 'INS');
+define('OP_UPD', 'UPD');
+define('OP_DEL', 'DEL');
+
+require_once 'utils/msimplexml.class';
+require_once 'utils/mconfigloader.class';
+require_once 'utils/mrc4crypt.class';
+require_once 'services/mservice.class';
+require_once 'services/mcontext.class';
+require_once 'services/mrequest.class';
+require_once 'services/mresponse.class';
+
+//require_once 'utils/mrc4crypt.class';
+
+/**
+ * Brief Class Description.
+ * Complete Class Description.
+ */
+class MIOLO
+{
+    var $_version;
+    var $_author;
+
+    /**
+     * Attribute Description.
+     */
+    static private $instance = NULL;
+
+    /**
+     * remote tracing log message support
+     */
+    var            $trace_socket;
+
+    /**
+     * BD descriptor members
+     */
+    var            $db;
+
+    /**
+     * Attribute Description.
+     */
+    var            $user;
+
+    /**
+     * Attribute Description.
+     */
+    var            $pass;
+
+    /**
+     * Attribute Description.
+     */
+    var            $sqllog;
+
+    /**
+     * Attribute Description.
+     */
+    var            $errlog;
+
+    /**
+     * Other members
+     */
+    var            $theme;
+
+    /**
+     * Attribute Description.
+     */
+    var            $themepainter;
+
+    /**
+     * Attribute Description.
+     */
+    var            $themelayout;
+
+    /**
+     * Attribute Description.
+     */
+    var            $controlpainter;
+
+    /**
+     * Attribute Description.
+     */
+    var            $pagepainter;
+
+    /**
+     * Attribute Description.
+     */
+    var            $profile;
+
+    /**
+     * Attribute Description.
+     */
+    var            $uses;
+
+    /**
+     * Attribute Description.
+     */
+    var            $trace;
+
+    /**
+     * Attribute Description.
+     */
+    var            $error;
+
+    /**
+     * Attribute Description.
+     */
+    var            $page;
+
+    /**
+     * Attribute Description.
+     */
+    var            $context;
+    var            $response;
+    var            $request; 
+
+    /**
+     * Attribute Description.
+     */
+    var            $auth;
+
+    /**
+     * Attribute Description.
+     */
+    var            $perms;
+
+    /**
+     * Attribute Description.
+     */
+    var            $session;
+
+    /**
+     * Attribute Description.
+     */
+    var            $state;
+
+    /**
+     * Attribute Description.
+     */
+    var            $logdb;
+
+    /**
+     * Attribute Description.
+     */
+    var            $dbconf = array();
+
+    /**
+     * Attribute Description.
+     */
+    var            $halted = false;
+
+    var            $painter;
+
+    var            $mad;
+ 
+    var            $forward; 
+
+    /**
+     * Constructor.
+     * Miolo Class Constructor.
+     */
+    function __construct()
+    {
+    }
+
+    /**
+     * Returns Miolo instance.
+     * This method returns an instance of the Miolo Class.
+     *
+     * @returns (object) Instance of Miolo class
+     *
+     */
+    public function getInstance()
+    {
+        if (self::$instance == NULL)
+        {
+            self::$instance = new Miolo;
+        }
+
+        return self::$instance;
+    }
+
+    private function getObject($class, $param=NULL)
+    {
+        if ( is_null($this->$class) )
+        {
+            $className = 'M' . $class;
+            $this->$class = new $className($param);
+        }
+        return $this->$class;
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function handlerRequest()
+    {
+        $this->conf = new MConfigLoader();
+        $this->conf->loadConf();
+        $this->request  = new MRequest();
+        $this->response = new MResponse();
+        $this->context  = $this->GetContext();
+        if ($this->context->isFile)
+        {
+            $path = ($this->context->isRoot) ? $this->GetConf('home.' . $this->context->fileArea) : $this->GetConf('home.modules') . '/' . $this->context->module . $this->GetConf('home.module.' . $this->context->fileArea);
+            $fileName = $path . $this->context->fileName;
+            $pathinfo = pathinfo($fileName);
+            $ext = $pathinfo['extension']; 
+            if ($ext == 'tpl')
+            {
+                include ('utils/template.class');
+                $tpl = new MTemplate($fileName);
+                $this->SendText($tpl->text, $tpl->mimeType, $fileName);
+            }
+            elseif ($ext == 'php')
+            {
+                echo include($fileName);
+            }
+            else
+            {
+                $this->response->sendFile($fileName);
+            }
+        }
+        else
+        {
+            require_once 'support.inc';
+
+            try
+            {
+                $this->init();
+                do 
+                {
+                    $this->prepare();
+                    $this->handler();
+                } while ($this->forward != '');
+                $this->terminate();
+            }
+            catch( EMioloException $e )
+            {
+                $msg = $e->getMessage();
+                echo "Fatal Error: [$msg]";
+            }
+        }
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @param $string (tipo) desc
+     * @param $type (tipo) desc
+     * @param $fileName (tipo) desc
+     *
+     * @returns (tipo) desc
+     *
+     */
+/*
+    function SendText($string, $type, $fileName)
+    {
+        if (!empty($string))
+        {
+            include ('utils/mdownload.class');
+            $d = new MDownload();
+            $d->setFileName($fileName);
+            $d->SendText($string, $type);
+        }
+    }
+*/
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @param $fileName (tipo) desc
+     *
+     * @returns (tipo) desc
+     *
+     */
+/*
+    function SendFile($fileName)
+    {
+        if (!empty($fileName) && file_exists($fileName))
+        {
+            include_once ('utils/mdownload.class');
+            $d = new MDownload();
+            $d->setFileName($fileName);
+            $d->Send();
+        }
+    }
+*/
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @param $fileName (tipo) desc
+     *
+     * @returns (tipo) desc
+     *
+     */
+/*
+    function DownloadFile($fileName)
+    {
+        if (!empty($fileName) && file_exists($fileName))
+        {
+            include_once ('utils/mdownload.class');
+            $d = new MDownload();
+            $d->setFileNameDown($fileName);
+            $d->Send();
+        }
+    }
+*/
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @param $namespace (tipo) desc
+     * @param $class' (tipo) desc
+     *
+     * @returns (tipo) desc
+     *
+     */
+    public function import($namespace, $class = '')
+    {
+        $m = MIOLO::getInstance();
+        $m->profileEnter('MIOLO::import');
+        if ( array_key_exists($namespace, $m->import) )
+        {
+            $result = $m->import[$namespace];
+        } 
+        else
+        {
+            $path = $m->getConf('home.miolo');
+            $ns = '';
+            $tokens = explode('::', $namespace);
+
+            foreach ($tokens as $token)
+            {
+                $ns .= (($ns != '') ? '.' : '') . $token;
+
+                if ($ss = $m->getConf('namespace.' . $ns))
+                {
+                    $path .= $ss;
+                }
+                elseif ($ss = $m->getConf('namespace.' . $token))
+                {
+                    $path .= $ss;
+                }
+                else
+                {
+                    $path .= '/' . $token;
+                }
+
+                $last = $token;
+            }
+
+            $pathinfo = pathinfo($path);
+            $path .= ($pathinfo['extension'] == '' ? '.class' : '');
+            if ( $result = file_exists($path) )
+            {
+                $class = ($class != '') ? $class : $last;
+                $m->autoload->setFile($class, $path);
+                $m->import[$namespace] = $class;
+                $result = $path;
+            }
+        } 
+        $m->ProfileExit('MIOLO::import');
+        return $result;
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @param $home (tipo) desc
+     * @param $logname=miolo' (tipo) desc
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function init( $home = NULL, $logname = 'miolo')
+    {
+        global $autoload;
+
+        include ( 'flow/mexception.class' );
+        include ( 'utils/mxmltree.class' );
+        include ( 'compatibility/mcompatibility.class' );
+        include ( 'utils/mautoload.class' );
+
+        $this->handlers = array();
+        $this->uses     = array();
+        $this->import   = array();
+        $this->getObject('autoload');
+        $autoload = $this->autoload;
+        $this->setLog($logname);
+
+        $this->getObject('session');
+        $this->session->start( $this->_REQUEST('sid') );
+        $this->dispatch = $this->getConf('home.url') . '/' . $this->getConf('options.dispatch');
+        if ($home)
+        {
+            $this->home = $home;
+        }
+        // wether to dump internal information or not
+        $this->dumpping = $this->getConf('options.dump');
+
+        // get the modules.inf 
+        require_once $this->GetConf('home.modules') . '/modules.inc';
+
+        // what is the MAD module?
+        $this->mad = $this->getConf('mad.module');
+
+        $this->getObject('history');
+        $this->getObject('page');
+
+        $this->loadExtensions();
+
+        $this->persistence = new PersistentManagerFactory();
+        $this->persistence->setConfigLoader('XML');
+    }
+
+    function prepare()
+    {
+
+        $this->profileEnter('MIOLO::prepare');
+
+        $this->logMessage('[RESET_LOG_MESSAGES]');
+        $this->logMessage("URL: " . $this->getCurrentURL());
+
+        // getting the module.conf
+        if (!is_null($this->context->module))
+        {
+            $this->conf->LoadConf($this->context->module);
+        }
+
+/*
+        if ($this->getConf('home.url') == NULL)
+        {
+            $this->getConf('home.url', "http://{$_SERVER['HTTP_HOST']}");
+        }
+*/
+
+        // base module/handler        
+        $this->startup = $this->getConf('options.startup') != NULL ? $this->getConf('options.startup') : 'admin';
+
+        if ($this->startup != $this->context->module)
+        {
+            $this->context->setStartup($this->startup);
+            $this->conf->loadConf($this->startup);
+        }
+
+        if (($common = $this->getConf('options.common')) != NULL)
+        {
+            $this->conf->loadConf($common);
+        }
+
+        $this->forward = '';
+        $this->profileExit('MIOLO::prepare');
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function handler()
+    {
+        $this->profileEnter('MIOLO::handler');
+        try
+        { 
+            $this->removeInputSlashes();
+            $this->context->setStyle($this->GetConf('options.url.style'));
+            $this->getTheme();
+            $this->getPainter();
+
+            if ( $this->getConf('logs.handler') == 'screen' )
+            {
+                $this->page->addScript('m_error_handler.js');
+            }
+            
+            $this->session->checkTimeout();
+            $this->checkLogin();
+            $action = $this->context->getAction();
+            $handler = $action{0} == '_' ? substr($action,1) : 'main';  
+            $this->invokeHandler($this->startup, $handler);
+
+            if( $this->getConf('logs.handler') == 'screen' && $this->log->content )
+            {
+                echo "<script language=\"javascript\">".
+                    $this->log->content.
+                    "</script>";
+            }
+        }
+        catch( EMioloException $e )
+        {
+            $msg = $e->getMessage();
+//          $msg .= $e->getFile() . $e->getLine() . $e->GetTraceAsString();
+            $this->logMessage('[ERROR]' . $msg);
+            $this->error($msg, $e->goTo, 'Fatal Error');
+        }
+        $this->profileExit('MIOLO::handler');
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @param $module (tipo) desc
+     * @param $action (tipo) desc
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function InvokeHandler($module, $action)
+    {
+        $this->Trace("InvokeHandler: $module::$action");
+
+        if ($return = ($action != NULL))
+        {
+            $handler = $this->GetHandler($module);
+            $return = $handler->dispatch($action);
+        }
+
+        return $return;
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @param $module (tipo) desc
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function getHandler( $module )
+    {
+        $this->trace( "getHandler: $module" );
+        $this->profileEnter( 'MIOLO::getHandler' );
+        $class = 'Handler' . ucfirst( strtolower( $module ) );
+
+        if ( ( $handler = $this->handlers[$class] ) == NULL )
+        {
+            $this->uses( 'handlers/handler.class', $module );
+            $handler = $this->handlers[$class] = new $class( $this, $module );
+            $handler->init();
+        }
+
+        $this->ProfileExit('MIOLO::getHandler');
+
+        return $handler;
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function terminate()
+    {
+        $this->response->sendPage($this->page);
+        $this->history->close();
+        $this->session->freeze();
+		$this->profileDump();
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @param $key (tipo) desc
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function getConf($key)
+    {
+        return $this->conf->getConf($key);
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @param $key (tipo) desc
+     * @param $value (tipo) desc
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function setConf($key, $value)
+    {
+        $this->conf->setConf($key, $value);
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @param $cond (tipo) desc
+     * @param $msg' (tipo) desc
+     * @param $goto='' (tipo) desc
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function assert($cond, $msg = '', $goto = '')
+    {
+        if ($cond == false)
+        {
+            $this->LogMessage('[ERROR]' . $msg);
+
+            $this->Error($msg, $goto, _M('Erro Fatal'));
+        }
+    }
+
+    function Scramble($text)
+    {
+        $pwd = $this->GetConf('options.scramble.password');
+        $rc4 = new MRC4Crypt;
+        $crypto = base64_encode($rc4->rc4($pwd,$text));
+        $result = urlencode($crypto);
+        return $result;
+    }
+
+    function UnScramble($text)
+    {
+        $pwd = $this->GetConf('options.scramble.password');
+        $rc4 = new MRC4Crypt;
+        $crypto = urldecode($text);
+        $result = $rc4->rc4($pwd,base64_decode($crypto));
+        return $result;
+    }
+
+    function removeInputSlashesValue($value)
+    {
+        if (is_array($value))
+        {
+            return array_map(array('MIOLO','removeInputSlashesValue'), $value);  
+        }
+        return stripslashes($value);
+    }
+
+    function removeInputSlashes()
+    {
+        if (get_magic_quotes_gpc()) // Yes? Strip the added slashes
+        { 
+            $_REQUEST = array_map(array('MIOLO','removeInputSlashesValue'), $_REQUEST);  
+        } 
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @param $url (tipo) desc
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function SetDispatcher($url)
+    {
+        $this->dispatch = $url;
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function getContext($url = '', $style = 0, $scramble = false)
+    {
+        if (is_null($this->context))
+        {
+            $this->context = new MContext($url,$style,$scramble);
+        }
+        return $this->context;
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function getSession()
+    {
+        return $this->session;
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function getAuth()
+    {
+        if (is_null($this->auth))
+        {
+            $class = strtolower($this->GetConf('login.class'));
+            if ($class == NULL)
+            { 
+                $class = "mauthdb";
+            } 
+            $this->import('classes::security::' . $class);
+            $this->auth = new $class();
+        }
+        return $this->auth;
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function GetPerms()
+    {
+        return $this->getObject('perms');
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function GetLogin()
+    {
+        return $this->getAuth()->getLogin();
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function getPage()
+    {
+        return $this->page;
+    }
+
+    function loadExtensions()
+    {
+        $extensions = $this->getConf('extensions.extension');
+        if ($extensions && (!is_array($extensions))) $extensions = array($extensions);
+        $dir = $this->getConf('home.extensions');
+        for($i = 0; $i < count($extensions); $i++)
+        {
+            $this->autoload->loadFile($dir . '/' . $extensions[$i] . '/autoload.xml');
+        }
+    } 
+    
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @param $name (tipo) desc
+     * @param $module (tipo) desc
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function uses( $name, $module = NULL )
+    {
+        global $MIOLO;
+
+        $this->profileEnter( 'MIOLO::Uses' );
+
+        // fazer nomes unicos por modulo
+        $unique = ( $module != NULL ? $module : 'classes' ) . '::' . $name;
+
+        if ( ! array_key_exists( $unique, $this->uses ) )
+        {
+            if ($module)
+            {
+                $path = $this->getModulePath( $module, $name );
+            }
+            else
+            {
+                $path = $this->getAbsolutePath( 'classes/' . $name );
+            }
+
+            if ( ! file_exists( $path ) )
+            {
+                throw new EUsesException( $path );
+            }
+
+            $this->uses[$unique] = array( $name, filesize($path) );
+
+            include_once ( $path );
+
+            $this->logMessage( '[USES] file:' . $path );
+        }
+
+        $this->profileExit( 'MIOLO::Uses' );
+
+        return true;
+    }
+
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @param $module (tipo) desc
+     * @param $namemain' (tipo) desc
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function UsesBusiness($module, $name = 'main')
+    {
+        $this->ProfileEnter('MIOLO::UsesBusiness');
+
+        // compose the name of the class, wich must be defined in the file
+        // ../modules/$module/db/$name.class
+        $class = 'Business' .
+                 strtoupper(substr($module,0,1)) . substr($module,1) .
+                 strtoupper(substr($name,0,1)) . substr($name,1);
+
+        if (!isset($this->usesBusiness[$class]))
+        {
+        // try to open the file in the ../modules/$module/db dir (default) or
+        // ../modules/$module/classes (only for compatibility purpose *don't use it*)
+        // if the file doesn't exist raise exception, otherwise we'll
+        // receive an eval error
+           if ( ! ( $this->Import('modules::' . $module . '::db::'. $name, $class) || 
+                    $this->Import('modules::' . $module . '::classes::'. $name, $class) )
+              )
+           {
+               throw new EUsesException($this->GetConf('home.modules') . '/' . $module . "/db/$name.class ",  _M('Error in UsesBusiness: Class not Found! <BR>Class name: ') );
+           }
+
+           $class = strtolower($class);
+           $this->usesBusiness[$class]['module'] = $module;
+           $this->usesBusiness[$class]['name'] = $name;
+        }
+    }
+
+    /**
+     * @todo TRANSLATE
+     *
+     * Compõe um link (URL).
+     * Este metodo compoe um link para uma URL no sistema.
+     * <br>
+     * @example
+     * <code>
+     * ...
+     * $module = 'reports';
+     * $main   = 'main:list_person';
+     *
+     * $handler = $MIOLO->GetActionURL($module, $main);
+     * ...
+     * </code>
+     * O exemplo acima retorna um link para o handler list_person.inc, no
+     * modulo reports: http://nome_site/handler.php?module=reports&action=main:list_person
+     *
+     * @param $module (string) Nome do modulo que sera acessado
+     * @param $action (string) Nome do handler (<code>.inc</code>) a ser acessado
+     * @param $item   (string) Parametro adicional que pode ser utilizado
+     *                         para passar dados para a nova pagina.
+     * @param $args (string/array) Esse argumento pode ser utilizado para criar
+     *        outras variaveis, alem das tres anteriores (que sao padrao do MIOLO).
+     *        Quando for informado um array, o <code>key</code> sera o nome da variavel atraves
+     *        do qual o conteudo podera ser acessado.
+     * @param $dispatch (string) Indica qual arquivo devera ser utilizado
+     *        ao inves daquele configurado no miolo.conf: 
+     *        <code>$MIOLOCONF['options']['dispatch']</code>
+     * @param $scramble (boolean) Indica se o link deve ser 
+     *
+     * @returns (string) o link para uma URL
+     *
+     */
+    function GetActionURL($module = '', $action = 'NONE', $item = '', $args = NULL, $dispatch = NULL, $scramble = false)
+    {
+        if ( is_object( $module ) )
+        {
+            $obj = clone( $module );
+            $action = $obj->action;
+            $item   = $obj->item;
+            $args   = $obj->args;
+            $dispatch = $obj->dispatch;
+            $scramble = $obj->scramble;
+
+            $module = $obj->module;
+        }
+
+        if (is_null($dispatch))
+        {
+            $dispatch = $this->dispatch;
+        }
+        $amp = '&amp;';
+        if ($item)
+        {
+            $qs = $amp . "item=$item";
+        }
+        if (is_array($args))
+        {
+            foreach ($args as $key => $value)
+            {
+                $qs .= $amp . "$key=".$value;
+            }
+        }
+        $url = $this->context->ComposeURL($dispatch,$module,$action, $qs,$scramble);
+
+        return $url;
+    }
+
+    /**
+     * Gets physical filesystem path of $rel (relative filename)
+     */
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @param $rel (tipo) desc
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function GetAbsolutePath($rel = NULL, $module = NULL)
+    {
+        $path = $module ? $this->getConf('home.modules') . "/$module" : $this->getConf('home.miolo');
+
+        if ($rel)
+        {
+            // prepend path separator if necessary
+            if (substr($rel, 0, 1) != '/')
+            {
+                $path .= '/';
+            }
+
+            $path .= $rel;
+        }
+
+        return $path;
+    }
+
+    /**
+     * Gets absolute virtual path of $rel (relative filename) from browser's address 
+     */
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @param $rel (tipo) desc
+     * @param $module (tipo) desc
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function GetAbsoluteURL($rel, $module = NULL)
+    {
+        global $MIOLOCONF;
+
+        if ($module)
+        {
+            $url = $this->getConf('home.url') . '/modules/' . $module;
+        }
+        else
+        {
+            //            $url = $MIOLOCONF['home']['url'] . '/miolo';
+            $url = $this->getConf('home.url');
+        }
+
+        // prepend path separator if necessary
+        if (substr($rel, 0, 1) != '/')
+        {
+            $url .= '/';
+        }
+
+        $url .= $rel;
+
+        return $url;
+    }
+
+    /**
+     * Gets absolute virtual path of $rel for selected theme 
+     */
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @param $rel (tipo) desc
+     * @param $name (tipo) desc
+     * @param $default=NULL (tipo) desc
+     * @param $module=NULL (tipo) desc
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function GetThemeURL($rel, $name = NULL, $default = NULL, $module = NULL)
+    {
+        global $MIOLOCONF;
+
+        if (substr($rel, 0, 1) == '/')
+        {
+            return $rel;
+        }
+
+        if (!$name)
+        {
+            $name = $this->theme->getId();
+        }
+
+        if (!$module)
+        {
+            if (($module = $this->theme->GetModule()) == NULL)
+                $module = 'miolo';
+        }
+
+        //        $url = $this->getConf('home.url_themes') . '/' . $name . '/' . $rel;
+        if ( MUtil::getBooleanValue( $this->getConf('options.performance.uri_themes') ) == true )
+        {
+            $url = $this->GetAbsoluteURL('themes/' . $name . '/' . $rel);
+        }
+        else
+        {
+            $url = $this->GetActionURL($module, 'themes:' . $name . ':' . $rel);
+        }
+        return $url;
+    }
+
+    /**
+     * Gets the physical filesystem path of the module's file 
+     */
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @param $module (tipo) desc
+     * @param $file (tipo) desc
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function GetModulePath($module, $file)
+    {
+        $path = $this->GetConf('home.modules') . '/' . $module;
+
+        if (substr($file, 0, 1) != '/')
+        {
+            $path .= '/';
+        }
+
+        $path .= $file;
+        return $path;
+    }
+
+    /**
+     * Return current URL.
+     * Returns the URL address of the current page.
+     *
+     * @returns (string) URL address
+     *
+     */
+    public function getCurrentURL() //static
+    {
+        $m = MIOLO::getInstance();
+        if ( ! ($url = $m->context->url) )
+        {
+            $url = $m->getConf('home.url') . '/' . $m->getConf('options.dispatch');
+        }
+        return $url;
+    }
+    
+    /**
+     * Return previos URL, based on previous action
+     * Returns the URL address of the previous action page
+     *
+     * @returns (string) URL address
+     *
+     */
+    public static function getPreviousURL()
+    {
+        $MIOLO = MIOLO::getInstance();
+        $context = $MIOLO->getContext();
+        $url = $context->composeUrl('','',$context->getPreviousAction());
+        return $url;
+    }
+
+
+    /**
+     * Return current module.
+     * Return the name of the current module
+     *
+     * @returns (string) module name
+     */
+    public static function getCurrentModule()
+    {
+        $uri = $_SERVER['REQUEST_URI'];
+        $pos1 = strpos($uri, 'module=') + 7;
+        $pos2 = strpos($uri, '&', $pos1);
+
+        return substr($uri, $pos1, $pos2 - $pos1);
+    }
+
+    /**
+     * Return current action.
+     * Return the name of the current action
+     *
+     * @returns (string) module name
+     */
+    public static function getCurrentAction()
+    {
+        $uri = $_SERVER['REQUEST_URI'];
+        $pos1 = strpos($uri, 'action=') + 7;
+        $pos2 = strpos($uri, '&', $pos1);
+
+        if ( $pos2 == 0 )
+        {
+            $pos2 = strlen($uri);
+        }
+
+        return substr($uri, $pos1, $pos2 - $pos1);
+    }
+
+    /**
+     * @todo TRANSLATION
+     * Retorna 
+     * O metodo _REQUEST (que lembra o $_REQUEST do PHP) provê uma forma 
+     * simples para se ter acesso às variáveis. Utilizando comandos PHP, 
+     * vc. teria que utilzar $_REQUEST, $_GET, $_POST ou global ao passo 
+     * que no MIOLO este método trás todas as informacoes, nao importando
+     * de onde elas são provenientes.
+     * Caso você queira obter apenas o valor da variáveis provenientes de 
+     * uma dessas opcoes, por exemplo GET, passe essa palavra como segundo 
+     * parâmetro.
+     *
+     * @param $vars (string/array) variáveis as quais se deseja obter o valor
+     * @param $from (string) de onde obter os dados. Pode ser 'GET', 'POST', 
+     *                       além do padrão 'ALL' que retorna todos os dados.
+     *
+     * @returns (array) os valores das variáveis solicitadas
+     */
+    public static function _REQUEST( $vars, $from = 'ALL' )
+    {
+        if ( is_array($vars) )
+        {
+            foreach ( $vars as $v )
+            {
+                $values[$v] = self::_REQUEST($v);
+            }
+
+            return $values;
+        }
+        else
+        {
+            if ( $from == 'GET' )
+            {
+                $value = $_GET["$vars"];
+            }
+            elseif ( $from == 'POST' )
+            {
+                $value = $_POST["$vars"];
+            }
+            elseif ( $from == 'SESSION' )
+            {
+                $value = $_SESSION["$vars"];
+            }
+            else
+            {
+                $value = $_REQUEST["$vars"];
+            }
+
+            // If we still didn't has the value
+            // let's try in the global scope
+            if ( ( ! isset($value) ) && ( ( strpos($vars, '[') ) === false) )
+            {
+                $value = $_GLOBALS["$vars"];
+            }
+
+            // If we still didn't has the value
+            // let's try in the session scope
+
+            if ( ! isset($value) )
+            {
+                $value = $_SESSION["$vars"];
+            }
+
+            return $value;
+        }
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function getSysTime($format = 'd/m/Y H:i:s')
+    {
+        return date($format);
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function checkLogin()
+    {
+        return $this->getAuth()->checkLogin();
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @param $trans (tipo) desc
+     * @param $access (tipo) desc
+     * @param $deny (tipo) desc
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function checkAccess($trans, $access, $deny = false)
+    {
+        return $this->getObject('perms')->checkAccess($trans, $access, $deny);
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function IsHostAllowed()
+    {
+        global $MIOLOCONF;
+
+        $REMOTE_ADDR = $_SERVER['REMOTE_ADDR'];
+        $ReturnValue = false;
+
+        foreach ($MIOLOCONF['hosts']['allow'] as $h)
+        {
+            if ($REMOTE_ADDR == $h)
+            {
+                $ReturnValue = true;
+            }
+
+            // Is it a interval of IP's?
+            if ((strpos($h,
+                        '-') > 0) && (substr($h, 0,
+                                             strrpos($h, '.')) == substr($REMOTE_ADDR, 0, strrpos($REMOTE_ADDR, '.'))))
+            {
+                list($FirstIP, $LastIP) = explode('-', $h);
+                $LastIP = substr($FirstIP, 0, strrpos($FirstIP, '.') + 1) . $LastIP;
+
+                $RemoteIP = substr($REMOTE_ADDR, strrpos($REMOTE_ADDR, '.') + 1, strlen($REMOTE_ADDR));
+                $StartIP = substr($FirstIP, strrpos($FirstIP, '.') + 1, strlen($FirstIP));
+                $EndIP = substr($LastIP, strrpos($LastIP, '.') + 1, strlen($LastIP));
+
+                if (($StartIP < $RemoteIP) && ($EndIP > $RemoteIP))
+                {
+                    $ReturnValue = true;
+                }
+            }
+        }
+
+        foreach ($MIOLOCONF['hosts']['deny'] as $h)
+        {
+            if ($REMOTE_ADDR == $h)
+            {
+                $ReturnValue = false;
+            }
+        }
+
+        return $ReturnValue;
+    }
+
+    //
+    // Factories Methods
+    //     GetDatabase
+    //     GetBusiness
+    //     GetUI
+    //     GetTheme
+    //
+    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    # Este método é utilizado para criar uma conexão com a base de dados
+    # especificada no parâmetro <code>$conf</code>.
+    # A configuração da base deve ter sido previamente criada no arquivo
+    # de configuração do MIOLO: miolo.conf
+    #
+    # @param $conf (string) Nome da configuração, definida no miolo.conf
+    # @param $user (string) (optional) Nome do usuário para conectar à base
+    #        de dados
+    # @param $pass (string) (optional) Senha para acesso à base.
+    #
+    # @see #MIOLO::GetBusiness, miolo/database.class
+    #---------------------------------------------------------------------
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @param $conf (tipo) desc
+     * @param $user=NULL (tipo) desc
+     * @param $pass=NULL (tipo) desc
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function GetDatabase($conf = NULL, $user = NULL, $pass = NULL)
+    {
+        global $MIOLOCONF;
+
+        $this->ProfileEnter('MIOLO::GetDatabase');
+
+        if (isset($this->dbconf[$conf]))
+        {
+            $db = $this->dbconf[$conf];
+            if ($db->status == 'close')            
+            {
+                $db->open(); 
+            }
+        }
+        else
+        {
+            try
+            {
+                if (!$conf)
+                {
+                    $conf = $this->db;
+                }
+
+                if (!$conf)
+                    throw new EDatabaseException($conf,"Database configuration missing in miolo.conf!");
+
+                $db_host = $this->GetConf("db.$conf.host");
+                $db_name = $this->GetConf("db.$conf.name");
+                $db_system = $this->GetConf("db.$conf.system");
+                $db_persistent = (bool)$this->GetConf("db.$conf.persistent");
+                $db_jdbc_driver = $this->GetConf("db.$conf.jdbc_driver");
+                $db_jdbc_db = $this->GetConf("db.$conf.jdbc_db");
+
+                if ($this->GetConf('login.shared'))
+                {
+                    $this->conf->loadConf('',$this->GetConf("home.etc").'/passwd.conf'); 
+                    $db_user = $this->GetConf("db.$conf.user");
+                    $db_pass = $this->GetConf("db.$conf.password");
+
+                    if (!(isset($db_user) && isset($db_pass)))
+                    {
+                        throw new EDatabaseException($conf,"Configuration in miolo.conf is missing login for this database!");
+                    }
+                }
+                else
+                {
+                    $db_user = $user ? $user : $this->login->id;
+                    $db_pass = $pass ? $pass : $this->login->password;
+                }
+
+                $db = new MDatabase($conf, $db_system, $db_host, $db_name, $db_user, $db_pass, $db_persistent,'','', $db_jdbc_driver, $db_jdbc_db);
+                $this->dbconf[$conf] = $db;
+            }
+            catch( Exception $e )
+            {
+                throw $e;
+            }
+        }
+
+        // $this->Dump(array($db_host,$db_name,$db_user,$db_pass,$this->login),__FILE__,__LINE__);
+        $this->ProfileExit('MIOLO::GetDatabase');
+        return $db;
+    }
+
+    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    # Como o MIOLO é capaz de abrigar módulos diferentes, era preciso
+    # adotar um esquema para evitar possíveis colisões de nomes de classes.
+    # Teoricamente dois modulos poderiam definir uma classe, por exemplo,
+    # 'Guestbook' que, utilizada simultaneamente, causaria problemas.
+    # <br><br>
+    # O MIOLO espera que classes do tipo 'Business' tenham o seu nome composto
+    # de 'Business' + 'nome do module' + 'nome da classe'. Mas para evitar
+    # redundâncias adotou-se o padrão de somente usar o nome básico da classe
+    # para definir o nome do arquivo, já que o mesmo se encontra dentro da estrutura
+    # de diretórios do módulo em questão.
+    #
+    # @example 
+    /**
+     * Brief Class Description.
+     * Complete Class Description.
+     */
+    # <i>/* in file: ../modules/foo/db/guestbook.class */</i>
+    # &lt;?
+    #
+    /**
+     * Brief Class Description.
+     * Complete Class Description.
+     */
+    # class BusinessFooGuestbook extends Business
+    # {
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @param $data (tipo) desc
+     *
+     * @returns (tipo) desc
+     *
+     */
+    #     function AddVisitor($data)
+    #     {
+    #           ...
+    # ?&gt;
+    # <hr>
+    # <i>/* in file: ../modules/foo/handlers/register.inc */</i>
+    # &lt;?
+    # ...
+    # $guestbook = $MIOLO->GetBusiness( 'foo', 'guestbook' );
+    # $data = $form->GetData();
+    # result = $guestbook->AddVisitor( $data );
+    # ...
+    # ?&gt;
+    # 
+    # @see miolo/miolo.class#MIOLO::GetDatabase,
+    #      miolo/ui/form.class#Form::GetData
+    #---------------------------------------------------------------------
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @param $module (tipo) desc
+     * @param $namemain' (tipo) desc
+     * @param $data= (tipo) desc
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function GetBusiness($module, $name = 'main', $data = NULL)
+    {
+        $this->ProfileEnter('MIOLO::GetBusiness');
+
+        // compose the name of the class, wich must be defined in the file
+        // ../modules/$module/db/$name.class
+        $class = 'Business' .
+                 strtoupper(substr($module,0,1)) . substr($module,1) .
+                 strtoupper(substr($name,0,1)) . substr($name,1);
+
+        // try to open the file in the ../modules/$module/db dir (default) or
+        // ../modules/$module/classes (only for compatibility purpose *don't use it*)
+        // if the file doesn't exist raise exception, otherwise we'll
+        // receive an eval error
+        if ( ! ( $this->Import('modules::' . $module . '::db::'. $name, $class) || 
+                 $this->Import('modules::' . $module . '::classes::'. $name, $class) )
+           )
+        {
+            throw new EBusinessException( _M('Error in GetBusiness: Class not Found! <BR>Class name: ') . $class . '<BR><BR>This class should exist in file ' . $this->GetConf('home.modules') . '/' . $module . "/db/$name.class ");
+        }
+
+        // instanciate a new class
+        $business = new $class($data);
+        $business->_bmodule = $module;
+        $business->_bclass = $name;
+        $business->OnCreate($data);
+        $this->ProfileExit('MIOLO::GetBusiness');
+        return $business;
+    }
+
+    function GetBusinessMAD($name = 'main', $data = NULL)
+    {
+        $class = $this->GetConf('mad.classes.' . $name);
+        return $this->GetBusiness($this->mad, $class, $data);
+    }
+
+    /**
+     *
+     */
+    function getClass($module,$name)
+    {
+        $this->uses("/classes/$name.class", $module);
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function GetUI()
+    {
+        return $this->getObject('ui');
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @param $themeId' (tipo) desc
+     * @param $layout='default' (tipo) desc
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function getTheme($themeId = '', $layout = 'default')
+    {
+
+        $this->profileEnter('MIOLO::getTheme');
+        if ($themeId == '')
+        {
+            $themeId = $this->getConf('theme.main');
+        }
+        if (is_object($this->theme))
+        {
+            // $this->theme already exists... is the same id? 
+            if ($this->theme->getId() == $themeId)
+                return $this->theme;
+        }
+        $themeTitle = $this->getConf('theme.title');
+        $class = 'Theme' . $themeId;
+        $module = $this->GetConf('theme.module');
+        $namespace = ($module != '') && ($module != 'miolo')
+            ? 'modules::' . $module . '::themes::' . $themeId . '::theme' 
+            : 'core::themes::' . $themeId . '::theme';
+        $path = $this->import($namespace, $class);
+        $this->theme = new $class;
+        $this->theme->setLayout($layout);
+        $this->theme->setModule($module);
+        $this->theme->setPath(dirname($path));
+        $this->theme->init();
+        $this->ProfileExit('MIOLO::getTheme');
+        return $this->theme;
+    }
+
+    function getPainter()
+    {
+        if ( is_null($this->painter) )
+        {
+            $this->painter = new MHtmlPainter();
+        }
+
+        return $this->painter;
+    }
+
+    //
+    // Dialogs and Error Handling
+    //     Error
+    //     Information
+    //     Confirmation
+    //     Question
+    //     Prompt
+    //
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @param $msg' (tipo) desc
+     * @param $goto='' (tipo) desc
+     * @param $caption='' (tipo) desc
+     * @param $event='' (tipo) desc
+     * @param $halt= (tipo) desc
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function Error($msg = '', $goto = '', $caption = '', $event = '', $halt = true)
+    {
+        $this->prompt(MPrompt::Error($msg, $goto, $caption, $event), $halt);
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @param $msg (tipo) desc
+     * @param $goto' (tipo) desc
+     * @param $event='' (tipo) desc
+     * @param $halt= (tipo) desc
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function Information($msg, $goto = '', $event = '', $halt = true)
+    {
+        $this->prompt(MPrompt::Information($msg, $goto, $event), $halt);
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @param $msg (tipo) desc
+     * @param $gotoOK' (tipo) desc
+     * @param $gotoCancel='' (tipo) desc
+     * @param $eventOk='' (tipo) desc
+     * @param $eventCancel='' (tipo) desc
+     * @param $halt= (tipo) desc
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function Confirmation($msg, $gotoOK = '', $gotoCancel = '', $eventOk = '', $eventCancel = '', $halt = true)
+    {
+        $this->prompt(MPrompt::Confirmation($msg, $gotoOK, $gotoCancel, $eventOk, $eventCancel), $halt);
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @param $msg (tipo) desc
+     * @param $gotoYes' (tipo) desc
+     * @param $gotoNo='' (tipo) desc
+     * @param $eventYes='' (tipo) desc
+     * @param $eventNo='' (tipo) desc
+     * @param $halt= (tipo) desc
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function Question($msg, $gotoYes = '', $gotoNo = '', $eventYes = '', $eventNo = '', $halt = true)
+    {
+        $this->prompt(MPrompt::Question($msg, $gotoYes, $gotoNo, $eventYes, $eventNo), $halt);
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @param $prompt (tipo) desc
+     * @param $halt (tipo) desc
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function Prompt($prompt, $halt = true)
+    {
+        $spacer = new MSpacer();
+        $this->theme->insertContent($spacer);
+        $this->theme->insertContent($prompt);
+        $this->theme->setHalted($halt);
+    }
+
+    //
+    // Log, Trace, Dum, Profile
+    //     
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @param $logname (tipo) desc
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function SetLog($logname)
+    {
+        $this->getObject('log')->setLog($logname);
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @param $sql (tipo) desc
+     * @param $force (tipo) desc
+     * @param $conf= (tipo) desc
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function LogSQL($sql, $force = false, $conf = '?')
+    {
+        $this->getObject('log')->logSQL($sql, $force, $conf);
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @param $error (tipo) desc
+     * @param $conf (tipo) desc
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function LogError($error, $conf = 'miolo')
+    {
+        $this->getObject('log')->logError($error, $conf);
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function ProfileTime()
+    {
+        return $this->getObject('profile')->profileTime();
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @param $name (tipo) desc
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function ProfileEnter($name)
+    {
+        return $this->getObject('profile')->profileEnter($name);
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @param $name (tipo) desc
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function ProfileExit($name)
+    {
+        return $this->getObject('profile')->profileExit($name);
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function ProfileDump()
+    {
+        return $this->getObject('profile')->profileDump();
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function GetProfileDump()
+    {
+        return $this->getObject('profile')->getProfileDump();
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function UsesDump()
+    {
+        return $this->getObject('dump')->usesDump();
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @param $var (tipo) desc
+     * @param $file (tipo) desc
+     * @param $line=false (tipo) desc
+     * @param $info=false (tipo) desc
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function Dump($var, $file = false, $line = false, $info = false)
+    {
+        return $this->getObject('dump')->dump($var, $file, $line, $info);
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function IsLogging()
+    {
+        return $this->getObject('log')->isLogging();
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @param $msg (tipo) desc
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function LogMessage($msg)
+    {
+        return $this->getObject('log')->logMessage($msg);
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @param $msg (tipo) desc
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function Deprecate($msg)
+    {
+        $this->logMessage('[DEPRECATED]' . $msg);
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @param $msg (tipo) desc
+     * @param $file (tipo) desc
+     * @param $line=0 (tipo) desc
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function Trace($msg, $file = false, $line = 0)
+    {
+        return $this->getObject('trace')->trace($msg, $file, $line);
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function TraceDump()
+    {
+        return $this->getObject('trace')->traceDump();
+    }
+
+    //
+    // Files methods
+    //     GetThemes
+    //     ListFiles
+    //
+    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    # Returns a array with the existing themes
+    #---------------------------------------------------------------------
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function getThemes()
+    {
+        global $MIOLOCONF;
+
+        $themes = MIOLO::ListFiles($MIOLOCONF['home']['themes'] . "/");
+
+        ksort ($themes);
+        reset ($themes);
+
+        return ($themes);
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @param $dir (tipo) desc
+     * @param $typed' (tipo) desc
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function listFiles($dir, $type = 'd')
+    {
+        $result = '';
+        if (is_dir($dir))
+        {
+            $thisdir = dir($dir);
+
+            while ($entry = $thisdir->read())
+            {
+                if (($entry != '.') && ($entry != '..') && (substr($entry, 0, 1) != '.'))
+                {
+                    if ($type == 'a')
+                    {
+                        $result[$entry] = $entry;
+                        next;
+                    }
+
+                    $isFile = is_file("$dir$entry");
+                    $isDir = is_dir("$dir$entry");
+
+                    if (($type == 'f') && ($isFile))
+                    {
+                        $result[$entry] = $entry;
+                        next;
+                    }
+
+                    if (($type == "d") && ($isDir))
+                    {
+                        $result[$entry] = $entry;
+                        next;
+                    }
+                }
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Send a file to client
+     * @param string $module Module
+     * @param string $filename Complete filepath relative to directory "files" on module dir
+     */
+    /**
+     * Brief Description.
+     * Complete Description.
+     *
+     * @param $module' (tipo) desc
+     * @param $filename (tipo) desc
+     * @param $dir='html (tipo) desc
+     *
+     * @returns (tipo) desc
+     *
+     */
+    function saveFile($module = '', $filename='', $dir = 'html/files/')
+    {
+        $path = $this->GetModulePath($module, $dir);
+        $this->response->sendDownload($path . $filename);
+    }
+}
+?>

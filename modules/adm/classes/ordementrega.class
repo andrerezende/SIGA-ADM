@@ -1,0 +1,111 @@
+<?
+class BusinessAdmOrdemEntrega extends Business
+{
+    var $idOrdemEntrega;
+    var $data;
+    var $numero;
+    var $idUoExecutante;
+    var $impresso;
+    
+    function __construct($data = null)
+    {
+        parent::__construct('sigaept', $data);
+    }
+    
+    function OnCreate($data)
+    {
+        if ($data)
+        {
+            $this->GetById($data);
+        }
+    }
+    
+    function getById($id)
+    {
+        $this->idOrdemEntrega = $id;
+        $this->retrieve();
+        return $this;
+    }
+
+    function getUltimoNumeroByUo($idUo)
+    {
+        $ano = date('Y');
+        $criteria =  $this->getCriteria();
+        $criteria->addColumnAttribute('max(numero)','numero');
+        $criteria->addCriteria('idUoExecutante','=', "$idUo");
+        $criteria->addCriteria("substr(data,7,4)",'=',"'$ano'");
+        return $criteria->retrieveAsQuery()->result[0][0];
+    }
+    
+    function newOrdemEntrega($idUo)
+    {
+        $numero = $this->getUltimoNumeroByUo($idUo);
+        if ($numero) $numero++;
+        else $numero = 1;
+        $today = getDate();
+        $this->data = $today['mday']."/".$today['mon']."/".$today['year'];
+        $this->numero = $numero; 
+        $this->idUoExecutante = $idUo;
+        $this->impresso = '0';
+        $this->save();
+    }
+	
+    function ListOrdemNaoImpressa()
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->addColumnAttribute('numero','numero');
+        $criteria->addCriteria('impresso','=', "'0'");
+        return $criteria->retrieveAsQuery();
+    }
+
+    function getByNumero($numero)
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->addCriteria('numero','=', "'$numero'");
+        $this->retrieveFromCriteria($criteria);
+    }
+    
+    function MarcarOrdemImpressa($ordem)
+    {
+        try
+        {
+            $this->getByNumero($ordem);
+            $this->impresso = '1';
+            $this->save();
+            return true;
+        }
+        catch (Exception $e)
+        {
+            return false;
+        }
+    }
+
+    function getRequisicao()
+    {
+        $requisicao = $this->_miolo->getBusiness('adm','requisicao');
+        $criteria = $requisicao->getCriteria();
+        $criteria->addCriteria('movimento.idOrdemEntrega','=',"{$this->idOrdemEntrega}");
+        $cursor = $criteria->retrieveAsCursor();
+        while ($o = $cursor->getObject())
+        {
+            return $o;
+        }
+    }
+    
+    // 13/12/2010 JOSELITO
+    function listMateriaisOrdemEntrega($numOrdenEnrega, $idOrdemEntrega) {
+        $sql = new sql("DISTINCT MAT.idmaterial, MAT.codmaterial, MAT.descricao, MAT.unidade, I.quantpedida, I.quantentregue");
+        $sql->SetTables('ad_ordentrega O, ad_movimento M, ad_itemreq I, ad_material MAT');
+        $sql->SetWhere("O.idordement = M.idordement AND M.idrequisicao = I.idrequisicao AND I.idmaterial = MAT.idmaterial
+                                                    AND O.numeroordem = $numOrdenEnrega AND O.idordement = $idOrdemEntrega");
+        $sql->SetOrderBy('codmaterial');
+        $query = $this->ObjQuery($sql->Select());       
+        return $query;
+    }
+    // 13/12/2010 JOSELITO
+    function MarcarImpresso($numero) {
+        $this->impresso = '1';
+        $this->save();
+    }
+}
+?>

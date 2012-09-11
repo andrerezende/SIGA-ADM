@@ -1,0 +1,93 @@
+<?
+class frmRepFechamentoDiaria extends MForm
+{
+	function __construct()
+    {
+		global $MIOLO;
+        parent::__construct('Relatório de Fechamento de Diária');
+		$this->SetClose($this->manager->GetActionURL('adm','main:relatorios'));
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+		global $MIOLO, $module;
+
+		$fields = array(
+			new CalendarField('calDataInicial','','Data Inicial'),
+			new CalendarField('calDataFinal','','Data Final'),
+		);
+
+       	$this->SetFields($fields);
+
+		$button = array(
+			new FormButton('btnRelatorio','Gerar Relatório','PDF'),
+			new MButton('btnGerarCSV','Gerar Planilha'),
+		);
+       	$this->SetButtons($button);
+		$this->defaultButton = false;
+	}
+
+	function btnRelatorio_click()
+    {   global $MIOLO, $module, $item;
+
+		$ui = $MIOLO->GetUI();
+        $report = $ui->GetReport($module,'repFechamentoDiaria');
+        $report->Generate();
+    }
+    function btnGerarCSV_click()
+	{
+		global $MIOLO, $module, $self, $action, $perms;	
+		
+		
+		$dataInicial = $this->GetFormValue('calDataInicial');
+		$dataFinal = $this->GetFormValue('calDataFinal');		
+		
+		$itemDiaria = $MIOLO->GetBusiness($module,'itemdiaria');
+		$processo = $MIOLO->GetBusiness('protocolo', 'processo');
+
+		$cf = new MCurrencyFormatter();
+		$data = $itemDiaria->repFechamentoDiaria($dataInicial, $dataFinal);
+		if ($data <> null)
+			{
+			
+			for($i = 0; $i < count($data); $i++)
+			{
+				$data[$i][6] = number_format(str_replace(',','.',$data[$i][6]),2,',','.');//valor
+				$data[$i][7] = $processo->numProcessoFormatado($data[$i][7]);//processo
+				$localidades = $itemDiaria->GetLocalidades($data[$i][0]);
+				//$data[$i][5] = 0.0;//quantidade
+				$data[$i][4] = "";//municipio
+				if($localidades->result)
+				{
+					foreach($localidades->result as $l)
+					{
+						$data[$i][4] .= $l[0] . ", ";//municipio
+						$data[$i][5] += $cf->toDecimal($l[1]);//quantidade
+					}
+				}
+				$data[$i][4] = substr($data[$i][4], 0, -2);
+			}
+				
+				
+				
+		    
+					$resultAux[] = array('Nº REQ','SAÍDA','RETORNO','BENEFICIÁRIO','DESTINO','QUANTIDADE','VALOR','PROCESSO','FINALIDADE');
+					foreach ($data as $result)		  
+			    	{
+			    		$resultAux[] = array($result[0],$result[1],$result[2],$result[3],$result[4],$result[5],$result[6],$result[7],$result[8]);		
+			    	}
+	
+			    	$dump = new MCSVDump();
+			    	$dump->dump($resultAux,"FechamentoDiaria.$dataInicial::$dataFinal");
+			    	exit;		    
+				     
+				}
+			 $this->addError('Não existem dados referentes à solicitação');
+             return;
+		}
+
+			
+	
+}
+?>

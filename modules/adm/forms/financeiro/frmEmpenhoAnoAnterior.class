@@ -1,0 +1,569 @@
+<?
+class frmEmpenhoAnoAnterior extends MFormAjax
+{
+	var $itens;
+    function __construct()
+    {
+		global $MIOLO, $module, $action;
+        $this->aux = $aux;		
+        parent::__construct('Empenhos do Ano Anterior ');
+		//$this->Form('Pagamento');
+		$this->SetClose($MIOLO->GetActionURL($module,'main:financeiro'));
+		$this->page->SetAction($MIOLO->GetActionURL($module,$action));
+		$this->EventHandler();
+		$this->defaultButton = false;
+		$this->page->AddJsCode(file_get_contents(dirname(__FILE__) . '/js/frmSaldoEmpenho.js'));
+    }
+
+	function CreateFields()
+	{
+		global $MIOLO, $module, $action, $item, $theme;
+		$tabelaGeral = $this->manager->getBusiness('adm','modalidadelicitacao');        
+        $modalidadeLicitacao = $tabelaGeral->listAll();
+		$tabelaGeral = $this->manager->getBusiness('common','tabelageral');
+		$optTipoEntrega = array("I"=>"Imediata","P"=>"Parcelada");
+		$queryModalidadeEmpenho = $tabelaGeral->ListByTabela('ad_modalidadeemp');
+        $optModalidadeEmpenho = $queryModalidadeEmpenho->result;
+		$queryTipoEmpenho = $tabelaGeral->ListByTabela('ad_tipoempenho');
+		$optEmpenho =$queryTipoEmpenho->result;
+		$uo = $this->manager->getBusiness('adm','uo');
+	    foreach ($uo->listAlmoxarifados()->result as $a)
+        {
+            $opLocaisEntrega[$a[0]] = $a[1];
+        }
+		$orcamento = $this->manager->getBusiness('adm','orcamento');
+		$optOrcamento=$orcamento->listAll();
+		$ptr = $this->manager->getBusiness('adm','ptr');
+		$optPtr=$ptr->listAll();
+		$fonte = $this->manager->getBusiness('adm','fonte');
+		$optFonte=$fonte->listAll();
+		$rubrica = $this->manager->getBusiness('adm','rubrica');
+		$optRubrica=$rubrica->listAll();
+		$opTipoLicitacao = array('1'=>'Material','2'=>'Serviço');
+		$opNovaRequisicao = array('0'=>'Nova requisicão');
+		$fields = array(
+					#campos de licitacao
+					new LookupTextField('numeroLicitacao','','Número',10),
+					new CalendarField('dataAbertura','','Data Abertura','10','Informe a data de abertura da licitação'),
+					new Selection('modalidadeLicitacao','','Modalidade',$modalidadeLicitacao->result),
+					new Selection('imediata','','Imediata'),
+					//new Selection('idTipoLicitacao','','Tipo de Licitação',$opTipoLicitacao),
+					new MHiddenField('idTipoLicitacao','1'),//apenas licitação de materiais
+					new MHiddenField('idLicitacao'),
+					new MHiddenField('idRequisicao'),
+					#campos do empenho
+					new MHiddenField('idEmpenho'),
+					new MTextField('numeroEmp','2006NE90','Número do Empenho',13),
+					new MTextField('numProcesso','','Processo',15),
+					//new LookupTextField('fornecedor', '', 'Fornecedor', 60),
+					new LookupFieldValue('fornecedor', '', 'Fornecedor', 60),
+					new MCalendarField('dataEmpenho','','Data do Empenho','10'),
+					//new MSelection('orcamento','','Orçamento',$optOrcamento->result),
+					//new LookupTextField('lkpOrcamento', '', 'Orçamento', 60),
+					new MHiddenField('orcamento'),
+					new MSelection('tipoEmpenho','','Tipo de Empenho',$optEmpenho),
+					new MSelection('tipoEntrega','','Tipo de Entrega',$optTipoEntrega),
+					new MSelection('modalidadeEmp','','Modalidade Empenho',$optModalidadeEmpenho),
+					new MSelection('idUoEntrega','','Local de entrega',$opLocaisEntrega),
+					new MHiddenField('idFornecedor'),
+					new MMultiLineField('obs','','Observação',240,4,40,'',''),
+					#campos do serviço
+					new LookupTextField('servico', '', 'Serviço', 60),
+					array (//new MCurrencyField('valorEmpenhado','','Valor',5),
+							new MTextField('valorEmpenhado','','Valor',5),
+							new MTextField('quantidadeEmpenhado','','Quantidade',5)),
+					new MHiddenField('idServico'),
+					#campos do Material
+					new LookupTextField('material', '', 'Material', 60),
+					array (
+							new MCurrencyField('valorEmpenhadoMaterial','','Valor',13),
+							//new MTextField('valorEmpenhadoMaterial','','Valor',5),
+							new MTextField('quantidadeEmpenhadoMaterial','','Quantidade',5),
+							new MSelection('requisicaoNova','','Requisicao',$opNovaRequisicao)
+							),
+					new LookupTextField('lkpUO', '', 'UO', 60),
+					array (new MTextField('idUO','','Id UO',10)),
+					array(
+						new MTextField('localEntrega','','Local de Entrega da Requisição',30)
+					),
+					new MHiddenField('idMaterial'),
+					new MHiddenField('cgc')
+			);
+		
+		$this->setFields($fields);
+		$this->SetFieldAttr('lkpUO','module','adm');
+		$this->SetFieldAttr('lkpUO','item','Uo');
+		$this->SetFieldAttr('lkpUO','event','filler');
+		$this->SetFieldAttr('lkpUO','related', 'idUO,lkpUO');
+
+		/*$this->SetFieldAttr('lkpOrcamento','module','adm');
+		$this->SetFieldAttr('lkpOrcamento','item','Orcamento');
+		$this->SetFieldAttr('lkpOrcamento','event','filler');
+		$this->SetFieldAttr('lkpOrcamento','related', 'orcamento,lkpOrcamento');*/
+
+		$this->SetFieldAttr('servico','module','adm');
+		$this->SetFieldAttr('servico','item','ServicoExterno');
+		$this->SetFieldAttr('servico','event','filler');
+		$this->SetFieldAttr('servico','related', 'idServico,servico');
+
+		$this->SetFieldAttr('material','module','adm');
+		$this->SetFieldAttr('material','item','material');
+		$this->SetFieldAttr('material','event','filler');
+		$this->SetFieldAttr('material','related', 'idMaterial,material');
+
+		$this->SetFieldAttr('fornecedor','module','adm');
+		$this->SetFieldAttr('fornecedor','item','FornecedorEmpenho');
+		$this->SetFieldAttr('fornecedor','event','filler');
+		$this->SetFieldAttr('fornecedor','related', 'idFornecedor,cgc,fornecedor');
+
+		$this->SetFieldAttr('numeroLicitacao','module','adm');
+		$this->SetFieldAttr('numeroLicitacao','item','LicitacaoEmpenho2');
+		$this->SetFieldAttr('numeroLicitacao','event','filler');
+		$this->SetFieldAttr('numeroLicitacao','related', 'idLicitacao, numeroLicitacao, dataAbertura, modalidadeLicitacao, imediata, idTipoLicitacao');
+		
+		$this->SetFieldAttr('idUO','readonly',true);
+		
+		$aguarde = $this->manager->getUI()->getImage('miolo','aguarde.gif');
+        $urlAjaxHandler = $this->manager->getActionURL('adm','ajaxhandler');
+        $this->requisicaoNova->addAttribute('onChange',"doSelRequisicaoNova('$urlAjaxHandler','$aguarde');");
+
+		/*
+		$this->SetFieldAttr('ptr','readonly',true);
+		$this->SetFieldAttr('fonte','readonly',true);
+		$this->SetFieldAttr('rubrica','readonly',true);
+		*/
+
+		$buttons = array(
+			new FormButton('btnConfirmaLicitacao', 'Confirmar Licitação'),
+			new FormButton('btnConfirmaEmpenho', 'Confirmar Empenho'),
+			new FormButton('btnConfirmaServico', 'Inserir Item'),
+			new FormButton('btnFinalizar', 'Finalizar'),
+			new MButton('btnReportNota','Nota de Empenho','pdf')
+		);
+		$this->SetButtons($buttons);
+		$this->setFieldsAttrBySteps('visible',true);
+		$this->setFieldsAttrBySteps('readonly');
+		$this->setButtonsAttrBySteps(true);
+	}
+	function btnConfirmaLicitacao_click()
+	{ 
+		$idTipoLicitacao = $this->getFormValue('idTipoLicitacao');
+		$idLicitacao=$this->getFormValue('idLicitacao');
+		if($idLicitacao==""){//licitacao nova,será inserida
+			$objLicitacao=$this->manager->getBusiness('adm','licitacao');
+			$numeroLicitacao=$this->getFormValue('numeroLicitacao');
+			$query = $objLicitacao->GetIdBynumero($numeroLicitacao);
+			if(count($query)<>0){//já existe este número
+				$this->addError('Este número '.$numeroLicitacao.' já está em uso.');	
+			}else{
+				try{
+					$objLicitacao->numero=$numeroLicitacao;
+					$objLicitacao->dataAbertura=$this->getFormValue('dataAbertura');
+					$objLicitacao->status='4';
+					$objLicitacao->dataCriacao=date('d/m/Y H:i:s');
+					$objLicitacao->idModalidadeLicitacao=$this->getFormValue('modalidadeLicitacao');
+					$objLicitacao->imediata=$this->getFormValue('imediata');
+					$objLicitacao->idTipoLicitacao=$idTipoLicitacao;
+					$this->setFieldValue('idTipoLicitacao',$objLicitacao->idTipoLicitacao);
+					$objLicitacao->save();
+					$objLicitacao->Log(OP_UPD,"Licitação salva - janela de saldo de empenho");
+					$this->setFieldValue('idLicitacao',$objLicitacao->idLicitacao);
+					$this->setFieldsAttrBySteps('visible',true,true);
+					$this->setFieldsAttrBySteps('readonly',true);
+					$this->setButtonsAttrBySteps(false,true);
+				}catch (Exception $e){
+					$this->addError($e->getMessage());
+					$this->setFieldsAttrBySteps('visible',true);
+					$this->setFieldsAttrBySteps('readonly');
+					$this->setButtonsAttrBySteps(true);
+				}
+			}
+		}else{//licitacao selecionada, o id já está no hidden idlicitacao
+			$this->setFieldsAttrBySteps('visible',true,true);
+			$this->setFieldsAttrBySteps('readonly',true);
+			$this->setButtonsAttrBySteps(false,true);
+		}
+	}
+function btnConfirmaEmpenho_click()
+	{ 
+		$objEmpenho=$this->manager->getBusiness('adm','empenho');
+		$numeroEmpenho=$this->getFormValue('numeroEmp');
+		$query = $objEmpenho->ListByNumero($numeroEmpenho,'','=');
+		if(!$query){//já existe este número
+			$this->addError('Este número '.$numeroEmpenho.' já está em uso.');	
+			$this->setFieldsAttrBySteps('visible',true,true);
+			$this->setFieldsAttrBySteps('readonly',true);
+			$this->setButtonsAttrBySteps(false,true);
+		}else{
+			try{
+				$objEmpenho->numero=$numeroEmpenho;
+				$objEmpenho->dataEmpenho=$this->getFormValue('dataEmpenho');
+				$objEmpenho->status='2';
+				$objProcesso=$this->manager->getBusiness('protocolo','processo');
+				$objProcesso->getByNumeroFormatado($this->getFormValue('numProcesso'));
+				$objEmpenho->numPro=$objProcesso->numProcesso;
+				$objEmpenho->idOrcamento=$this->getFormValue('orcamento');
+				$objEmpenho->modalidadeEmp=$this->getFormValue('modalidadeEmp');
+				$objEmpenho->tipoEmpenho=$this->getFormValue('tipoEmpenho');
+				$objEmpenho->tipoEntrega=$this->getFormValue('tipoEntrega');
+				$objEmpenho->idUoEntrega=$this->getFormValue('idUoEntrega');
+				$objEmpenho->idFornecedor=$this->getFormValue('idFornecedor');
+				$objEmpenho->obs=$this->getFormValue('obs');
+				$objEmpenho->save();
+				$objEmpenho->Log(OP_UPD,"Licitação salva - janela de saldo de empenho");
+				$this->setFieldValue('idEmpenho',$objEmpenho->idEmpenho);
+				$this->setFieldsAttrBySteps('visible',true,true,true);
+				$this->setFieldsAttrBySteps('readonly',true,true);
+				$this->setButtonsAttrBySteps(false,false,true,true);
+			}catch (Exception $e){
+				$findme    = 'unique constraint';
+				$mystring = $e->getMessage();
+				$this->addError($mystring);
+				$pos = stripos($mystring, $findme);
+				if ($pos !== false) {
+					$this->addError("O número do empenho ".$numeroEmpenho." já está em uso.");
+				}
+				$this->setFieldsAttrBySteps('visible',true,true);
+				$this->setFieldsAttrBySteps('readonly',true);
+				$this->setButtonsAttrBySteps(false,true);
+			}
+		}
+	}
+	function btnConfirmaServico_click()
+	{ 
+		$idLicitacao=$this->getFormValue('idLicitacao');
+		$idServico= $this->getFormValue('idServico');
+		$idMaterial= $this->getFormValue('idMaterial');
+		$idEmpenho= $this->getFormValue('idEmpenho');
+		$quantPedida= $this->getFormValue('valorEmpenhadoMaterial');
+		$precoEstimado= $this->getFormValue('quantidadeEmpenhadoMaterial');
+		$idTipoLicitacao=$this->getFormValue('idTipoLicitacao');
+		$localEntrega = $this->getFormValue('localEntrega');
+		$this->preencheComboNovaRequisicao();
+		try{
+			if($idTipoLicitacao=='2'){//se é serviço, várias requisicoes são salvas
+				#requisicao
+				//echo "requisicao de serviço";
+				$objRequisicao=$this->manager->getBusiness('adm','requisicao');
+				$objRequisicao->status='6';
+				$objRequisicao->idTipoReq='9';
+				$objRequisicao->idUoRequisitante = $this->getFormValue('idUO');
+				$objRequisicao->idUoExecutante =$this->getFormValue('idUoEntrega');
+				$objRequisicao->localEntrega = $localEntrega;
+				$objRequisicao->dataHora =date("d/m/Y H:i:s");
+				$objRequisicao->save();
+				$objRequisicao->Log(OP_UPD,"Requisição salva - janela de saldo de empenho");
+				//var_dump($objRequisicao->idRequisicao);
+				$idRequisicao = $objRequisicao->idRequisicao;
+			}elseif($idTipoLicitacao=='1'){//material
+				$opcaoNovaRequisicao = $this->getFormValue('requisicaoNova');
+				//var_dump($opcaoNovaRequisicao);
+				if ($opcaoNovaRequisicao=="0"){//nova requisicao
+					#requisicao
+					$objRequisicao=$this->manager->getBusiness('adm','requisicao');
+					$objRequisicao->status='6';
+					$objRequisicao->dataHora =date("d/m/Y H:i:s");
+					$objRequisicao->idTipoReq='7';//
+					$objRequisicao->idUoRequisitante = $this->getFormValue('idUO');
+					$objRequisicao->idUoExecutante =$this->getFormValue('idUoEntrega');
+					$objRequisicao->localEntrega = $localEntrega;
+					$objRequisicao->idTipoReq = $this->getFormValue("idTipoLicitacao");
+					$objRequisicao->save();
+					$objRequisicao->Log(OP_UPD,"Requisição salva - janela de saldo de empenho");
+					$idRequisicao = $objRequisicao->idRequisicao;
+					//echo 'inserindo nova requisicao'.$idRequisicao;
+				}else{
+					//utiliza uma outra requisicao
+					//echo 'requisicao velha '.$opcaoNovaRequisicao;
+					$idRequisicao = $opcaoNovaRequisicao;
+				}
+			}
+			$this->setFieldsAttrBySteps('visible',true,true,true);
+			$this->setFieldsAttrBySteps('readonly',true,true);
+			$this->setButtonsAttrBySteps(false,false,true,true);
+			///$this->preencheComboNovaRequisicao();			
+		}catch (Exception $e){
+			$this->addError($e->getMessage());
+			$this->setFieldsAttrBySteps('visible',true,true,true);
+			$this->setFieldsAttrBySteps('readonly',true,true);
+			$this->setButtonsAttrBySteps(false,false,true,true);
+
+		}
+		$this->showGrid($idRequisicao);
+		$this->preencheComboNovaRequisicao();
+	}
+
+	function preencheComboNovaRequisicao(){
+		//$data = $this->getFormValue('data');
+		$opNovaRequisicao[0]='Nova requisicão';
+		foreach($this->itens as $item){
+			$opNovaRequisicao[$item[4]] = $item[4];
+		}		
+		$this->setFieldAttr('requisicaoNova','options',$opNovaRequisicao);
+	}
+	
+	function deleteEmpenhado(){
+		$id = $this->getFormValue('id');
+		$this->showGrid(NULL, $id);
+		$this->setFieldsAttrBySteps('visible',true,true,true);
+		$this->setFieldsAttrBySteps('readonly',true,true);
+		$this->setButtonsAttrBySteps(false,false,true,true);
+		$this->preencheComboNovaRequisicao();		
+
+	}
+	
+	function MyRowMethod($i, $row, $actions, $columns)
+    {
+		$cf = new MCurrencyFormatter();
+		$columns["valorEmp"]->control[$i]->setValue($cf->formatWithSymbol($cf->toDecimal($row[4])));
+    }
+
+	function showGrid($idRequisicao=NULL,$deleteId=NULL){
+		global $MIOLO;
+		$idMaterial=$this->getFormValue('idMaterial');
+		$quantidade=$this->getFormValue('quantidadeEmpenhadoMaterial');
+		$valor=$this->getFormValue('valorEmpenhadoMaterial');
+		$material=$this->manager->getBusiness('adm','material',$idMaterial);
+		$data = $this->getFormValue('data');
+		if($deleteId){		
+			foreach($data as $item){
+				if($item[5]!=$deleteId){
+					$dataAux[] =  $item;
+				}
+			}
+			$data=$dataAux;
+		}
+		if(!is_null($idRequisicao)){
+
+			$data[] = array ($idMaterial, $material->descricao, $quantidade,$valor,$idRequisicao,uniqid());
+		}
+		$this->itens = $data;
+		$columns = array(
+			new MGridColumn('idMaterial','','','0',false),
+			new MGridColumn('Descrição','','','60%'),
+			new MGridColumn('Quantidade','','','10%'),
+			new MGridColumn('Valor do empenho','','','15%'),
+			new MGridColumn('Requisicão','','','15%'),
+			new MGridColumn('id','','','0',false)
+		);
+		$datagrid = new MGrid($data,$columns,$action,0);
+		$href = $MIOLO->getActionURL('adm', 'main:financeiro:saldoempenho','', array('event'=>'deleteEmpenhado','id'=>'#5#'));
+		$datagrid->AddActionDelete($href);
+		$this->addField($datagrid);
+		$i = 0;
+
+		foreach ( $data as $d ){
+			foreach ( $d as $valor ){
+				$this->addField(new MHiddenField("data[$i][]",$valor));				
+			}
+			$i++;
+		}
+		$this->preencheComboNovaRequisicao();
+	}
+	function btnFinalizar_click(){
+		global $MIOLO;
+		$idTipoLicitacao=$this->getFormValue('idTipoLicitacao');
+		$data = $this->getFormValue('data');
+		foreach ( $data as $d ){
+			$cf = new MCurrencyFormatter();
+			$itemEmpenhado[$d[0]]['quantidadeEmp'] += $cf->toDecimal($d[2]);
+			//var_dump($cf->toDecimal($d[2]));
+			//echo '<br>';
+			//$itemEmpenhado[$d[0]]['valorEmp']+=$d[3];
+			$itemEmpenhado[$d[0]]['valorEmp']+=$cf->toDecimal($d[3]);
+			$itemEmpenhado[$d[0]]['itemLicitacao']=NULL;
+		}		
+		$this->getFormValue('idEmpenho');
+		$idLicitacao = $this->getFormValue('idLicitacao');
+		foreach ( $itemEmpenhado as $key=>$item ){
+			#item licitacao
+			$objItemLicitacao=$this->manager->getBusiness('adm','itemlicitacao');
+			$newItem = $objItemLicitacao->GetNewItemLicitacao($idLicitacao);
+			$objItemLicitacao->idLicitacao=$idLicitacao;
+			$objItemLicitacao->item=$newItem;
+			$objItemLicitacao->save();
+			$objItemLicitacao->Log(OP_UPD,"Item Licitação salvo - janela de saldo de janela de saldo de empenho");
+			#empenhado
+			$itemEmpenhado[$key]['itemLicitacao']=$objItemLicitacao->item;
+			$objEmpenhado=$this->manager->getBusiness('adm','empenhado');
+			$objEmpenhado->valorEmp = $item['valorEmp'];
+			$objEmpenhado->quantidadeEmp = $item['quantidadeEmp'];
+			$objEmpenhado->idEmpenho = $this->getFormValue('idEmpenho');
+			$objEmpenhado->idLicitacao = $idLicitacao;
+			$objEmpenhado->item = $objItemLicitacao->item;
+			$objEmpenhado->save();
+			$objEmpenhado->Log(OP_UPD,"Empenhado salvo - janela de saldo de empenho");
+		}
+		//var_dump($itemEmpenhado);
+		foreach ( $data as $d ){
+			#itemreq
+			//var_dump($itemEmpenhado[$d[0]]['itemLicitacao']);
+			if($idTipoLicitacao=='2'){//serviço
+				$objItemServExt=$this->manager->getBusiness('adm','itemservext');
+				$objItemServExt->idRequisicao =$d[4];
+				$objItemServExt->idServico=$d[0];
+				$objItemServExt->idLicitacao=$idLicitacao;
+				$objItemServExt->item = $itemEmpenhado[$d[0]]['itemLicitacao'];
+				$objItemServExt->quantidade = $d[2];
+				$objItemServExt->valorEst = $d[3];
+				$objItemServExt->save();
+				$objItemServExt->Log(OP_UPD,"Item serviço externo salvo - janela de saldo de empenho");
+			}if($idTipoLicitacao=='1'){//material
+				$objItemReq=$this->manager->getBusiness('adm','itemreq');
+				$objItemReq->idRequisicao=$d[4];
+				$objItemReq->idMaterial=$d[0];
+				$objItemReq->idLicitacao=$idLicitacao;
+				$objItemReq->quantPedida = $d[2];
+				$objItemReq->precoEstimado = $d[3];
+				$objItemReq->item = $itemEmpenhado[$d[0]]['itemLicitacao'];
+				$objItemReq->save();
+				$objItemReq->Log(OP_UPD,"Item requisicao salvo - janela de saldo de empenho");
+			}
+		}	
+		$this->descontoOrcamento();
+		$this->setFieldsAttrBySteps('visible',true,true,true);
+		$this->setFieldsAttrBySteps('readonly',true,true,true);
+		$this->setButtonsAttrBySteps(false,false,false,false,true);
+		$this->showGrid_empenhado();
+	}
+	function showGrid_empenhado(){
+		global $MIOLO;
+		$objEmpenhado=$this->manager->getBusiness('adm','empenhado');
+		$idTipoLicitacao=$this->getFormValue('idTipoLicitacao');
+		switch($idTipoLicitacao){
+			case 1://material
+			{	//echo "grid material";
+				//var_dump($this->getFormValue('idEmpenho'));
+				$result = $objEmpenhado->ListByIdEmpenho($this->getFormValue('idEmpenho'));				
+				break;
+			}
+			case 2://serviço
+			{
+				//echo "grid serviço";
+				$result = $objEmpenhado->ListItensServExtEmpenhadosByEmpenho($this->getFormValue('idEmpenho'));
+				break;
+			}
+		}
+		$columns = array(
+			new DataGridColumn('idEmpenhado','ID','','','',false),
+			new DataGridColumn('item','Item','','','',false),
+			new DataGridColumn('descricao','Descrição','','','60%'),
+			new DataGridColumn('quantidadeEmp','Quantidade','','','20%'),
+			new DataGridColumn('valorEmp','Valor do empenho','','','20%'),
+			//new DataGridColumn('idRequisicao','Requisicão','','','15%'),
+		);
+		$datagrid = new DataGrid2($result,$columns,$action,0);
+		$datagrid->SetRowMethod($this,'MyRowMethod');
+		//$href = $MIOLO->getActionURL('adm', 'main:financeiro:saldoempenho','', array('event'=>'deleteEmpenhado','idEmpenhado'=>'#0#'));
+		//$datagrid->AddActionDelete($href);
+		$this->addField($datagrid);
+	}
+
+	function descontoOrcamento(){
+		global $MIOLO;
+		try{
+			$objEmpenho=$this->manager->getBusiness('adm','empenho',$this->getFormValue('idEmpenho'));
+			$objEmpenho->retrieveAssociation('empenhado');
+			foreach ($objEmpenho->empenhado as $empenhado){
+				$valorParcial = str_replace(',','.',$empenhado->valorEmp);
+				$valor =$valorParcial + $valor;
+			}
+			$cf = new MCurrencyFormatter();
+			
+			/*if(!is_null($objEmpenho->idOrcamento)){
+				$orcamento = $this->manager->getBusiness('adm','orcamento',$objEmpenho->idOrcamento);
+				$orcamento->pago = str_replace(",", ".",$valor) + str_replace(",", ".",$orcamento->pago);
+				$orcamento->save();
+			}*/
+			$this->addInfo('O empenho tem valor total de '.$cf->formatWithSymbol($cf->toDecimal($valor)));
+		}catch (Exception $e){
+			$this->addError($e->getMessage());
+		}
+	}
+
+	function setFieldsAttrBySteps($type='visible', $fieldsFirstStep=false, $fieldsSecondStep=false, $fieldsThirdStep=false){
+		#First Step's fields
+		$this->SetFieldAttr('numeroLicitacao',$type,$fieldsFirstStep);
+		$this->SetFieldAttr('dataAbertura',$type,$fieldsFirstStep);
+		$this->SetFieldAttr('modalidadeLicitacao',$type,$fieldsFirstStep);
+		$this->SetFieldAttr('imediata',$type,$fieldsFirstStep);
+		$this->SetFieldAttr('idTipoLicitacao',$type,$fieldsFirstStep);
+		#Second Step's fields
+		$this->SetFieldAttr('numeroEmp',$type,$fieldsSecondStep);
+		$this->SetFieldAttr('numProcesso',$type,$fieldsSecondStep);
+		$this->SetFieldAttr('obs',$type,$fieldsSecondStep);
+		$this->SetFieldAttr('fornecedor',$type,$fieldsSecondStep);
+		$this->SetFieldAttr('dataEmpenho',$type,$fieldsSecondStep);
+		$this->SetFieldAttr('tipoEmpenho',$type,$fieldsSecondStep);
+		$this->SetFieldAttr('tipoEntrega',$type,$fieldsSecondStep);
+		$this->SetFieldAttr('modalidadeEmp',$type,$fieldsSecondStep);
+		$this->SetFieldAttr('idUoEntrega',$type,$fieldsSecondStep);
+		$this->SetFieldAttr('btnCofirmaEmpenho',$type,$fieldsSecondStep);
+		//$this->SetFieldAttr('lkpOrcamento',$type,$fieldsSecondStep);
+		/*
+		$this->SetFieldAttr('ptr',$type,$fieldsSecondStep);
+		$this->SetFieldAttr('fonte',$type,$fieldsSecondStep);
+		$this->SetFieldAttr('rubrica',$type,$fieldsSecondStep);
+		*/
+		#Third Step's fields
+		$idTipoLicitacao=$this->getFormValue('idTipoLicitacao');
+		switch($idTipoLicitacao){
+			case '1'://material
+			{
+				$this->SetFieldAttr('servico',$type,false);
+				$this->SetFieldAttr('valorEmpenhado',$type,false);
+				$this->SetFieldAttr('quantidadeEmpenhado',$type,false);
+				$this->SetFieldAttr('material',$type,$fieldsThirdStep);
+				$this->SetFieldAttr('valorEmpenhadoMaterial',$type,$fieldsThirdStep);
+				$this->SetFieldAttr('quantidadeEmpenhadoMaterial',$type,$fieldsThirdStep);
+				$this->SetFieldAttr('requisicaoNova',$type,$fieldsThirdStep);
+				$this->SetFieldAttr('localEntrega',$type,$fieldsThirdStep);
+				$this->SetFieldAttr('lkpUO',$type,$fieldsThirdStep);
+				$this->SetFieldAttr('idUO',$type,$fieldsThirdStep);
+				break;
+			}
+			case '2'://serviço
+			{
+				$this->SetFieldAttr('servico',$type,$fieldsThirdStep);
+				$this->SetFieldAttr('valorEmpenhado',$type,$fieldsThirdStep);
+				$this->SetFieldAttr('quantidadeEmpenhado',$type,$fieldsThirdStep);
+				$this->SetFieldAttr('material',$type,false);
+				$this->SetFieldAttr('valorEmpenhadoMaterial',$type,false);
+				$this->SetFieldAttr('quantidadeEmpenhadoMaterial',$type,false);
+				$this->SetFieldAttr('requisicaoNova',$type,false);
+				$this->SetFieldAttr('localEntrega',$type,$fieldsThirdStep);
+				$this->SetFieldAttr('lkpUO',$type,$fieldsThirdStep);
+				$this->SetFieldAttr('idUO',$type,$fieldsThirdStep);
+				break;
+			}
+			default :{
+				$this->SetFieldAttr('servico',$type,false);
+				$this->SetFieldAttr('valorEmpenhado',$type,false);
+				$this->SetFieldAttr('quantidadeEmpenhado',$type,false);
+				$this->SetFieldAttr('material',$type,false);
+				$this->SetFieldAttr('valorEmpenhadoMaterial',$type,false);
+				$this->SetFieldAttr('quantidadeEmpenhadoMaterial',$type,false);
+				$this->SetFieldAttr('requisicaoNova',$type,false);		
+				$this->SetFieldAttr('localEntrega',$type,$fieldsThirdStep);
+				$this->SetFieldAttr('lkpUO',$type,$fieldsThirdStep);
+				$this->SetFieldAttr('idUO',$type,$fieldsThirdStep);
+				break;
+			}
+		}
+		$this->SetFieldAttr('idUO','readonly',true);
+				
+	}
+	function btnReportNota_click()
+	{  global $MIOLO;
+		$objEmpenho=$this->manager->getBusiness('adm','empenho',$this->getFormValue('idEmpenho'));
+        $report = $MIOLO->getUI()->GetReport('adm','repNotaProcessoEmpenho',$objEmpenho);        $report->Generate();
+    }
+	function setButtonsAttrBySteps($fieldsFirstStep=false, $fieldsSecondStep=false, $fieldsThirdStep=false,$fieldsFourthStep=false,$fieldsFifthStep=false, $type='visible'){
+		$this->SetFieldAttr('btnConfirmaLicitacao',$type,$fieldsFirstStep);
+		$this->SetFieldAttr('btnConfirmaEmpenho',$type,$fieldsSecondStep);
+		$this->SetFieldAttr('btnConfirmaServico',$type,$fieldsThirdStep);
+		$this->SetFieldAttr('btnFinalizar',$type,$fieldsFourthStep);
+		$this->SetFieldAttr('btnReportNota',$type,$fieldsFifthStep);
+	}
+}
+?>

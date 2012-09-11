@@ -1,0 +1,160 @@
+<?
+class frmAbastecimento extends Form
+{
+	protected $objRequisicao;
+	protected $grid;
+
+	function __construct($objRequisicao)
+    {
+        $this->objRequisicao = $objRequisicao;
+        $this->Form("Cadastro de Abastecimento de veículo");
+        $this->EventHandler();
+    }
+
+	Function CreateFields()
+	{
+	       	global $MIOLO, $module, $perms, $auth, $page, $ui, $action, $theme, $item, $self ;
+
+		$abast=$_GET['abast'];
+		if($abast!=""){
+				$objAbastecimento=$MIOLO->GetBusiness('adm','abastecimento');
+				$objAbastecimento=$objAbastecimento->GetByRequisicaoAbastecimento($this->objRequisicao->idRequisicao, $abast);
+				try{
+				$objAbastecimento->delete();
+				$idRequisicao=$this->objRequisicao->idRequisicao;
+				$go= $MIOLO->GetActionURL('adm','main:abastecimento',"$idRequisicao");
+				$this->page->redirect($go);
+				}catch(Exception $ex){
+
+				}
+		}
+		$combustivel = array ("1"=>"GASOLINA",
+							"2"=>"ÁLCOOL",
+							"3"=>"DIESEL",
+							"4"=>"GNV");
+		$this->grid = $this->manager->GetUI()->GetGrid('adm','gridAbastecimento',$this->objRequisicao->idRequisicao);
+		$this->grid->SetTitle('Abastecimentos');
+
+		/*------------------------------Lookup de Endereço-------------------------------*/
+		$idEndereco=new MHiddenField('idEndereco','');
+		$lookupEndereco = new MLookupTextField('endereco', '', 'Endereço', 20);
+		$lookupEndereco->module = 'adm';
+        $lookupEndereco->item = 'endereco';
+        $lookupEndereco->event = 'filler';
+        $lookupEndereco->related = 'idEndereco,endereco';
+
+		/*--------------------------------------------------------------------------------------*/
+		$fields = Array(
+		new TextField('idRequisicao',$this->objRequisicao->idRequisicao,'Requisicao',4),
+		new MTextField('posto','','Posto',30),
+		$idEndereco,
+		$lookupEndereco,
+		new MTextField('quantidade','','Litros'),
+		new MTextField('valorAbastecimento','','Valor'),
+		new MSelection('combustivel','','Combustível',$combustivel),
+		new MCalendarField('dataAbastecimento','','Data',10),
+		new MTextField('horaAbastecimento','','Hora'),
+		new MSeparator(''),
+		$this->grid
+
+		 );
+        	$this->SetFields($fields);
+        	$this->SetFieldAttr('idRequisicao','readonly',true);
+
+		$buttons = Array(
+	            new FormButton('btnPost','Enviar'),
+	            //new MButtonClose('btnFechar','Fechar')
+		    new FormButton('btnPost2','Finalizar'),
+	        );
+
+	        $this->SetButtons($buttons);
+	}
+	function btnPost_click()
+	{
+    		global $MIOLO, $module, $ui, $action;
+
+		//Declarando objeto de Abastecimento
+		$objAbastecimento = $MIOLO->GetBusiness('adm','abastecimento');
+
+		//Pegando os valores para Preencher no Objeto de Abastecimento
+		$idRequisicao=$this->objRequisicao->idRequisicao;
+		$objAbastecimento->idRequisicao=$idRequisicao;
+		$idEndereco						=$this->GetFormValue('idEndereco');
+		$idAbastecimento				=$objAbastecimento->GetNovoAbastecimento();
+		$posto								=$this->GetFormValue('posto');
+		$horaAbastecimento				=$this->GetFormValue('horaAbastecimento');
+		$dataAbastecimento				=$this->GetFormValue('dataAbastecimento');
+		$dataAbastecimento				=explode("/", $dataAbastecimento);
+		$dataHoraAbastecimento		= $dataAbastecimento[2] . "-" . $dataAbastecimento[1] . "-" . $dataAbastecimento[0]." ".$horaAbastecimento;
+		$valorAbastecimento			=$this->GetFormValue('valorAbastecimento');
+		$valorAbastecimento			=  str_replace(',', '.', $valorAbastecimento);
+		$quantidadeCombustivel		=$this->GetFormValue('quantidade');
+		$combustivel						=$this->GetFormValue('combustivel');
+
+		//Atribuindo valores ao objeto 'objAbastecimento'
+		$objAbastecimento->idAbastecimento=$idAbastecimento;
+		$objAbastecimento->idEndereco=$idEndereco;
+		$objAbastecimento->posto=$posto;
+		$objAbastecimento->dataHoraAbastecimento=$dataHoraAbastecimento;
+		$objAbastecimento->valorAbastecimento=$valorAbastecimento;
+		$objAbastecimento->quantidade=$quantidadeCombustivel;
+		$objAbastecimento->combustivel=$combustivel;
+
+		//Tratamento de Erros
+		 if($posto==null || $posto==""){
+                $this->AddError("Nome do Posto de Abastecimento não informado!");
+            }
+
+            if($dataAbastecimento == null || $dataAbastecimento[0] == ""){
+                $this->AddError("Data do Abastecimento não informada!");
+            }
+
+			if($valorAbastecimento == null || $valorAbastecimento == ""){
+                $this->AddError("Valor do Abastecimento não informado!");
+            }
+			if($quantidadeCombustivel == null || $quantidadeCombustivel == ""){
+                $this->AddError("Quantidade de Combustível não informada!");
+            }
+			if($combustivel == null || $combustivel == ""){
+                $this->AddError("Tipo do Combustível não informado!");
+            }
+            if ($this->errors != '') {
+                    $this->GenerateErrors();
+
+		}else{
+            try
+    		{
+    			$objAbastecimento->save();
+			$go = $this->manager->GetActionURL('adm','main:abastecimento',$this->objRequisicao->idRequisicao);
+			$this->manager->Information('Registro efetuado com sucesso!',$go);
+			}
+    		catch(Exception $e)
+    		{
+			echo $ex;
+    			$this->addError($e->getMessage());
+		}
+		}
+
+
+}
+	function btnPost2_click()
+	{
+		global $MIOLO;
+
+		$this->addInfo("Por Favor feche esta janela para finalizar");
+		$this->setFieldAttr('idRequisicao','visible',false);
+		$this->setFieldAttr('posto','visible',false);
+		$this->setFieldAttr('enderecoPosto','visible',false);
+		$this->setFieldAttr('cidadePosto','visible',false);
+		$this->setFieldAttr('endereco','visible',false);
+		$this->setFieldAttr('valorAbastecimento','visible',false);
+		$this->setFieldAttr('dataAbastecimento','visible',false);
+		$this->setFieldAttr('horaAbastecimento','visible',false);
+		$this->setFieldAttr('quantidade','visible',false);
+		$this->setFieldAttr('combustivel','visible',false);
+		$this->setButtonAttr('btnPost','visible',false);
+		$this->setButtonAttr('btnPost2','visible',false);
+
+	}
+}
+?>

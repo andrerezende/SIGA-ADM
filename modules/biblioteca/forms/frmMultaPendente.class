@@ -1,0 +1,242 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+
+
+class frmMultaPendente extends Form
+{
+    protected $objMulta;
+    protected $objEmprestimo;
+    protected $objUsuario;
+    protected $objPessoa;
+    
+	function frmMultaPendente()
+	{
+		global $MIOLO, $module, $item;
+
+		$this->Form("Multas não Pagas");
+		$this->EventHandler();
+		$this->defaultButton = false;
+		// Botão 'fechar', direcionando para o handler biblioteca/main/circulacao/multa
+		$this->SetClose($this->manager->GetActionURL($module, 'main:circulacao:multa'));		
+    }
+
+	function CreateFields()
+    {
+		global $MIOLO, $action, $module, $item, $page;
+
+		$this->SetTitle("Multas não Pagas - Ordem Crescente por Data/Hora");
+		//datagrid
+		$perms = $this->manager->getPerms();
+		if ( $perms->checkAccess('BIB_CIRCULACAO_TOT',A_ACCESS) )
+		{
+			$columns = array(
+				new DataGridColumn('idmulta','Código da Multa','center', true,'9%'),
+				new DataGridColumn('login','Código do Usuário','center', true,'11%'),
+				new DataGridColumn('idemprestimo','Código do Empréstimo','center', true,'9%'),
+				new DataGridColumn('numerodotombo','Exemplar','center', true,'16%'),
+				new DataGridColumn('datahora','Data/Hora','center', true,'16%'),
+				new DataGridColumn('valor','Valor','center', true,'9%'),
+				new DataGridColumn('observacao','Observação','left', true,'24%'),
+				);
+		}
+		else
+		{
+			$columns = array(
+				new DataGridColumn('idmulta','Código da Multa','center', true,'9%'),
+				new DataGridColumn('login','Código do Usuário','center', true,'11%'),
+				new DataGridColumn('idemprestimo','Código do Empréstimo','center', true,'9%'),
+				new DataGridColumn('numerodotombo','Exemplar','center', true,'16%'),
+				new DataGridColumn('datahora','Data/Hora','center', true,'16%'),
+				new DataGridColumn('valor','Valor','center', true,'9%'),
+				new DataGridColumn('observacao','Observação','left', true,'30%'),
+				);
+		}
+
+		//Instancia o objeto multa
+		$this->objMulta = $MIOLO->GetBusiness('biblioteca','multa');
+
+		$query = $this->objMulta->SelectMultaPendente();
+
+		$href_datagrid = $MIOLO->GetActionURL($module,$action);
+		$page->SetAction($href_datagrid);
+
+		$datagrid = new DataGrid2($query, $columns, $href_datagrid,25);
+		$datagrid->SetWidth('99%');
+		if ( $perms->checkAccess('BIB_CIRCULACAO_TOT',A_ACCESS) )
+		{
+	        $href_edit = $MIOLO->GetActionURL($module,$action,'%0%', array('event'=>'btnEdit:click'));
+			$href_dele = $MIOLO->GetActionURL($module,"main:circulacao:multaperdao",'%0%', array('event'=>'btnEdit:click'));
+			$datagrid->AddActionIcon('Editar', 'edit', $href_edit);
+			$datagrid->AddActionIcon('Perdoar', 'delete.gif', $href_dele);
+		}
+
+		$fields = array(
+						$datagrid,
+						);
+
+		$this->SetFields($fields);
+
+		$buttons = Array(
+			new FormButton('btnVoltar', 'Voltar', $MIOLO->GetActionURL($module = $module, 'main:circulacao:multa')),
+   			);
+
+		$this->SetButtons($buttons);
+		$this->SetButtonAttr('btnVoltar','visible',true);
+	}
+
+
+	function btnEdit_click()
+	{
+		global $MIOLO, $item;
+
+		$this->objMulta = $MIOLO->GetBusiness('biblioteca','multa');
+		$this->objMulta = $this->objMulta->GetById($item);
+		$this->objEmprestimo = $MIOLO->GetBusiness('biblioteca','emprestimo');
+		$this->objEmprestimo = $this->objEmprestimo->GetById($this->objMulta->GetIdEmprestimo());
+		$this->objUsuario = $MIOLO->GetBusiness('common','usuario');
+		$this->objUsuario = $this->objUsuario->GetById($this->objEmprestimo->GetIdUsuario());
+		$this->objPessoa = $MIOLO->GetBusiness('common','pessoa');
+		$this->objPessoa = $this->objPessoa->GetById($this->objUsuario->GetIdPessoa());
+
+		$opcoes = array('1'=>'Sim','2'=>'Não');
+
+		$fields = array(
+			new TextField('idmulta','','Cod. da Multa',20),
+			new TextField('Pessoa','','Código do Usuário',20),
+			new TextField('nome','','Nome',40),
+			new TextField('idemprestimo','','Cod. do Empréstimo',20),
+			new TextField('datahora','','Data/Hora',20),
+			new TextField('valor','','Valor',20),
+			new MultiLineField('observacao','','Observação','',3,40,'ATENÇÃO : Limite de 150 caracteres'),
+			new TextField('datahorapagamento','','Data/Hora do Pagamento',20),
+			new Selection('foipaga','','Foi paga?',$opcoes),
+		);
+		$this->SetFields($fields);
+
+		$this->SetFieldValue('idmulta',$this->objMulta->GetIdMulta());
+		$this->SetFieldValue('Pessoa',$this->objUsuario->login);
+		$this->SetFieldValue('nome',$this->objPessoa->GetNome());
+		$this->SetFieldValue('idemprestimo',$this->objMulta->GetIdEmprestimo());
+		$this->SetFieldValue('datahora',$this->objMulta->GetDatahora());
+		$this->SetFieldValue('valor',$this->objMulta->GetValor());
+		$this->SetFieldValue('observacao',$this->objMulta->GetObservacao());
+		$this->SetFieldValue('datahorapagamento',date('d/m/Y H:i:s'));
+		if($this->objMulta->GetFoiPaga() == '0')
+			$this->SetFieldValue('foipaga','2');
+		else
+			$this->SetFieldValue('foipaga',$this->objMulta->GetFoiPaga());
+		$this->SetFieldAttr('idmulta','readonly',true);
+		$this->SetFieldAttr('Pessoa','readonly',true);
+		$this->SetFieldAttr('nome','readonly',true);
+		$this->SetFieldAttr('idemprestimo','readonly',true);
+
+		$this->SetButtonAttr('btnVoltar','visible',false);
+		$buttons = Array(
+			new FormButton('btnSalvar', 'Salvar'),
+			new FormButton('btnVoltarEdit', 'Voltar', $MIOLO->GetActionURL($module = $module, $action = $action))
+		);
+		$this->SetButtons($buttons);
+	}
+
+	function btnSalvar_click()
+	{
+		global $MIOLO;
+
+		$this->objMulta = $MIOLO->GetBusiness('biblioteca','multa');
+		$this->objMulta = $this->objMulta->GetById($this->GetFormValue('idmulta'));
+		$this->objMulta->setData($this->getData());
+		try
+		{
+			/*
+			*	Novo código para edição da multa
+			*/
+			$this->objMulta->setData($this->getData());
+			
+			$go = $MIOLO->GetActionURL($module,$action);  
+			
+			if ($this->objMulta->SalvarMulta())
+			{
+				$MIOLO->Information("Multa Editada", $go );		
+			}
+			else 
+			{
+				$MIOLO->Error('Houve algum problema ao editar a multa', $go);	
+			}
+		}
+		catch (Exception $e)
+		{
+			$this->addError($e->getMessage());
+		}
+	}
+
+	function getData()
+	{
+		$data = new FormData();
+		$data->datahora = $this->GetFormValue('datahora');
+		$data->valor = str_replace("R$","",$this->GetFormValue('valor'));
+		$data->observacao = $this->GetFormValue('observacao');
+		if(($this->GetFormValue('foipaga') == '2') or ($this->GetFormValue('foipaga') == null))
+			$data->foipaga = 0;
+		else
+			$data->foipaga = $this->GetFormValue('foipaga');
+		$data->datahorapagamento = $this->GetFormValue('datahorapagamento');
+		$data->idemprestimo = $this->GetFormValue('idemprestimo');
+		return $data;
+	}
+
+	function btnExcluir_click()
+	{ 
+		global $MIOLO, $module, $item, $action;
+		
+		//Instancia o objeto multa
+		$this->objMulta = $MIOLO->GetBusiness($module,'multa');
+
+		try
+		{
+			$this->objMulta->Delete($item);
+			$MIOLO->Information("Multa " . $item . " deletada com sucesso.", $MIOLO->GetActionURL($module,$action) );
+		}
+		catch (Exception $e)
+		{
+			$this->Error("Multa não foi deletada.<BR>" . $e->getMessage());
+		}
+	}
+
+	function getDataLog($mne)
+	{
+		global $MIOLO;
+		$data = new FormData();
+		$data->data = date('d/m/Y H:i:s');
+		$data->idusuario = $MIOLO->GetLogin()->idkey;
+		$operacao = $MIOLO->GetBusiness('biblioteca','operacao');
+		$operacao = $operacao->GetIdoperacaoByMnemonico($mne);
+		$data->idoperacao = $operacao->idoperacao;
+		$data->identificador = $this->objMulta->idmulta;
+		return $data;
+	}
+}
+?>

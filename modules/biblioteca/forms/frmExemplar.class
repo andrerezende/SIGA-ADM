@@ -1,0 +1,812 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+class frmExemplar extends Form
+{
+	var $objExemplar;
+	var $objEstado;
+	var $objRegraCirculacao;
+	var $objUnidade;
+	var $objColecao;
+	var $numerodaobra;
+
+    function frmExemplar()  // construtor da Classe
+    {
+		global $MIOLO,$module;
+		
+		//Instancia objetos
+		$this->objExemplar = $MIOLO->GetBusiness($module,'exemplar');
+		$this->objEstado = $MIOLO->GetBusiness($module,'estado');
+		$this->objRegraCirculacao = $MIOLO->GetBusiness($module,'regracirculacao');
+		$this->objUnidade = $MIOLO->GetBusiness($module,'unidade');
+		$this->objColecao = $MIOLO->GetBusiness($module,'colecao');
+
+		// Título do Formulário
+		$this->Form('Catalogação de Exemplares');
+
+		//Chama o CreateFileds, etc.
+		$this->EventHandler();
+
+		// Botão "enviar" não aparece
+		$this->defaultButton = false;
+		
+		// Botão 'fechar', direcionando para o handler biblioteca/main/catalogacao
+		$this->SetClose($this->manager->GetActionURL($module, 'main:catalogacao'));
+	}
+   
+    function CreateFields()
+    {
+		global $MIOLO,$module,$action,$item;
+		// Buscando dados para as caixas de seleção
+		$optEstado = $this->objExemplar->ListEstado();
+		$optRegra = $this->objExemplar->ListRegraCirculacao();
+		$optUnidade = $this->objExemplar->ListUnidade();
+		$optCol = $this->objColecao->ListColecao();
+		foreach($optCol->result as $o)
+		{
+			$optColecao[] = array($o[0], $o[1] . ' -- ' . $o[2]);
+		}
+
+      $optCodigo['1'] = 'Code 128A';
+      $optCodigo['2'] = 'Code 128B';
+      $optCodigo['3'] = 'Code 128C';
+      $optCodigo['4'] = 'Code 3 of 9';
+      $optCodigo['5'] = 'Interleave 2 of 5';
+      //$optCodigo['6'] = 'Free 3 of 9';
+      //$optCodigo['7'] = 'Free 3 of 9 Extended';
+      //$optCodigo['8'] = 'Id Automation 3 of 9'; 
+
+      $ui = $MIOLO->getUI();
+ //     $href_mais = $MIOLO->GetActionURL($module,$action,'',Array('event'=>'btnMais:click')); 
+		// Campos que aparecem no formulário
+	  $fields = Array (
+			// campos readonly
+			array(
+				new TextField('edtObraIni','','Número da Obra',16),
+                new MTextLabel('ou','&nbsp;&nbsp;&nbsp; -OU- &nbsp;&nbsp;&nbsp;','&nbsp;'),
+				new TextField('edtExemplarIni','','Número do Tombo',16),
+			),
+
+			new TextField('edtNumerodaObra','','Número da Obra',10),
+			new TextField('edtTitulo','','Título',60),
+			new HiddenField('hidKeyObra'),
+			new HiddenField('hidKeyExemplar'), // controla incluir/editar
+
+			new TextField('edtAutor','','Autor',60),
+			new TextField('edtNumerodoTombo','','Número do Tombo',20),
+
+			new TextField('edtVolume','','Volume',20),
+			new TextField('edtPreco','','Preço',20),
+			new TextField('edtNotaInterna','','Nota Interna',60),
+			new TextField('edtNotaOPAC','','Nota OPAC',60),
+			new TextField('edtNotaCirculacao','','Nota de Circulação',60),
+			new TextField('edtNumeroInventario','','Número do Inventário',20),
+			
+			new Selection('selEstado','Disponível','Estado',$optEstado),
+			new Selection('selRegraCirculacao','','Regra de Circulação',$optRegra),
+			new Selection('selUnidade','','Unidade',$optUnidade),
+ 		    new Selection('selColecao','','Coleção',$optColecao),
+         new TextField('edtQtdExemplar','','Quantidade',10,'Digite a quatidade de exemplares'),
+            new Selection('codigo','','Codigo de Barra',$optCodigo),         
+            new MTextLabel('espaco1','&nbsp;' , '&nbsp;','&nbsp;'),
+            new MTextLabel('dica','&nbsp; -Selecione um código de barra e clique em imprimir- &nbsp;','&nbsp;'),
+            new MTextLabel('espaco2','&nbsp;' , '&nbsp;','&nbsp;'),
+            new ImageForm('imgCodigoBarra','Codigo',$ui->getImage($module,'codigo.png'),'' ),
+      
+            new MTextLabel('dica2','&nbsp; -Selecione os campos que devem ser exibidos na etiqueta - &nbsp;','&nbsp;'),
+            new TextField('edtTags','','TAG', '10'," Tag-Subcampo. <b>Ex: 245-a</b>"),
+            new MButton('btnMais','Adicionar Tags','',$ui->getImage($module,'cartao_mini.png')),
+            new HiddenField('listaTags',''),
+            new MultiLineField('mlinTags','','Tags Selecionadas',35,7, 35,"<b>Só é possível inserir até 4 tags</b>"),
+            new MTextLabel('dica3','&nbsp; -Outros Campos - &nbsp;','&nbsp;'),
+            new CheckBox('chkVolume',true,'Volume',false,'','Volume do exemplar' ),
+            new CheckBox('chkNumeroTombo',true,'Número do Tombo',false,'','Número do tombo do exemplar' ),
+		);
+		
+		$this->SetFields($fields);
+
+		$this->SetFieldAttr('dica', 'visible', false);
+      $this->SetFieldAttr('espaco1', 'visible', false);
+      $this->SetFieldAttr('espaco2', 'visible', false);
+        
+		//busca numero da obra a partir de idexemplar, para montar url do botão Voltar na Transferência
+		if($item != null)
+		{
+			$obra = $this->objExemplar->GetAllByCodigo($item)->numerodaobra;
+		}
+
+		// Botões que aparecem no formulário
+		$buttons = Array(
+			new FormButton('btnConsultar', 'Procurar'),
+			new FormButton('btnEnviar', 'Incluir'),
+			new FormButton('btnConfirmaTransfere', 'Transferir'),
+        	new FormButton('btnImprimir', 'Imprimir','PDF'),
+			new FormButton('btnVoltar', 'Voltar', $MIOLO->GetActionURL($module = $module, $action = $action)),
+			new FormButton('btnVoltarTrans', 'Voltar', $MIOLO->GetActionURL($module = $module, $action = $action, '', array('event'=>'btnConsultar_click', 'edtNumerodaObra'=>$obra)) ),
+		    new FormButton('btnCriar', 'Gerar Etiquetas','PDF'),
+          new MButton('btnLimpar', 'Nova Etiqueta'),
+		);
+		$this->SetButtons($buttons);
+
+		//Escondendo os campos
+		$this->SetFieldAttr('edtNumerodaObra','visible',false);
+		$this->SetFieldAttr('edtTitulo','visible',false);
+		$this->SetFieldAttr('edtAutor','visible',false);
+		$this->SetFieldAttr('edtNumerodoTombo','visible',false);
+		$this->SetFieldAttr('edtVolume','visible',false);
+		$this->SetFieldAttr('edtPreco','visible',false);
+		$this->SetFieldAttr('edtNotaInterna','visible',false);
+		$this->SetFieldAttr('edtNotaOPAC','visible',false);
+		$this->SetFieldAttr('edtNotaCirculacao','visible',false);
+		$this->SetFieldAttr('edtNumeroInventario','visible',false);
+		$this->SetFieldAttr('selEstado','visible',false);
+		$this->SetFieldAttr('selRegraCirculacao','visible',false);
+		$this->SetFieldAttr('selUnidade','visible',false);
+		$this->SetFieldAttr('selColecao','visible',false);
+      $this->SetFieldAttr('edtQtdExemplar','visible',false);
+        $this->SetFieldAttr('codigo','visible',false);
+        $this->SetFieldAttr('imgCodigoBarra','visible',false);
+        $this->SetFieldAttr('dica2', 'visible', false);
+        $this->SetFieldAttr('edtTags', 'visible', false);
+        $this->SetFieldAttr('btnMais', 'visible', false);
+         $this->SetFieldAttr('dica3', 'visible', false);
+        $this->SetFieldAttr('chkVolume', 'visible', false);
+        $this->SetFieldAttr('chkNumeroTombo', 'visible', false);   
+        $this->SetFieldAttr('mlinTags', 'visible', false);
+        
+		$this->SetbuttonAttr('btnEnviar','visible',false);
+		$this->SetbuttonAttr('btnVoltar','visible',false);
+		$this->SetbuttonAttr('btnVoltarTrans','visible',false);
+		$this->SetbuttonAttr('btnConfirmaTransfere','visible',false);
+        $this->SetbuttonAttr('btnImprimir','visible',false);
+        $this->SetbuttonAttr('btnCriar','visible',false);
+       $this->SetbuttonAttr('btnLimpar','visible',false); 
+         
+      //Validator
+      $this->AddValidator(new IntegerValidator('edtQtdExemplar'));
+      		
+         //Definindo o foco
+        if ( (!$this->page->isPostBack()) and ($this->GetFormValue('event') == null) )
+		{
+			$this->page->onLoad("MIOLO_GetElementById('edtObraIni').focus();");
+		}
+	}
+    
+
+
+
+	// pega os dados que estão no formulário   
+    function GetData()
+    {
+    $data = new FormData();
+        $data->numerodaobra = $this->GetFieldValue('edtNumerodaObra');
+        $data->titulo = $this->GetFieldValue('edtTitulo');
+		$data->idobra = $this->GetFieldValue('hidKeyObra');
+		$data->idexemplar = $this->GetFieldValue('hidKeyExemplar');
+		$data->idautor = $this->GetFieldValue('edtAutor');
+		$data->numerodotombo = $this->GetFieldValue('edtNumerodoTombo');
+		$data->volume = $this->GetFieldValue('edtVolume');
+        $data->preco = $this->GetFieldValue('edtPreco');
+        $data->notainterna = $this->GetFieldValue('edtNotaInterna');
+        $data->notaopac = $this->GetFieldValue('edtNotaOPAC');
+        $data->notacirculacao = $this->GetFieldValue('edtNotaCirculacao');
+        $data->numinventario = $this->GetFieldValue('edtNumeroInventario');
+		$data->idestado = $this->GetFieldValue('selEstado');
+		$data->idregracirculacao = $this->GetFieldValue('selRegraCirculacao');		
+		$data->idunidade = $this->GetFieldValue('selUnidade');
+        $data->idcolecao = $this->GetFieldValue('selColecao');
+      $data->codigo = $this->GetFieldValue('codigo');
+      $data->qtdexemplar = $this->GetFieldValue('edtQtdExemplar');
+	   return $data;
+    }
+
+
+	// usada para inserir valores no formulário
+	function SetData($data)
+	{
+		$this->SetFieldValue('edtNumerodaObra',$data->numerodaobra);
+		$this->SetFieldValue('edtTitulo',$data->titulo);
+		$this->SetFieldValue('hidKeyObra',$data->idobra);
+		$this->SetFieldValue('hidKeyExemplar',$data->idexemplar);
+	//	$this->SetFieldValue('edtAutor',$data->idautor); //Trago o Autor pelo Nome
+                $this->SetFieldValue('edtAutor',$data->prenome);
+		$this->SetFieldValue('edtNumerodoTombo',$data->numerodotombo);
+
+		$this->SetFieldValue('edtVolume',$data->volume);
+		$this->SetFieldValue('edtPreco',$data->preco);
+		$this->SetFieldValue('edtNotaInterna',$data->notainterna);
+		$this->SetFieldValue('edtNotaOPAC',$data->notaopac);
+		$this->SetFieldValue('edtNotaCirculacao',$data->notacirculacao);
+		$this->SetFieldValue('edtNumeroInventario',$data->numinventario);
+
+		$this->SetFieldValue('selEstado',$data->idestado);
+		$this->SetFieldValue('selRegraCirculacao',$data->idregracirculacao);
+		$this->SetFieldValue('selUnidade',$data->idunidade);
+		$this->SetFieldValue('selColecao',$data->idcolecao);
+		//default para Coleção é N-E:
+		if($data->idcolecao == null)
+		{
+			$this->SetFieldValue('selColecao',$this->objColecao->GetIdByMnemonico('N-E'));
+		}
+	}
+
+
+
+
+	//consulta retorna do lookup
+	function btnConsultar_click()
+	{
+		global $MIOLO,$item,$theme,$module;
+		
+
+		//buscando o valor nos campos iniciais e guardando no principal, edtNumerodaObra
+		$obraIni = $this->GetFormValue('edtNumerodaObra');
+		$obraIni = ($obraIni != null) ? $obraIni : $item;
+		if($obraIni == null)
+		{
+			$obraIni = $this->GetFormValue('edtObraIni');
+		}
+		if($obraIni == null)
+		{		     		
+			//chama consulta relativa a exemplar
+			$exemplarIni = $this->GetFormValue('edtExemplarIni');
+                        
+			//verifica se o exemplar existe
+			if($exemplarIni == null)
+			{
+			   $path = $this->manager->GetActionURL($module,$self);
+			   $MIOLO->Error("Preencha pelo menos um dos campos!",$path);
+			}
+			else
+			{
+			   $obraIni = $this->objExemplar->GetObraIdExemplarByTombo($exemplarIni);          
+			   //echo "passou  ";
+			   //var_dump($obraIni);
+			   $this->SetFieldValue('edtNumerodaObra', $obraIni[0]);
+			   $item = $obraIni[1];
+			   $this->btnConsulta2_click();
+			}
+		}
+		else
+		{        
+		    
+			$this->SetFieldValue('edtNumerodaObra', $obraIni);
+
+			$this->numerodaobra = $this->GetFieldValue('edtNumerodaObra');
+
+                        if(!is_numeric($this->numerodaobra)) 
+			{
+			   $path= $this->manager->GetActionURL($module, $self); 
+			   $MIOLO->Error("Número de obra inválido!",$path);
+			}
+
+//			$this->numerodaobra = ($this->numerodaobra != null) ? $this->numerodaobra : $item;
+			$ok = $this->objExemplar->GetObraByCodigo($this->numerodaobra);
+                        
+			//verifica se a obra existe
+			if($ok == NULL)
+			{
+			    $path= $this->manager->GetActionURL($module,$self);
+			    $MIOLO->Error("Obra não encontrada!",$path);			    
+			}			
+			else
+			{			
+			
+			   $this->SetData($ok);				   
+			   
+			   //Inserindo os campos
+			   $this->SetFieldAttr('edtObraIni', 'visible', false);
+			   $this->SetFieldAttr('edtExemplarIni', 'visible', false);
+			   $this->SetFieldAttr('ou', 'visible', false);
+			   $this->SetFieldAttr('dica', 'visible', false);
+
+			   $this->SetFieldAttr('edtNumerodaObra','visible',true);
+			   $this->SetFieldAttr('edtTitulo','visible',true);
+			   $this->SetFieldAttr('edtAutor','visible',true);
+			   $this->SetFieldAttr('edtNumerodoTombo','visible',true);
+			   $this->SetFieldAttr('edtVolume','visible',true);
+			   $this->SetFieldAttr('edtPreco','visible',true);
+		   	   $this->SetFieldAttr('edtNotaInterna','visible',true);
+			   $this->SetFieldAttr('edtNotaOPAC','visible',true);
+			   $this->SetFieldAttr('edtNotaCirculacao','visible',true);
+			   $this->SetFieldAttr('edtNumeroInventario','visible',true);
+			   $this->SetFieldAttr('selEstado','visible',true);
+			   $this->SetFieldAttr('selRegraCirculacao','visible',true);
+			   $this->SetFieldAttr('selUnidade','visible',true);
+			   $this->SetFieldAttr('selColecao','visible',true);
+            $this->SetFieldAttr('edtQtdExemplar','visible',true);
+
+			   //Valores default
+			   $this->SetFieldValue('selEstado',$this->objEstado->GetIdByMnemonico('DISPONIVEL'));
+			   $this->SetFieldValue('selRegraCirculacao',$this->objRegraCirculacao->GetIdByDescricao('LIVRO - 2 SEMANAS'));
+			   $this->SetFieldValue('selUnidade',$this->objUnidade->GetIdByMnemonico('BCE'));
+			   $this->SetFieldValue('selColecao',$this->objColecao->GetIdByMnemonico('N-E'));
+
+			   // Campos readonly
+			   $this->SetFieldAttr('edtAutor','readonly',true);
+			   $this->SetFieldAttr('edtNumerodaObra','readonly',true);
+			   $this->SetFieldAttr('edtTitulo','readonly',true);
+
+			   // Atributos dos botões
+			   $this->SetbuttonAttr('btnEnviar','visible',true);
+			   $this->SetbuttonAttr('btnVoltar','visible',true);
+			   $this->SetbuttonAttr('btnVoltarTrans','visible',false);
+			   $this->SetbuttonAttr('btnConsultar','visible',false);
+                           $this->SetbuttonAttr('btnImprimir','visible',false);
+
+			   $this->Grid();
+
+			   $this->page->onLoad("MIOLO_GetElementById('edtNumerodoTombo').focus();");
+
+		      }
+		}
+	}
+
+    // consulta2 retorna do grid
+	function btnConsulta2_click()
+	{
+		global $MIOLO,$item,$theme,$module;
+
+		$this->numerodaobra = $this->GetFieldValue('edtNumerodaObra');
+		
+		$idexemplar = $item; 
+
+		if($idexemplar == null)
+		{
+		    $path= $this->manager->GetActionURL($module,$self);
+		    $MIOLO->Error("Exemplar não encontrado!",$path);
+		}
+                  
+		$ok = $this->objExemplar->GetAllByCodigo($idexemplar);
+				
+		$this->SetData($ok);
+
+		//Inserindo os campos
+		$this->SetFieldAttr('edtObraIni', 'visible', false);
+		$this->SetFieldAttr('edtExemplarIni', 'visible', false);
+		$this->SetFieldAttr('ou', 'visible', false);
+		$this->SetFieldAttr('dica', 'visible', false);
+
+		$this->SetFieldAttr('edtNumerodaObra','visible',true);
+		$this->SetFieldAttr('edtTitulo','visible',true);
+		$this->SetFieldAttr('edtAutor','visible',true);
+		$this->SetFieldAttr('edtNumerodoTombo','visible',true);
+		$this->SetFieldAttr('edtVolume','visible',true);
+		$this->SetFieldAttr('edtPreco','visible',true);
+		$this->SetFieldAttr('edtNotaInterna','visible',true);
+		$this->SetFieldAttr('edtNotaOPAC','visible',true);
+		$this->SetFieldAttr('edtNotaCirculacao','visible',true);
+		$this->SetFieldAttr('edtNumeroInventario','visible',true);
+		$this->SetFieldAttr('selEstado','visible',true);
+		$this->SetFieldAttr('selRegraCirculacao','visible',true);
+		$this->SetFieldAttr('selUnidade','visible',true);
+		$this->SetFieldAttr('selColecao','visible',true);
+      $this->SetFieldAttr('edtQtdExemplar','visible',true);
+		// Campos readonly
+		$this->SetFieldAttr('edtAutor','readonly',true);
+		$this->SetFieldAttr('edtNumerodaObra','readonly',true);
+		$this->SetFieldAttr('edtTitulo','readonly',true);
+
+		// Atributos dos botões
+
+		$this->SetbuttonAttr('btnConsultar','visible',false);
+		$this->SetbuttonAttr('btnVoltar','visible',true);
+		$this->SetbuttonAttr('btnVoltarTrans','visible',false);
+      $this->SetbuttonAttr('btnImprimir','visible',false);
+      $perms = $this->manager->getPerms();
+      if ( $perms->checkAccess('bib_catalogacao',A_ACCESS) )
+		{
+			$this->SetbuttonAttr('btnEnviar','visible',true);
+			$this->SetbuttonAttr('btnEnviar','label','Salvar');
+		}
+
+		$this->Grid();
+	}
+
+	// Inserir ou editar dados
+	function btnEnviar_click()
+	{
+		global $MIOLO,$module,$action;
+	
+		$data = $this->GetData();
+
+		if ($data->idexemplar)
+		{
+			try
+			{
+				$ok = $this->objExemplar->Update($data);
+
+				$MIOLO->Information("Exemplar ". $data->numerodotombo . " atualizado com sucesso. ", $MIOLO->GetActionURL($module,$action,$data->numerodaobra,array('event'=>'btnConsultar_click')) );
+			}
+			catch (Exception $e)
+			{
+				$this->addError($e->getMessage());
+			}
+		}
+		else
+		{
+			try
+			{
+            if($data->qtdexemplar != null){
+              if($data->qtdexemplar > 0){
+                $this->objExemplar->InsertMany($data);
+                $tomboFinal = $data->numerodotombo+$data->qtdexemplar -1;
+                $MIOLO->Information("Exemplares $data->numerodotombo - $tomboFinal  incluídos com sucesso. ", $MIOLO->GetActionURL($module,$action,$data->numerodaobra,null));
+              }
+              else{
+                $go = $this->manager->GetActionURL('biblioteca','main:catalogacao:exemplar',$data->idexemplar,null);
+                $MIOLO->Error('Quantidade de exemplares invalida', $go );
+                
+              }  
+            }
+			}
+			catch (Exception $e)
+			{
+				$this->addError($e->getMessage());
+			}
+		}
+	}
+	
+	function btnExcluir_click()
+	{
+		global $MIOLO,$item,$theme,$module;
+
+		$idexemplar = $item;
+
+		$data = $this->objExemplar->GetAllByCodigo($idexemplar);
+
+		try
+		{
+			$ok = $this->objExemplar->Delete($idexemplar);
+
+			$MIOLO->Information("Exemplar ". $data->numerodotombo . " excluído com sucesso.", $MIOLO->GetActionURL($module,$action,$data->numerodaobra,array('event'=>'btnConsultar_click')) );
+		}
+		catch (Exception $e)
+		{
+			$this->addError($e->getMessage());
+		}
+	}
+
+	function Grid()
+	{
+		global $MIOLO, $module, $self, $theme, $action, $page, $action;
+     
+		$columns = array(
+			new DataGridColumn('numerodotombo','Numero do Tombo','center', true, '20%'),
+			new DataGridColumn('descregra','Regra de Circulação','center', true, '30%'),
+			new DataGridColumn('descunidade','Unidade','center', true, '25%'),
+			new DataGridColumn('descestado','Estado','center', true, '25%'),
+		);
+
+		$href_datagrid = $MIOLO->GetActionURL($module,$action);
+      
+		$query = $this->objExemplar->ListExemplar($this->numerodaobra);
+		
+		$datagrid = new DataGrid2($query, $columns, $href_datagrid,0);
+		$datagrid->SetTitle('Relação de exemplares da obra ' . $this->numerodaobra);
+		$datagrid->SetLinkType('linkbutton');
+		$datagrid->SetWidth('99%');
+
+      $perms = $this->manager->getPerms();
+      if ( $perms->checkAccess('bib_catalogacao',A_ACCESS) )
+		{
+			$href_edit = $MIOLO->GetActionURL($module,$action,'%0%',Array('event'=>'btnConsulta2:click'));
+			$datagrid->AddActionIcon('Editar', 'edit', $href_edit);
+		}
+
+		if ( $perms->checkAccess('bib_catalog_exclusao',A_ACCESS) )
+		{
+			$href_dele = $MIOLO->GetActionURL($module,$action,'%0%',Array('event'=>'btnExcluir:click'));
+			$datagrid->AddActionIcon('Excluir', 'delete.gif', $href_dele);
+			$href_trans = $MIOLO->GetActionURL($module,$action,'%0%',Array('event'=>'btnTransferir:click'));
+			$datagrid->AddActionText('alt', 'Transferir', $href_trans);
+
+//			$datagrid->AddActionIcon('Transferir', 'edit', $href_trans);
+		}
+      
+       if ( $perms->checkAccess('bib_catalogacao',A_ACCESS) )
+		{
+			$href_barcode = $MIOLO->GetActionURL($module,$action,'%0%',Array('event'=>'btnCodigoBarra:click'));
+			$datagrid->AddActionIcon('Código Barra', 'Código Barra', $href_barcode);
+         $href_etiqueta = $MIOLO->GetActionURL($module,$action,'%0%',Array('event'=>'btnEtiqueta:click'));
+			$datagrid->AddActionIcon('Etiqueta', 'Etiqueta', $href_etiqueta);
+		}
+		$this->AddField($datagrid);
+	}
+
+	function btnTransferir_click()
+	{
+		global $MIOLO,$item,$theme,$module;
+
+		$idexemplar = $item;
+		$data = $this->objExemplar->GetAllByCodigo($idexemplar);
+
+		$field = new TextField('edtNumeroNovaObra','','Obra de Destino',10);
+		$this->AddField($field);
+
+		//Atributos dos campos
+		$this->SetFieldAttr('edtObraIni', 'visible', false);
+		$this->SetFieldAttr('edtExemplarIni', 'visible', false);
+		$this->SetFieldAttr('ou', 'visible', false);
+		$this->SetFieldAttr('dica', 'visible', false);
+
+		$this->SetFieldAttr('edtNumerodaObra','visible',true);
+		$this->SetFieldAttr('edtNumerodoTombo','visible',true);
+		$this->SetFieldAttr('edtNumerodoTombo','readonly',true);
+		$this->SetFieldAttr('edtNumerodaObra','readonly',true);
+
+		$this->SetbuttonAttr('btnConfirmaTransfere','visible',true);
+		$this->SetbuttonAttr('btnVoltarTrans','visible',true);
+		$this->SetbuttonAttr('btnVoltar','visible',false);
+		$this->SetbuttonAttr('btnConsultar','visible',false);
+      $this->SetbuttonAttr('btnImprimir','visible',false);
+
+		$this->SetFieldValue('edtNumerodoTombo',$data->numerodotombo);
+		$this->SetFieldValue('edtNumerodaObra',$data->numerodaobra);
+
+		//Definindo o foco
+		if (!($this->GetFieldValue('edtNumeroNovaObra')))
+		{
+			$this->page->onLoad("MIOLO_GetElementById('edtNumeroNovaObra').focus();");
+		}
+	}
+
+	function btnConfirmaTransfere_click()
+	{
+		global $MIOLO,$item,$theme,$module;
+
+		$idexemplar = $item;
+		$data = $this->objExemplar->GetAllByCodigo($idexemplar);
+		$idNovaObra = $this->GetFormValue('edtNumeroNovaObra');
+
+		try
+		{
+			$ok = $this->objExemplar->Transfere($idexemplar,$idNovaObra);
+
+			$MIOLO->Information("Exemplar ". $data->numerodotombo . " transferido com sucesso.", $MIOLO->GetActionURL($module,$action,$data->numerodaobra,array('event'=>'btnConsultar_click')) );
+		}
+		catch (Exception $e)
+		{
+			$this->addError($e->getMessage());
+		}
+	}
+
+   function btnCodigoBarra_click()
+	{
+
+      global $MIOLO,$item,$theme,$module,$action;
+      $idexemplar = $item;
+      $exemplar = $this->objExemplar->GetAllByCodigo($idexemplar);
+      $this->SetFieldValue('edtNumerodoTombo',$exemplar->numerodotombo);
+      $this->SetFieldAttr('imgCodigoBarra','visible',false);
+      $this->SetFieldAttr('edtObraIni', 'visible', false);
+	   $this->SetFieldAttr('edtExemplarIni', 'visible', false);
+	   $this->SetFieldAttr('ou', 'visible', false);
+	   $this->SetFieldAttr('dica', 'visible', true);
+      $this->SetbuttonAttr('btnConsultar','visible',false);
+      $this->SetbuttonAttr('btnImprimir','visible',true);
+      $this->SetFieldAttr('codigo','visible',true);
+      $this->SetFieldAttr('espaco1', 'visible', true);
+      $this->SetFieldAttr('espaco2', 'visible', true);
+      $this->SetFieldAttr('edtNumerodoTombo','visible',true);
+     
+      $this->SetFieldAttr('edtNumerodoTombo','readonly',true);        
+   }
+
+   function btnImprimir_click()
+   {
+      global $MIOLO,$module;
+      $data = $this->getData();
+      
+      $codigo = $MIOLO->getBusiness($module,'codigobarra');
+           
+      //Code128A
+      if($data->codigo == 1)
+      {
+         $codigo->draw($data->numerodotombo,'code128');
+      }
+
+      //Code128B
+      if($data->codigo == 2)
+      {
+         $codigo->draw($data->numerodotombo,'code128');
+      }
+
+      //Code128C   
+      if($data->codigo ==3)
+      {
+         $codigo->draw($data->numerodotombo,'code128');
+      }
+
+      //Code 3 of 9
+      if($data->codigo == 4)
+      {
+         $codigo->draw($data->numerodotombo,'code39');
+      }
+
+      //Interleave 2 of 5 
+      if($data->codigo == 5)
+      {
+         $codigo->draw($data->numerodotombo,'int25');
+      }    
+
+      $ui = $MIOLO->GetUI();    
+      $report = $ui->GetReport($module,'repCodigoBarra',$data);
+      $report->Generate();	
+   }
+
+   function btnEtiqueta_click()
+   {
+      global $MIOLO,$module,$action,$item;	
+      $this->SetFieldValue('hidKeyExemplar',$item); 
+      $this->SetFieldAttr('edtObraIni', 'visible', false);
+      $this->SetFieldAttr('edtExemplarIni', 'visible', false);
+      $this->SetFieldAttr('ou', 'visible', false);
+      
+      $this->SetbuttonAttr('btnConsultar','visible',false);
+      
+      $this->SetFieldAttr('dica2', 'visible', true);
+      $this->SetFieldAttr('edtTags', 'visible', true);
+      $this->SetFieldAttr('btnMais', 'visible', true);
+      $this->SetFieldAttr('mlinTags', 'visible', true);
+      $this->SetFieldAttr('dica3', 'visible', true);
+      $this->SetFieldAttr('chkVolume', 'visible', true);
+      $this->SetFieldAttr('chkNumeroTombo', 'visible', true);
+      $this->SetFieldAttr('mlinTags','readonly',true);
+       
+      $this->SetbuttonAttr('btnCriar','visible',true);
+      $this->SetbuttonAttr('btnLimpar','visible',true); 
+      $etiqueta = $MIOLO->getBusiness($module,'etiquetaLombada');
+      $escolhaAnterior = $etiqueta->getTagEscolhidas();
+      if($escolhaAnterior->result)
+      {                  
+         $value = '';
+         $num = 2;
+         $lista = $escolhaAnterior->result[0][0].'-'.$escolhaAnterior->result[0][1];
+         $valorTag2 = $etiqueta->getDescricaoMarcByTag($escolhaAnterior->result[0][0]);
+         $value .= "1- ". $valorTag2."\n";
+
+         for($i = 1 ; $i<count($escolhaAnterior->result);$i++){
+            $tag1 = $escolhaAnterior->result[$i][0];
+            $lista .= '[-]'.$tag1.'-'.$escolhaAnterior->result[$i][1];
+            $valorTag2 = $etiqueta->getDescricaoMarcByTag($tag1);
+            $value .= "$num- ". $valorTag2."\n";
+            $num++;
+         }                  
+
+         $this->SetFieldValue('mlinTags',$value);
+         $this->SetFieldValue('listaTags',$lista);
+      }
+   }
+
+   function btnLimpar_click()
+   { 
+      global $MIOLO,$module;
+      $etiqueta = $MIOLO->getBusiness($module,'etiquetaLombada');
+      $etiqueta->delete();
+      $this->SetFieldValue('listaTags','');
+      $this->SetFieldValue('mlinTags','');         
+   }   
+
+   function getDataEtiqueta()
+   {
+      $data = new FormData();
+      $data->listaTags = $this->GetFieldValue('listaTags');
+      $data->NumeroTombo = $this->GetFormValue('chkNumeroTombo');
+      $data->VolumeExemplar = $this->GetFormValue('chkVolume');
+      $data->idexemplar = $this->GetFieldValue('hidKeyExemplar');
+      return $data;
+   }
+   
+   function btnMais_click()
+   { 
+      global $MIOLO,$module,$item;
+      
+      $this->SetFieldAttr('edtObraIni', 'visible', false);
+	   $this->SetFieldAttr('edtExemplarIni', 'visible', false);
+      $this->SetFieldAttr('ou', 'visible', false);      
+      
+      $this->SetbuttonAttr('btnConsultar','visible',false);
+
+      $this->SetbuttonAttr('btnCriar','visible',true);
+      $this->SetbuttonAttr('btnLimpar','visible',true);
+      $this->SetFieldAttr('dica2', 'visible', true);
+      $this->SetFieldAttr('edtTags', 'visible', true);
+      $this->SetFieldAttr('btnMais', 'visible', true);
+      $this->SetFieldAttr('mlinTags', 'visible', true);
+      $this->SetFieldAttr('dica3', 'visible', true);
+      $this->SetFieldAttr('chkVolume', 'visible', true);
+      $this->SetFieldAttr('chkNumeroTombo', 'visible', true);
+      $this->SetFieldAttr('mlinTags','readonly',true);       
+      
+      $tag = $this->GetFieldValue('edtTags');
+      $idexemplar = $this->GetFieldValue('hidKeyExemplar');
+   
+      $this->SetFieldValue('edtTags','');
+      $lista = $this->GetFieldValue('listaTags');
+      $etiqueta = $MIOLO->getBusiness($module,'etiquetaLombada');
+      $tags = explode('-',$tag);
+      $valorTag = $etiqueta->getDescricaoMarcByTag($tags[0]);
+
+      if($valorTag != null)
+      {
+         if($lista =='')
+         {
+            $lista = $tag;      
+         }         
+         else
+         {
+            $lista .= '[-]'.$tag;
+         }
+         $tagsEscolhidas = explode('[-]',$lista);     
+         $this->SetFieldValue('listaTags',$lista);
+         if(count($tagsEscolhidas) <= 4)         
+         {         
+            $valor = '';
+            $num = 1;
+            foreach($tagsEscolhidas as $tag1){
+               $tags = explode('-',$tag1);
+               $valorTag2 = $etiqueta->getDescricaoMarcByTag($tags[0]);
+               $valor .= "$num- ". $valorTag2."\n";
+               $num++;
+            }                        
+            $this->SetFieldValue('mlinTags',$valor);
+         }
+         else
+         {
+            $go = $this->manager->GetActionURL('biblioteca','main:catalogacao:exemplar',$idexemplar,array('event'=>'btnEtiqueta:click'));
+            $MIOLO->Error('Não é possível inserir mais do que 4 tags na etiqueta', $go );         
+         }
+      }
+      else
+      {
+         $go = $this->manager->GetActionURL('biblioteca','main:catalogacao:exemplar',$idexemplar,array('event'=>'btnEtiqueta:click'));
+         $MIOLO->Error("A tag " . $tag . " não foi encontrada", $go );         
+      }      
+   }
+
+   function btnCriar_click()
+   {
+      global $MIOLO,$module;
+      $this->SetbuttonAttr('btnConsultar','visible',false);
+      $data = $this->getDataEtiqueta();
+      $etiqueta = $MIOLO->getBusiness($module,'etiquetaLombada');
+      $etiqueta->delete();
+      $tagsEscolhidas = explode('[-]',$data->listaTags);
+      $idetiqueta = 1 ;    
+      foreach($tagsEscolhidas as $tag1)
+      {
+         $tags = explode('-',$tag1);
+         $etiqueta->insert($idetiqueta,'t',$tags[0],$tags[1]);
+         $idetiqueta++;
+      }   
+      $ui = $MIOLO->GetUI();
+      $report = $ui->GetReport($module,'repEtiquetasLombada',$data);
+      $report->gerarParaUMExemplar(19,380,450,$data);
+      $report->Generate();	
+   }  
+}
+?>

@@ -1,0 +1,234 @@
+<?php
+class repRequisicaoPendenteResumo extends PDFReport
+{
+	var $img;
+	var $timestamp;
+	var $objRequisicao;
+	var $objPassagem;
+	
+	
+	function __construct()
+	{
+		global $MIOLO, $module, $page, $context, $self, $action, $perms;
+
+		$tipoReq = Form::GetFormValue('selTipoRequisicao');
+		$dataInicio = Form::GetFormValue('dataInicio');
+		$dataFim = Form::GetFormValue('dataFim');		
+				
+		parent::__construct(NULL, NULL, 55);
+	    
+		$ui = $MIOLO->GetUI();
+        $this->img = $ui->GetImageSrc('logo_siga.png',$module);
+		
+
+		$this->SetOption('showLines',0);
+		$this->timestamp = date('d/m/Y G:i');
+		
+		$this->pdf->ezStartPageNumbers(580, 800, 10, 'rigth', 'Página: {PAGENUM}/{TOTALPAGENUM}');
+		$this->pdf->ezSetMargins(50, 30, 30, 30);
+		$this->SetOption('fontSize',8);
+
+		$objRequisicao = $MIOLO->GetBusiness($module,'requisicao');			
+		$objTipoReq = $MIOLO->GetBusiness($module,'tiporeq');		
+		$descReq = $objTipoReq->GetById($tipoReq)->descricao;
+			
+		$query = $objRequisicao->listByDataTipo($dataInicio, $dataFim, $tipoReq, $descReq);
+		
+		if($query->result[0][0] <> null)
+		{
+
+			$totalreal = 0;
+			$totalest = 0;
+			$totalEstPorUO = 0;
+			$sigla = $query->result[0][1];
+			
+			foreach($query->result as $row)
+			{
+				$row[3] = 'R$ ' . number_format(str_replace(',','.',$row[3]),2,',','.');
+				switch($row[6])
+				{
+					case 6:
+					case 7:
+						$itemreq = $MIOLO->getBusiness('adm', 'itemreq');
+						$itemreq->getById($row[0], $row[7]);
+						if ($itemreq->status == 'A' || $itemreq->status == '1' || $itemreq->status == '5')
+						{
+							$quant = floatval(str_replace(',','.',$itemreq->quantPedida)) - floatval(str_replace(',','.',$itemreq->quantEmpenhada));
+							$preco = floatval(str_replace(',','.',$itemreq->precoEstimado));
+							$total = $quant*$preco;
+							$row[3] = 'R$ ' . number_format(str_replace(',','.',$total),2,',','.');
+						}
+						else
+						{
+							$total = floatval(str_replace(',','.',$itemreq->quantPedida))*floatval(str_replace(',','.',$itemreq->precoEstimado));
+							$row[3] = 'R$ ' . number_format(str_replace(',','.',$total),2,',','.');
+						}
+						break;
+					case 9:
+						$itemreq = $MIOLO->getBusiness('adm', 'itemservext');
+						$itemreq->getById($row[0], $row[7]);
+						if ($itemreq->status == 'A' || $itemreq->status == '1' || $itemreq->status == '5')
+						{
+							$quant = floatval(str_replace(',','.',$itemreq->quantidade)) - floatval(str_replace(',','.',$itemreq->quantEmpenhada));
+							$preco = floatval(str_replace(',','.',$itemreq->valorEst));
+							$total = $quant*$preco;
+							$row[3] = 'R$ ' . number_format(str_replace(',','.',$total),2,',','.');
+						}
+						else
+						{
+							$total = floatval(str_replace(',','.',$itemreq->quantidade))*floatval(str_replace(',','.',$itemreq->valorEst));
+							$row[3] = 'R$ ' . number_format(str_replace(',','.',$total),2,',','.');
+						}
+						break;
+					case 10:
+						$itemreq = $MIOLO->getBusiness('adm', 'itemreqbib');
+						$itemreq->getById($row[0], $row[7]);
+						if ($itemreq->status == 'A' || $itemreq->status == '1' || $itemreq->status == '5')
+						{
+							$quant = floatval(str_replace(',','.',$itemreq->quantPedida)) - floatval(str_replace(',','.',$itemreq->quantEmpenhada));
+							$preco = floatval(str_replace(',','.',$itemreq->precoEstimado));
+							$total = $quant*$preco;
+							$row[3] = 'R$ ' . number_format(str_replace(',','.',$total),2,',','.');
+						}
+						else
+						{
+							$total = floatval(str_replace(',','.',$itemreq->quantPedida))*floatval(str_replace(',','.',$itemreq->precoEstimado));
+							$row[3] = 'R$ ' . number_format(str_replace(',','.',$total),2,',','.');
+						}
+						break;
+				}				
+				if($row[1] != $sigla)
+				{
+					$totalEstPorUO = 'R$ ' . number_format(str_replace(',','.',$totalEstPorUO),2,',','.');
+					$linhaTotal = array($sigla, "$totalEstPorUO");					
+					$data[] = $linhaTotal;
+					$sigla = $row[1];
+					$totalEstPorUO = 0;
+				}
+				$valor = str_replace(',','.',str_replace('.','',str_replace('R$ ','',$row[3])));
+				$totalEstPorUO += floatval($valor);
+				$totalest += floatval($valor);				
+			}			
+			$totalEstPorUO = 'R$ ' . number_format(str_replace(',','.',$totalEstPorUO),2,',','.');
+			$linhaTotal = array($sigla, "$totalEstPorUO");			
+			$data[] = $linhaTotal;
+			
+			$totalest = 'R$ ' . number_format(str_replace(',','.',$totalest),2,',','.');
+			$linhaTotalGeral = array("<b>TOTAL GERAL</b>", "<b>$totalest</b>");
+			$data[] = $linhaTotalGeral;
+
+			$columns = array(
+				new PDFReportColumn('sigla','<b><i>Unidade</b></i>','left',true,17,true,null,true),
+				new PDFReportColumn('valorest','<b><i>Total Valor Estimado</b></i>','left',true,15,true,null,true),
+			);
+			
+			// define as colunas da linha de grupo (level1)
+	            $sum1 = array(
+	                new MPDFReportColumn('texto', 'texto', 'right', false, 10, true), 
+	                new MPDFReportColumn('valor1', 'valor1', 'right', false, 17, true),              
+	                new MPDFReportColumn('valor2', 'valor2', 'right', false, 18, true),
+	                new MPDFReportColumn('valor3', 'valor3', 'center', false, 15, true), 
+	                new MPDFReportColumn('valor4', 'valor4', 'center', false, 15, true),              
+	                new MPDFReportColumn('valor5', 'valor5', 'right', false, 32, true)
+	            );
+		// gera o report		
+		
+		// Largura do report, em %
+	    $this->SetWidth(100);
+	    $this->SetColumns($columns);
+	    $colDetail = $this->columns;
+	    $this->SetColumns($sum1);
+	    $colSum1 = $this->columns;
+	             
+	    // gera o report
+	   
+	    $this->columns = $colDetail; 
+	    
+	    $this->GeneratePageHeader($dataInicio, $dataFim, $descReq);
+		$this->GenerateData($data);
+		$this->GeneratePageFooter();	    
+	    
+	    $this->SetOption('showHeadings', 0);
+	    $this->SetOption('showLines', 0);
+	    $this->columns = $colSum1;
+		
+		}
+		else 
+		{
+			
+
+		// gera o report
+		$this->GeneratePageHeader($dataInicio, $dataFim, $descReq);
+		$this->GenerateDatanull();
+		$this->GeneratePageFooter();
+		}
+
+	}
+
+	function GeneratePageHeader($dataInicio, $dataFim, $descReq)
+	{
+		global $MIOLO;
+			
+		$x0 = $this->pdf->left;
+		$h = $this->pdf->getFontHeight(12);
+
+		$x00=$this->pdf->left;
+		$hh = $this->pdf->getFontHeight(12);
+		$this->pdf->addText($x00, 800, 12, $this->manager->getConf('instituicao.sigla')." - ".$this->manager->getConf('instituicao.nome'));
+		$this->pdf->addText($x00, 800 - $hh, 12, $this->manager->getConf('theme.system'));
+
+
+/*
+		$this->pdf->addPngFromFile($this->img, 10, 730 + $x0, 100, 54);
+		$this->pdf->addText(110,800,12,'UFJF - Universidade Federal de Juiz de Fora');
+		$this->pdf->addText(110,800-$h,12,'CGCO - Centro de Gestão do Conhecimento Organizacional');
+		$this->pdf->addText(110,800-$h-$h,12,'SIGA - Sistema Integrado de Gestão Acadêmica');		
+*/
+
+	
+		$this->pdf->addText(110,800-$h-$h-$h,12,'Pró-Reitoria de Logística');
+
+		$this->pdf->addTextWrap(10,800-5*$h,600,11,'Resumo de Requisições Pendentes','left');
+		$this->pdf->addTextWrap(10,800-6*$h,600,11,'Tipo : '.$descReq, 'left');
+		$this->pdf->addTextWrap(10,800-7*$h,600,11,'Período de '.$dataInicio.' a '.$dataFim, 'left');
+
+		$this->pdf->ezSetY(800-$h-$h-$h-$h-$h-$h-$h);
+	}
+
+	function GeneratePageFooter()
+	{
+		$x0 = $this->pdf->left;
+        $x1 = $this->pdf->right;
+        $footer = $this->pdf->openObject();
+        $this->pdf->saveState();
+        $this->pdf->SetStrokeColor(0, 0, 0);
+        $this->pdf->line($x0, 28, $x1, 28);
+        $this->pdf->addText($x0, 19, 9, $this->timestamp . ' - CGCO/DSI');
+        $this->pdf->restoreState();
+        $this->pdf->closeObject();
+        $this->pdf->addObject($footer, 'all');    		
+
+	}
+
+	function GenerateData($data)
+	{
+		$this->pdf->ezSetDy(-12);
+		$this->SetData($data);
+		$this->rawdata = $this->GenerateTableData();
+		$this->GenerateBody($this->rawdata);
+	}
+	function GenerateDataNULL()
+	{
+		$this->pdf->ezSetDy(-12);
+		$h = $this->pdf->getFontHeight(12);		
+		$this->pdf->addTextWrap(0,800-12*$h,600,11,' NÃO FORAM ENCONTRADOS DADOS RELATIVOS À CONSULTA SOLICITADA ', 'center');
+		
+	}
+
+	function Generate()
+	{
+		$this->SetOutput();
+		$this->Execute();
+	}
+}
+?>

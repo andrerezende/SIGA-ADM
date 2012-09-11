@@ -1,0 +1,81 @@
+<?
+class frmPassagemAerea extends Form
+{	
+	protected $requisicao;	
+    
+    function __construct()
+    {
+        global $MIOLO;
+        $this->requisicao = $MIOLO->getBusiness('adm','requisicao');
+        $this->Form('Relatório de Passagem Aérea');
+        $this->EventHandler();       
+    }
+
+	function CreateFields()
+	{	
+		$valores = array("7"=>"A Serem Executadas","9"=>"Aguardando Avaliação","E"=>"Finalizadas"); 	
+		$fields = Array(new Selection('status','','Status',$valores),
+			new MCalendarField('dataInicio','','Data Inicial',10,'informe a data inicial do relatório.'),
+			new MCalendarField('dataFim','','Data Final',10,'informe a data final do relatório.'),
+		);
+		
+		$this->SetFields($fields);
+		$buttons = Array
+		(
+			new FormButton('btnGerarRelatorio', 'Gerar Relatório','pdf'),
+			new FormButton('btnGerarCSV', 'Gerar Planilha')
+		);
+		$this->SetButtons($buttons);
+	}
+	function btnGerarCSV_click()
+	{
+		$data = $this->getData();
+		$requisicao = $this->requisicao;
+		$consulta = $requisicao->listDiariasComPassagem($data->dataInicio,$data->dataFim,$data->status);	    
+	    
+		$resultAux[] = array('SIGLA UO','PROCESSO','REQ.','BENEFICIARIO','DESTINO');
+	    foreach ($consulta->result as $result)
+	    {
+	    	$resultAux[] = $result;
+	    }
+	    $consulta->result = $resultAux;
+		$consulta->getCSV("passagem");
+	}
+
+	function btnGerarRelatorio_click()
+	{	
+	    $data = $this->getData();
+        
+	    $report = new MEzPDFReport('2','portrait');
+        $h = $report->pdf->getFontHeight(10);
+        $ui = $this->manager->GetUI();
+        //$report->pdf->ezImage($ui->GetImage('','logonet.png'),5,50,'none','left',0);
+        $image = $ui->GetImageSrc('logonet.png');
+        $report->pdf->ezImage($image,5,50,'none','left',0);
+        $report->pdf->addText(110,810       ,10,'UNIVERSIDADE FEDERAL DE JUIZ DE FORA');
+        $report->pdf->addText(110,810-$h,10,'SISTEMA INTEGRADO DE GESTÃO ACADÊMICA - SIGA');
+        $report->pdf->ezSetY(810-2*$h);
+        $report->pdf->ezText('RELATÓRIO PASSAGEM AÉREA',16,array('justification'=>'center'));
+        $report->pdf->addText(200,810-(5*$h),10,"PERÍODO DE ".$data->dataInicio." ATÉ ".$data->dataFim);
+        $report->pdf->ezSetY(810-4*$h);
+        $report->pdf->ezText('',20);
+        //unset($dataRel);
+        
+        $options['textCol'] = array(0,0,0);
+	    $options['shaded'] = 1;
+	    $options['showLines'] = 0;
+	    $options['fontSize'] = 11;
+	    $options['width'] = 540;
+	    $options['xPos'] = 'left';
+	    $options['xOrientation'] = 'right';
+	    
+	    $cols = array('<b>SIGLA UO</b>','<b>PROCESSO</b>','<b>REQ.</b>','<b>BENEFICIARIO</b>','<b>DESTINO</b>');
+	    
+	    $dataRel = $this->requisicao->listDiariasComPassagem($data->dataInicio,$data->dataFim,$data->status);
+        $report->pdf->ezTable($dataRel->result,$cols,'',$options);
+	    $report->Execute();
+	    
+    }
+
+}
+?>

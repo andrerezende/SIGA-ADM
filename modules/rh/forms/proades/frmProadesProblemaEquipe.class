@@ -1,0 +1,107 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+MIOLO::Import('extensions::class.phpmailer.php','PHPMailer'); 
+class frmProadesProblemaEquipe extends MForm
+{
+    private $proades;
+    
+	function __construct($proades)
+	{
+        $this->proades = $proades; 
+        
+		parent::__construct("Informar equipe inconsistente");
+		$this->EventHandler();
+	}
+    
+	function CreateFields()
+	{
+        $proades = $this->proades;
+
+        if ( $proades->config->problemaEquipe == 'N' || $proades->config->problemaEquipe == '' )
+        {
+            $fields = array(
+                    new MLabel('<b>ATEN&Ccedil;&Atilde;O!</b> Use o campo abaixo para descrever TODAS as inconsist&ecirc;ncias encontradas, informando nome e SIAPE do servidor e a ocorr&ecirc;ncia'),
+                    new MLabel('<b>Exemplo 1: </b> Servidor Fulano de Tal, Siape 9999999 - N&atilde;o consta da unidade.'),
+                    new MLabel('<b>Exemplo 2: </b> Servidor Fulano de Tal, Siape 9999999 - N&atilde;o pertence a esta unidade.'),
+                    new MSeparator(),
+                    new MMultiLineField('mensagem','','Mensagem',25,10,75),
+                );
+
+            $this->setFields($fields);
+
+            $buttons = array(
+                    new MButton('btnPost','Enviar')
+                    );
+
+            $this->setButtons($buttons);
+        }
+        else
+        {
+            $fields = array(
+                    new MText('','Inconsist&ecirc;ncia informada. Aguarde contato da CAMP/PRORH.'),
+                    new MSeparator()
+                    );
+            $this->setFields($fields);
+
+            $this->setShowPostButton(FALSE);
+            
+        }
+	}
+
+    function btnPost_click()
+    {
+        $proades = $this->proades;
+        $proades->config->problemaEquipe = 'S';
+        try
+        {
+            $proades->save();
+            $this->addInfo("Informa&ccedil;&atilde;o enviada com sucesso. Aguarde contato da CAMP/PRORH.");
+            $session = $this->manager->session;
+            $setor = $this->manager->getBusiness('common','setor');
+            $setor->getById($session->getValue('idSetor'));
+
+            $mail = new PHPMailer();
+            $mail->IsSMTP(); // telling the class to use SMTP
+            $mail->Host = "smtp.ufjf.br"; // SMTP server
+            $mail->From = 'siga@ufjf.edu.br';
+            $mail->FromName = 'SIGA - Sistema Integrado de Gestao Academica';
+            $mail->Subject = "$setor->sigla - Equipe Inconsistente";
+            $time = $this->manager->getSysTime(); 
+            $ipaddress = $_SERVER['REMOTE_ADDR'];
+            $mensagem .= "Pedido enviado em [{$time}] a partir da maquina [{$ipaddress}].\n";
+
+            $mensagem .= "Setor: $setor->sigla - $setor->nome\n\n";
+            $mensagem .= $this->getFormValue('mensagem');
+            $body =
+<<< HERE
+            $mensagem
+HERE;
+            $mail->Body = $body;
+
+            $mail->AddAddress("camp.prorh@ufjf.edu.br");
+            $mail->Send();
+        }
+        catch ( Exception $e )
+        {
+			$this->AddError($e->GetMessage());
+        }
+    }
+}
+?>

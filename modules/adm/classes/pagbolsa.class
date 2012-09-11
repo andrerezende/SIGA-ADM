@@ -1,0 +1,513 @@
+<?PHP
+
+class BusinessAdmPagBolsa extends Business
+{
+    var $idbolsista;
+    var $mesano,$mes,$ano;
+    var $valor;
+    var $horastrabalhadas;
+    var $idbolsa;
+    var $cpf;
+    var $nome;
+    var $idagenc;
+    var $idbanco;
+    var $conta;
+    var $folha;
+
+    function BusinessAdmPagBolsa($data = null)
+    {
+      $this->Business('sigaept',$data);
+    }
+
+    function listFrequenciabyMatricula($idpessoa,$ano)
+    {
+        $MIOLO = MIOLO::getInstance();
+        $objmonitor = $MIOLO->GetBusiness('adm','bolsista');
+        $bolsas = $objmonitor->listBolsasbyMatricula($idpessoa , $ano)->result;
+
+        $t = NULL;
+
+        if ( is_array($bolsas) )
+        {
+            foreach ( $bolsas as $idbolsista ) //para cada bolsa de um mesmo aluno
+            {
+                $frequencias = $this->listFrequenciasbyIdmonitor($idbolsista[0] , false)->result;
+                if ( is_array($frequencias) )
+                {
+                    foreach ($frequencias as $frequencia)
+                    {
+                        $t[] = $frequencia;
+                    }
+                }
+            }
+        } // if
+        return $t;
+    } // listFrequenciabyMatricula
+
+
+    function listFrequenciasbyIdmonitor($idbolsista , $retornarano=TRUE)
+    //lista as frequencias do monitor informado, ordem inversa de ano e mês
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->addCriteria('idbolsista','=', "'{$idbolsista}'");
+
+        $criteria->addColumnAttribute('idbolsista');
+        $criteria->addcolumnattribute('substr(mesano,1,2)','mes');
+        if ($retornarano)  //quando o ano já está em teste não seria necessário retorná-lo
+        {
+            $criteria->addcolumnattribute('substr(mesano,4,4)','ano');
+        }
+        $criteria->addColumnAttribute('horastrabalhadas');
+
+        return $criteria->retrieveAsQuery();
+    } // listFrequenciasbyIdmonitor
+
+
+    function GetByIdmonitorAnoMes($idbolsista,$ano,$mes) //verifica se já existe a mesma chave
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addCriteria('idbolsista', '=' , $idbolsista);
+        $criteria->addCriteria('mesano'    , '=' , "'$mes/$ano'"  );
+        return $criteria->retrieveAsQuery();
+    } // GetByIdmonitorAnoMes
+
+
+    function TabelaFrequencia($idbolsista)
+    //monta tabela com as frequencias do monitor informado, ordem inversa de ano e mês
+    {
+        $result = $this->listFrequenciabyIdmonitor($idbolsista);
+        $array[] = new MSpacer(1);  //adiciona um elemento para que o vetor não fique vazio mesmo se não houver freqüência
+
+        //para listar tudo
+        if ( is_array($result) )
+        {
+            foreach ($result as $reg)
+            {
+                $t[] = $reg;//array($reg[1], $reg[2], $reg[3]);
+            }
+        } // if
+
+        $table = new MTableRaw('Freqüências registradas', $t, array('Mês','Ano', 'Freqüência'));  //
+
+// acrescentar                                                                               , 'Valor'        
+        
+        $table->table->SetAttributes('bgcolor=#0000FF');
+
+        $array[] = $table; //adiciona a grade
+
+        return $array;  //note-se que o tamanho de $array será 2 caso não haja freqüência lançada
+    } // TabelaFrequencia
+
+
+    function listFrequenciabyIdmonitor($idbolsista)
+    //lista as frequencias do monitor informado, ordem inversa de ano e mês
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->addCriteria('idbolsista','=', "'{$idbolsista}'");
+        $criteria->addcolumnattribute('substr(mesano,1,2) mes');
+        $criteria->addcolumnattribute('substr(mesano,4,4) ano');
+        $criteria->addColumnAttribute('horastrabalhadas');
+
+        return $criteria->retrieveAsQuery()->result;  //para listar tudo
+    } // listFrequenciabyIdmonitor
+
+
+    function contaFrequenciabyIdmonitor($idbolsista)
+    {
+        $sql = new sql("count(*) as quantidade","ad_pagbolsa","idbolsista = ?");
+        $query = $this->ObjQuery( $sql->Select(array($idbolsista)) );
+        return $query->Fields("quantidade");
+    } // contaFrequenciabyIdmonitor
+
+
+    //obtém último mês lançado para o monitoramento
+    function MaxAnoMesdoIdmonitor($idbolsista)
+    {
+        $sql = new sql("max(substr(MESANO,4,4)||substr(MESANO,1,2))",   //select
+                          // 12/4567
+                          // 012345
+                       "ad_pagbolsa",                                   //from
+                       "idbolsista = ?");                               //where
+        $query = $this->objQuery( $sql->Select(array($idbolsista)) );
+
+        return array( 'ano'=>substr($query->result[0][0],0,4) , 'mes'=>substr($query->result[0][0],4,2) );
+    } // MaxAnoMesdoIdmonitor
+
+    //modificacoes
+    function GetById($idbolsista,$mesano,$folha=null)
+    {
+        $sql = new sql();
+        $sql->SetColumns('*');
+        $sql->SetTables('ad_pagbolsa');
+        $sql->SetWhere('idbolsista = ?');
+        $sql->SetWhereAnd('mesano = ?');
+        
+        //modificacoes
+        if ($folha!=null)
+        {
+            $sql->SetWhereAnd('folha = ?');
+            $sql->SetParameters(array(trim($idbolsista),$mesano,$folha));
+        }	
+        else
+        {
+            $sql->SetParameters(array(trim($idbolsista),$mesano));
+        }
+        
+        $query = $this->Query($sql);
+        if (! $query->eof() )
+        {
+            $this->SetData($query->GetRowObject());
+        }
+        return $this;
+    }
+	
+    function GetDadosBolsista($idbolsista)
+    {
+        $sql = new sql();
+        $sql->SetColumns('bol.idbolsista,pes.cpf,pes.nome,pes.idagenc, pes.idbanco, pes.conta');
+        $sql->SetJoin('ad_bolsista bol','cm_pessoa pes','bol.idpessoa = pes.idpessoa');
+        
+        $sql->SetWhere('bol.idbolsista = ?');
+        
+        $sql->SetParameters($idbolsista);
+        $query = $this->Query($sql);
+        
+        if (! $query->eof() )
+        {
+            $this->SetData($query->GetRowObject());
+        }
+        return $this;
+    }
+
+    function GetDadosBolsistaPag($idbolsista,$mesano='',$folha=null)
+    {
+        $parametros = Array();
+
+        $sql = new sql();
+        //modificacoes
+        $sql->SetColumns('pag.idbolsista,pag.mesano,pes.cpf,pes.nome,pag.horastrabalhadas,pag.folha,pes.idagenc, pes.idbanco, pes.conta,pag.valor,bol.idbolsa');
+        $sql->SetJoin('ad_bolsista bol','ad_pagbolsa pag','bol.idbolsista = pag.idbolsista');
+        $sql->SetJoin('ad_bolsista bol','cm_pessoa pes','bol.idpessoa = pes.idpessoa');
+        
+        $sql->SetWhere('pag.idbolsista = ?');
+        $parametros[] = $idbolsista;
+        
+        if($mesano!='')
+        {
+            $sql->SetWhereAnd('pag.mesano = ?');
+            $parametros[] = $mesano;
+        }
+        
+        //modificacoes
+        if ($folha!=null)
+        {
+            $sql->SetWhereAnd('pag.folha = ?');
+            $parametros[] = $folha;
+        }
+        
+        
+        $sql->SetParameters($parametros);
+        $query = $this->Query($sql);
+        
+        if (! $query->eof() )
+        {
+            $this->SetData($query->GetRowObject());
+        }
+        return $this;
+    }
+    
+    function Insert($msgorientador=NULL)
+    {
+        $sql = new sql();
+        $sql->SetColumns('idbolsista,mesano,valor,horastrabalhadas,folha');
+        $sql->SetTables('ad_pagbolsa');
+
+        $values = array(
+            $this->idbolsista,
+            $this->mesano,
+            $this->valor,
+            $this->horastrabalhadas,
+            $this->folha
+        );
+        
+        try
+        {
+            $this->Execute($sql->Insert($values));
+            $ok = true;
+        }
+        catch(Exception $e)
+        {
+            $ok = false;
+        }
+        
+        if ($ok)
+        {
+            //tal if nao adianta pois Insert nao gera excecao
+            $this->Log(OP_INS,"idbolsista= $this->idbolsista, mesano= $this->mesano, folha= $this->folha, valor= $this->valor" . $msgorientador);
+        }
+
+        return $ok;
+    }
+
+    function Update($msgorientador=NULL)
+    {
+        $sql = new sql();
+        $sql->SetColumns('valor,horastrabalhadas');
+        $sql->SetTables('ad_pagbolsa');
+        $sql->SetWhere('idbolsista = ?');
+        $sql->SetWhereAnd('mesano = ?');
+        //modificacoes
+        $sql->SetWhereAnd('folha = ?');
+        
+
+        $values = array(
+            $this->valor,
+            $this->horastrabalhadas,
+            $this->idbolsista,
+            $this->mesano,
+            $this->folha
+        );
+
+        try
+        {
+            $this->Execute($sql->Update($values));
+            $ok = true;
+        }
+        catch(Exception $e)
+        {
+            $ok = false;
+        }
+
+        if ($ok)
+        {
+            $this->Log(OP_UPD,"idbolsista= $this->idbolsista, mesano= $this->mesano, folha= $this->folha, valor= $this->valor" . $msgorientador);
+        }
+        return $ok;
+    }
+
+    //modificacoes
+    function Delete($msgorientador=NULL)
+    {
+        $sql = new sql();
+        $sql->SetTables('ad_pagbolsa');
+        $sql->SetWhere("idbolsista = '{$this->idbolsista}'");
+        $sql->SetWhereAnd("mesano = '{$this->mesano}'");	
+        $sql->SetWhereAnd("folha = '{$this->folha}'");	
+        
+        try
+        {
+            $this->Execute($sql->Delete());
+            $ok = true;
+        }
+        catch(Exception $e)
+        {
+            $ok = false;
+        }
+
+        if ($ok)
+        {
+            $this->Log(OP_DEL,"idbolsista= $this->idbolsista, mesano= $this->mesano, folha= $this->folha, valor= $this->valor" . $msgorientador);
+        }
+        return $ok;
+    }
+
+    function ListRange($range=NULL)
+    {
+        $sql = new sql('idbolsa,descricao','ad_bolsa');
+        $sql->SetOrderBy('idbolsa');
+        $sql->SetRange($range);
+        $query = $this->Query($sql);
+        return $query;
+    }
+
+    function ListAll()
+    {
+        return $this->ListRange();
+    }
+
+    
+    //modificacoes
+    function ListByMesAnoBolsa($mesano,$idbolsa,$folha=null)
+    {
+        $sql = new sql();
+        $sql->SetColumns('pag.idbolsista,pag.mesano,pes.cpf,pes.nome,pag.horastrabalhadas, pes.idbanco as banco,pes.idagenc, pes.conta,pag.valor');
+        $sql->SetJoin('ad_bolsista bol','ad_pagbolsa pag','bol.idbolsista = pag.idbolsista');
+        $sql->SetJoin('ad_bolsista bol','cm_pessoa pes','bol.idpessoa = pes.idpessoa');
+        $sql->SetWhere('pag.mesano = ?');
+        $sql->SetWhereAnd('bol.idbolsa = ?');
+        
+        //modificacoes
+        if ($folha!=null)
+        {
+            $sql->SetWhereAnd("pag.folha = ?");
+            $sql->SetParameters(array($mesano,trim($idbolsa),trim($folha)));
+        }
+        else 
+        {
+            $sql->SetParameters(array($mesano,trim($idbolsa)));
+        }
+            
+        $sql->SetOrderBy('pes.nome');
+        $query = $this->Query($sql);
+        return $query;
+    }
+
+    function GetValorTotal($idbolsa=null,$mesano=null,$folha=null)
+    {
+        $sql = new sql('sum(pag.valor) as somavalortotal','');
+        $sql->SetJoin('ad_pagbolsa pag','ad_bolsista bol','pag.idbolsista = bol.idbolsista');
+
+        if( ($idbolsa!=null)&&($mesano!=null)&&($folha!=null) )
+        {	
+            $sql->SetWhere("bol.idbolsa = $idbolsa");
+            $sql->SetWhereAnd("pag.mesano = '$mesano'");
+            $sql->SetWhereAnd("pag.folha = '$folha'");
+        }		
+        $query = $this->Query($sql);
+
+        $valortotal = 0;
+        if (! $query->eof() )
+        {
+            $valortotal = $query->GetRowObject()->somavalortotal;
+        }
+        return $valortotal;
+    }
+
+    //modificacao - Metodo utilizado no Relatório de pagamento de bolsa - inclusao do campo Folha
+    function GetNumReg($idbolsa=null,$mesano='',$folha=null)
+    {
+        //modificacao
+        if( ($idbolsa!=null) && ($mesano!='') && ($folha!=null)  )
+        {
+            $idbolsa = trim($idbolsa);
+            $folha = trim($folha);
+                  
+            $sql = new sql();
+            $sql->SetColumns('count(pag.idbolsista) as totreg');
+            $sql->SetJoin('ad_bolsista bol','ad_pagbolsa pag','bol.idbolsista = pag.idbolsista');
+            $sql->SetWhere("bol.idbolsa = $idbolsa");
+            $sql->SetWhereAnd("pag.mesano = '$mesano'");			
+            //modificacao
+            $sql->SetWhereAnd("pag.folha = '$folha'");		
+            $query = $this->Query($sql);
+            return $query->result[0][0];
+        }
+    }
+    
+    //modificacoes - campo Folha	
+    function ListPagamento($idbolsa=0,$mesano='',$folha=null)
+    {
+        $sql = new sql();
+        $sql->SetColumns("p.nome as nome, p.cpf as cpf,p.idbanco as idbanco, p.idagenc as idagenc, p.conta as conta,g.valor as valor");
+        $sql->SetJoin('ad_bolsista bol','ad_pagbolsa g','bol.idbolsista = g.idbolsista');
+        $sql->SetJoin('ad_bolsista bol','cm_pessoa p','bol.idpessoa = p.idpessoa');
+        $sql->SetWhere("bol.idbolsa = $idbolsa");
+        $sql->SetWhereAnd("g.mesano = '$mesano'");
+        
+        //modificacoes
+        if ($folha!=null)
+            $sql->SetWhereAnd("g.folha = '$folha'");
+        
+
+        $sql->SetOrderBy('nome');
+        
+        $query = $this->Query($sql);
+        return $query;
+    }
+
+    /*
+    ** return de CopiarPag: 'ok' || 'origemVazia' || Array (com erros)
+    */
+    function CopiarPag($dtorigem,$dtdestino,$bolsa,$valor=null,$folha2=null,$folha=null)
+    {		
+        $dtatual = new InvertDate(date('d/m/Y'));
+        $sql = new sql();
+        $sql->SetColumns('pag.idbolsista, pag.mesano, pag.valor, pag.horastrabalhadas, pag.folha');
+        $sql->SetJoin('ad_pagbolsa pag','ad_bolsista bol','pag.idbolsista = bol.idbolsista');
+        $sql->SetWhere("( (TO_CHAR(bol.dataexclusao,'YYYY/MM/DD') >= '$dtatual->date') OR (bol.dataexclusao is null) OR (bol.dataexclusao = '') )");
+        $sql->SetWhereAnd('pag.mesano = ?');
+        $sql->SetWhereAnd('bol.idbolsa = ?');
+
+        //modificacoes
+        if ($folha!=null)
+        {   	
+            $sql->SetWhereAnd('pag.folha = ?');
+            $sql->SetParameters($dtorigem,$bolsa,$folha);
+        }
+        else 
+        {
+            $sql->SetParameters($dtorigem,$bolsa);
+        }
+                
+        $query = $this->Query($sql);
+
+        $retorno = 'ok';
+        if ( $query->result )
+        {
+            $erros = Array();
+            foreach($query->result as $PagBolsa)
+            {
+                $sql = new sql();
+                $sql->SetColumns('idbolsista,mesano,valor,horastrabalhadas,folha');
+                $sql->SetTables('ad_pagbolsa');
+                
+                if( ($valor == 0) || ($valor == '0,00') )
+                {
+                    $values = array(
+                        $PagBolsa[0],
+                        $dtdestino,
+                        $PagBolsa[2],
+                        $PagBolsa[3],
+                        $folha2, //folha
+                    );
+                }
+                else
+                {
+                    $values = array(
+                        $PagBolsa[0],
+                        $dtdestino,
+                        $valor,
+                        $PagBolsa[3],
+                        $folha2
+                    );
+                }
+
+                $cmd = $sql->Insert($values);
+
+                try
+                {
+                    $this->Execute($cmd);
+                }
+                catch(Exception $e)
+                {				
+                    $erros[] = "Não pode ser feita a copia para o bolsista {$PagBolsa[0]} de bolsa $bolsa na data $dtdestino!";
+                }
+            }
+        }
+        else
+        {
+          $retorno = 'origemVazia';
+        }
+
+        return ( $erros ) ? $erros : $retorno;
+    }
+
+
+    function DesTravado()
+    {
+        $sql = new sql();
+        $sql->SetColumns('travapag');
+        $sql->SetTables('ad_controle');
+        $sql->SetWhere("travapag = 'N'");
+
+        $query = $this->Query($sql);
+        if ( !$query->eof() )
+        {
+            return true;
+        }
+        return false;
+    }
+
+
+}
+?>

@@ -1,0 +1,112 @@
+<?
+class frmCarteiraEstudante extends MForm
+{
+    public $matricula;
+
+    function __construct($matricula)
+    {  
+        $this->matricula = $matricula;
+	    parent::__construct('Atualização de Dados para Carteira de Estudante');
+        $this->eventHandler();
+    }
+
+    function createFields()
+    {
+        $aluno = $this->manager->getBusiness('ensino','aluno');
+        $aluno->getById($this->matricula);
+
+        $curso = $aluno->getCurso();
+
+        $pessoa = $aluno->getPessoa();
+
+        $fields = array(
+            new MLabel("Confira seus dados. Em caso de erro corrija ou procure a Central de Atendimento.<br>
+            As carteiras serão entregues no DCE-Campus, e as informações estarão disponíveis no site <a href=\"http://www.dceufjf.com\" target=\"_blank\">www.dceufjf.com</a>.<br>
+            Para entrega da carteira, o estudante deverá estar com um documento de
+identidade e a foto 3x4, no ato da entrega.
+                        ",'blue',true),
+            new MSpacer('8px'),
+            new MHr,
+            new MTextField('txtMatricula',$aluno->matricula,'Matrícula'),
+            new MTextField('txtNome',$pessoa->nome,'Nome',50),
+            new MTextField('txtCurso',$curso->curso." - ".$curso->nome,'Curso',50),
+            new MSpacer('8px'),
+            new MHr,
+            new MCalendarField('datanasc',$pessoa->datanasc,'Data Nascimento'),
+
+			new MTextField('cpf',$this->formatCPF($pessoa->cpf),'CPF',14,'999.999.999-99'),
+            new MTextField('numrg',$pessoa->numrg,'RG'),
+            new MLabel('Você só pode corrigir os campos de data de nascimento, CPF e RG','red'),
+            new MHiddenField('idpessoa',$pessoa->idpessoa)
+        );
+        $this->SetFields($fields);
+
+        $this->setFieldAttr('txtMatricula','readonly',TRUE);
+        $this->setFieldAttr('txtNome','readonly',TRUE);
+        $this->setFieldAttr('txtCurso','readonly',TRUE);
+
+        $validators = array(
+            new MCPFValidator('cpf','','required'),
+            new MRequiredValidator('datanasc')
+        );
+
+        $this->setValidators($validators);
+
+        $buttons = array(
+            new MButton('btnConfirma','CONFIRMAR AGORA'),
+            new MButton('btnContinua','CONFIRMAR DEPOIS')
+        );
+        $this->setButtons($buttons);
+        $this->setLabelWidth('20');
+    }
+
+    function btnConfirma_click()
+    {
+        $idpessoa = $this->getFormValue('idpessoa');
+        $cpf = $this->getFormValue('cpf');
+        $numrg = $this->getFormValue('numrg');
+        $datanasc = $this->getFormValue('datanasc');
+        
+
+        if ( ($cpf == '') || ($numrg == '') )
+        {
+            $this->addError('Dados obrigatórios.'); 
+        }
+        else
+        {
+            $pessoa = $this->manager->getBusiness('common','pessoa');
+            $pessoa->getById($idpessoa);
+
+            $pessoa->cpf = str_replace(".","", str_replace("-","", $cpf));
+            $pessoa->numrg = strtoupper($numrg);
+            $pessoa->datanasc = $datanasc;
+            $pessoa->datacartest = date('d/m/Y H:i:s');
+            try
+            {
+                $pessoa->save();
+                $this->manager->Information("Dados confirmados! <br> Solicite seu selo de validação da meia-entrada, gratuitamente pelo site: <a href=\"http://www.dceufjf.com\" target=\"_blank\">www.dceufjf.com</a>.",$this->manager->getActionURL('common','main'));
+            }
+            catch ( Exception $e )
+            {
+            }
+        }
+    }
+
+    function btnContinua_click()
+    {
+        $session = $this->manager->session;
+        $session->register("naoConfirma");
+        $session->setValue("naoConfirma",1);
+        $this->page->Redirect($this->manager->getActionURL('common','main'));
+    }
+
+    function formatCPF($cpf)
+    {
+        if ($cpf != '')
+        {
+           return substr($cpf,0,3) . '.' . substr($cpf,3,3) . '.' . substr($cpf,6,3) . '-' . substr($cpf,9,2);
+        }
+    }
+
+}
+?>

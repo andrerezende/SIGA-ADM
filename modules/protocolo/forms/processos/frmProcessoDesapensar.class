@@ -1,0 +1,167 @@
+<?
+class frmProcessoDesapensar extends MForm
+{
+	protected $processo;
+	protected $processoPai;
+	protected $setor;
+	protected $setoracesso;
+	protected $perms;
+    function __construct($objProcesso)
+    {
+//      construct
+        global $MIOLO;
+		$this->processo = $objProcesso;
+        $this->processoPai = $MIOLO->getBusiness('protocolo','processo');
+	$this->setor = $MIOLO->getBusiness('protocolo','setor');
+	$this->setoracesso = $MIOLO->getBusiness('protocolo','setoracesso');
+        $this->perms  = $MIOLO->getPerms();
+        parent::__construct('Desapensar processo');
+        $this->SetClose($MIOLO->GetActionURL('protocolo','main'));
+        $this->eventHandler();
+    }
+    function CreateFields()
+    {
+	/* IFRO - Controle de segurança de acesso */
+	$setores = ($this->perms->checkAccess('PROT_ADMIN', A_ACCESS)) ? $this->setor->selAll() : $this->setoracesso->selSetoresAcesso($this->processo->getSetorUsuario());
+	if (
+                $this->processo->retencao->setor
+                && in_array($this->processo->retencao->setor,$setores)
+           )
+	{
+	//      processo a desapensar
+		$processo = $this->processo;
+		foreach ($processo->andamento as $andamento)
+		{
+		    $decisao = substr($andamento->decisao,0,11);
+		    switch ($decisao)
+		    {
+		        case 'APENSADO AO':
+		            $apensados[] = $andamento->numAndamento;
+		        break;
+		        case 'DESAPENSADO':
+		            array_shift($apensados);
+		        break;
+		    }
+		}
+		foreach ($apensados as $apensado)
+		{
+		    $andamento = $processo->getAndamento($apensado);
+		    $numFormatado = substr($andamento->decisao,21,14);
+		    $serie = substr($numFormatado,0,6);
+		    $ano = substr($numFormatado,7,4);
+		    $codigo = substr($numFormatado,12,2);
+		    $num = $ano.$serie.$codigo;
+		    $numProcessos = array($num=>$numFormatado);
+		}
+		$numProcesso = new MSelection('numProcesso',$num,'Processo:',$numProcessos);
+		$autor = new MTextField('autor','','Autor:',90);
+		$autor->addAttribute('maxlength','80');
+		$groupDesapensar = new MBaseGroup('groupDesapensar', 'Selecionar processo',array($numProcesso,$autor),'vertical','css');
+		$groupDesapensar->addAttribute('style','padding:10px');
+	//      fields
+		$fields = array(
+		    array(
+		        $groupDesapensar,
+		    ),
+		);
+		$this->SetFields($fields);
+		$this->setFieldAttr('numProcessoFormatado','readonly',true);
+	//      required fields
+		$validators = array(
+				new MRequiredValidator('autor'),
+		);
+		$this->setValidators($validators);
+	//      buttons
+		$buttons = array(
+			new MButton('btnDesapensar', 'Desapensar'),
+		);
+			$this->SetButtons($buttons);
+	}
+	else {
+		$msg = 'Este usuário não tem permissão para acessar este Processo/Protocolo';
+		$this->manager->Information($msg,$this->manager->GetActionURL('protocolo','main:processos',$this->processo->numProcesso));
+	}
+    }
+    public function btnDesapensar_click()
+    {
+	/* IFRO - Controle de segurança de acesso */
+	$setores = ($this->perms->checkAccess('PROT_ADMIN', A_ACCESS)) ? $this->setor->selAll() : $this->setoracesso->selSetoresAcesso($this->processo->getSetorUsuario());
+	if (
+                $this->processo->retencao->setor
+                && in_array($this->processo->retencao->setor,$setores)
+           )
+	{
+	//      data
+		$data = $this->getData();
+	//      get processo pai
+		$this->processoPai->getByNumero($data->numProcesso);
+	//      números de processo iguais
+		if ($this->processoPai->numProcesso == $this->processo->numProcesso)
+		{
+		    $this->addError('O processo '.$this->processo->numProcessoFormatado().' não pode ser desapensado dele mesmo.');
+		    return;
+		}
+	//      status do processo pai
+		switch ($this->processoPai->retencao->status)
+		{
+		    case 'A':
+		        $this->addError('O processo '.$this->processo->numProcessoFormatado().' não pode ser desapensado de um processo arquivado ('.$this->processoPai->numProcessoFormatado().').');
+		    break;
+		    case 'J':
+		        $this->addError('O processo '.$this->processo->numProcessoFormatado().' não pode ser desapensado de um processo anexado ('.$this->processoPai->numProcessoFormatado().').');
+		    break;
+		    case 'N':
+	//              set and save
+		        try 
+		        {
+		            $this->processo->beginTransaction();
+		            $andamento = $this->processo->getAndamento($this->processo->retencao->numAndamento);
+		            $this->processo->retencao->numAndamento++;
+		            $andamento2 = $this->processo->getAndamento($this->processo->retencao->numAndamento);
+		            $andamento2->setData($andamento);
+		            $andamento->setorDestino = $this->processo->retencao->setor;
+		            $andamento->dataSaida = date("YmdHi");
+		            $andamento->decisao = 'DESAPENSADO DO PROCESSO '.$this->processoPai->numProcessoFormatado();
+		            $andamento->dataDespacho = $andamento->dataSaida;
+		            $andamento->autor = $data->autor;
+		            $andamento->status = 'N';
+		            $this->processo->addAndamento($andamento);
+		            $this->processo->addAndamento($andamento2);
+		            $this->processo->retencao->setData($andamento2);
+		            $this->processo->retencao->setorDestino = null;
+		            $this->processo->retencao->dataSaida = null;
+		            $this->processo->retencao->dataDespacho = null;
+		            unset($andamento,$andamento2);
+		            $andamento = $this->processoPai->getAndamento($this->processoPai->retencao->numAndamento);
+		            $this->processoPai->retencao->numAndamento++;
+		            $andamento2 = $this->processoPai->getAndamento($this->processoPai->retencao->numAndamento);
+		            $andamento2->setData($andamento);
+		            $andamento->dataEntrada = date("YmdHi");
+		            $andamento->setorDestino = $this->processoPai->retencao->setor;
+		            $andamento->dataSaida = $andamento->dataEntrada;
+		            $andamento->decisao = 'DESAPENSOU-SE DO PROCESSO '.$this->processo->numProcessoFormatado();
+		            $andamento->dataDespacho = $andamento->dataDespacho;
+		            $andamento->autor = $andamento->autor;
+		            $this->processoPai->addAndamento($andamento);
+		            $this->processoPai->addAndamento($andamento2);
+		            $this->processoPai->setTransaction($this->processo->getTransaction());
+		            $this->processoPai->save();
+		            $this->processo->save();
+		            $this->processo->endTransaction();
+		            $msg = 'O processo '.$this->processo->numProcessoFormatado().' foi desapensado do processo '.$this->processoPai->numProcessoFormatado().' com sucesso.';
+		            $this->processo->Log(OP_UPD,$msg);
+		            $this->manager->Information($msg,$this->manager->GetActionURL('protocolo','main:processos',$this->processo->numProcesso));
+		        }
+		        catch(Exception $e) {$this->addError($e->getMessage());}
+		    break;
+		    default:
+		        $this->addError('Houve um erro desconhecido e o processo '.$this->processo->numProcessoFormatado().' não pode ser desapensado. Procure o CGCO.');
+		}
+	}
+	else {
+		$msg = 'Este usuário não tem permissão para acessar este Processo/Protocolo';
+		$this->manager->Information($msg,$this->manager->GetActionURL('protocolo','main:processos',$this->processo->numProcesso));
+	}
+    }
+ }
+?>

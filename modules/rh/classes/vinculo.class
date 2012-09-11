@@ -1,0 +1,2766 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+global $MIOLO;
+$MIOLO->Uses('classes/exception.class','rh');
+//MIOLO::Import('modules::rh::classes::exception');
+class BusinessRhVinculo extends MBusiness
+{
+    var $idVinculo;
+    var $dvIdVinculo;
+    var $dataPosse;
+    var $dataExercicio;
+    var $regimeJuridico;
+    var $classificacaoConcurso;
+    var $dataConcurso;
+    var $dataFimContrato;
+    var $dataVacancia;
+    var $sauAlternativo;
+    var $numFunc;
+    var $numVinculo;
+    var $idPublicacao;
+    var $idPublicacaoVacancia;
+    var $idFuncionario;
+    var $idGrupoOcorrencia;
+    var $idOcorrencia;
+    var $idGrupoOcorrenciaVinculo;
+    var $idOcorrenciaVinculo;
+    var $licAfast;
+    var $ocupacaoVagas;
+    var $periodosAquisitivos;
+    var $ferias;
+    var $provimentos;
+    var $ocorrencias;
+    var $averbacoes;
+    var $adicionais;
+    var $cessao;
+    var $cessoes;
+    var $k;
+    var $funcionario;
+    var $prorrogacoesContrato; //Prorrogação contrato temporario
+    var $bases;
+    var $atv;
+    var $atividades;
+    var $incentivos;
+	var $historicos;
+
+    var $isDocente   = array('060','702');
+        //$isDocente12 = array('060','702');
+
+    
+    function __construct($data=null)
+    {
+        parent::__construct('sigaept',$data);
+        $this->k = new MKrono();
+        //$this->isDocente = array('060','702');
+    }
+
+
+    function OnCreate($data)
+    {
+        if (empty($data))
+        {
+            //$this->initialize();
+        }
+        else
+        {
+            $this->GetById($data);
+        }
+    }
+
+    function GetById($id, $proxy=true)
+    {
+       $this->idVinculo = $id;
+       if ($proxy)
+       {
+           $this->retrieveAsProxy();
+       }
+       else
+       {
+           $this->retrieve();
+       }
+       return $this;
+    }
+
+    function getOcupacaoVagas()
+    {
+        $this->retrieveAssociation('ocupacaoVagas');
+        if ($this->ocupacaoVaga != NULL)
+        {
+            if (!is_array($this->ocupacaoVaga))
+            {
+                $this->ocupacaoVaga = array($this->ocupacaoVaga);
+            }
+        }
+    }
+
+    /*
+    function getOcupacaoVaga($numerovaga)
+    {
+        global $MIOLO;
+        if ( $this->ocupacaoVagas != NULL )
+        {
+            foreach ( $this->ocupacaoVagas as $r )
+            {
+                if ( $r->numeroVaga == $numerovaga )
+                    return $r;
+            }
+        }
+        $r = $MIOLO->GetBusiness('rh','ocupacaovaga');
+        $r->idVinculo = $this->idVinculo;
+        $r->retrieve();
+        return $r;
+    }
+    */
+
+    function getPeriodosAquisitivos()
+    {
+        $this->retrieveAssociation('periodosAquisitivos');
+        if ($this->dataInicio != NULL)
+        {
+            if (!is_array($this->periodoAquisitivo))
+            {
+                $this->periodoAquisitivo = array($this->periodoAquisitivo);
+            }
+        }
+    }
+
+
+    function getPeriodoAquisitivo($datainicio)
+    {
+        global $MIOLO;
+        if ( $this->periodosAquisitivos != NULL )
+        {
+            foreach ( $this->periodosAquisitivos as $r )
+            {
+                if ( $r->dataInicio == $datainicio )
+                    return $r;
+            }
+        }
+        $r = $MIOLO->GetBusiness('rh','periodoaquisitivo');
+        $r->idVinculo = $this->idVinculo;
+        $r->retrieve();
+        return $r;
+    }
+
+    /*function listPeriodosAquisitivosFerias()
+    {
+        $periodoAquisitivo = $this->_miolo->GetBusiness('rh','periodoaquisitivo');
+        $criteria = $periodoAquisitivo->getCriteria();
+        $criteria->addColumnAttribute('idVinculo');
+        $criteria->addColumnAttribute('dataInicio','datainicio');
+        $criteria->addColumnAttribute('dataFim','datafim');
+        $criteria->addColumnAttribute('totalDias');
+        $criteria->addColumnAttribute('diasUsufruidos','usufruidos');
+        $criteria->addColumnAttribute('faltas');
+        $criteria->addColumnAttribute('dataPrescricao','prescricao');
+        $criteria->addColumnAttribute('periodoFerias.dataInicio','inicioFerias');
+        $criteria->addColumnAttribute('periodoFerias.dataFim','fimFerias');
+        $criteria->addColumnAttribute('periodoFerias.totalDias','totalFerias');
+        $criteria->addCriteria('idVinculo','=',$this->idVinculo);
+        $criteria->addOrderAttribute('dataInicio',FALSE);
+        $criteria->addOrderAttribute('periodoFerias.dataInicio');
+
+        $criteria->setAssociationType('periodoFerias','right');
+        return $criteria->retrieveAsQuery();
+    }*/
+    function listPeriodosAquisitivosFerias()
+    {
+        $periodoAquisitivo = $this->_miolo->GetBusiness('rh','periodoaquisitivo');
+        $criteria = $periodoAquisitivo->getCriteria();
+        $criteria->addColumnAttribute('idVinculo');
+        $criteria->addColumnAttribute('dataInicio','datainicio');
+        $criteria->addColumnAttribute('dataFim','datafim');
+        $criteria->addColumnAttribute('totalDias');
+        $criteria->addColumnAttribute('diasUsufruidos','usufruidos');
+        $criteria->addColumnAttribute('faltas');
+        $criteria->addColumnAttribute('dataPrescricao','prescricao');
+        /*$criteria->addColumnAttribute('periodoFerias.dataInicio','inicioFerias');
+        $criteria->addColumnAttribute('periodoFerias.dataFim','fimFerias');
+        $criteria->addColumnAttribute('periodoFerias.totalDias','totalFerias');*/
+        $criteria->addCriteria('idVinculo','=',$this->idVinculo);
+        $criteria->addOrderAttribute('dataInicio',FALSE);
+        //$criteria->addOrderAttribute('periodoFerias.dataInicio');
+
+        //$criteria->setAssociationType('periodoFerias','right');
+        return $criteria->retrieveAsQuery();
+    }
+
+    function getLicAfasts()
+    {
+        $this->retrieveAssociation('licAfast');
+        if ($this->licAfast != NULL)
+        {
+            if (!is_array($this->licAfast))
+            {
+                $this->licAfast = array($this->licAfast);
+            }
+        }
+    }
+ 
+
+	function getLicAfast($dataInicio)
+    {
+        global $MIOLO;
+        if ( $this->licAfast != NULL )
+        {
+            foreach ( $this->licAfast as $r )
+            {
+                if ( $r->dataInicio == $dataInicio )
+                    return $r;
+            }
+        }
+        $l = $MIOLO->GetBusiness('rh','licafast');
+        $l->idVinculo = $this->idVinculo;
+        $l->retrieveAssociation('vinculo');
+        return $l;
+    }
+
+    function getLicAfastByPeriodo($dataInicio,$dataFim)
+    {
+        $this->getLicAfasts();
+        if ($this->licAfast)
+        {
+            foreach ( $this->licAfast as $l )
+            {
+                if (! $l->dataFim)
+                {
+                    return $l;
+                }
+                if ( $this->k->compareDate($dataInicio,'>=',$l->dataInicio) && $this->k->compareDate($dataFim,'<=',$l->dataFim) )
+                {
+                    return $l;
+                }
+            }
+            return FALSE;
+        }
+        else
+        {
+            return FALSE;
+        }
+    }
+
+    function getAverbacoes()
+    {
+        $this->retrieveAssociation('averbacoes');
+        if ($this->averbacoes != NULL)
+        {
+            if (!is_array($this->averbacoes))
+            {
+                $this->averbacoes = array($this->averbacoes);
+            }
+        }
+    }
+
+    function getAverbacao($id)
+    {
+        global $MIOLO;
+        if ( $this->averbacoes != NULL )
+        {
+            foreach ( $this->averbacoes as $a )
+            {
+                if ( $a->idAverbacao == $id )
+                    return $a;
+            }
+        }
+        $a = $MIOLO->GetBusiness('rh','averbacao');
+        $a->idVinculo = $this->idVinculo;
+        return $a;
+    }
+
+
+    function calcularTotalDiasDesaverbados()
+    {
+
+        global $MIOLO;
+        if ( $this->averbacoes != NULL )
+        {
+            foreach ( $this->averbacoes as $a )
+            {
+                $a->getDiasDesaverbados();
+            }
+        }
+    }
+
+	function calcularTotalDiasAverbados()
+    {
+
+        global $MIOLO;
+        if ( $this->averbacoes != NULL )
+        {
+            foreach ( $this->averbacoes as $a )
+            {
+				$dias += $a->totalDias;
+            }
+        }
+		return $dias;
+    }
+
+    function calcularTotalDiasAverbadosFinalidade($finalidade)
+    {
+
+		if ( $this->averbacoes != NULL )
+        {
+            foreach ( $this->averbacoes as $a )
+            {
+                $a->retrieveAssociation('finalidades');
+                foreach ( $a->finalidades as $f)
+                {
+                    if ($f->idFinalidade == $finalidade)
+                    {
+				        $dias += $a->totalDias;
+                    }
+                }
+            }
+        }
+		return $dias;
+    }
+
+    function getAverbacaoByPeriodo($dataInicio,$dataFim)
+    {
+        $this->getAverbacoes();
+        if ( is_array($this->averbacoes) )
+        {
+            foreach ( $this->averbacoes as $a )
+            {
+                if ( $this->k->compareDate($dataInicio,'<=',$a->dataInicio) && $this->k->compareDate($dataFim,'<=',$a->dataFim) )
+                {
+                    return $a;
+                }
+            }
+        }
+        return FALSE;
+
+    }
+    function getProvimentos()
+    {
+        $this->retrieveAssociation('provimentos');
+        if ($this->provimentos != NULL)
+        {
+            if (!is_array($this->provimentos))
+            {
+                $this->provimentos = array($this->provimentos);
+            }
+        }
+    }
+
+    function getProvimento($dataInicio)
+    {
+        global $MIOLO;
+        if ( $this->provimentos != NULL )
+        {
+            foreach ( $this->provimentos as $p )
+            {
+                if ( $p->dataInicio == $dataInicio )
+                    return $p;
+            }
+        }
+        $p = $MIOLO->GetBusiness('rh','provimento');
+        $p->idVinculo = $this->idVinculo;
+        $p->dataInicio = $dataInicio;
+        return $p;
+    }
+
+    function getOcupacaoVaga($dataInicio)
+    {
+        global $MIOLO;
+        if ( $this->ocupacaoVagas != NULL )
+        {
+            foreach ( $this->ocupacaoVagas as $o )
+            {
+                if ( $o->dataInicio == $dataInicio )
+                    return $o;
+            }
+        }
+        $o = $MIOLO->GetBusiness('rh','ocupacaovaga');
+        $o->idVinculo = $this->idVinculo;
+        $o->dataInicio = $dataInicio;
+        return $o;
+    }
+
+    function getProvimentoAtual()
+    {
+        if ( $this->provimentos != NULL )
+        {
+            foreach ( $this->provimentos as $p )
+            {
+                   if (( !$p->dataFim ) or ($p->dataFim == "01/01/0001"))
+                    return $p;
+            }
+        }
+    }
+
+    function getUltimoProvimento()
+    {
+        global $MIOLO;
+        $provimento = $MIOLO->getBusiness('rh','provimento');
+        $provimento->getUltimoProvimento($this->idVinculo);
+        return $provimento;
+    }
+
+    function getUltimoPerAq()
+    {
+        $this->retrieveAssociation('periodosAquisitivos');
+        if ( $this->periodosAquisitivos != NULL )
+        {
+            $anoMaior = 0;
+            foreach ( $this->periodosAquisitivos as $p )
+            {
+                list(,,$ano) = split('/', $p->dataPrescricao);
+                if ( $ano > $anoMaior )
+                {
+                    $lastPerAq = $p;
+                    $anoMaior = $ano;
+                }
+            }
+        }
+            return $lastPerAq;
+    }
+
+    function licAfastSimultanea($dataInicio,$dataFim,$isPersistent)
+    {
+        $licAfasts = NULL;
+        if ( $this->licAfast == NULL )
+            $this->retrieveAssociation('licAfast');
+
+        if ( $isPersistent )
+        {
+            if ( $this->licAfast != NULL )
+            {
+                foreach ( $this->licAfast as $l )
+                {
+                    if ( $l->dataInicio != $dataInicio )
+                    {
+                        $licAfastAux[] = $l;
+                    }
+                }
+                $this->licAfast = $licAfastAux;
+            }
+        }
+
+        if ( $this->licAfast != NULL )
+        {
+            foreach ( $this->licAfast as $l )
+            {
+                $lDataInicio = new InvertDate($l->dataInicio);
+                $lDataFim = new InvertDate($l->dataFim);
+                $lDataInicio = str_replace('/','',$lDataInicio->date);
+                $lDataFim = str_replace('/','',$lDataFim->date);
+                $dataInicio = new InvertDate($dataInicio);
+                $dataFim = new InvertDate($dataFim);
+
+                $dataInicio = str_replace('/','',$dataInicio->date);
+                $dataFim = str_replace('/','',$dataFim->date);
+
+                //testa se existem licencas marcadas no intervalo compreendido pela nova licenca
+
+                if ( $lDataInicio > $dataInicio && $lDataFim < $dataFim )
+                {
+                    //$isSimultanea = TRUE;
+                    $licAfasts[$l->dataInicio] = $l;
+                }
+
+                //testa se a data de inicio da nova licenca coincide com alguma licenca existente
+                if ( $dataInicio >= $lDataInicio && $dataInicio <= $lDataFim )
+                {
+                    //$isSimultanea = TRUE;
+                    $licAfasts[$l->dataInicio] = $l;
+                }
+
+                //testa se a data de fim da nova licenca coincide com alguma licenca existente
+                if ( $dataFim >= $lDataInicio && $dataInicio <= $lDataInicio )
+                {
+                    //$isSimultanea = TRUE;
+                    $licAfasts[$l->dataInicio] = $l;
+                }
+            }
+        }
+        return $licAfasts;
+    }
+
+    function getTempoExercicio()
+    {
+        $today = date('d/m/Y');
+
+        $tempo = $this->k->daysDiff($this->dataExercicio,$today);
+        if ( $this->licAfast == NULL )
+        {
+            $this->retrieveAssociation('licAfast');
+        }
+        if ( ! $this->licAfast == NULL )
+        {
+            foreach ( $this->licAfast as $l )
+            {
+                if ( $l->isTipo("INTERROMPEESTAGIO") )
+                {
+                    $tempo -= $this->k->daysDiff($l->dataInicio,$l->dataFim);
+                }
+            }
+        }
+
+        return $tempo;
+    }
+
+    function calculaIntersticio($objLicenca,$dataInicial=NULL)
+    {
+        $dataInicial = ( $dataInicial ) ? $dataInicial : date('d/m/Y');
+        $intersticio = $this->k->daysDiff($objLicenca->dataFim,$dataInicial);
+        if ( $this->licAfast == NULL )
+        {
+            $this->retrieveAssociation('licAfast');
+        }
+        if ( ! $this->licAfast == NULL )
+        {
+            foreach ( $this->licAfast as $l )
+            {
+                $diff = $this->k->daysDiff($objLicenca->dataFim,$l->dataInicio);
+                if ( $diff >= 0 )
+                {
+                    if ( $l->isTipo("INTERROMPEINTERSTICIO") )
+                    {
+                        $intersticio -= $this->k->daysDiff($l->dataInicio,$l->dataFim);
+                    }
+                }
+            }
+        }
+       return $intersticio;
+    }
+
+    //verifica se existe uma licenca do mesmo tipo num prazo de 60 dias pregressos
+    function getPrazoProrrogacao($licAfast,$idOcorrencia=NULL,$dataInicio=NULL)
+    {
+        $idOcorrencia = ( $idOcorrencia ) ? $idOcorrencia : $licAfast->idOcorrencia;
+        $dataInicio = ( $dataInicio ) ? $dataInicio : $licAfast->dataInicio;
+
+        if ( $this->licAfast == NULL )
+        {
+            $this->retrieveAssociation('licAfast');
+        }
+        if ( ! $this->licAfast == NULL )
+        {
+            $ocorrencias = array();
+            if ( $this->licAfast[0]->isTipo("SAUDEEST",$idOcorrencia) )
+            {
+                $tipoLicAfast = $this->licAfast[0]->tipoLicAfast;
+                $tipoLicAfast->getByTipo("SAUDEEST");
+                foreach ( $tipoLicAfast->ocorrencias as $o )
+                {
+                    $ocorrencias[] = $o->idOcorrencia;
+                }
+                foreach ( $this->licAfast as $l )
+                {
+                    if ( in_array($l->idOcorrencia,$ocorrencias) )
+                    {
+                        $diff = $this->k->daysDiff($l->dataFim,$dataInicio);
+                        if ( $diff <= 60 )
+                        {
+                            $duracao += $l->getPrazo();
+                        }
+                        $dataInicio = $l->dataInicio;
+                    }
+                }
+            }
+            else
+            {
+                foreach ( $this->licAfast as $l )
+                {
+                    if ( $l->idOcorrencia == $idOcorrencia || in_array($idOcorrencia,$ocorrencias) )
+                    {
+                        $diff = $this->k->daysDiff($l->dataFim,$dataInicio);
+                        if ( $diff <= 60 )
+                        {
+                            $duracao += $l->getPrazo();
+                        }
+                    }
+                }
+            }
+        }
+        return ( $duracao ) ? $duracao : 0;
+    }
+
+    function getPeriodosAquisitivosParaFerias()
+    {
+        $this->retrieveAssociation('periodosAquisitivos');
+        /*
+         * Montar regras para retornar somente periodos liberados para ferias
+        */
+    }
+
+    function verificaOcorrenciaLicAfast($idOcorrencia)
+    {
+        if ( $this->licAfast == NULL )
+        {
+            $this->retrieveAssociation('licAfast');
+        }
+        if ( ! $this->licAfast == NULL )
+        {
+            foreach ( $this->licAfast as $l )
+            {
+                if ( $l->idOcorrencia == $idOcorrencia )
+                {
+                    return TRUE;
+                }
+            }
+        }
+        return FALSE;
+    }
+
+    function getLastLicAfastByOcorrencia($idOcorrencia)
+    {
+        if ( $this->licAfast == NULL )
+        {
+            $this->retrieveAssociation('licAfast');
+        }
+        if ( ! $this->licAfast == NULL )
+        {
+            foreach ( $this->licAfast as $l )
+            {
+                if ( $l->idOcorrencia == $idOcorrencia )
+                {
+                    $licencas[] = $l;
+                }
+            }
+            if ( count($licencas) > 0 )
+            {
+                $dataFinal = '0/0/0000';
+                for ( $i = 0; $i < count($licencas); $i++ )
+                {
+                    $diff = $this->k->daysDiff($dataFinal,$licencas[$i]->dataFim);
+                    if ( $diff > 0 )
+                    {
+                        $ind = $i;
+                    }
+                    $dataFinal = $licencas[$i]->dataFim;
+                }
+                return $licencas[$ind];
+            }
+            else
+            {
+                return NULL;
+            }
+        }
+
+    }
+
+    function finalizaOcupacaoVaga($dataFim)
+    {
+        $this->getOcupacaoVagas();
+        if ( $this->ocupacaoVagas != NULL )
+        {
+            foreach ( $this->ocupacaoVagas as $o )
+            {
+                if ( ! $o->dataFim )
+                {
+                    $o->finaliza($dataFim);
+                }
+            }
+        }
+    }
+
+    function finalizaLicAfast($dataFim)
+    {
+        $this->getLicAfasts();
+        if ( $this->licAfast != NULL )
+        {
+            foreach ( $this->licAfast as $l )
+            {
+                $diff = $this->k->daysDiff($l->dataFim,$dataFim);
+                if ( $diff < 0 )
+                {
+                    $l->finaliza($dataFim);
+                    //$this->saveAssociation('licAfast');
+                }
+            }
+        }
+    }
+
+    function novoProvimento($dataNovoInicio,
+                            $dataFimAtual,
+                            $idGrupoOcorrencia,
+                            $idOcorrencia,
+                            $idSituacao='',
+                            $idPublicacao='',
+                            $idJornada='',
+                            $idGrupoCargo='',
+                            $idCargo='',
+                            $idSetor='',
+                            $idClasse=null,
+                            $idReferencia=null,
+                            $obs=null,
+                            $idAmbiente=NULL)
+    {
+        $this->getProvimentos();
+        $k = new MKrono();
+        $provimentoAtual = $this->getProvimentoAtual();
+
+        if ( ! $provimentoAtual )
+        {
+            throw new ESimpleRnException("Não existe nenhum provimento atual associado ao vínculo.");
+        }
+        else
+        {
+            //se o novo provimento vier depois do provimento atual insere normalmente
+            if($k->CompareDate($dataNovoInicio, '>', $provimentoAtual->dataInicio))
+            {
+
+	        	//testar vazio
+	            $idClasse     = ($idClasse) ? $idClasse : $provimentoAtual->idClasse;
+	            $idReferencia = ($idReferencia) ? $idReferencia : $provimentoAtual->idReferencia;
+	            //$obs        = ($obs) ? $obs : $provimentoAtual->obs;
+
+	            $idAmbiente = ($idAmbiente) ? $idAmbiente : $provimentoAtual->idAmbiente;
+	            //$idPublicacao = ($idPublicacao) ? $idPublicacao : $provimentoAtual->idPublicacao;
+	            $idJornada = ($idJornada) ? $idJornada : $provimentoAtual->idJornada;
+	            $idGrupoCargo = ($idGrupoCargo) ? $idGrupoCargo : $provimentoAtual->idGrupoCargo;
+	            $idCargo = ($idCargo) ? $idCargo : $provimentoAtual->idCargo;
+	            $idSetor = ($idSetor) ? $idSetor : $provimentoAtual->idSetor;
+	            $provimentoNovo = $provimentoAtual;
+	            if ( $this->getTransaction() )
+	            {
+	                $provimentoNovo->setTransaction($this->getTransaction() );
+	            }
+	            else
+	            {
+	                $provimentoNovo->beginTransaction();
+	            }
+
+
+            	$provimentoAtual->finaliza($dataFimAtual);
+            	$provimentoNovo->setDataFim(NULL);
+
+            	$provimentoNovo->setDataInicio($dataNovoInicio);
+	            $provimentoNovo->setIdGrupoOcorrencia($idGrupoOcorrencia);
+	            $provimentoNovo->setIdOcorrencia($idOcorrencia);
+	            if ( $idSituacao )
+	            {
+	                $provimentoNovo->setIdSituacao($idSituacao);
+	            }
+	            $provimentoNovo->setIdAmbiente($idAmbiente);
+	            $provimentoNovo->setIdPublicacao($idPublicacao);
+	            $provimentoNovo->setIdJornada($idJornada);
+	            $provimentoNovo->setIdGrupoCargo($idGrupoCargo);
+	            $provimentoNovo->setIdCargo($idCargo);
+	            $provimentoNovo->setIdSetor($idSetor);
+
+	            $provimentoNovo->setIdClasse($idClasse);
+	            $provimentoNovo->setIdReferencia($idReferencia);
+	            $provimentoNovo->setObs($obs);
+
+	            $provimentoNovo->setPersistent(FALSE);	            
+							
+							try
+							{
+							  $operacao  = OP_INS;  
+								$descricao = 'Inserido novo provimento - ' . ' ' .
+														'dataNovoInicio: ' . $dataNovoInicio . ' ' .
+                            'dataFimAtual: ' . $dataFimAtual . ' ' .
+                            'idGrupoOcorrencia: ' . $idGrupoOcorrencia . ' ' .
+                            'idOcorrencia: ' . $idOcorrencia;							  
+							
+								$provimentoNovo->save();	
+							  $provimentoNovo->log($operacao, $descricao);
+							  
+							}
+							catch (exception $e)
+							{
+							  $this->AddError($e->getMessage());
+							}			
+							
+	            
+	            if ( ! $this->getTransaction() )
+	            {
+	                $provimentoNovo->endTransaction();
+	            }
+            }
+            else //se o provimento for incluído especialmente
+            {
+            	$this->insereEspecial($dataNovoInicio,$idGrupoOcorrencia,$idOcorrencia,$idSituacao,$idPublicacao,$idJornada,$idGrupoCargo,$idCargo,$idSetor,$idClasse,$idReferencia,$obs,$idAmbiente);
+            }
+        }
+    }
+
+    function setDadosAposentadoria($data)
+    {
+        $this->idGrupoOcorrenciaVacancia = $data->idGrupoOcorrencia ;
+        $this->idOcorrenciaVacancia = $data->idOcorrencia ;
+        $this->dataVacancia = $data->dataVacancia ;
+        $this->idPublicacaoVacancia = $data->idPublicacaoVacancia ;
+    }
+
+    function addProvimento($provimento)
+    {
+        $this->provimentos[] = $provimento;
+    }
+
+    function addOcupacaoVaga($ocupacaoVaga)
+    {
+        $this->ocupacaoVagas[] = $ocupacaoVaga;
+    }
+
+    function aposenta($dataFim)
+    {
+        $idSituacao = 2;
+        $this->finalizaOcupacaoVaga($dataFim);
+        $this->finalizaLicAfast($dataFim);
+        $this->novoProvimento($this->dataVacancia,$dataFim,$this->idGrupoOcorrenciaVacancia,$this->idOcorrenciaVacancia,$idSituacao);
+        $this->save();
+    }
+
+    function isAtivo()
+    {
+        $this->getProvimentos();
+        $provimentoAtual = $this->getProvimentoAtual();
+        //if ( $provimentoAtual->idGrupoCargo == '60' ) //docentes
+        if ( in_array($provimentoAtual->idGrupoCargo , $this->isDocente ) )
+        {
+            return  ( $provimentoAtual->regimeJuridico == "EST" || $provimentoAtual->regimeJuridico == "CLT" || $provimentoAtual->regimeJuridico == "CDT" ) && ( $provimentoAtual->idSituacao == 1 || $provimentoAtual->idSituacao == 8 || $provimentoAtual->idSituacao == 12 || $provimentoAtual->idSituacao == 20 || $provimentoAtual->idSituacao == 19);
+        }
+        else //tecnicos
+        {
+				 //var_dump($provimentoAtual->idSituacao);
+            if ( $provimentoAtual->idSituacao == 5 || $provimentoAtual->idSituacao == 4 || $provimentoAtual->idSituacao == 19 )
+            {
+
+                return TRUE;
+            }
+            else
+            {
+                return ( $provimentoAtual->regimeJuridico == "EST" ) && ( $provimentoAtual->idSituacao == 1 || $provimentoAtual->idSituacao == 9 || $provimentoAtual->idSituacao == 8);
+            }
+        }
+    }
+
+    function isTA()
+    {
+        $this->getProvimentos();
+        $provimentoAtual = $this->getProvimentoAtual();
+        return (! in_array($provimentoAtual->idGrupoCargo , $this->isDocente) );
+        //return ($provimentoAtual->idGrupoCargo != 60) ? TRUE : FALSE;
+    }
+
+    function isDocente()
+    {
+        $this->getProvimentos();
+        $provimentoAtual = $this->getProvimentoAtual();
+        return in_array($provimentoAtual->idGrupoCargo , $this->isDocente);
+        //return ($provimentoAtual->idGrupoCargo == 60) ? TRUE : FALSE;
+    }
+
+    function isDocenteEfetivo()
+    {
+        $this->getProvimentos();
+        $provimentoAtual = $this->getProvimentoAtual();
+        return ($provimentoAtual->idGrupoCargo == 60) ? ( $provimentoAtual->idCargo == 1 || $provimentoAtual->idCargo == 11 ) : FALSE;
+    }
+
+    function isDocenteAdjunto()
+    {
+        $this->getProvimentos();
+        $provimentoAtual = $this->getProvimentoAtual();
+        return ($provimentoAtual->idClasse == 13) ?  TRUE : FALSE;
+    }
+
+    function isDocenteAdjuntoNivel4()
+    {
+        $this->getProvimentos();
+        $provimentoAtual = $this->getProvimentoAtual();
+        return ( ($provimentoAtual->idReferencia == 1201) && ($provimentoAtual->idClasse == 13) ) ?  TRUE : FALSE;
+    }
+
+    function isDoc12ClasseENivel4()
+    {
+        $this->getProvimentos();
+        $provimentoAtual = $this->getProvimentoAtual();
+        return ( ($provimentoAtual->idReferencia == 1188) && ($provimentoAtual->idClasse == 9) ) ?  TRUE : FALSE;
+    }
+
+
+    // inacabada
+    function isDOC12()
+    {
+        $this->getProvimentos();
+        $provimentoAtual = $this->getProvimentoAtual();
+        return (($provimentoAtual->idGrupoCargo == 60) && ($provimentoAtual->idCargo == 11) ) ? TRUE : FALSE;
+    }
+
+
+
+    // inacabada
+    function isDOC()
+    {
+        $this->getProvimentos();
+        $provimentoAtual = $this->getProvimentoAtual();
+        return (($provimentoAtual->idGrupoCargo == 60) && ($provimentoAtual->idCargo == 1) ) ? TRUE : FALSE;
+    }
+
+    function permiteAverbacao()
+    {
+        $this->getProvimentos();
+        $provimentoAtual = $this->getProvimentoAtual();
+        switch ( $provimentoAtual->regimeJuridico )
+        {
+            case 'EST':
+                return ( $provimentoAtual->idSituacao == 1 || $provimentoAtual->idSituacao == 2 || $provimentoAtual->idSituacao == 8 ||$provimentoAtual->idSituacao == 10 || $provimentoAtual->idSituacao == 11 || $provimentoAtual->idSituacao == 13 || $provimentoAtual->idSituacao == 13 ) ;
+            break;
+
+            case 'CLT':
+                return ( $provimentoAtual->idSituacao == 20 );
+            break;
+
+            case 'ANS':
+                return ( $provimentoAtual->idSituacao == 21 );
+            break;
+        }
+    }
+
+    function existeAverbacao($dataInicio, $dataFim)
+    {
+        $this->getAverbacoes();
+        if ( is_array($this->averbacoes) )
+        {
+            foreach ( $this->averbacoes as $a )
+            {
+                if (
+                    ( $this->k->compareDate($dataInicio,'>=',$a->dataInicio) && $this->k->compareDate($dataInicio,'<=',$a->dataFim) )
+                    ||
+                    (  $this->k->compareDate($dataInicio,'<=',$a->dataInicio) && ( $this->k->compareDate($dataFim,'>=',$a->dataInicio) && $this->k->compareDate($dataFim,'<=',$a->dataFim ) ) )
+                   )
+                {
+                    //var_dump($a->totalDias,$a->getDiasDesaverbados());
+                    if ($a->totalDias == 0)
+                        return FALSE;
+                    else
+                        return TRUE;
+                }
+            }
+        }
+        return FALSE;
+
+    }
+
+    function emLicenca($data)
+    {
+        $this->retrieveAssociation('licAfast');
+        if ( is_array($this->licAfast) )
+        {
+            foreach ( $this->licAfast as $l )
+            {
+                if (! $l->dataFim)
+                {
+                    return TRUE;
+                }
+                if ( $this->k->compareDate($data,'>=',$l->dataInicio) && $this->k->compareDate($data,'<=',$l->dataFim) )
+                {
+                    return TRUE;
+                }
+            }
+        }
+        return false;
+    }
+
+    function emCessao($data)
+    {
+        $this->retrieveAssociation('cessao');
+        if ( is_array($this->cessao) )
+        {
+            foreach ( $this->cessao as $l )
+            {
+                if (! $l->dataFim)
+                {
+                    return TRUE;
+                }
+                if ( $this->k->compareDate($data,'>=',$l->dataInicio) && $this->k->compareDate($data,'<=',$l->dataFim) )
+                {
+                    return TRUE;
+                }
+            }
+        }
+        return false;
+    }
+
+
+    function emMissaoExterior($data)
+    {
+        $this->retrieveAssociation('licAfast');
+        $ultMisExt = $this->getLastLicAfastByOcorrencia(111);
+        if ( $this->k->compareDate($data,'>=',$ultMisExt->dataInicio) && $this->k->compareDate($data,'<=',$ultMisExt->dataFim) )
+        return TRUE;
+        else
+        return FALSE;
+
+    }
+
+    function emFerias($data)
+    {
+     $this->retrieveAssociation('periodosAquisitivos');
+     $periodoAquisitivo = $this->getUltimoPerAq();
+     if($periodoAquisitivo)
+     {
+         $periodoAquisitivo->retrieveAssociation('ferias');
+        // var_dump($periodoAquisitivo->ferias);
+
+            if ( is_array($periodoAquisitivo->ferias) )
+            {
+                foreach ( $periodoAquisitivo->ferias as $l )
+                {
+                    if ( $this->k->compareDate($data,'>=',$l->dataInicio) && $this->k->compareDate($data,'<=',$l->dataFim) )
+                        return TRUE;
+                }
+            }
+    }
+        return FALSE;
+    }
+
+    function getAdicionais()
+    {
+        $this->retrieveAssociation('adicionais');
+        if ($this->adicionais != NULL)
+        {
+            if (is_array($this->adicionais))
+            {
+                global $MIOLO;
+                $tabelaGeral = $MIOLO->getBusiness('common','tabelageral');
+                foreach ( $this->adicionais as $a )
+                {
+                    $tabelaGeral->getByItem('RH_TIPOADICIONAL',trim($a->idAdicional));
+                    $a->adicional = $tabelaGeral->item2;
+                    $adicionaisAux[] = $a;
+                }
+                $this->adicionais = $adicionaisAux;
+            }
+            else
+            {
+                $this->adicionais = array($this->adicionais);
+            }
+        }
+    }
+
+    function getAdicional($id)
+    {
+        global $MIOLO;
+        if ( $this->adicionais != NULL )
+        {
+            foreach ( $this->adicionais as $a )
+            {
+                if ( $a->dataInicio == $id )
+                    return $a;
+            }
+        }
+        $a = $MIOLO->GetBusiness('rh','adicional');
+        $a->idVinculo = $this->idVinculo;
+        return $a;
+    }
+
+    function permiteAdicional()
+    {
+        if ( is_array($this->adicionais) )
+        {
+            foreach ( $this->adicionais as $a )
+            {
+                if ( ! $a->dataFim )
+                {
+                    return FALSE;
+                }
+            }
+            return TRUE;
+        }
+        return TRUE;
+    }
+
+    function permiteCessao($dataInicio,$dataFim,$isPersistent=true)
+    {
+
+        $isSimultanea = TRUE;
+        if ( $this->cessoes == NULL )
+            $this->retrieveAssociation('cessoes');
+
+
+
+        if ( $isPersistent )
+        {
+            if ( $this->cessoes != NULL )
+            {
+                foreach ( $this->cessoes as $c )
+                {
+                    //var_dump($this->cessoes[0]->dataInicio,$c->dataInicio,$dataInicio);
+                    if ( $c->dataInicio == $dataInicio ) //if ( $c->dataInicio != $dataInicio )
+                    {
+                        $cessoesAux[] = $c;
+                    }
+                }
+            }
+        }
+
+        if ( $cessoesAux != NULL )
+        {
+            foreach ( $cessoesAux as $c )
+            {
+                $cDataInicio = new InvertDate($c->dataInicio);
+                $cDataFim = new InvertDate($c->dataFim);
+                $cDataInicio = str_replace('/','',$cDataInicio->date);
+                $cDataFim = str_replace('/','',$cDataFim->date);
+                $dataInicio = new InvertDate($dataInicio);
+                $dataFim = new InvertDate($dataFim);
+
+                $dataInicio = str_replace('/','',$dataInicio->date);
+                $dataFim = str_replace('/','',$dataFim->date);
+
+                //testa se existem cessoes marcadas no intervalo compreendido pela nova cessao
+
+                //var_dump($cDataInicio,$cDataFim,"---",$dataInicio,$dataFim);
+                if ( $cDataInicio > $dataInicio && $cDataFim < $dataFim )
+                {
+                    $isSimultanea = FALSE;
+                }
+
+                //testa se a data de inicio da nova cessao coincide com alguma cessao existente
+                if ( $dataInicio >= $cDataInicio && $dataInicio <= $cDataFim )
+                {
+                    $isSimultanea = FALSE;
+                }
+
+                //testa se a data de fim da nova cessao coincide com alguma cessao existente
+                if ( $dataFim >= $cDataInicio && $dataInicio <= $cDataInicio )
+                {
+                    $isSimultanea = FALSE;
+                }
+            }
+        }
+        return $isSimultanea;
+    }
+
+    function listLicenciados($adicionais = null)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('idVinculo');
+        $criteria->addColumnAttribute('funcionario.pessoa.nome');
+        $criteria->addColumnAttribute('provimentos.cargo.descricao');
+        $criteria->addColumnAttribute('provimentos.setor.nome');
+        $criteria->addColumnAttribute('adicionais.tabelaGeral.item2');
+        $criteria->addColumnAttribute('adicionais.dataInicio');
+        $criteria->addColumnAttribute('adicionais.dataFim');
+        $criteria->addColumnAttribute('adicionais.dataFim');
+
+        $criteria->addCriteria('provimentos.dataFim','is','NULL');
+        $criteria->addCriteria('adicionais.tabelaGeral.tabela','=',"'RH_TIPOADICIONAL'");
+
+        if ( $adicionais )
+        {
+            $operacao = ( is_array($adicionais) ) ? "IN" : "=";
+            $criteria->addCriteria('adicionais.idAdicional',$operacao,$adicionais);
+        }
+        return $criteria->retrieveAsQuery();
+    }
+
+
+	function listAll()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('idVinculo');
+        $criteria->addColumnAttribute('funcionario.pessoa.nome');
+        $criteria->addColumnAttribute('provimentos.cargo.descricao');
+        $criteria->addColumnAttribute('provimentos.setor.nome');
+        $criteria->addColumnAttribute('adicionais.tabelaGeral.item2');
+        $criteria->addColumnAttribute('adicionais.dataInicio');
+        $criteria->addColumnAttribute('adicionais.dataFim');
+        $criteria->addColumnAttribute('adicionais.dataFim');
+
+        $criteria->addCriteria('provimentos.dataFim','is','NULL');
+        $criteria->addCriteria('adicionais.tabelaGeral.tabela','=',"'RH_TIPOADICIONAL'");
+
+        if ( $adicionais )
+        {
+            $operacao = ( is_array($adicionais) ) ? "IN" : "=";
+            $criteria->addCriteria('adicionais.idAdicional',$operacao,$adicionais);
+        }
+        return $criteria->retrieveAsQuery();
+    }
+
+
+    function getCessoes()
+    {
+        $this->retrieveAssociation('cessoes');
+        if ($this->cessoes != NULL)
+        {
+            if (is_array($this->cessoes))
+            {
+                /*
+                global $MIOLO;
+                $tabelaGeral = $MIOLO->getBusiness('common','tabelageral');
+                foreach ( $this->cessoes as $c )
+                {
+                    $tabelaGeral->getByItem('RH_TIPOORGAO',trim($c->idTipoOrgao));
+                    $c->tipoOrgao = $tabelaGeral->item2;
+                    $adicionaisAux[] = $a;
+                }
+                $this->adicionais = $adicionaisAux;
+                */
+            }
+            else
+            {
+                $this->cessoes = array($this->cessoes);
+            }
+        }
+    }
+
+    function getCessao($id)
+    {
+        global $MIOLO;
+        if ( $this->cessoes != NULL )
+        {
+            foreach ( $this->cessoes as $c )
+            {
+                if ( $c->dataInicio == $id )
+                    return $c;
+            }
+        }
+        $c = $MIOLO->GetBusiness('rh','cessao');
+        $c->idVinculo = $this->idVinculo;
+        return $c;
+    }
+
+    function verificaOcorrenciasByGrupoOcorrencia($idGrpOcorrencia)
+    {
+    if ( $this->licAfast == NULL )
+    {
+        $this->retrieveAssociation('licAfast');
+    }
+    if ( ! $this->licAfast == NULL )
+    {
+        foreach ( $this->licAfast as $l )
+        {
+            if ( $l->idGrupoOcorrencia == $idGrpOcorrencia )
+        {
+                    return TRUE;
+                }
+            }
+        }
+        return FALSE;
+    }
+
+
+    function getLicencaByData($data)
+    {
+        //$this->retrieveAssociation('licAfast');
+        if ( is_array($this->licAfast) )
+        {
+            foreach ( $this->licAfast as $l )
+            {
+                if ( $this->k->compareDate($data,'>=',$l->dataInicio) && $this->k->compareDate($data,'<=',$l->dataFim) )
+                {
+                    $l->retrieveAssociation('ocorrencia');
+                    return $l;
+                }
+            }
+        }
+        return FALSE;
+    }
+
+
+    function validaExclusao($dataExclusao, $ocorrencia)
+    {
+
+        $today = date('d/m/Y');
+        if ( $this->k->compareDate($dataExclusao,'>',$today))
+         {
+            throw new ESimpleRnException("Não é possível excluir o servidor com data superior à atual");
+        }
+        elseif($this->emFerias($dataExclusao))
+        {
+            throw new ESimpleRnException("Não é possível excluir o servidor pois este está usufruindo férias");
+        }
+        elseif($this->getLicAfastByPeriodo($dataExclusao,$dataExclusao))
+        {
+            throw new ESimpleRnException("Procedimento possível apenas após encerramento de licença/afastamento do servidor.");
+        }
+        elseif($ocorrencia == 198)
+        {
+             if($this->emMissaoExterior($dataExclusao))
+            {
+                throw new ESimpleRnException("Não é possivel excluir pois o servidor está em missao no exterior!!");
+            }
+            elseif($this->emCessao($dataExclusao))
+            {
+                throw new ESimpleRnException("Não é possível excluir o servidor pois este está em cessão");
+            }
+            elseif($this->verificaOcorrenciasByGrupoOcorrencia(02) != NULL)
+            {
+                throw new ESimpleRnException("Não é possível excluir o servidor pois já existe registro de exclusão para este");
+            }
+            else
+               return TRUE;
+        }
+    }
+
+    function getFrequenciaMnemonico($dia)
+    {
+        $l = $this->getLicencaByData($dia);
+        return ( $l ) ? array("mnemonico"=>$l->ocorrencia->mnemonico,"descricao"=>$l->ocorrencia->descricao) : array("mnemonico"=>'N',"descricao"=>"FREQÜÊNCIA NORMAL");
+    }
+
+    function permiteMudancaJornada()
+    {
+        $this->getProvimentos();
+        $provimentoAtual = $this->getProvimentoAtual();
+
+        if ( in_array($provimentoAtual->idGrupoCargo , $this->isDocente ) )
+        {
+            return TRUE;
+        }
+        else
+        {
+            switch ( $provimentoAtual->idGrupoCargo )
+            {
+                //case 60:
+                //    return TRUE;
+                //    break;
+                case 61:
+                    return ( $provimentoAtual->idCargo == 62 );
+                    break;
+                case 701:
+                    return ( $provimentoAtual->idCargo == 47 );
+                    break;
+                default:
+                    return FALSE;
+                    break;
+            }
+        }
+    }
+
+    function getProvimentoByOcorrencia($idGrupoOcorrencia,$idOcorrencia)
+    {
+        if ( ! $this->provimentos)
+        {
+            $this->getProvimentos();
+        }
+        if ( is_array($this->provimentos) )
+        {
+            foreach ( $this->provimentos as $p )
+            {
+                if ( $p->idGrupoOcorrencia == $idGrupoOcorrencia && $p->idOcorrencia == $idOcorrencia )
+                {
+                    return $p;
+                }
+            }
+        }
+    }
+
+    function intersticioJornada($dataInicio,$dataFim)
+    {
+        $intersticio = $this->k->daysDiff($dataInicio,$dataFim);
+        if ( $this->licAfast == NULL )
+        {
+            $this->retrieveAssociation('licAfast');
+        }
+        if ( ! $this->licAfast == NULL )
+        {
+            foreach ( $this->licAfast as $l )
+            {
+                if ( $l->isTipo('INTERSTICIOJORNADAINT') )
+                {
+                    $intersticio -= $l->getPrazo();
+                }
+                else
+                {
+                    if ( $l->isTipo('INTERSTICIOJORNADA24') )
+                    {
+                        $desconto = $l->getPrazo() - 730;
+                        if ( $desconto > 0 )
+                        {
+                            $intersticio -= $desconto;
+                        }
+                    }
+                }
+            }
+        }
+       return $intersticio;
+    }
+
+    function getFuncionario()
+    {
+        $this->retrieveAssociation('funcionario');
+        return $this->funcionario;
+    }
+
+    function mudancaCargo($idGrupoCargo,$idCargo,$dataInicio,$idPublicacao)
+    {
+        $dataFimAtual = $this->k->operation('-',$dataInicio,'1%D');
+        $this->novoProvimento($dataInicio,$dataFimAtual,6,2,'',$idPublicacao,'',$idGrupoCargo,$idCargo);
+    }
+
+    function remove($dataRemocao, $idPublicacao, $idSetor, $idAmbiente)
+    {
+        global $MIOLO;
+        // Data para fechamento do ultimo provimento (1 dia antes da remoção)
+        $dataFechmento = $this->k->operation('-',$dataRemocao,'1%D');
+
+        // Ultimo provimento do servidor
+        $provimento = $MIOLO->GetBusiness('rh','provimento');
+        $provimento->getUltimoProvimento($this->idVinculo);
+
+        $provimentoAtual = $this->getProvimentoAtual();
+
+        // Novo provimento (idGrupoOcorrencia=06, idOcorrencia=018).
+        // Os demais valores continuam iguais ao provimento anterior
+        if($this->k->CompareDate($dataRemocao, '<', $provimentoAtual->dataInicio))
+        {
+        	$this->novoProvimento($dataRemocao,
+                              $dataFechmento,
+                              '06',
+                              '018',
+                              $provimento->idSituacao,
+                              $idPublicacao,
+                              $provimento->idJornada,
+                              $provimento->idGrupoCargo,
+                              $provimento->idCargo,
+                              $idSetor,
+                              '',
+                              '',
+                              '',
+                              $idAmbiente);
+        }
+        else
+        {
+        	$this->insereEspecial($dataRemocao,
+                              '06',
+                              '018',
+                              '',
+                              $idPublicacao,
+                              '',
+                              '',
+                              '',
+                              $idSetor,
+                              '',
+                              '',
+                              '',
+                              $idAmbiente);
+        }
+
+        // Salva o vínculo
+        //$this->save();
+
+        //if ( $provimento->idGrupoCargo == 60 )
+        if ( in_array($provimento->idGrupoCargo , $this->isDocente ) )
+        {
+            $setor = $this->_miolo->getBusiness('common','setor');
+            $setor->getById($idSetor);
+
+            $departamento = $this->_miolo->getBusiness('ensino','departamento');
+            $departamento->getBySiglaSetor($setor->sigla);
+
+            $docente = $this->_miolo->getBusiness('ensino','docente');
+
+            $docente->getByIdVinc($this->idVinculo);
+
+            if ( $docente->isPersistent() )
+            {
+                $docente->updateDepto($departamento->iddepto);
+            }
+            else
+            {
+                $this->getFuncionario();
+                $data->idvinc = $this->idVinculo;
+                $data->situacao = 'Ativo';
+                $data->idpessoa = $this->funcionario->pessoa->idpessoa;
+                $data->iddepto = $departamento->iddepto;
+
+                $docente->setData($data);
+                $docente->save();
+            }
+        }
+    }
+
+    function validaRemocao($dataRemocao)
+    {
+        global $MIOLO;
+        $today = date('d/m/Y');
+        $provimento = $MIOLO->GetBusiness('rh','provimento');
+        $provimento->getUltimoProvimento($this->idVinculo);
+        $provimento->getSituacaoFuncional();
+        // Testa a situacaoOcorrencia, passando como parâmetros: situação funcional, grupo de ocorrencia (018) e ocorrencia (06)
+        // Testa se o servidor está ativo
+        // Testa se o servidor é professor substituto ou visitante
+        // Confere se a data de remoção e menor igaul que a data atual
+        // Confere se a data de remoção é maior ou igual que a data de início do último provimento
+        if (!$this->checkSituacaoOcorrencia($provimento->situacaofuncional->idSituacao, '018','06'))
+            throw new ESimpleRnException("Não foi possível remover o servidor. A situação funcional do mesmo não é compatível: ".$provimento->situacaofuncional->descricao);
+        elseif (!$this->isAtivo())
+            throw new ESimpleRnException("Não foi possível remover o servidor. O servidor não está ativo. Situação: ".$provimento->situacaofuncional->descricao);
+        elseif (($this->isDocente()) and !($this->isDocenteEfetivo()))
+            throw new ESimpleRnException("Não foi possível remover o servidor. O servidor é professor substituto ou visitante.");
+        elseif (($this->k->compareDate($dataRemocao,'>',$today)))
+            throw new ESimpleRnException("Não foi possível remover o servidor. A data de remoção não pode ser posterior a data atual ($today).");
+        /*elseif ($this->k->compareDate($dataRemocao, '<' ,$provimento->dataInicio))
+            throw new ESimpleRnException("Não foi possível remover o servidor. A data é imcompatível com a data início do provimento anterior ($provimento->dataInicio).");*/
+        elseif($this->emFerias($dataExclusao))
+            throw new ESimpleRnException("Não é possível remover o servidor pois este está usufruindo férias");
+        else
+            return true;
+    }
+
+    function checkSituacaoOcorrencia($idSituacao, $idOcorrencia, $idGrupoOcorrencia)
+    {
+        global $MIOLO;
+        $situacaoocorrencia = $MIOLO->GetBusiness('rh','situacaoocorrencia');
+        $situacoesPermitidas = $situacaoocorrencia->checkSituacao($idOcorrencia,$idGrupoOcorrencia);
+		//var_dump($idSituacao, $idOcorrencia, $idGrupoOcorrencia);
+        if (is_array($situacoesPermitidas->result))
+        {
+            foreach ($situacoesPermitidas->result as $object)
+                if ($idSituacao = $object[0]);
+                    return true;
+        }
+        else
+            return false;
+
+    }
+
+    function progride($dataProgressao,$idPublicacao,$idClasse,$idReferencia,$obs)
+    {
+        global $MIOLO;
+        // Data para fechamento do ultimo provimento (1 dia antes da progressão)
+        $dataFechmento = $this->k->operation('-',$dataProgressao,'1%D');
+
+        // Ultimo provimento do servidor
+        $provimento = $MIOLO->GetBusiness('rh','provimento');
+        $provimento->getUltimoProvimento($this->idVinculo);
+
+//($dataNovoInicio,$dataFimAtual,$idGrupoOcorrencia,$idOcorrencia,$idSituacao = '',$idPublicacao = '',$idJornada='',$idGrupoCargo = '',$idCargo = '', $idSetor = '')
+
+        // Novo provimento (idGrupoOcorrencia=06, idOcorrencia=027).
+        // Os demais valores continuam iguais ao provimento anterio
+        $this->novoProvimento($dataProgressao,
+                              $dataFechmento,
+                              '06',
+                              '027',
+                              $provimento->idSituacao,
+                              $idPublicacao,
+                              $provimento->idJornada,
+                              $provimento->idGrupoCargo,
+                              $provimento->idCargo,
+                              $idSetor,
+                              $idClasse,
+                              $idReferencia,
+                              $obs);
+
+    }
+
+    function getUltimoProvProgr()
+    {
+        global $MIOLO;
+        $provimento = $MIOLO->GetBusiness('rh','provimento');
+        $provimentoPF = $provimento->getUltimoProvimentoComProgressaoFuncional($this->idVinculo);
+        return $provimentoPF;
+    }
+
+    function validaProgressao($dataProgressao,$progressaoFuncional=FALSE)
+    {
+        $this->getProvimentos();
+
+        // ultimo provimento = provimento atual
+        $provimentoAtual = $this->getProvimentoAtual();
+        $provimentoAtual->getSituacaoFuncional();
+        $progEspecial = false;
+        $provimentoFuncional = $this->getProvimentoByOcorrencia('6','27');
+
+        $today = date('d/m/Y');
+        if($this->k->compareDate($dataProgressao,'<',$provimentoAtual->dataInicio))
+        {
+        	$progEspecial = true;
+        	$dataMinima = $this->getDataMinimaProgressaoEspecial($dataProgressao);
+        	$data = $this->getDatasLimitesProgressaoEspecial($dataProgressao);
+        	$dataProgressaoPosterior = $this->getDataProgressaoPosterior($dataProgressao);
+        }
+        else
+        {
+        	$dataMinima = $this->getDataMinimaProgressao();
+        	$data = $this->getDatasLimitesProgressao();
+        }
+
+        $diasAdescontar = $this->getDiasADescontarProgressao($data['inicio'],$data['fim']);
+        if ($this->k->compareDate($dataProgressao, '<' ,$dataMinima) && ! $progressaoFuncional )
+        {
+            $diff = $this->k->daysDiff($dataProgressao,$dataMinima);
+            $total = $diff + $diasAdescontar;
+            throw new ESimpleRnException("A progressão não foi concluída. O servidor deve cumprir 2 anos com descontos de licenças e/ou afastamentos apropriados contando a partir da última progressão funcional. Ainda faltam $total dias para a próxima progressão.");
+        }
+
+        if(($progEspecial) && (!(is_null($dataProgressaoPosterior))))
+        {
+        	//se for uma progressão especialmente incluída e houver uma progressão posterior à data escolhida
+
+        	/*$menosDoisAnos = $this->k->operation('-',$dataProgressaoPosterior,'2%Y');
+        	if ($this->k->compareDate($dataProgressao,'>',$menosDoisAnos))
+        		throw new ESimpleRnException("A progressão não foi concluída. Existe uma progressão cadastrada ocorrendo a menos de dois anos após a data escolhida. ");*/
+
+        	throw new ESimpleRnException("A progressão não foi concluída. Não é possível incluir uma progressão quando já existe uma progressão posterior à data escolhida. ");
+        }
+
+        if ( (!($provimentoAtual->dataFim == null)) and ( (!($provimentoAtual->situacaofuncional->idSituacao == 1)) or (!($provimentoAtual->situacaofuncional->idSituacao == 8)) ) )
+            throw new ESimpleRnException("A progressão não foi concluída. O servidor possui ocorrência de exclusão e/ou sua situação é incompatível com a ocorrencia (".$provimentoAtual->situacaofuncional->descricao.")");
+
+        /*elseif (($this->k->compareDate($dataProgressao,'>',$today)))
+            throw new ESimpleRnException("A progressão não foi concluída. A data da progressão não pode ser posterior a data atual ($today).");*/
+
+        elseif ($this->k->compareDate($dataProgressao, '<' ,$provimentoAntProg->dataInicio))
+            throw new ESimpleRnException("A progressão não foi concluída. A data da remoção é incompatível com a data início do provimento anterior (com progressão) ($provimentoAntProg->dataInicio).");
+
+        elseif ($this->k->compareDate($dataProgressao, '<' ,$dataMinima) && ! $progressaoFuncional )
+            throw new ESimpleRnException("A progressão não foi concluída. O servidor deve cumprir 2 anos com descontos de licenças e/ou afastamentos apropriados. 2 anos + $diasAdescontar dias.");
+
+        elseif  (  ($this->isDocente()) && ($this->isDocenteAdjuntoNivel4()) && (!$this->possuiDoutorado()) )
+            throw new ESimpleRnException("A progressão não foi concluída. O Professor atual não possui doutorado para realizar a próxima progressão. ");
+
+        elseif ( ($this->isDocente()) && ($this->isDoc12ClasseENivel4()) )
+        {
+            //passo 1, contar o tempo na classe E nivel 4. Minimo 2 anos
+            $diff = $this->k->daysDiff($provimentoFuncional->dataInicio,$today);
+
+            if ( $diff >= 730 )
+            {
+
+                $efetivoExercicio = $this->k->daysDiff($this->dataExercicio,$today);
+                if ( ($this->possuiMestrado()) or ($this->possuiDoutorado()) )
+                {
+
+                    //testar com 8 anos de efetivo exercicio
+                    if ( $efetivoExercicio < 2920 )
+                    {
+                        throw new ESimpleRnException("A progressão não foi concluída. É requisto para a progressão para a classe ESP/SENIOR ter pelo menos 8 anos de efetivo exercício, para docentes com mestrado.");
+                    }
+                }
+                else
+                {
+
+                    //testar com 15 anos de efetivo exercicio e se é especialista
+                    if ( ($efetivoExercicio < 5475) or !($this->isEspecialista()) )
+                    {
+                        throw new ESimpleRnException("A progressão não foi concluída. É requisto para a progressão para a classe ESP/SENIOR ter pelo menos 15 anos de efetivo exercício, para docentes com Especialização/Aperfeiçoamento/Graduação.");
+                    }
+                }
+                //ok, fazer os testes de titulacao
+            }
+            else
+            {
+                throw new ESimpleRnException("A progressão não foi concluída. É necessário estar na classe E nível 4 há pelo menos dois anos.");
+            }
+        }
+
+    }
+
+    /* Alterações para relatório de progressão por intersticio */
+    function validaProgressaoParaRelatorio($dataProgressao)
+    {
+        global $MIOLO;
+        $today = date('d/m/Y');
+        $this->getProvimentos();
+        $provimentoAtual = $this->getProvimentoAtual();
+        $provimentoAtual->getSituacaoFuncional();
+        $provimentoAntProg = $MIOLO->GetBusiness('rh','provimento');
+        $provimentoAntProg->getUltimoProvimentoComProgressaoFuncional($this->idVinculo);
+        $maisDoisAnos = $this->k->operation('+',$provimentoAntProg->dataInicio,'2%Y');
+        $ocorrencias = array('001', '078', '084', '085', '100', '105', '106', '107', '109', '133', '137', '142', '166', '176');
+        $matrizProcura = array( '03' => $ocorrencias);
+        $objLicAfast = $MIOLO->GetBusiness('rh','licafast');
+        $diasAdescontar = 0;
+        $diasAdescontar = $objLicAfast->contagemLicAfast($this->idVinculo, $provimentoAntProg->dataInicio, $maisDoisAnos, $matrizProcura);
+        $dataMinima = $this->k->operation('+',$maisDoisAnos,"$diasAdescontar%D");
+        $ok = true;
+        if ($this->k->compareDate($dataProgressao, '<' ,$provimentoAntProg->dataInicio))
+        {
+           $ok = false;
+        }
+        else
+        {
+            if ($this->k->compareDate($dataProgressao, '<' ,$dataMinima) && ! $progressaoFuncional )
+                $ok = false;
+        }
+    $provimentoAntProg = null;
+    $objLicAfast = null;
+        return $ok;
+
+    }
+
+    function getDataMinimaProgressao()
+    {
+        $data = $this->getDatasLimitesProgressao();
+
+        $diasAdescontar = $this->getDiasADescontarProgressao($data['inicio'],$data['fim']);
+
+        $dataMinima = $this->k->operation('+',$data['fim'],"$diasAdescontar%D");
+        return $dataMinima;
+    }
+
+    function getDiasADescontarProgressao($dataInicio,$dataFim)
+    {
+        $ocorrencias = array('001', '078', '084', '085', '100', '105', '106', '107', '109', '133', '137', '142', '166', '176');
+        $matrizProcura = array( '03' => $ocorrencias);
+
+        $objLicAfast = $this->_miolo->GetBusiness('rh','licafast');
+        $diasAdescontar = 0;
+        $diasAdescontar = $objLicAfast->contagemLicAfast($this->idVinculo, $dataInicio, $dataFim, $matrizProcura);
+        return $diasAdescontar;
+    }
+
+    function getDatasLimitesProgressao()
+    {
+        // ultimo provimento que tenha progressão funcional
+        $provimentoAntProg = $this->_miolo->GetBusiness('rh','provimento');
+        $provimentoAntProg->getUltimoProvimentoComProgressaoFuncional($this->idVinculo);
+
+
+        // os dois anos tem que ter a contagem  das ocorrencias descontadas
+        $maisDoisAnos = $this->k->operation('+',$provimentoAntProg->dataInicio,'2%Y');
+        $data = array('inicio'=>$provimentoAntProg->dataInicio,'fim'=>$maisDoisAnos);
+        return $data;
+    }
+
+    function listProvimentos()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('provimentos.dataInicio','datainicio');
+        $criteria->addColumnAttribute('provimentos.dataFim','datafim');
+        $criteria->addColumnAttribute('provimentos.setor.sigla','sigla');
+        $criteria->addColumnAttribute('provimentos.ocorrencia.descricao');
+        $criteria->addCriteria('provimentos.idVinculo','=',"'$this->idVinculo'");
+        $criteria->addOrderAttribute('provimentos.dataInicio',FALSE);
+        return $criteria->retrieveAsQuery();
+    }
+
+
+    function progressaoAutomatica()
+    {
+        $provimento = $this->getProvimentoAtual();
+        if ( $provimento )
+        {
+            if ( $provimento->isTitular() )
+            {
+                throw new Exception("Não é possível realizar a progressão para servidores da classe TITULAR.");
+            }
+            try
+            {
+                $data = $provimento->getProgressao();
+                return $data;
+            }
+            catch ( Exception $e )
+            {
+                throw new Exception($e->getMessage());
+            }
+
+        }
+        else
+        {
+            throw new Exception("Progressão incompatível com a situação atual do servidor.");
+
+        }
+    }
+
+    function getProrrogacoesContrato()
+    {
+        $this->retrieveAssociation('prorrogacoesContrato');
+    }
+
+    function getProrrogacaoContrato($dataFim)
+    {
+        if ( $this->prorrogacoesContrato != NULL )
+        {
+            foreach ( $this->prorrogacoesContrato as $o )
+            {
+                if ( $o->dataFim == $dataFim )
+                    return $o;
+            }
+        }
+        $o = $this->_miolo->GetBusiness('rh','prorrogacao');
+        $o->idVinculo = $this->idVinculo;
+        return $o;
+    }
+
+    function addProrrogacaoContrato($prorrogacao)
+    {
+        $this->prorrogacoesContrato[] = $prorrogacao;
+    }
+
+    function deleteProrrogacaoContrato($idProrrogacao)
+    {
+        $prorrogacao = $this->getProrrogacaoContrato($idProrrogacao);
+        $prorrogacao->delete();
+    }
+
+    function contratoTemporario()
+    {
+        if ( ! $this->provimentos )
+        {
+            $this->getProvimentos();
+        }
+        $provimento = $this->getProvimentoAtual();
+        if ( ! $provimento )
+        {
+            $provimento = $this->getUltimoProvimento();
+        }
+        if ($provimento->idSituacao == 12)
+        {
+            if ( is_null($provimento->dataFim) && is_null($this->dataVacancia) )
+            {
+                return TRUE;
+            }
+            return $provimento->dataFim != $this->dataVacancia;
+        }
+        return FALSE;
+    }
+
+    function saveProrrogacao($prorrogacao)
+    {
+        if ( $ultimaProrrogacao = $this->getUltimaProrrogacao() )
+        {
+            $dataFim = $ultimaProrrogacao->dataFim;
+            $msg = 'da última prorrogação';
+        }
+        else
+        {
+            $dataFim = $this->dataFimContrato;
+            $msg = 'de fim do contrato';
+        }
+
+        $k = new MKrono();
+
+        if ( $k->compareDate($prorrogacao->dataFim,'<=',$dataFim) )
+        {
+            throw new Exception("A nova data de fim da prorrogação deve ser maior que a data $msg.");
+        }
+        $this->beginTransaction();
+        $this->addProrrogacaoContrato($prorrogacao);
+        $this->saveAssociation('prorrogacoesContrato');
+        $provimento = $this->getUltimoProvimento();
+        if ( $provimento->dataFim )
+        {
+            $provimento->dataFim = '';
+            $provimento->setTransaction($this->getTransaction());
+            $provimento->save();
+        }
+        $this->endTransaction();
+
+    }
+
+    function getUltimaProrrogacao()
+    {
+        $prorrogacao = $this->_miolo->getBusiness('rh','prorrogacao');
+        $criteria = $prorrogacao->getCriteria();
+        $criteria->addCriteria('idVinculo','=',"'$this->idVinculo'");
+        $criteria->addOrderAttribute('dataFim',FALSE);
+        $query = $criteria->retrieveAsQuery();
+
+        if ( ! $query->eof() )
+        {
+            $data->idVinculo = $query->result[0][0];
+            $data->dataFim = $query->result[0][1];
+            $data->obs = $query->result[0][2];
+
+            $prorrogacao->setData($data);
+            return $prorrogacao;
+        }
+        return FALSE;
+    }
+
+    function getNivelAtuacaoDocente()
+    {
+        //retorna 'SUPERIOR' para lecionantes do nivel superior, 'MEDIO' para lecionantes do nivel médio
+        if ( $this->isDocente() )
+        {
+            $nivel[1] = 'SUPERIOR';
+            $nivel[2] = 'SUPERIOR';
+            $nivel[3] = 'SUPERIOR';
+            $nivel[11] = 'MEDIO';
+            $nivel[12] = 'MEDIO';
+            $nivel[13] = 'MEDIO';
+
+            $provimento = $this->getProvimentoAtual();
+            return $nivel[$provimento->idCargo];
+        }
+        return null;
+    }
+
+    function isAposentado()
+    {
+        $this->getProvimentos();
+        $provimentoAtual = $this->getProvimentoAtual();
+        if ( $provimentoAtual->idVinculo )
+        {
+            return $provimentoAtual->idSituacao == 2;
+        }
+        return false;
+    }
+
+    function listMedicosJornada($idJornada)
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->addColumnAttribute('idVinculo');
+        $criteria->addColumnAttribute('funcionario.pessoa.nome');
+        $criteria->addColumnAttribute('provimentos.jornada.descricao');
+        $criteria->addColumnAttribute('provimentos.idGrupoCargo');
+        $criteria->addColumnAttribute('provimentos.cargo.grupoCargo.descricao');
+        $criteria->addColumnAttribute('provimentos.idCargo');
+        $criteria->addColumnAttribute('provimentos.cargo.descricao');
+
+        $criteria->addCriteria('provimentos.idGrupoCargo','=',701);
+        $criteria->addCriteria('provimentos.idCargo','=',47);
+
+        $criteria->addCriteria('provimentos.idJornada','=',$idJornada);
+        $criteria->addCriteria('provimentos.dataFim','is','null');
+        $query = $criteria->retrieveAsQuery();
+        return $query;
+    }
+
+    function save()
+    {
+        $op = ( $this->isPersistent() ) ? OP_UPD : OP_INS;
+        parent::save();
+        $this->log($op,"vinculo: $this->idVinculo, data posse: $this->dataPosse, data exercicio: $this->dataExercicio, data concurso: $this->dataConcurso, classificacao: $this->classificacaoConcurso, id funcionario: $this->idFuncionario");
+    }
+
+    function listLicencas($dataInicio,$dataFim,$idSetor)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('idVinculo');
+        $criteria->addColumnAttribute('funcionario.pessoa.nome');
+        $criteria->addColumnAttribute('licAfast.dataInicio','datainicio');
+        $criteria->addColumnAttribute('licAfast.dataFim','datafim');
+        $criteria->addColumnAttribute('licAfast.ocorrencia.mnemonico');
+        $criteria->addColumnAttribute('licAfast.ocorrencia.descricao');
+
+        $k = new MKrono();
+        $dataInicio = $k->invertDate($dataInicio);
+        $dataFim = $k->invertDate($dataFim);
+        $criteria->addCriteria('provimentos.dataInicio','<', "'$dataInicio'");
+        $cc = new CriteriaCondition();
+        $cc->addCriteria($criteria->getCriteria('provimentos.dataFim','>', "'$dataInicio'"));
+        $cc->addOrCriteria($criteria->getCriteria('provimentos.dataFim','is','NULL'));
+        $criteria->addCriteria($cc);
+
+        $operador = (is_array($idSetor)) ? 'IN' : '=';
+        $criteria->addCriteria('provimentos.idSetor',$operador,$idSetor);
+        $criteria->addCriteria('licAfast.dataInicio','>=',"'$dataInicio'");
+        $criteria->addCriteria('licAfast.dataInicio','<=',"'$dataFim'");
+        return $criteria->retrieveAsQuery();
+    }
+
+    function getBases()
+    {
+        $this->retrieveAssociation('bases');
+        if ( $this->bases )
+        {
+            for ( $i = 0; $i < count($this->bases); $i++ )
+            {
+                $this->bases[$i]->setValorCorrigido();
+            }
+        }
+    }
+    function getOcorrenciasLicenca()
+    {
+        if ( is_array($this->licAfast) )
+        {
+            foreach ( $this->licAfast as $l )
+            {
+                $l->retrieveAssociation('ocorrencia');
+            }
+        }
+    }
+
+    function setDataVacancia($dataVacancia)
+    {
+        $this->dataVacancia = $dataVacancia;
+    }
+
+    function addBaseAposentadoria($baseAposentadoria)
+    {
+        $this->bases[] = $baseAposentadoria;
+    }
+
+    function getValorRemuneracao($mes,$ano)
+    {
+        if ( $this->bases )
+        {
+            foreach ( $this->bases as $base )
+            {
+                if ( $base->mes == $mes && $base->ano == $ano )
+                {
+                    return $base->valorBase;
+                }
+            }
+        }
+    }
+
+    function getValorCorrigidoRemuneracao($mes,$ano)
+    {
+        if ( $this->bases )
+//echo "<br>BASE=";var_dump($this->bases);
+        {
+            foreach ( $this->bases as $base )
+            {
+                if ( $base->mes == $mes && $base->ano == $ano )
+                {
+                    return $base->valorCorrigido;
+                }
+            }
+        }
+    }
+
+    function getBaseAposentadoria($mes,$ano)
+    {
+        if ( $this->bases )
+        {
+            foreach ( $this->bases as $base )
+            {
+                if ( $base->mes == $mes && $base->ano == $ano )
+                {
+                    return $base;
+                }
+            }
+
+        }
+        $baseAposentadoria = $this->_miolo->getBusiness('rh','baseaposentadoria');
+        $baseAposentadoria->setIdVinculo($this->idVinculo);
+        $baseAposentadoria->setMes($mes);
+        $baseAposentadoria->setAno($ano);
+        return $baseAposentadoria;
+    }
+
+    function getValorTotalCorrigido($quantidade)
+    {
+        if ( $this->bases )
+        {
+            for ( $i = 0; $i < count($this->bases); $i++ )
+            {
+                $valores[] = $this->bases[$i]->valorCorrigido;
+            }
+            rsort($valores);
+            for ( $i = 0; $i < $quantidade; $i++ )
+            {
+                $valor += $valores[$i];
+            }
+            return $valor;
+        }
+        return 0;
+    }
+
+    function emEstagioProbatorio()
+    {
+        return ( $this->getTempoExercicio() <= 1095 );
+    }
+
+    function possuiDoutorado()
+    {
+        $histtitulacao = $this->_miolo->getBusiness('rh','histtitulacao');
+        return $histtitulacao->possuiDoutorado($this->idFuncionario);
+    }
+
+    function possuiMestrado()
+    {
+        $histtitulacao = $this->_miolo->getBusiness('rh','histtitulacao');
+        return $histtitulacao->possuiMestrado($this->idFuncionario);
+    }
+
+    function isEspecialista()
+    {
+        $histtitulacao = $this->_miolo->getBusiness('rh','histtitulacao');
+        return $histtitulacao->isEspecialista($this->idFuncionario);
+    }
+
+
+    function getAtividades()
+    {
+        $this->retrieveAssociation('atividades');
+        if ($this->atividades != NULL)
+        {
+            if (!is_array($this->atividades))
+            {
+                $this->atividades = array($this->atividades);
+            }
+        }
+    }
+
+    
+
+    function getAtividade($id)
+    {
+        global $MIOLO;
+        if ( $this->atividades != NULL )
+        {
+            foreach ( $this->atividades as $a )
+            {
+                if ( $a->idAtividade == $id )
+                    return $a;
+            }
+        }
+        $a = $MIOLO->GetBusiness('rh','atividade');
+        $a->idVinculo = $this->idVinculo;
+        return $a;
+    }
+
+    function listBySetorProvimento($idSetor)
+    {
+        $criteria = $this->getCriteria();
+
+        $criteria->addColumnAttribute("idVinculo");
+        $criteria->addColumnAttribute("funcionario.pessoa.nome");
+
+        $criteria->addCriteria("provimentos.idSetor","=","'$idSetor'");
+        $criteria->addCriteria("provimentos.dataFim","is","null");
+
+        $query = $criteria->retrieveAsQuery();
+        return $query;
+    }
+
+    //método para inserir um provimento anterior ao provimento atual
+    function insereEspecial($dataNovoInicio,
+                            $idGrupoOcorrencia,
+                            $idOcorrencia,
+                            $idSituacao='',
+                            $idPublicacao='',
+                            $idJornada='',
+                            $idGrupoCargo='',
+                            $idCargo='',
+                            $idSetor='',
+                            $idClasse=null,
+                            $idReferencia=null,
+                            $obs=null,
+                            $idAmbiente=NULL)
+    {
+        $this->getProvimentos();
+        $k = new MKrono();
+
+        $numProv = count($this->provimentos);
+
+        $this->ordenaProvimentos();
+
+        /*
+		if ( $k->CompareDate($dataNovoInicio, '<', $this->provimentos[$numProv-1]->dataInicio) )
+        {
+            throw new ESimpleRnException("Não é possível incluir um provimento antes do primeiro provimento.");
+        }
+		*/
+
+    	$i = 0;
+
+    	//laço para encontrar o provimento anterior ao provimento a ser inserido
+    	while(($k->CompareDate($this->provimentos[$i]->dataInicio, '>', $dataNovoInicio)) && ($i < $numProv))
+    	{
+    		$i++; //a variável i determina a posição do provimento anterior
+    	}
+
+    	$provimentoAnterior = $this->provimentos[$i];
+        $provimentoAtual = $this->getProvimentoAtual();
+
+        if ( ! $provimentoAtual )
+        {
+            throw new ESimpleRnException("Não existe nenhum provimento atual associado ao vínculo.");
+        }
+        else
+        {
+            //testar vazio
+            $idClasse     = ($idClasse) ? $idClasse : $provimentoAnterior->idClasse;
+            $idReferencia = ($idReferencia) ? $idReferencia : $provimentoAnterior->idReferencia;
+
+            $idAmbiente = ($idAmbiente) ? $idAmbiente : $provimentoAnterior->idAmbiente;
+
+            $idJornada = ($idJornada) ? $idJornada : $provimentoAnterior->idJornada;
+            $idGrupoCargo = ($idGrupoCargo) ? $idGrupoCargo : $provimentoAnterior->idGrupoCargo;
+            $idCargo = ($idCargo) ? $idCargo : $provimentoAnterior->idCargo;
+            $idSetor = ($idSetor) ? $idSetor : $provimentoAnterior->idSetor;
+            $provimentoNovo = $provimentoAnterior;
+
+            if ( $this->getTransaction() )
+            {
+                $provimentoNovo->setTransaction($this->getTransaction() );
+            }
+            else
+            {
+                $provimentoNovo->beginTransaction();
+            }
+
+        	//deve-se mudar a dataFim do provimento anterior para ser o dia anterior
+    		//à dataInicio do provimento a ser inserido, e a dataFim do novo provimento
+    		//recebe o valor da dataFim do provimento anterior
+    		//var_dump($provimentoAnterior->dataFim);exit;
+    		$dataFimNovo = $provimentoAnterior->dataFim;
+    		$dataFimAnterior = $k->operation('-', $dataNovoInicio, '1%D');
+
+    		$provimentoAnterior->setDataFim($dataFimAnterior);
+			$provimentoAnterior->save();
+			$provimentoNovo->dataFim = $dataFimNovo;
+
+			$i--;
+
+			//coloca o valor mudado do provimento a ser inserido nos provimentos posteriores
+        	while ((($this->provimentos[$i]->idOcorrencia != $idOcorrencia) || ($this->provimentos[$i]->idGrupoOcorrencia != $idGrupoOcorrencia)) && ($i >= 0))
+        	{
+        		if(($idOcorrencia == '100') || ($idOcorrencia == 100)) //progressão por mérito
+        		{
+        			if((($this->provimentos[$i]->idOcorrencia != '101') && ($this->provimentos[$i]->idOcorrencia != 101)) || (($this->provimentos[$i]->idGrupoOcorrencia != '6') && ($this->provimentos[$i]->idGrupoOcorrencia != 6)))
+        			{
+        				//se o provimento não ocorreu devido a uma mudança de ambiente muda a classe e a referência do provimento
+
+        				$this->provimentos[$i]->idClasse = $idClasse;
+	        			$this->provimentos[$i]->idReferencia = $idReferencia;
+	        			$this->provimentos[$i]->save();
+        			}
+
+        			else break;
+
+        		}
+
+        		if(($idOcorrencia == '27') || ($idOcorrencia == 27) || ($idOcorrencia == '027')) //progressão
+        		{
+        			$this->provimentos[$i]->idClasse = $idClasse;
+        			$this->provimentos[$i]->idReferencia = $idReferencia;
+        			$this->provimentos[$i]->save();
+        		}
+
+        		if(($idOcorrencia == '200') || ($idOcorrencia == 200)) //mudança de jornada
+        		{
+        			$this->provimentos[$i]->idJornada = $idJornada;
+        			$this->provimentos[$i]->save();
+        		}
+
+        		if(($idOcorrencia == '18') || ($idOcorrencia == 18) || ($idOcorrencia == '018'))  //remoção
+        		{
+        			if((($this->provimentos[$i]->idOcorrencia != '998') && ($this->provimentos[$i]->idOcorrencia != 998)) || (($this->provimentos[$i]->idGrupoOcorrencia != '6') && ($this->provimentos[$i]->idGrupoOcorrencia != 6)))
+        			{
+        				//se o provimento não ocorreu devido a uma mudança de ambiente muda o setor e o ambiente do provimento
+
+        				$this->provimentos[$i]->idSetor = $idSetor;
+        				$this->provimentos[$i]->idAmbiente = $idAmbiente;
+        				$this->provimentos[$i]->save();
+        			}
+        			else break; //senão sai do while
+        		}
+
+        		if(($idOcorrencia == '998') || ($idOcorrencia == 998)) //mudança de ambiente
+        		{
+        			if((($this->provimentos[$i]->idOcorrencia != '18') && ($this->provimentos[$i]->idOcorrencia != 18) && ($this->provimentos[$i]->idOcorrencia != '018')) || (($this->provimentos[$i]->idGrupoOcorrencia != '6') && ($this->provimentos[$i]->idGrupoOcorrencia != 6)))
+        			{
+        				//se o provimento não ocorreu devido a uma remoção muda o ambiente do provimento
+
+        				$this->provimentos[$i]->idAmbiente = $idAmbiente;
+        				$this->provimentos[$i]->save();
+        			}
+        			else break; //senão sai do while
+        		}
+        		$i--;
+        	}
+
+            $provimentoNovo->setDataInicio($dataNovoInicio);
+            $provimentoNovo->setIdGrupoOcorrencia($idGrupoOcorrencia);
+            $provimentoNovo->setIdOcorrencia($idOcorrencia);
+            if ( $idSituacao )
+            {
+                $provimentoNovo->setIdSituacao($idSituacao);
+            }
+            $provimentoNovo->setIdAmbiente($idAmbiente);
+            $provimentoNovo->setIdPublicacao($idPublicacao);
+            $provimentoNovo->setIdJornada($idJornada);
+            $provimentoNovo->setIdGrupoCargo($idGrupoCargo);
+            $provimentoNovo->setIdCargo($idCargo);
+            $provimentoNovo->setIdSetor($idSetor);
+
+            $provimentoNovo->setIdClasse($idClasse);
+            $provimentoNovo->setIdReferencia($idReferencia);
+            $provimentoNovo->setObs($obs);
+
+            $provimentoNovo->setPersistent(FALSE);
+            $provimentoNovo->save();
+            if ( ! $this->getTransaction() )
+            {
+                $provimentoNovo->endTransaction();
+            }
+        }
+    }
+
+    function ordenaProvimentos()
+    {
+    	if ( ! $this->provimentos)
+        {
+            $this->getProvimentos();
+        }
+
+        $k = new MKrono();
+
+        $numProv = count($this->provimentos);
+
+    	//método bubble sort para ordenar os provimentos em ordem decrescente
+    	for ($i = 0; $i < $numProv; $i++)
+    	{
+    		for($j = $i+1; $j < $numProv; $j++)
+    		{
+    			if($k->CompareDate($this->provimentos[$i]->dataInicio, '<', $this->provimentos[$j]->dataInicio))
+    			{
+    				$aux = $this->provimentos[$i];
+    				$this->provimentos[$i] = $this->provimentos[$j];
+    				$this->provimentos[$j] = $aux;
+    			}
+    		}
+    	}
+    	//fim da ordenação
+    }
+
+    function getDataMinimaProgressaoEspecial($dataProgressao, $progressaoPorMerito = false)
+    {
+        $data = $this->getDatasLimitesProgressaoEspecial($dataProgressao, $progressaoPorMerito);
+
+        $diasAdescontar = $this->getDiasADescontarProgressao($data['inicio'],$data['fim']);
+
+        $dataMinima = $this->k->operation('+',$data['fim'],"$diasAdescontar%D");
+        //var_dump($dataMinima);exit;
+        return $dataMinima;
+    }
+
+    function getDatasLimitesProgressaoEspecial($dataProgressao, $progressaoPorMerito = false)
+    {
+    	$query = $this->_miolo->GetBusiness('rh','provimento');
+        //  provimentos que tenham progressão funcional
+
+        if($progressaoPorMerito)
+        {
+        	$query = $query->getProvimentosComProgressaoPorMerito($this->idVinculo);
+        }
+        else
+        {
+        	$query = $query->getProvimentosComProgressaoFuncional($this->idVinculo);
+        }
+
+
+        if(!$this->provimentos) $this->getProvimentos();
+        $this->ordenaProvimentos();
+
+        foreach ($query as $q)
+        {
+	        foreach ($this->provimentos as $p)
+	        {
+	        	if($q[1] == $p->dataInicio) $provsComProg[] = $p;
+	        }
+        }
+
+		for($i = 0;$i < count($provsComProg); $i++)
+		{
+			if($this->k->compareDate($provsComProg[$i]->dataInicio, '<', $dataProgressao)) break;
+		}
+
+		if(($progressaoPorMerito) && ($this->k->compareDate($dataProgressao,'>','01/05/2008')))
+		{
+			// os 18 meses tem que ter a contagem  das ocorrencias descontadas
+	        $maisDezoitoMeses = $this->k->operation('+',$provsComProg[$i]->dataInicio,'18%M');
+	        $data = array('inicio'=>$provsComProg[$i]->dataInicio,'fim'=>$maisDezoitoMeses);
+		}
+		else
+		{
+			// os dois anos tem que ter a contagem  das ocorrencias descontadas
+	        $maisDoisAnos = $this->k->operation('+',$provsComProg[$i]->dataInicio,'2%Y');
+	        $data = array('inicio'=>$provsComProg[$i]->dataInicio,'fim'=>$maisDoisAnos);
+		}
+
+        return $data;
+    }
+
+    //método para achar a data da próxima progressão após $dataProgressao
+    function getDataProgressaoPosterior($dataProgressao, $progressaoPorMerito = false)
+    {
+    	$query = $this->_miolo->GetBusiness('rh','provimento');
+        //  provimentos que tenham progressão funcional
+        if($progressaoPorMerito)
+        {
+        	$query = $query->getProvimentosComProgressaoPorMerito($this->idVinculo);
+        }
+        else
+        {
+        	$query = $query->getProvimentosComProgressaoFuncional($this->idVinculo);
+        }
+
+
+        if(!$this->provimentos) $this->getProvimentos();
+        $this->ordenaProvimentos();
+
+        foreach ($query as $q)
+        {
+	        foreach ($this->provimentos as $p)
+	        {
+	        	if($q[1] == $p->dataInicio) $provsComProg[] = $p;
+	        }
+        }
+
+		$i=0;
+    	for($i;$i < count($provsComProg); $i++)
+		{
+			if($this->k->compareDate($provsComProg[$i]->dataInicio, '<', $dataProgressao)) break;
+		}
+
+		if(is_null($provsComProg[$i-1])) //não existe progressão após a data
+			$data = null;
+		else
+		    $data = $provsComProg[$i-1]->dataInicio;
+		//var_dump($data);exit;
+        return $data;
+    }
+
+    function validaProgressaoMerito($dataProgressao,$progressaoFuncional=FALSE)
+    {
+        $this->getProvimentos();
+        $teste = "valida";
+
+        // ultimo provimento = provimento atual
+        $provimentoAtual = $this->getProvimentoAtual();
+        $provimentoAtual->getSituacaoFuncional();
+        $progEspecial = false;
+        $provimentoFuncional = $this->getProvimentoByOcorrencia('6','100');
+
+        $today = date('d/m/Y');
+
+        if($this->k->compareDate($dataProgressao,'<',$provimentoAtual->dataInicio))
+        {
+        	$progEspecial = true;
+        	$dataMinima = $this->getDataMinimaProgressaoEspecial($dataProgressao,true);
+        	$data = $this->getDatasLimitesProgressaoEspecial($dataProgressao,true);
+        	$dataProgressaoPosterior = $this->getDataProgressaoPosterior($dataProgressao,true);
+        }
+        else
+        {
+        	$dataMinima = $this->getDataMinimaProgressaoMerito($dataProgressao);
+        	$data = $this->getDatasLimitesProgressaoMerito($dataProgressao);
+        }
+
+        $diasAdescontar = $this->getDiasADescontarProgressao($data['inicio'],$data['fim']);
+
+        if ($this->k->compareDate($dataProgressao, '<' ,$dataMinima) && ! $progressaoFuncional )
+        {
+            $diff = $this->k->daysDiff($dataProgressao,$dataMinima);
+            $total = $diff + $diasAdescontar;
+            if($this->k->compareDate($dataProgressao, '<' ,'01/05/2008'))
+            {
+            	$tempoMinimo = "2 anos";
+            }
+            else
+            {
+            	$tempoMinimo = "18 meses";
+            }
+            throw new ESimpleRnException("A progressão não foi concluída. O servidor deve cumprir ".$tempoMinimo." com descontos de licenças e/ou afastamentos apropriados contando a partir da última progressão por mérito. Ainda faltam $total dias para a próxima progressão.");
+        }
+
+        if(($progEspecial) && (!(is_null($dataProgressaoPosterior))))
+        {
+        	//se for uma progressão especialmente incluída e houver uma progressão posterior à data escolhida
+        	/*if ($this->k->compareDate($dataProgressaoPosterior, '<' ,'01/05/2008'))
+        	{
+        		$tempoMinimo = "2 anos";
+        		$dataLimite = $this->k->operation('-',$dataProgressaoPosterior,'2%Y');
+        	}
+        	else
+        	{
+        		$tempoMinimo = "18 meses";
+        		$dataLimite = $this->k->operation('-',$dataProgressaoPosterior,'18%M');
+        	}
+
+        	if ($this->k->compareDate($dataProgressao,'>',$dataLimite))
+        		throw new ESimpleRnException("A progressão não foi concluída. Existe uma progressão cadastrada ocorrendo a menos de ".$tempoMinimo." após a data escolhida. ");*/
+
+        	throw new ESimpleRnException("A progressão não foi concluída. Não é possível incluir uma progressão quando já existe uma progressão posterior à data escolhida. ");
+        }
+
+        if ( (!($provimentoAtual->dataFim == null)) and ( (!($provimentoAtual->situacaofuncional->idSituacao == 1)) or (!($provimentoAtual->situacaofuncional->idSituacao == 8)) ) )
+            throw new ESimpleRnException("A progressão não foi concluída. O servidor possui ocorrência de exclusão e/ou sua situação é incompatível com a ocorrencia (".$provimentoAtual->situacaofuncional->descricao.")");
+        /*    A data da progressão pode sim, ser após a data atual
+        elseif (($this->k->compareDate($dataProgressao,'>',$today)))
+            throw new ESimpleRnException("A progressão não foi concluída. A data da progressão não pode ser posterior a data atual ($today).");*/
+
+        elseif ($this->k->compareDate($dataProgressao, '<' ,$provimentoAntProg->dataInicio))
+            throw new ESimpleRnException("A progressão não foi concluída. A data da remoção é incompatível com a data início do provimento anterior (com progressão) ($provimentoAntProg->dataInicio).");
+
+        elseif ($this->k->compareDate($dataProgressao, '<' ,$dataMinima) && ! $progressaoFuncional )
+            throw new ESimpleRnException("A progressão não foi concluída. O servidor deve cumprir 18 meses com descontos de licenças e/ou afastamentos apropriados. 18 meses + $diasAdescontar dias.");
+
+        /*elseif  (  ($this->isDocente()) && ($this->isDocenteAdjuntoNivel4()) && (!$this->possuiDoutorado()) )
+            throw new ESimpleRnException("A progressão não foi concluída. O Professor atual não possui doutorado para realizar a próxima progressão. ");
+
+        elseif ( ($this->isDocente()) && ($this->isDoc12ClasseENivel4()) )
+        {
+            //passo 1, contar o tempo na classe E nivel 4. Minimo 2 anos
+            $diff = $this->k->daysDiff($provimentoFuncional->dataInicio,$today);
+
+            if ( $diff >= 730 )
+            {
+
+                $efetivoExercicio = $this->k->daysDiff($this->dataExercicio,$today);
+                if ( ($this->possuiMestrado()) or ($this->possuiDoutorado()) )
+                {
+
+                    //testar com 8 anos de efetivo exercicio
+                    if ( $efetivoExercicio < 2920 )
+                    {
+                        throw new ESimpleRnException("A progressão não foi concluída. É requisto para a progressão para a classe ESP/SENIOR ter pelo menos 8 anos de efetivo exercício, para docentes com mestrado.");
+                    }
+                }
+                else
+                {
+
+                    //testar com 15 anos de efetivo exercicio e se é especialista
+                    if ( ($efetivoExercicio < 5475) or !($this->isEspecialista()) )
+                    {
+                        throw new ESimpleRnException("A progressão não foi concluída. É requisto para a progressão para a classe ESP/SENIOR ter pelo menos 15 anos de efetivo exercício, para docentes com Especialização/Aperfeiçoamento/Graduação.");
+                    }
+                }
+                //ok, fazer os testes de titulacao
+            }
+            else
+            {
+                throw new ESimpleRnException("A progressão não foi concluída. É necessário estar na classe E nível 4 há pelo menos dois anos.");
+            }
+        }*/
+
+    }
+    function progrideMerito($dataProgressao,$idPublicacao,$idClasse,$idReferencia,$obs)
+    {
+        global $MIOLO;
+        // Data para fechamento do ultimo provimento (1 dia antes da progressão)
+        $dataFechamento = $this->k->operation('-',$dataProgressao,'1%D');
+
+        // Ultimo provimento do servidor
+        $provimento = $MIOLO->GetBusiness('rh','provimento');
+        $provimento->getUltimoProvimento($this->idVinculo);
+
+//($dataNovoInicio,$dataFimAtual,$idGrupoOcorrencia,$idOcorrencia,$idSituacao = '',$idPublicacao = '',$idJornada='',$idGrupoCargo = '',$idCargo = '', $idSetor = '')
+
+        // Novo provimento (idGrupoOcorrencia=06, idOcorrencia=100).
+        // Os demais valores continuam iguais ao provimento anterio
+        $this->novoProvimento($dataProgressao,
+                              $dataFechamento,
+                              '06',
+                              '100',
+                              $provimento->idSituacao,
+                              $idPublicacao,
+                              $provimento->idJornada,
+                              $provimento->idGrupoCargo,
+                              $provimento->idCargo,
+                              $idSetor,
+                              $idClasse,
+                              $idReferencia,
+                              $obs);
+
+    }
+
+
+    function getDataMinimaProgressaoMerito($dataProgressao)
+    {
+        $data = $this->getDatasLimitesProgressaoMerito($dataProgressao);
+
+        $diasAdescontar = $this->getDiasADescontarProgressao($data['inicio'],$data['fim']);
+
+        $dataMinima = $this->k->operation('+',$data['fim'],"$diasAdescontar%D");
+        return $dataMinima;
+    }
+
+
+    function getDatasLimitesProgressaoMerito($dataProgressao)
+    {
+        // ultimo provimento que tenha progressão funcional
+        $provimentoAntProg = $this->_miolo->GetBusiness('rh','provimento');
+        $provimentoAntProg->getUltimoProvimentoComProgressaoPorMerito($this->idVinculo);
+
+
+        if($this->k->compareDate($dataProgressao,'<','01/05/2008'))
+        {
+        	// os dois anos tem que ter a contagem  das ocorrencias descontadas
+	        $maisDoisAnos = $this->k->operation('+',$provimentoAntProg->dataInicio,'2%Y');
+	        $data = array('inicio'=>$provimentoAntProg->dataInicio,'fim'=>$maisDoisAnos);
+        }
+        else
+        {
+        	// os dezoito meses tem que ter a contagem  das ocorrencias descontadas
+	        $maisDezoitoMeses = $this->k->operation('+',$provsComProg[$i]->dataInicio,'18%M');
+		    $data = array('inicio'=>$provimentoAntProg->dataInicio,'fim'=>$maisDezoitoMeses);
+        }
+
+        return $data;
+    }
+
+
+     /**
+      * BusinessRhVinculo::getLicAfastsExcPgto()
+      * Recupera as licenças de afastamentos com exclusão de pagamento.
+      * @return $query
+      */
+     function getLicAfastsExcPgto($idVinculo,$dataAntes)
+    {       	
+		$licAfast = $this->_miolo->GetBusiness('rh','licafast');        
+		$criteria = $licAfast->getCriteria();
+
+    $criteria->addColumnAttribute('idVinculo');
+    $criteria->addColumnAttribute('dataInicio');
+    $criteria->addColumnAttribute('dataFim'); 
+    $criteria->addColumnAttribute('ocorrencia.excPgto');
+
+		$dataAntes = $this->k->invertDate($dataAntes);		
+		
+    $criteria->addCriteria("idVinculo","=","'$idVinculo'");
+		$criteria->addCriteria("dataInicio",">=","'$dataAntes'");
+		$criteria->addCriteria("dataInicio","is not","null");
+		$criteria->addCriteria("dataFim","is not","null");		
+		$criteria->addCriteria("ocorrencia.excPgto","=","'S'");
+		
+		$idsOcorrencias = array(3,77,128,100,133,137,105,106,107,109,166,176);
+		$cc = new CriteriaCondition;				
+		$cc->addCriteria($criteria->getCriteria("idVinculo","=","'$idVinculo'"));
+		$cc->addCriteria($criteria->getCriteria("ocorrencia.idGrupoOcorrencia","=","3"));
+		$cc->addCriteria($criteria->getCriteria("ocorrencia.idOcorrencia","in",$idsOcorrencias));
+		$criteria->addOrCriteria($cc);	
+		
+		$criteria->addOrderAttribute("dataInicio");		
+   					
+		$query = $criteria->retrieveAsQuery();		
+		
+		return $query;
+    }
+
+
+	function podeProgredir($id,$dateAntes,$dataUltimaProgressao,$dataHoje,$categoria)
+    {
+		global $MIOLO;
+
+		// recupera somenete as licencas de afastamento que excluem pagamento = nao remunerada
+		$query = $this->getLicAfastsExcPgto($id,$dateAntes);
+		
+//		echo '***';
+//		var_dump($query->sql);
+//		echo '###';
+//		die;
+
+		//var_dump($query->sql);
+		//die;
+
+		$dias = 0;
+
+		if ( is_array($query->result) )
+		{
+			foreach ( $query->result as $licAfast )
+			{	
+				// acumula os dias de licenca nao remunerada
+				$dias += intval( $this->k->daysDiff($licAfast[1],$licAfast[2]) ) + 1; // +1 = corrigir distorcao do mkrono
+			}
+		}
+		
+		// data da última progressão por mérito + 18 Meses + a soma dos dias a descontar = vigência
+		switch($categoria)
+		{
+			case '0':
+			  $dataParaProgredir = $this->k->operation('+',$dataUltimaProgressao,'18%M');
+			  break;
+	   		case '1':
+	   		  $dataParaProgredir = $this->k->operation('+',$dataUltimaProgressao,'24%M');
+	   		  break;
+		}
+
+		// soma os dias descontados para chegar a data de vigencia
+		$vigencia = $this->k->operation('+',$dataParaProgredir,$dias.'%D');
+
+		// ano e mes referentes a data de vigência
+		$anoMesProgredir = $this->k->GetYear($vigencia).$this->k->GetMonth($vigencia);
+
+		// ano e mes "atuais" ( pedido no relatorio )
+		$anoMesHoje = $this->k->GetYear($dataHoje).$this->k->GetMonth($dataHoje);
+
+		$dados[0] = $vigencia;	  // vigencia
+		$dados[1] = $dias;		  // dias a descontar
+
+		// compara o mes e ano da vigencia com o mes e o ano solicitados no relatorio
+		if( $anoMesHoje == $anoMesProgredir )
+		{
+			//var_dump($dados);
+			//exit(0);
+			
+			return $dados;
+				     
+		}
+		else
+		{
+			return false;
+		}
+    }
+
+    function getIncentivos()
+    {
+        $this->retrieveAssociation('incentivos');
+        if ($this->incentivos != NULL)
+        {
+            if (!is_array($this->incentivos))
+            {
+                $this->incentivos = array($this->incentivos);  
+            }
+        }
+        return $this->incentivos;
+    }
+
+    function getIncentivo($idHistIncentivo)
+    {   global $MIOLO;
+      
+        $this->getIncentivos();
+        if ($this->incentivos != NULL)
+        {
+            foreach($this->incentivos as $i)
+            {
+                if ($i->idHistIncentivo == $idHistIncentivo)
+                    return $i;
+            }
+        }
+        $i = $MIOLO->GetBusiness('rh','histincentivo');
+        $i->idVinculo = $this->idVinculo;
+        return $i;
+    }
+
+    function getHistoricos()
+    {
+        $this->retrieveAssociation('historicos');
+//        if ($this->historicos == NULL)
+//        {
+//			$this->historicos = array($this->historicos);
+//        }
+    }
+
+    function getHistorico($id)
+    {
+        global $MIOLO;
+        if ( $this->historicos != NULL )
+        {
+            foreach ( $this->historicos as $h )
+            {
+                if ( $h->idHistorico == $id )
+                    return $h;
+            }
+        }
+        $h = $MIOLO->GetBusiness('rh','historico');
+        $h->idVinculo = $this->idVinculo;
+        return $h;
+    }
+
+    function getIdVinculo($login)
+    {
+		$sql = new sql('f.idfuncionario','rh_funcionario f, cm_usuario u');
+		$sql->SetWhere("u.login = '$login' and u.idpessoa=f.idpessoa");	
+		$query = $this->Query($sql)->result;
+		return $query[0][0];
+    }
+
+}
+
+?>

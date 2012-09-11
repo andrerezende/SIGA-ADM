@@ -1,0 +1,275 @@
+<?
+/**
+ * Form Requisicao
+ */
+class frmAnularRequisicao extends Form
+{
+	public $oid;
+    protected $requisicao;
+    protected $idMaterial;
+	protected $idRubrica;
+	private $valoresSomadosParaDebitoOrcamentoInterno;
+    
+	/**
+     * Construtor
+     */
+    function __construct($arrAtributos)
+    {
+
+        $this->requisicao = $arrAtributos[0];
+        $this->idMaterial = $arrAtributos[1];
+
+        parent::__construct();
+        
+        $this->SetClose($this->manager->GetActionURL('adm','main:listarLicitacoes:itens'));
+        $this->SetTitle("Requisição: ".$this->requisicao->idRequisicao);
+        $this->SetIcon($this->manager->GetUi()->GetImage('adm','nothing.jpg'));
+        $this->EventHandler();
+        
+    }
+
+    function CreateFields()
+    {
+        global $MIOLO,$page, $module, $context, $history;
+
+        $requisicao = $this->requisicao;
+        
+        
+        // form
+        $ui = $this->manager->GetUI();
+        $form = $this->GetFormValue('form');
+
+		// info
+		$idUsuario = $this->manager->GetLogin()->idkey;
+
+		$tipoReq = $this->manager->GetBusiness('adm','tiporeq');
+		$tipoReq->GetById($this->requisicao->idTipoReq);
+		
+       	$tabelaGeral = $this->manager->GetBusiness('common','tabelageral');
+	   	$status = $tabelaGeral->GetByItem('AD_ALMOXSTATUSREQ',$this->requisicao->status);
+
+	   	$indice = 0;
+	   	
+	   	$arrControls = Array();
+	   	
+	   	
+		$arrControls[]	= new TextLabel('txtNumero',$this->requisicao->idRequisicao,'Número');
+		$arrControls[] = new TextLabel('txtStatus',strtoupper($status->item2),'Status');
+		$this->requisicao->retrieveAssociation('uoRequisitante');
+		$this->requisicao->retrieveAssociation('uoExecutante');
+
+		$arrControls[] = new TextLabel('txtUoRequisitante',$this->requisicao->uoRequisitante->nome,'UO Req.');
+		$arrControls[] = new TextLabel('txtUoExecutante',$this->requisicao->uoExecutante->nome,'UO Exec.');
+		$arrControls[] = new TextLabel('txtTipoReq',$tipoReq->descricao,'Tipo');
+        $arrControls[] = new TextLabel('txtDataHora',$this->requisicao->dataHora,'Data Hora');
+		$arrControls[] = new MSpacer(1);
+        
+		
+		if ($this->idMaterial)
+		{		
+			/**
+			 * Inserir informações sobre Item da requisição
+			 */			
+			
+			$objItemReq = $MIOLO->GetBusiness($module,'itemreq');
+			$objItemReq->GetById($this->requisicao->idRequisicao,$this->idMaterial);	
+			
+			
+			$arrControls[] = new MText('tit',"Item a ser anulado:",'',true);
+			$arrControls[] = new MSpacer(1);
+			
+			$arrControls[] = new MTextLabel('itemReq'," $this->idMaterial","Código");
+			$arrControls[] = new MTextLabel('itemReq2'," {$objItemReq->material->descricao}","Item");
+			
+			$arrControls[] = new MSpacer(1);			
+					
+			$action_sim = $this->manager->GetActionURL($module,$self,$this->idMaterial . "_" . $this->requisicao->idRequisicao  ,array('event'=>'btnAnularItem:click'));
+	        
+			$arrControls[] = new MTextField('edtMotivo','','Motivo',70);
+			
+			$arrControls[] = new MSpacer(1);
+	        $arrControls[] = new MTextLabel('anular','Deseja anular este item?');
+	        
+		}
+		else 
+		{
+			
+			/**
+			 * Verifica se existe itens que já foram licitados. Se existir,
+			 * nao pode ser anulado
+			 */
+
+			if  (!$requisicao->somenteItensAnuladosAbertos())
+			{
+				$MIOLO->Error("Esta requisição ({$this->requisicao->idRequisicao}) não pode ser anulada pois existem itens já licitados.",$this->manager->GetActionURL($module,"main:listarLicitacoes:livrosALicitar"));
+			}
+			
+			$arrControls[] = new MTextField('edtMotivo','','Motivo',70);
+			
+			$arrControls[] = new MText('tit',"Deseja anular esta requisição e todos os seus itens ?",'',true);	
+
+		}
+
+		$action_nao = $this->manager->GetActionURL($module,"main:listarLicitacoes:livrosALicitar");
+		
+		$buttons = Array(
+	                new FormButton('btnAnularItem','Sim'),
+	                new FormButton('btnAnularItem','Não',$action_nao)
+			);
+		
+		$this->SetFields($arrControls);
+        $this->SetButtons($buttons);   
+		
+	}
+	
+	function btnAnularItem_click()	
+	{
+		global $module,$MIOLO,$self,$item,$theme;
+
+		$cf = new MCurrencyFormatter();
+		
+		if (strstr($item,"_"))
+		{
+		
+			$aux = explode("_",$item);
+		
+			$idRequisicao = $aux[1];
+        	$this->idMaterial = $aux[0];	
+		}
+		else 
+		{
+			$idRequisicao = $item;
+        	$this->idMaterial = 0;	
+		}
+		
+
+        if ($this->idMaterial)
+        {
+            //anular somente um item
+            
+            $this->requisicao->beginTransaction();
+            
+            $this->anularItem($idRequisicao,$this->idMaterial);
+            
+            $this->requisicao->endTransaction();
+            $MIOLO->information("Item anulado com sucesso: requisicao $idRequisicao idmaterial $this->idMaterial",$this->manager->GetActionURL($module,"main:listarLicitacoes:livrosALicitar"));
+        }
+        else 
+        {
+            //aular todos os itens
+        
+            $objItemReq = $MIOLO->GetBusiness($module,'itemreq');
+            $query = $objItemReq->ListItensAtendidosByCosupPorRequisicao($idRequisicao);
+                
+            $this->requisicao->beginTransaction();
+            
+            if ($query->result) //Se é requisição de material
+            {
+                $naoDebitarItem = false;            
+                foreach ($query->result as $itemRequisicao)
+                {
+                    $aux = explode("_",$itemRequisicao[0]);
+                    $idMaterial = $aux[0];
+                    $itensToMessage .= $idMaterial . ", ";
+                    $this->anularItem($idRequisicao,$idMaterial,$naoDebitarItem);
+                }
+            }
+            else // senão é de serviço
+            {
+                // é item de servico, pois ListItensAtendidosByCosupPorRequisicao retornou vazio.
+                
+                $objItemServExt = $MIOLO->GetBusiness($module,'itemservext');
+                $query = $objItemServExt->listItens($idRequisicao);
+
+                $quantidade = $cf->toDecimal($query->result[0][6]);
+                $preco = $cf->toDecimal($query->result[0][7]);
+
+                $valorTotal = $quantidade * $preco;
+                $this->valoresSomadosParaDebitoOrcamentoInterno = $valorTotal;
+                
+                //todo:anular itemreqservext
+                $item =  $objItemServExt->GetById($idRequisicao);
+                            
+                $item->anularItem();
+                $this->debitarOrcamentoInterno($this->valoresSomadosParaDebitoOrcamentoInterno);
+            }
+            
+            
+            // anula a requisicao
+            
+            $requisita = $this->manager->getBusiness('adm','requisita');
+            $requisita->GetById($this->requisicao->idTipoReq,$this->requisicao->idUoRequisitante);
+
+            $motivo = $this->getFormValue('edtMotivo');
+            
+            $this->requisicao->setStatus('A');
+            $this->requisicao->motivoRejeicao = $motivo;
+            $status = "recusada";
+            
+                   
+            $this->requisicao->Save();     
+			$this->requisicao->endTransaction();        
+             
+            $MIOLO->information("Requisição ".$this->requisicao->idRequisicao." anulada com sucesso com o motivo '$motivo' ",$this->manager->GetActionURL($module,"main:listarLicitacoes:livrosALicitar"));
+        }
+    }
+	
+	function anularItem($idRequisicao,$idMaterial,$naoDebitar=false)
+	{ 
+        global $module,$MIOLO,$self,$item,$theme;
+
+        $cf = new MCurrencyFormatter();
+		
+		$objItemReq = $MIOLO->GetBusiness($module,'itemreq');
+		
+		$objItemReq->setTransaction($this->requisicao->getTransaction());
+		
+		$objItemReq->GetById($idRequisicao,$idMaterial);
+		
+		$motivo = $this->getFormValue('edtMotivo');
+		
+		$objItemReq->anularItemByMaterialRequisicao($motivo);		
+		
+		$objItemReq->precoEstimado = $cf->toDecimal($objItemReq->precoEstimado);
+		
+		$valorEstimado = $cf->toDecimal($objItemReq->quantPedida) * $cf->toDecimal($objItemReq->precoEstimado);		
+		
+		$this->valoresSomadosParaDebitoOrcamentoInterno += $valorEstimado;
+
+		if (!$naoDebitar)
+		{
+			$this->debitarOrcamentoInterno($cf->toDecimal($valorEstimado));
+		}
+	}
+	
+	function debitarOrcamentoInterno($valorEstimado)
+	{
+        $cf = new MCurrencyFormatter();
+
+		$requisita = $this->manager->getBusiness('adm','requisita');
+        $requisita->GetById($this->requisicao->idTipoReq,$this->requisicao->idUoRequisitante,$this->requisicao->getAno());
+	
+        // Remove a previsão de débito e adiciona o debito no orçamento da Uo requisitante
+        $this->requisicao->getUoRequisitante();
+        $this->requisicao->uoRequisitante->setTransaction($this->requisicao->getTransaction());
+        $this->requisicao->uoRequisitante->removePrevisaoDebito($requisita->idRubrica,$cf->toDecimal($valorEstimado),$this->requisicao->getAno());
+        $this->requisicao->Log(OP_UPD,"Requisicao ".$this->requisicao->idRequisicao.": remocao da previsao de ".$valorEstimado." na UO ".$this->requisicao->uoRequisitante->idUo);		
+        // Lançamento interno de retorno da previsão de débito
+        $lancamentoInt = $this->manager->getBusiness('adm','lancamentoint');
+        $lancamentoInt->setTransaction($this->requisicao->getTransaction());
+        $lancamentoInt->tipoLancamento = '7';
+        $lancamentoInt->obs = "Retorno de previsao devido à anulacao de item no painel de licitacoes.";
+        $lancamentoInt->data = date("d/m/Y");                
+        $lancamentoInt->valor = $cf->toDecimal($valorEstimado);
+        $lancamentoInt->ano = date("Y");
+        $lancamentoInt->idUoRequisitante = $this->requisicao->idUoRequisitante;       
+        $lancamentoInt->idUoExecutante = $this->requisicao->idUoExecutante;
+        $lancamentoInt->idRubrica = $requisita->idRubrica;           
+        $lancamentoInt->idRequisicao = $this->requisicao->idRequisicao;
+        $lancamentoInt->save();
+        $lancamentoInt->Log(OP_INS,"Lançamento Interno de retorno da previsao. numero ".$lancamentoInt->idLancamentoInt." gerado com sucesso para a Requisicao ".$this->requisicao->idRequisicao.".");
+	}
+	
+	
+}
+?>

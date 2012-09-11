@@ -1,0 +1,155 @@
+<?php
+class frmLoginMD5 extends MForm {
+	public $auth;
+	public $tries;
+
+	public function __construct() {
+		parent::__construct('Login');
+		$this->SetIcon($this->manager->GetUI()->GetImage('common','login.gif'));
+		$this->page->AddScript('m_md5.js');
+		$this->AddJsCode($this->doChallengeResponse());
+//		$this->AddJsCode();
+		/*$this->page->OnLoad("$$('.m-hr').each(
+			function(e) {
+				e.setStyle({display: 'none'})
+			}
+		);");*/
+		$this->OnSubmit('doChallengeResponse()');
+		$this->defaultButton = false;
+		if ($this->page->isPostBack()) {
+			$this->EventHandler();
+		}
+	}
+
+	public function CreateFields() {
+		global $MIOLO;
+
+		$this->auth = $this->manager->auth;
+		$challenge = uniqid(rand());
+		$ui = $MIOLO->GetUI();
+
+		$fields = Array(
+			// Mensagem de aviso a todos os usuario
+			// new MLabel( '<div align="center" STYLE="color:#ff0000; "><b><font size="2">Atenção: <BR> O Siga está de visual novo! <BR> Qualquer observação entre em contato com o e-mail abaixo.</font></b></div>' ),
+			new MTextField('uid',$this->auth->login->iduser,'Usuário',20),
+			new MPasswordField('pwd','','Senha',20),
+			new MTextLabel('username',$this->auth->login->user,'Nome',40),
+			//new MLink('mail','Email para contato', 'mailto:'.$this->manager->GetConf('theme.email'),$this->manager->GetConf('theme.email')),
+			//new MLink('btnLostPass', 'Esqueci minha senha', $MIOLO->GetActionURL('common','lostpass')),
+//			new MImageLink('linkprot', 'Procurar rocessos', $MIOLO->GetActionURL('protocolo','processospub'), $ui->GetImageTheme('','icons/processos.png')),			
+			new MHiddenField('tries', ''),
+			new MHiddenField('return_to', ''),
+			new MHiddenField('challenge', $challenge),
+			new MHiddenField('response', ''),
+			new MButton('btnLogin', 'Entrar'),
+			//new MLabel( '<div align="center" STYLE="color:#000000; "><b><font size="1">Obrigado por sua atenção! <BR> Equipe de desenvolvimento do SIGA.</font></b></div>' ),
+		);
+		$this->SetFields($fields);
+		//$this->SetWidth('210px');
+		$this->SetBackgroundColor('white');
+		$this->AddButton(new MHiddenField('btnLogin', 'Entrar'));
+		$this->AddButton(new MButton('btnLogout', 'Logout'));
+
+		//$urlFaq = $MIOLO->getActionUrl('common','html:files:faq.html');
+
+		//$this->AddButton(new MOpenWindow('', 'Ajuda', $urlFaq));		
+		
+		$processo = new MImageLinkLabel('linkprot', '', $MIOLO->GetActionURL('protocolo','processospub'), $ui->GetImageTheme('','icons/processos-login.png'));
+		$processo->SetImagetype('icon');
+		$this->AddButton($processo);
+
+		$lostpass = new MImageLinkLabel('btnLostPass', '', $MIOLO->GetActionURL('common','lostpass'), $ui->GetImageTheme('','icons/alterar_sua_senha-login.png'));
+		$lostpass->SetImagetype('icon');
+		$this->AddButton($lostpass);
+
+		$mail = new MImageLinkLabel('mail', '', 'mailto:'.$this->manager->GetConf('theme.email'), $ui->GetImageTheme('','icons/email-login.png'));
+		$mail->SetImagetype('icon');
+		$this->AddButton($mail);
+
+		/*$ajuda = new MImageLinkLabel('', '', $MIOLO->getActionUrl('common','html:files:faq.html'), $ui->GetImageTheme('','icons/informacoes-login.png'));
+		$ajuda->SetImagetype('icon');
+		$this->AddButton($ajuda);*/
+
+		$this->SetButtonAttr('btnLogin'	,'visible'	, !$this->isAuthenticated());
+		$this->SetButtonAttr('btnLostPass'	,'visible'	, !$this->isAuthenticated());
+		$this->SetButtonAttr('btnLogout'	,'visible'	,  $this->isAuthenticated());
+		$this->SetFieldAttr('uid'			,'readonly'	,  $this->isAuthenticated());
+		$this->SetFieldAttr('pwd'			,'visible'	, !$this->isAuthenticated());
+		$this->SetFieldAttr('username'	,'visible'	,$this->isAuthenticated());
+		$this->SetFieldAttr('mail'	,'formMode'	,MControl::FORM_MODE_SHOW_SIDE);
+
+//		$panel = new ActionPanel('pnlAdTables','Manutenção do Sistema','',$close);
+//		$panel->AddUserAction('adm_cadastromaterial',A_EXECUTE,'Altera Material de Requisição',$ui->GetImageTheme('','icons/altera_material_de_requisicao.png'),$module, 'main:alteraMaterialRequisicao');
+//		$this->AppendContent($panel);
+	}
+
+	public function btnLogin_click() {
+		global $MIOLO;
+
+		$this->GetData();
+		$MIOLO->LogMessage('[LOGIN] Validating login information MD5');
+
+		// Max login tries
+		$max_tries = 3;
+
+		// autenticar usuário e obter dados do login
+		$uid = $this->GetFormValue('uid');
+		$pwd = $this->GetFormValue('pwd');
+		$challenge = $this->GetFieldValue('challenge');
+		$response = $this->GetFieldValue('response');
+
+		if (!$this->LoginPermitted($uid)) {
+			$err = 'Acesso não permitido.';
+		} else {
+			if ($this->auth->Authenticate($uid, $challenge, $response)) {
+				$return_to = $this->GetFormValue('return_to');
+				// ToDo: voltar para onde estava...
+				if ($return_to) {
+					$url = $return_to;
+				} else {
+					//09/04/2012 - Tiago Macedo
+					$url = $MIOLO->GetActionURL('common','main');
+				}
+				$this->page->Redirect($url);
+			} else {
+				$tries = $this->GetFormValue('tries');
+				if ($tries >= $max_tries) {
+					$MIOLO->Error('Erro na identificação do usuário!');
+				} else {
+					$err = 'Erro na identificação do usuário!' . ' - Restam ' . ( $max_tries - $tries) .
+							' ' . 'tentativa(s).';
+					$tries++;
+					$this->SetFormValue('tries',$tries);
+					$pwd = null;
+					if ($err) {
+						$this->AddError($err);
+					}
+				}
+			}
+		}
+	}
+
+	public function doChallengeResponse() {
+		$code = "function doChallengeResponse() { \n".
+				"  var str = miolo.getElementById('uid').value + \":\" + \n" .
+				"        MD5(miolo.getElementById('pwd').value) + \":\" + \n" .
+				"        miolo.getElementById('challenge').value; \n".
+				"        miolo.setElementValueById('pwd','');\n".
+				"        miolo.setElementValueById('response',MD5(str));\n".
+				"  return true;\n".
+				"}\n";
+		return $code;
+	}
+
+	public function LoginPermitted($uid) {
+		global $MIOLO;
+
+		$ok = true;
+		return $ok;
+	}
+
+	public function isAuthenticated() {
+		return $this->auth->isLogged();
+	}
+}
+?>

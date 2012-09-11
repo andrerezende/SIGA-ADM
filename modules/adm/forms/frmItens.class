@@ -1,0 +1,123 @@
+<?
+class frmItens extends Form
+{
+	function frmItens()  // construtor da Classe
+	{   
+		global $MIOLO, $module, $self, $page, $ui;
+
+		$this->Form('Análise de Itens de Requisição');
+		$this->EventHandler();
+	}
+   
+	Function CreateFields()
+	{
+        	global $MIOLO,$module,$perms,$auth,$page,$item;
+	        $login = $MIOLO->GetLogin();
+	
+		// controle dentro do grid
+	        $objItem = $MIOLO->GetBusiness('adm','item');
+        	$qryItem = $objItem->ListItensByIdRequisicao2($item);
+		$objRequisicao = $MIOLO->GetBusiness('adm','requisicao');
+		$objRequisicao->GetById($item);
+		
+		//Se a requisição nunca foi atendida, então muda o status da requisição pra "Em análise".	
+		if ($objRequisicao->status == '1')
+			$objRequisicao->SetStatus(2);
+			
+		$quantitem = new TextField('quantidade','','Quantidade',10);	
+		// link dentro do grid
+		$href_trans = $MIOLO->GetActionURL('common','main:admin:transaction','#0#', array('event'=>'btnEdit:click'));
+
+		// colunas
+	        $columns = array(
+        	   new GridColumn('Id','right', true, '',false),
+	           new GridColumn('Item','left',false,'70%',true),
+	           new GridColumn('Req.', 'center', true,'10%',true,'',false,true),
+		   new GridColumn('Disp.', 'center', true,'10%',true,'',false,true),
+		   new GridControl($quantitem,'Atendido', 'center', true, '10%',true,'',false,true)
+        	);
+
+		// instancia o grid
+		$href_grid = $MIOLO->GetActionURL($module,$self);
+	        $grid = new Grid($qryItem->result, $columns, $href_grid,15,0);
+		$fields = Array(
+			new TextLabel('','Requisição n&ordm; '.$objRequisicao->numero.' - Aberta em '.$objRequisicao->datarequisicao),
+			$grid,
+			new TextLabel('','LEGENDA'),
+			new TextLabel('','Req: Quantidade requisitada'),
+			new TextLabel('','Disp: Quantidade disponível em estoque'),
+			new TextLabel('','Atendido: Quantidade que será entregue ao requisitante'),
+			new HiddenField('item',$item)
+	        );    
+		
+        	$this->SetFields($fields);
+	        $buttons = Array(
+	            new FormButton('btnPost','Gravar Alterações'),
+	        );
+    
+	        $this->SetButtons($buttons);
+	}
+
+	function btnPost_click()
+	{
+		global $MIOLO, $module, $page, $context, $self, $action, $perms, $item, $state;
+		
+		$quant = $this->GetFormValue('quantidade');
+		//var_dump($item);
+	        $objItem = $MIOLO->GetBusiness('adm','item');
+        	$qryItem = $objItem->ListItensByIdRequisicao2($item);		
+		//var_dump($qryItem->result);
+		$i = 0;
+		$ok_atend = true;
+		$atend_total = true;
+		
+		foreach ($qryItem->result as $rs)
+		{
+			$objId = $MIOLO->GetBusiness('common','objectid');
+			$idmovimento = $objId->GetNextId('ad_movimento');
+
+			// Se usuario informou uma quantidade atendida maior que zero
+			if ($quant[$i] > 0)
+			{
+				if ($quant[$i] > $rs[3]) //Se a quant atendida for maior que a em estoque
+				{
+					$quantidade_baixa = $rs[3];
+					$objItem->DarBaixa($rs[6],$quantidade_baixa,$rs[0],$idmovimento,$quant[$i],$rs[7],$rs[8]);
+					//Da baixa na quantidade disponivel em estoque
+					$action = $MIOLO->GetActionURL($module, 'itens', '','');
+			        	$MIOLO->Information('Quantidade solicitada para o produto '.$rs[6].' é maior que a disponível em estoque',$action);
+				}
+				else
+				{
+					//Se a requisição não foi atendida completamente, joga false em variável auxiliar.
+					if ($quant[$i] < $rs[2])
+						$atend_total = false;
+						
+					$quantidade_baixa = $rs[3]-$quant[$i];
+					if (!$objItem->DarBaixa($rs[6],$quantidade_baixa,$rs[0],$idmovimento,$quant[$i],$rs[7],$rs[8]))
+						$ok_atend = false;				
+				}
+			}
+			$i++;
+		}
+		if ($ok_atend)
+		{
+			$objRequisicao = $MIOLO->GetBusiness('adm','requisicao');
+			$objRequisicao->GetById($item);
+
+			//Se variavel aux. é true a requisicao foi atend. totalmente, senão foi parcialmente.
+			if ($atend_total == true)
+				$status = "4";
+			else
+				$status = "3";
+						
+			if ($objRequisicao->SetStatus($status)) //Muda o status da requisição para "Atend. Parcial/Total"
+			{
+				$action = $MIOLO->GetActionURL($module, 'almoxarifado', '','');
+		        	$MIOLO->Information('Requisiçao Atendida com sucesso',$action);
+			}
+		}
+
+	}
+}
+?>

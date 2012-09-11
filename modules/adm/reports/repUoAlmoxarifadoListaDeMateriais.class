@@ -1,0 +1,146 @@
+<?php
+ini_set( 'default_charset', 'utf-8');
+    class repUoAlmoxarifadoListaDeMateriais extends MPDFReport
+    {
+        var $img;
+        var $timestamp;
+        var $uoalmoxarifado;
+        var $dataRel;
+
+        function __construct($objUo)
+        {
+            global $MIOLO, $module, $page, $context, $self, $action, $perms;
+            $this->uoalmoxarifado = $objUo;
+            $this->timestamp = date('d/m/Y G:i');
+            $hoje = date('d/m/Y');
+            $ui = $MIOLO->GetUI();
+            $this->img = $ui->GetImageSrc('logonet.png','tutorial');
+            // obtem os movimentos por período
+            $estoque = $MIOLO->getBusiness('adm','estoque');
+            $criteria = $estoque->getCriteria();
+            $criteria->addColumnAttribute('material.codmaterial');
+            $criteria->addColumnAttribute('material.descricao');
+            $criteria->addColumnAttribute('material.unidade');
+            $criteria->addColumnAttribute('estoqueMin');
+            $criteria->addColumnAttribute('estoque');
+            $criteria->addColumnAttribute('valorTotal');
+            $criteria->addCriteria('idUo','=',"'{$this->uoalmoxarifado->idUo}'");
+            $criteria->addOrderAttribute('material.descricao');
+            $materiais = $criteria->retrieveAsQuery()->result;
+		    if ($materiais)
+            {
+                $cf = new MCurrencyFormatter();
+                foreach ($materiais as $material)
+                {
+                    $this->dataRel[] = array($material[0],$material[1],$material[2],$material[3],$material[4],$cf->formatWithSymbol($cf->toDecimal($material[5])));
+                }
+            }
+            $columns = array (
+                new MPDFReportColumn('codigo', '<b>CÓDIGO</b>', 'right', true, 8, true),
+                new MPDFReportColumn('especificacao', '<b>ESPECIFICAÇÃO</b>', 'left', true, 60, true),
+                new MPDFReportColumn('unidade', '<b>UNIDADE</b>', 'left', true, 8, true),
+                new MPDFReportColumn('estoqueminimo', '<b>ESTOQUE MÍNIMO</b>', 'right', true, 8, true),
+                new MPDFReportColumn('estoque', '<b>ESTOQUE</b>', 'right', true, 8, true),
+                new MPDFReportColumn('valortotal', '<b>VALOR TOTAL</b>', 'right', true, 8, true),
+            );
+            parent::__construct($this->dataRel, $columns,1000000,NULL,'landscape','a4');
+            $this->getPDF()->setFont('Courier.afm');
+            $this->GeneratePageAllHeader();
+            $this->GeneratePageFirstHeader();
+            $this->GeneratePageAllFooter();
+            $this->SetColumnAttr('codigo', 'index', 0);
+            $this->SetColumnAttr('especificacao', 'index', 1);
+            $this->SetColumnAttr('unidade', 'index', 2);
+            $this->SetColumnAttr('estoqueminimo', 'index', 3);
+            $this->SetColumnAttr('estoque', 'index', 4);
+            $this->SetColumnAttr('valortotal', 'index', 5);
+            $this->SetOption('fontSize', 8);
+            $this->SetOption('titleFontSize', 10);
+            $this->SetTitle("LISTA DE MATERIAIS - {$hoje}");
+            $this->SetOption('showTableTitle', 1);
+        }
+        function GeneratePageFirstHeader()
+        {
+            global $MIOLO;
+            $this->pdf->ezSetMargins(80, 50, 25, 25);
+            $x0 = $this->pdf->left;
+            $x1 = $this->pdf->right;
+            $h = $this->pdf->getFontHeight(10);
+            $header = $this->pdf->openObject();
+            $this->pdf->saveState();
+            $ui = $MIOLO->GetUI();
+            $this->img = $ui->GetImageSrc('logonet.png','tutorial');
+
+            //$this->pdf->addPngFromFile($this->img, $x0+10, 515, 50, 50);
+            $this->pdf->addText(100,550,10,$this->manager->getConf('instituicao.nome'));
+
+
+
+            $this->pdf->addText(100,550-$h,10,"{$this->uoalmoxarifado->nome}   -   CONSUMO");
+            $this->pdf->addTextWrap($x0, 550-$h,$x1-$x0, 10,"{$this->timestamp}",'right');
+            $this->pdf->addText(100,550-$h-$h,10,'COORDENADORIA DE SUPRIMENTOS');
+            $this->pdf->restoreState();
+            $this->pdf->closeObject();
+            $this->pdf->addObject($header, 'add');
+        }
+        function GeneratePageAllHeader()
+        {
+            $inicio = Form::getFormValue('dataInicio');
+            $fim = Form::getFormValue('dataFim');
+            $this->pdf->ezSetMargins(50, 50, 25, 25);
+            $x0 = $this->pdf->left;
+            $x1 = $this->pdf->right;
+            $h = $this->pdf->getFontHeight(10);
+            $header = $this->pdf->openObject();
+            $hoje = date('d/m/Y');
+            $this->pdf->saveState();
+            $this->pdf->SetStrokeColor(0, 0, 0);
+            $this->pdf->line($x0, 570, $x1, 570);
+            $this->pdf->addTextWrap($x0, 572,$x1-$x0, 6,"{$this->uoalmoxarifado->nome} - LISTA DE MATERIAIS - {$hoje}",'right');
+            $this->pdf->restoreState();
+            $this->pdf->closeObject();
+            $this->pdf->addObject($header, 'all');
+        }
+
+        function GeneratePageFooter()
+        {
+            $footer = $this->pdf->openObject();
+		    $cf = new MCurrencyFormatter();
+            if ($this->dataRel)
+            {
+                foreach ($this->dataRel as $material)
+                {
+                    $saldoAtual += $cf->toDecimal($material[5]);
+                }
+            }
+            $this->pdf->saveState();
+            $this->pdf->SetStrokeColor(0, 0, 0);
+            $this->pdf->ezSetMargins(50, 50, 25, 25);
+            $this->pdf->ezText("",10);
+            $this->pdf->ezText('_________________________________________________________________________________________________________________________________________________________________________________',8);
+            $this->pdf->ezText("",10);
+            $this->pdf->ezText("<b>SALDO ATUAL...: </b> {$cf->formatWithSymbol($saldoAtual)}",8);
+            $this->pdf->ezText('_________________________________________________________________________________________________________________________________________________________________________________',8);
+            $this->pdf->ezText("",30);
+            $this->pdf->ezText("____________________________________________________________\n{$this->uoalmoxarifado->nome}\nGERENTE",8,array('justification'=>'center'));
+            $this->pdf->restoreState();
+            $this->pdf->closeObject();
+            $this->pdf->addObject($footer, 'add');
+        }
+
+        function GeneratePageAllFooter()
+        {
+            $x0 = $this->pdf->left;
+            $x1 = $this->pdf->right;
+            $footer = $this->pdf->openObject();
+            $this->pdf->saveState();
+            $this->pdf->SetStrokeColor(0, 0, 0);
+            $this->pdf->line($x0, 23, $x1, 23);
+            $this->pdf->addText($x0, 15, 6,'CGCO/DSI');
+            $this->pdf->ezStartPageNumbers($x1,15, 6, 'left', '{PAGENUM}');
+            $this->pdf->restoreState();
+            $this->pdf->closeObject();
+            $this->pdf->addObject($footer, 'all');
+        }
+    }
+?>

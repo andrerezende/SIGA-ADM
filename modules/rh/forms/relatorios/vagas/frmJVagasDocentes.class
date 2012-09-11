@@ -1,0 +1,211 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmJVagasDocentes extends MForm
+{
+	var $tipoVagas;
+	var $tipoDocentes;
+
+    function __construct()
+    {
+        parent::__construct('Obter Relatório de Vagas - Docentes');
+        $this->SetClose($this->manager->GetActionURL('rh','main:relatorio'));
+        $this->EventHandler();
+    }   
+
+    function CreateFields()
+    {
+        global $MIOLO, $self, $module, $page, $action, $theme;
+        $ui = $this->manager->getUI();
+
+        $this->tipoVagas['0'] = 'DESOCUPADAS';
+		$this->tipoVagas['1'] = 'OCUPADAS';
+
+		$this->tipoDocentes['0'] = 'DOCENTES 3º GRAU';
+		$this->tipoDocentes['1'] = 'DOCENTES 1º E 2º GRAUS';
+		$this->tipoDocentes['2'] = 'DOCENTES DO ENSINO BÁSICO/TÉCNICO/TECNOLÓGICO';
+		
+		$fields = array(
+            new MSelection('tDocentes','','Tipo de Docentes', $this->tipoDocentes), 
+            new MSelection('tVagas','','Tipo de Vagas', $this->tipoVagas),
+        );
+        $this->SetFields($fields);        
+        
+        $buttons = array(
+            new MButton('btnReport','Gerar Relatório','PDF'),
+            //new MButton('btnGerarCSV','Gerar Planilha')
+        );
+        $this->SetButtons($buttons);
+
+		$validators = array(
+            new RequiredValidator('tDocentes'),
+            new RequiredValidator('tVagas')
+        );
+        
+        $this->SetValidators($validators);
+
+    }    
+    
+    
+    function btnReport_click()
+    {
+    	//iReport
+		$docentes = $this->getFormValue('tDocentes');
+		$vagas = $this->getFormValue('tVagas');
+
+		if ( is_null($docentes) or ($docentes == "") )
+            $erro[] = "Selecione o tipo de docente!";
+		if ( is_null($vagas) or ($vagas == "") )
+            $erro[] = "Selecione o tipo de vaga!";
+            
+        if ( count($erro) > 0 )
+            foreach ( $erro as $e )
+                $this->addError($e);
+    	else {
+
+			if($docentes == 0)
+			{
+				//DOCENTES 3º GRAU
+				$whereCargo = " and vg.IDGRUPOCARGO = 60 and vg.idcargo = 1";
+				$titDoc = 'Docentes 3º Grau';
+			}
+			elseif($docentes == 1)
+			{
+				//DOCENTES 1º E 2º GRAUS
+				$whereCargo = " and vg.IDGRUPOCARGO = 60 and vg.idcargo = 11";
+				$titDoc = 'Docentes 1º e 2º Graus';
+			}
+			else
+			{
+				//DOCENTES DO ENSINO BÁSICO/TÉCNICO/TECNOLÓGICO
+				$whereCargo = " and vg.IDGRUPOCARGO = 702 and vg.idcargo = 1";
+				$titDoc = 'Docentes do Ensino Básico/Técnico/Tecnológico';
+			}
+
+			if($vagas == 0)
+			{
+				//DESOCUPADAS
+				$whereTipo = " and oc.datafim is not null
+							  UNION
+							  select 
+									vg.numerovaga as codigo,
+									og.descricao as origem,
+									s1.nomesetor as unidade,
+									s2.nomesetor as departamento,
+									' ' as ultimoocupante
+							  from 
+									rh_vaga vg,
+									rh_origemvaga og,
+									cm_setor s1,
+									cm_setor s2
+							  where 
+									og.IDORIGEMVAGA = vg.ORIGEM
+									and s2.IDSETOR = vg.IDSETOR
+									and s2.IDPAISETOR = s1.IDSETOR".$whereCargo."and vg.numerovaga not in
+									( select distinct numerovaga 
+									  from rh_ocupacaovaga)";
+				$titVagas = 'Desocupadas';
+			}
+			else
+			{
+				$whereTipo = " and oc.datafim is null and oc.datainicio is not null";
+				$titVagas = 'Ocupadas';
+			}
+
+			$campos = "vg.numerovaga as codigo, og.descricao as origem, s1.nomesetor as unidade, s2.nomesetor as departamento, p.nome as ultimoocupante";
+				
+			$tabelas = "rh_vaga vg, rh_origemvaga og, cm_setor s1, cm_setor s2, rh_vinculo v, rh_funcionario f, cm_pessoa p, ( select o.idvinculo, o.numerovaga, o.datainicio, o.datafim
+						   from rh_ocupacaovaga o, (select numerovaga, max(datainicio) from rh_ocupacaovaga group by								numerovaga) tabela2
+						   where o.numerovaga = tabela2.numerovaga) oc";
+			$condicoes = "og.IDORIGEMVAGA = vg.ORIGEM and s2.IDSETOR = vg.IDSETOR and s2.IDPAISETOR = s1.IDSETOR and oc.NUMEROVAGA = vg.NUMEROVAGA and oc.IDVINCULO = v.IDVINCULO and v.IDFUNCIONARIO = f.IDFUNCIONARIO and f.IDPESSOA = p.IDPESSOA";
+			
+				
+			$sql = "SELECT ". $campos ." FROM " . $tabelas . " WHERE " . $condicoes . $whereCargo . $whereTipo;
+			
+			$report = new MJasperReport('ufjf');
+
+			$parameters['str_TITULO'] = 'Relatório de Vagas '.$titVagas.' - '.$titDoc;
+			$parameters['str_SUBREPORT_DIR'] = $this->manager->getConf('home.modules') . '/common/reports/';
+			$parameters['str_SQL'] =  $sql;
+			
+			if($vagas == 0)	$report->Execute('rh','vagas/RH_VagasDesocupadasDocentes',$parameters);
+			else $report->Execute('rh','vagas/RH_VagasOcupadasDocentes',$parameters);
+		}
+    
+ 	}
+ 	
+	/*
+ 	function btnGerarCSV_click()
+	{
+		//global $MIOLO,$module;
+    	//$vagas = $MIOLO->GetBusiness($module,'ocupacaovaga');
+    	$vagas = $this->manager->GetBusiness('rh','ocupacaovaga');
+    	
+		$idCargo = $this->getFormValue('idCargos');
+    	//$ocup = $this->getFormValue('idOcupacao');
+    	$this->setFormValue('descricaoCargo', $this->options[$idCargo]);
+    	$descricaoCargo = $this->getFormValue('descricaoCargo');    	
+    	    	
+    	if ( is_null($idCargo) or ($idCargo == "") )
+            $erro[] = "Selecione o cargo";   
+        if ( count($erro) > 0 )
+            foreach ( $erro as $e )
+                $this->addError($e);
+    	else 
+    	{				
+			if ($idCargo == '0') //TODOS OS CARGOS
+			{             	
+            	$consulta = $vagas->ListByNumeroVagaOrDescricaoCargo(strtoupper("'%'")); 
+			}            	
+            else
+            {
+            	$consulta = $vagas->ListByNumeroVagaOrDescricaoCargo(strtoupper("'$descricaoCargo'"));            	
+            }
+                        
+            $totalvagas = count($consulta->result); 
+
+            if (is_array($consulta->result))
+            {
+            	$resultAux[] = array('Número da Vaga','Descrição do Cargo','Início','Término','Matrícula do Ocupante');
+    			foreach ($consulta->result as $result)		  
+	    		{
+	    			$resultAux[] = array($result[0],$result[1],$result[2],$result[3],$result[4]);		
+	    		}
+            }
+            else 
+            {
+            	$consulta->result[] = '';	
+            }
+            
+            if ($totalvagas == 0)
+            {
+            	$e = "NÃO HÁ VAGAS";
+            	$this->addError($e);
+            }
+            else 
+            {
+                $consulta->result = $resultAux;
+				$consulta->getCSV("Vagas. $descricaoCargo");
+            }
+        }
+	}*/
+ 	
+}
+ 
+?>

@@ -1,0 +1,273 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmTerceirizadoProvimento extends MCSSForm
+{
+	protected $objProvimento;
+	protected $idJE;
+	
+    function frmTerceirizadoProvimento($objProvimento)
+    {
+		$this->objProvimento = $objProvimento;
+        parent::__construct('Dados do Provimento / Histórico');
+        $this->SetAlternate(true);
+        $this->setClose($this->manager->getActionUrl('rh','main:terceirizado',$objProvimento->idTerceirizado,array('form'=>'provimentos')));
+        $this->EventHandler();
+    }
+    
+    function CreateFields()
+    {
+        global $MIOLO, $context, $action;
+        
+        $provimento = $this->objProvimento;
+
+        //jornada
+		$objJornada = $this->manager->GetBusiness('rh','jornada');
+		$query = $objJornada->listAll();
+		$jornadas = $query->chunkResult();
+		asort($jornadas);
+		$objEscala = $this->manager->GetBusiness('rh','escala');
+		$query = $objEscala->listAll();
+		$escalas = $query->chunkResult();
+		asort($escalas);
+		$arrJE = ($jornadas + $escalas);
+
+		//função
+		$objFuncao = $this->manager->GetBusiness('rh','funcaoterceirizado');
+		$query = $objFuncao->listAll();
+		$funcoes = $query->chunkResult();
+		
+		//verifica escala
+		if ($provimento->isEscala())
+		{
+		    $this->idJE = $provimento->escala->idEscala;
+		}
+		else 
+		{
+		    $this->idJE = $provimento->jornada->idJornada;
+		}
+		
+		//contrato
+		$provimento->retrieveassociation('contrato');
+
+		//local de trabalho
+		$localTrab = $this->manager->getBusiness('rh','localterceirizado',$provimento->idLocalTerceirizado);
+		
+		//ocorrência
+		$objOcorrencia = $this->manager->GetBusiness('rh','ocorrenciaterceirizado');
+		$query = $objOcorrencia->listAll();
+		$ocorrencias = $query->chunkResult();
+		   
+        //Exibição
+        /*$this->SetField(0,0,10,new MLabel('Data Início:'));
+        $this->SetField(0,1,15,new MTextLabel('dataInicio','','Data Início'));
+		
+        $this->SetField(0,2,10,new MLabel('Data Fim:'));
+        $this->SetField(0,3,15,new MTextLabel('dataFim','','Data Fim'));*/
+        
+		$this->SetField(0,0,15,new MLabel('Data Início:'));
+		$this->SetField(0,1,25,new MCalendarField('dataInicio','','Data de Início'));
+        
+		$this->SetField(0,2,8, new MLabel('Data Fim:'));
+		$this->SetField(0,3,25,new MCalendarField('dataFim','','Nova Data Fim'));
+		
+        $this->SetField(4,0,15,new MLabel('Jornada:'));
+        //$this->SetField(4,1,25,new MTextLabel('jornada','','Jornada'));
+        $this->SetField(4,1,25,new MSelection('idJornada',$this->idJE,'Jornada',$arrJE));
+		
+		/*$this->SetField(4,2,10,new MLabel('Escala:'));
+        $this->SetField(4,3,25,new MTextLabel('escala','','Escala'));*/
+        
+        $this->SetField(5,0,15,new MLabel('Função:'));
+        //$this->SetField(5,1,100,new MTextLabel('funcao','','Função'));        
+        $this->SetField(5,1,100,new MSelection('idFuncao',$provimento->funcao->idFuncaoTerceirizado,'Função',$funcoes));
+        
+        
+        $this->SetField(7,0,15,new MLabel('Local de Trabalho:'));
+        //$this->SetField(7,1,100,new MTextLabel('setor','','Setor'));
+        $this->SetField(7,1,0,new MHiddenField('idLocalTerceirizado',$provimento->idLocalTerceirizado));
+        $this->SetField(7,2,100,new MLookupFieldValue('lkpLocal',$localTrab->nome,'Local de Trabalho',70));
+        
+        $this->SetField(8,0,15,new MLabel('Instituição:'));
+        //$this->SetField(8,1,100,new MTextLabel('instituicao','','Instituição'));
+        $this->SetField(8,1,0,new MHiddenField('idInstituicao',$provimento->idInstituicaoTerceirizado));
+        $this->SetField(8,2,100,new MLookupFieldValue('instituicao',strtoupper($provimento->instituicao->nome),'Instituição',70));
+              
+        $this->SetField(10,0,15,new MLabel('Contrato:'));
+        $this->SetField(10,1,0,new MHiddenField('idContrato',$provimento->idContrato));
+        $this->SetField(10,2,100,new MLookupFieldValue('lkpContrato',$provimento->contrato->numContrato,'Contrato',8));
+        
+        $this->SetField(12,0,15,new MLabel('Ocorrência:'));
+        //$this->SetField(10,1,100,new MTextLabel('ocorrencia','','Ocorrência'));
+        $this->SetField(12,1,100,new MSelection('ocorrencia',$provimento->ocorrencia->idOcorrenciaTerceirizado,'Ocorrência',$ocorrencias));
+        
+        
+		//lookup local de trabalho
+		$this->SetFieldAttr('lkpLocal','module','rh');
+   	 	$this->SetFieldAttr('lkpLocal','item','local');
+  	 	$this->SetFieldAttr('lkpLocal','event','filler');
+    	$this->SetFieldAttr('lkpLocal','related','idLocalTerceirizado,lkpLocal,null,null');
+		
+		//lookup instituição
+		$this->SetFieldAttr('instituicao','module','common');
+        $this->SetFieldAttr('instituicao','item','instituicao');
+        $this->SetFieldAttr('instituicao','event','filler');
+        $this->SetFieldAttr('instituicao','related','idInstituicao,null,instituicao'); 
+        
+        //lookup contrato
+		$this->SetFieldAttr('lkpContrato','module','rh');
+        $this->SetFieldAttr('lkpContrato','item','contrato');
+        $this->SetFieldAttr('lkpContrato','event','filler');
+        $this->SetFieldAttr('lkpContrato','related','idContrato,lkpContrato,null,null'); 
+        
+        
+        $action = $context->action;
+        $close = $MIOLO->GetActionURL('rh',$action, $this->objProvimento->idTerceirizado, array("form"=>"provimento") );
+		
+        $buttons = array(
+		    new MButton('btnSalvar','Salvar'),
+		    //new MButton('btnExcluir','Excluir'),
+			new FormButton('btnClose','Fechar', $close)
+        );
+		$this->SetButtons($buttons);
+		//$this->setButtonAttr('btnSalvar','visible',FALSE);
+		$this->SetData();
+        
+		$this->setFieldAttr('dataInicio','showLabel',true);
+    }
+
+	function SetData()
+	{   
+        global $MIOLO;
+		$provimento = $this->objProvimento;
+        $this->SetFieldValue('dataInicio',$provimento->dataInicio);
+        $this->SetFieldValue('dataFim',$provimento->dataFim);
+        $provimento->retrieveAssociation('localTerceirizado');
+	    //$this->SetFieldValue('idLocalTerceirizado',$provimento->idLocalTerceirizado);
+		//$provimento->localTerceirizado->retrieveAssociation('setor');
+		//$this->SetFieldValue('setor',$provimento->localTerceirizado->setor->sigla . ' - ' . $provimento->localTerceirizado->idsetor);
+        $provimento->retrieveAssociation('jornada');
+		$this->SetFieldValue('idJornada',$this->idJE);
+        $provimento->retrieveAssociation('ocorrencia');
+		$this->SetFieldValue('ocorrencia',$provimento->idOcorrenciaTerceirizado);
+        $provimento->retrieveAssociation('funcao');
+		$this->SetFieldValue('idFuncao',$provimento->idFuncaoTerceirizado);
+		$provimento->retrieveAssociation('instituicao');
+        //$this->SetFieldValue('idInstituicao',$provimento->idInstituicaoTerceirizado);
+	}
+
+    public function btnSalvar_click()
+    {
+        $provimento = $this->manager->GetBusiness('rh','provterceirizado');
+		$idLocal = $this->GetFieldValue('idLocalTerceirizado');
+		$idFuncao = $this->GetFieldValue('idFuncao');
+		$idInstituicao = $this->GetFieldValue('idInstituicao');
+		$idContrato = $this->GetFieldValue('idContrato');
+		//var_dump($idContrato);
+	    $idOcorrencia = $this->GetFieldValue('ocorrencia');
+	    $dataInicio = $this->GetFieldValue('dataInicio');
+	    $dataFim = $this->GetFieldValue('dataFim');
+	    
+	    //Atribui valor a Escala/Jornada
+		$srtjornada = strlen($this->GetFieldValue('idJornada'));
+		switch ($srtjornada) 
+		{
+		    case 1:
+				$idJornada = '0';
+		        break;
+		    case 2:
+		        $idJornada = $this->GetFieldValue('idJornada');
+		        break;
+		    case 4:
+				$idJornada = '0';
+				$idEscala = $this->GetFieldValue('idJornada');
+		        break;
+		}
+        try
+        {	
+			//modifica provimento(usa método clona)
+			$provimento->beginTransaction();
+			$provimento = $provimento->clonaProvimento($this->objProvimento);
+    		$provimento->setDataInicio($dataInicio);
+			$provimento->setDataFim($dataFim);
+			$provimento->setIdJornada($idJornada);
+			$provimento->setIdEscala($idEscala);
+			$provimento->setIdFuncao($idFuncao);
+			$provimento->setIdLocal($idLocal);
+            $provimento->setIdInstituicao($idInstituicao);
+            $provimento->setIdOcorrencia($idOcorrencia);
+            $provimento->setIdContrato($idContrato);
+			$this->objProvimento->delete();
+			$provimento->save();
+			$provimento->endTransaction();
+			
+            $go = $this->manager->GetActionURL('rh','main:terceirizado:provimento', $provimento->idTerceirizado, array('form'=>'provimento'));
+            if ($update)
+            {
+                $this->manager->information('Provimento atualizado com sucesso.', $go );
+            }
+            else    
+            {
+                $this->manager->information('Provimento atualizado.', $go );
+            }
+        }
+        catch ( ESimpleRnException $e )
+        {
+            $this->AddError($e->getMessage());
+        }
+		
+    }	
+
+	function btnExcluir_click()
+	{       
+        $update = $this->objProvimento->isPersistent();
+    	$provimento = $this->manager->GetBusiness('rh','provterceirizado');
+    	$provimento = $this->objProvimento;
+    	
+     	$action_sim = $this->manager->GetActionURL('rh','main:terceirizado', $provimento->idTerceirizado, array('form'=>'provimento','conf'=>'sim','data'=>$provimento->dataInicio,'event'=>'btnExcluir:click'));
+     	
+     	$action_nao = $this->manager->GetActionURL('rh','main:terceirizado', $provimento->idTerceirizado, array('form'=>'provimento','data'=>$provimento->dataInicio));
+        
+    	$conf = $this->GetFormValue('conf');
+
+    	if ($conf == 'sim')
+    	{
+    		try
+    		{
+    			$provimento->delete();
+    			$this->manager->Information('Provimento excluído com sucesso',$this->manager->GetActionURL('rh','main:terceirizado:provimento', $provimento->idTerceirizado, array('form'=>'provimento')));
+    		
+    		}
+    		catch ( Exception $e )
+    		{
+    			$this->manager->error("Informe o seguinte erro à equipe do CGCO: ".$e->getMessage());
+    		}
+    	}
+    	else
+    	{
+    	    $this->manager->Question("Tem certeza que deseja excluir o provimento ?",$action_sim,$action_nao);
+    	}
+    }   
+	
+	public function btnClose_click()
+	{
+	}
+
+ }
+?>

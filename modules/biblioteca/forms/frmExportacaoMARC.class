@@ -1,0 +1,212 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+class frmExportacaoMarc extends MForm 
+{
+    var $objObra;
+    var $objEtiqueta;
+
+    protected $erro, $info, $mime_content_type, $hashmd5;
+    function __construct()
+    {
+	global $MIOLO,$module;
+
+        parent::__construct('Exportação MARC');
+        $this->SetClose($this->manager->GetActionURL('biblioteca', 'main:exportacaoMarc'));
+        $this->EventHandler();
+	
+    } 
+
+    function CreateFields()
+    {
+	global $MIOLO, $module, $self, $theme, $action, $page, $item;
+	$ui = $this->manager->getUI();
+	$this->objObra = $MIOLO->GetBusiness($module,'obra');
+	$this->objEtiqueta = $MIOLO->GetBusiness($module,'etiqueta');
+
+
+	$array = array( 
+              		new MHiddenField('hidFieldList',''),
+              		new MTextLabel('lbl1','Obra',null,'black'),
+			array(
+		                new MTextField('idobra','','Número',10),
+		                new MTextLabel('ou','-OU-','&nbsp;'),
+		                new MLookupTextField('lkpobra','','Título',45),
+              			
+
+            		),
+			new MButton('btnIncluir','Incluir'),	
+        	);
+	$this->setFields($array);
+	$this->setfieldattr('lnkDownload','visible',false);
+	$this->SetFieldAttr('lkpobra','module','biblioteca');
+	$this->SetFieldAttr('idobra','readonly','true');
+    	$this->SetFieldAttr('lkpobra','item','obra');
+	$this->SetFieldAttr('lkpobra','event','filler');     
+	$this->SetFieldAttr('lkpobra','related','idobra, lkpobra');  
+	
+	$columns = array(
+			new DataGridColumn('idobra','Código','left',true, '10%',true, null, false,true),
+			new DataGridColumn('titulo','Título','left',true, '90%',true, null, false,true),
+			);
+	
+	$query = $this->objObra->GetObrasExportacao();
+
+	$datagrid = new DataGrid2($query, $columns, '',20);
+	
+	$datagrid->SetTitle('Relação de obras para exportação');
+	$datagrid->SetLinkType('linkbutton');
+	$datagrid->SetWidth('100%');
+	$this->addField($datagrid);
+
+        $ui = $this->manager->getUI();
+        $buttons = array
+        (
+	    new MButton('btnEnviar','Enviar'),
+        );
+        $this->SetButtons($buttons);
+    } 
+
+    function btnIncluir_click()
+    {
+	global $MIOLO, $module, $self, $theme, $action, $page, $item;
+	$this->objObra = $MIOLO->GetBusiness($module,'obra');
+	$idobra = $this->GetFormValue('idobra');		
+	$titulo = $this->GetFieldValue('lkpobra');
+	if ($this->objObra->qtdObrasInseridasExportacao($idobra)==0)
+	{
+		$this->objObra->saveObrasExportacao($idobra,$titulo);
+		$MIOLO->information("Obra adicionada");
+	}
+	else $MIOLO->information("Obra já está na lista da exportação. Então não foi adicionada.");
+    }
+
+    function btnEnviar_click()
+    {
+	$exportacao = $this->objObra->getObrasExportacao()->result;
+	for ($cont=0;$cont<sizeof($exportacao);$cont++)
+	{
+		$idobra = $this->objObra->GetIdByNumero($exportacao[$cont][0]);
+		$variaveis = $this->objObra->getMaterialExportacao($idobra)->result;
+		$fixos = $this->objObra->getCamposFixosExportacao($idobra)->result;
+		$lider = $this->objObra->getLiderExportacao($idobra);	
+		if ($lider==NULL) $lider = '00000nam  22000005a 4500';
+		$indicadores = $this->objObra->getIndicadoresByIdobra($idobra);
+		$entrada=0;
+		for ($x=0;$x<sizeOf($variaveis);$x++)
+		{
+			$material[$entrada] = $material[$entrada] . '$' . $variaveis[$x][1] . $variaveis[$x][2];
+			if (!(($variaveis[$x+1][0]==$variaveis[$x][0])&&($variaveis[$x+1][3]==$variaveis[$x][3])))
+			{
+				$etiqueta[$entrada] = $variaveis[$x][0];
+				$ocorrencia[$entrada] = $variaveis[$s][3];
+				$entrada++;
+			}			
+		} 
+		$string = '^';
+		for ($x=0;$x<sizeOf($fixos);$x++)
+		{
+			$string = $string . $fixos[$x][1] . '^' ;
+		}
+
+		for ($x=0;$x<sizeOf($material);$x++)
+		{
+			$string = $string . $indicadores[2*$x][3] . $indicadores[(2*$x)+1][3] . $material[$x] . '^' ;
+		}
+		$tamanho = 0;
+		for ($x=0;$x<sizeOf($fixos);$x++)
+		{
+			$diretorio = $diretorio . $fixos[$x][0] . ($this->converteQtdDigitos(strlen($fixos[$x][1])+1,4)). ($this->converteQtdDigitos($tamanho,5));
+			$tamanho = $tamanho + strlen($fixos[$x][1]) + 1;
+		}
+		for ($x=0;$x<sizeOf($material);$x++)
+		{
+			$diretorio = $diretorio . $etiqueta[$x] . ($this->converteQtdDigitos(strlen($indicadores[2*$x][3] . $indicadores[(2*$x)+1][3] .$material[$x])+1,4)). ($this->converteQtdDigitos($tamanho,5));
+			$tamanho = $tamanho + strlen($indicadores[2*$x][3] . $indicadores[(2*$x)+1][3] .$material[$x]) + 1;
+		}
+		
+		$string = $lider . $diretorio . $string . "\\\n" ;
+		$saida = $saida . $string;
+	}
+	$this->objObra->deleteObrasExportacao();
+	$file = fopen($this->manager->getConf('home.modules') . "/biblioteca/files/exportacao.txt","w+");
+        fwrite($file,$saida);
+	fclose($file);
+	$this->manager->SaveFile("biblioteca","exportacao.txt","files/");
+	$MIOLO->information("Arquivo gerado com sucesso.");
+    }
+
+    function converteQtdDigitos($tamanho,$digitos)
+    {
+	for ($x = $digitos - strlen($tamanho);$x>0;$x--) 
+	{
+		$tamanho = '0' . $tamanho;
+	}
+	return $tamanho;
+    }
+
+
+    function GetData()
+    {
+        $data = new FormData();
+        $data->titulo = null;
+        $data->subtitulo = null;
+        $data->autor = null;
+        $data->edicao = null;
+        $data->localdepublicacao = null;
+        $data->editora = null;
+        $data->datadepublicacao = null;
+        $data->descfisica = null;
+        $data->idgenero = 1;
+        $data->keygenero = null;
+        $data->edicao = null;
+        return $data;
+    }
+	
+    function ErroSucesso($mensagem)
+    {
+        if ( count($this->erro) > 0 )
+        {
+            foreach ( $this->erro as $e )
+            {
+                $this->addError($e);
+            }
+        }
+        else
+        {
+            //$this->info[] = "Arquivo enviado com sucesso! <br> Código de verificação do arquivo <b>texto:</b> $this->hashmd5";
+   		$this->info[] = $mensagem;
+        }
+        if ( count($this->info) > 0 )
+        {
+            foreach ( $this->info as $i )
+            {
+                $this->addInfo($i);
+            }
+        }
+    }
+}
+?>

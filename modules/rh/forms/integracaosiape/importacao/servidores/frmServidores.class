@@ -1,0 +1,303 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmServidores extends MForm
+{
+    protected $erro, $info, $mime_content_type, $hashmd5;
+    //a função mime_content_type() não está sendo usada pois retorna resultados variados em estações e ou navegadores diferentes
+
+    function __construct()
+    {
+        parent::__construct('Carregamento do arquivo SIAPEFITAESP');
+        $this->SetClose($this->manager->GetActionURL('rh', 'main:integracaosiape:importacao'));
+        $this->EventHandler();
+    } // __construct
+
+
+    function CreateFields()
+    {
+        $ui = $this->manager->getUI();
+        $fields = array
+        (
+            new MText('txtObs2','Todo arquivo enviado será processado no decorrer da madrugada do dia subsequente.'),
+            new MSpacer(1),
+            //new MText('txtObs',"Envie apenas arquivos com extensão '.txt' ou '.zip', de preferência '.zip'",'blue',TRUE),
+            new MText('txtObs',"Envie apenas arquivos com extensão '.zip'",'blue',TRUE),
+            new MFileField('fileServidor','','Arquivo de Servidores'),
+            new MSeparator(),
+            new MSpacer(1),
+            $this->listaUltimos()
+        );
+        $this->SetFields($fields);
+
+        $buttons = array( new MButton('btnEnviar','Enviar') );
+        $this->SetButtons($buttons);
+    } // CreateFields
+
+    function listaUltimos()
+    {
+        global $module;
+
+        $objtipo0 = $this->manager->GetBusiness($module,'tipo0');
+        $result = $objtipo0->listaUltimos();
+
+        //para limitar a doze meses
+        foreach ($result as $ind => $reg) 
+        {
+            $t[] = array( substr($reg[0],4,2) . '/' . substr($reg[0],0,4), $reg[1] );
+            if ($ind > 10)
+            {
+///////////////////                break;
+            }
+        }
+		$table = new MTableRaw('Últimos importados e gravados', $t, array('Mês/Ano','Quantidade'));
+        //$table = new MTableRaw('Últimos 12 importados e gravados', $t, array('Mês/Ano','Quantidade'));
+        $table->table->SetAttributes('bgcolor=#0000FF');
+        $table->table->SetAttributes('align=center');
+        return $table;
+    } // listaUltimos
+
+
+    function btnEnviar_click()
+    {
+        $login = $this->manager->getLogin();
+
+        $filename = $_FILES['fileServidor']['tmp_name'];  //matriz['tmp_name']['name']['type']['error']['size']
+
+        // verifica se algum arquivo foi especificado
+        if ( $filename != '' )
+        {
+            //verifica o tipo de conteúdo do arquivo
+            //$type = $_FILES['fileServidor']['type'];
+            $type = mime_content_type($filename);   //$tipoMime = mime_content_type($filename);
+            if (stripos($type, 'text') !== false)
+            {
+                $this->mime_content_type = 'text';
+            }
+            else
+            {
+                if (stripos($type, 'zip') !== false)
+                {
+                    $this->mime_content_type = 'zip';
+                }
+            }
+
+            if ( ($this->mime_content_type == 'text') or ($this->mime_content_type == 'zip') )
+            {
+                //verifica se o arquivo foi gravado no servidor e se não está em branco
+                if ( (file_exists($filename)) and (filesize($filename) > 0) )
+                {
+                    $this->btnEnviar2($filename, $login);
+                }
+                else
+                {
+                    $this->erro[] = "Erro ao carregar o arquivo ou arquivo vazio.";
+                }
+            }
+            else
+            {
+                $this->erro[] = "O arquivo não é do tipo 'txt' ou 'zip'.";
+            }
+        }
+        else
+        {
+            $this->erro[] = "Arquivo não informado.";
+        }
+
+        $this->ErroSucesso();
+    } // btnEnviar_click
+
+
+    function btnEnviar2($filename, $login)
+    {
+        if ($this->mime_content_type == 'zip')
+        {
+            $r = exec("unzip -xo $filename -d /tmp",$m_resultados,$resultado);
+
+            $arqUnZip       = str_replace('inflating: ','',$r       );   //limpa resultado para obter o nome do arquivo gerado
+            $arqUnZip       = trim(str_replace('Archive: '  ,'',$arqUnZip));
+            $arrRegistros   = file     (      $arqUnZip);
+            $hashmd5        = hash_file('md5',$arqUnZip);
+            $tamanhoArquivo = filesize (      $arqUnZip);
+        }
+        else
+        {
+            $arrRegistros   = file     (      $filename);
+            $tamanhoArquivo = filesize (      $filename);
+            $hashmd5        = hash_file('md5',$filename);
+        }
+
+        $REGISTRO_TIPO_0 = $arrRegistros[0];
+        $quantidadeRegistros = count($arrRegistros);
+
+        //$REGISTRO_TIPO_9 = $arrRegistros[$quantidadeRegistros-1];
+
+        $NOME_ARQUIVO   =        substr($REGISTRO_TIPO_0,18,12);
+        //$MES_REFERENCIA = intval(substr($REGISTRO_TIPO_0,45,2));
+        $MES_REFERENCIA = substr($REGISTRO_TIPO_0,45,2);
+        $ANO_REFERENCIA = substr($REGISTRO_TIPO_0,47,4);
+        //$ANO_REFERENCIA = intval(substr($REGISTRO_TIPO_0,47,4));
+
+        //$QUANTIDADE = intval(substr($REGISTRO_TIPO_9,21,6));
+
+        // consistir a integridade dos registros
+        $quantidadeCaracteresQuebrasLinha = $quantidadeRegistros*2;
+        $tamanhoSemQuebraLinha = $tamanhoArquivo - $quantidadeCaracteresQuebrasLinha;
+        if ( $tamanhoSemQuebraLinha == ($quantidadeRegistros*764) )
+        {
+            // consistir 'nome' dentro do arquivo
+            if ( $NOME_ARQUIVO == "SIAPEFITAESP" )
+            {
+                // consistir se o arquivo já foi carregado (data)
+                $arquivoTabela = $this->manager->getBusiness('common','arquivo');
+            
+                $arquivoTabela = $arquivoTabela->GetByMD5($hashmd5);
+                
+                if ( ! $arquivoTabela->IsPersistent() )
+                {
+                    $modules = $this->manager->getConf('home.modules');
+                    $destino = '/rh/files/integracaosiape/importacao/servidores/'; //sub-diretório para o txt
+
+                    // copiar o arquivo para o local apropriado (caso haja espaço)
+                    if ( $tamanhoArquivo < disk_free_space($modules.$destino) )
+                    {
+
+                        $fileNameTxt = "siapefitaesp_{$MES_REFERENCIA}_{$ANO_REFERENCIA}.txt";
+						
+                        if ($this->mime_content_type == 'zip')                        
+						
+						{ //zip apagar na origem
+							copy($arqUnZip ,                 $modules.$destino . $fileNameTxt);							
+                            $this->hashmd5 = hash_file('md5',$modules.$destino . $fileNameTxt);
+                            exec("gzip -f9 "  .              $modules.$destino . $fileNameTxt);
+                        }
+                        else
+                        {  //move
+                            copy($filename ,                 $modules.$destino . $fileNameTxt);
+                            $this->hashmd5 = hash_file('md5',$modules.$destino . $fileNameTxt);
+                            exec("gzip -f9 "  .              $modules.$destino . $fileNameTxt);
+                        }
+                        
+                       	//********** Jeferson (Inicio - A)	   
+						   
+						//var_dump($modules.$destino . $fileNameTxt);
+						//exit(0);
+						
+						$tamanhoArquivo = filesize( $modules.$destino . $fileNameTxt . ".gz" ); 
+						$arrRegistros   = fread ( fopen($modules.$destino . $fileNameTxt . ".gz",'r') , $tamanhoArquivo); 
+						
+						//fopen($modules.$destino . $fileNameTxt . ".gz",'r');
+						
+						//var_dump($arrRegistros);
+						//exit(0);
+						                        	
+						$arquivoTabela->conteudo = $arrRegistros;
+						//$arquivoTabela->conteudo = $modules.$destino . $fileNameTxt . ".gz";   
+						//$arquivoTabela->conteudo = "miolo\modules\rh\files\integracaosiape\importacao\servidores\siapefitaesp_01_2009.txt.gz";
+
+						
+						//********** Jeferson (Fim - A)
+						
+                        /*
+                        if ( !$arquivoTabela->isPersistent() )
+                        {
+                            $arquivoTabela->idArquivo      = $this->hashmd5;
+                        }
+                        */
+                        //var_dump("passei aqui");
+                        $arquivoTabela->md5                 = $this->hashmd5;
+                        $arquivoTabela->nome                = "$fileNameTxt.gz";
+                        $arquivoTabela->caminho             = $destino;              //sub-diretório para o txt
+//$arquivoTabela->tipoMime            = "application/x-gz";
+                        $arquivoTabela->tamanho             = $tamanhoArquivo;
+                        $arquivoTabela->mesReferencia       = $MES_REFERENCIA;
+                        $arquivoTabela->anoReferencia       = $ANO_REFERENCIA;
+                        $arquivoTabela->dataGravacao        = date("d/m/Y");
+                        $arquivoTabela->idUsuario           = $login->idkey;
+                        $arquivoTabela->scriptProcessamento = "importServidor.php";
+                        $arquivoTabela->caminhoScript       = "/rh/offline/";
+                        
+                        //var_dump($arquivoTabela);
+                        //exit(0);
+                        
+                        $arquivoTabela->beginTransaction();
+						$arquivoTabela->Save();
+						$arquivoTabela->endTransaction();
+						
+						//Após armazenar o conteúdo do arquivo no campo LOB
+						//apaga-o do disco.
+						try
+						{
+							unlink($modules.$destino . $fileNameTxt . ".gz");
+						}
+						catch (Exception $e) 
+						{
+							$this->erro[] = $e->getMessage();
+						}
+                    }
+                    // caso não tenha espaço em disco
+                    else
+                    {
+                        $this->erro[] = "O arquivo não pode ser armazenado no servidor. Entre em contato com administrador de sistemas imediatamente.";
+                    }
+
+                }
+                else
+                {
+                    $this->erro[] = "O arquivo já foi carregado em $arquivoTabela->dataGravacao.";
+                }
+            }
+            else
+            {
+                // TO DO: verificar ordem de prioridade das msgs.
+                $this->erro[] = "O arquivo apresenta inconsistência de dados ou está corrompido.";
+            }
+        }
+        else
+        {
+            $this->erro[] = "A estrutura interna do arquivo não corresponde as especificações técnicas necessárias.";
+        }
+    } // btnEnviar2
+
+
+    function ErroSucesso()
+    {
+        if ( count($this->erro) > 0 )
+        {
+            foreach ( $this->erro as $e )
+            {
+                $this->addError($e);
+            }
+        }
+        else
+        {
+            $this->info[] = "Arquivo enviado com sucesso! <br> Código de verificação do arquivo <b>texto:</b> $this->hashmd5";
+        }
+        if ( count($this->info) > 0 )
+        {
+            foreach ( $this->info as $i )
+            {
+                $this->addInfo($i);
+            }
+        }
+    } // ErroSucesso
+
+
+}
+?>

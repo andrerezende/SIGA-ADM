@@ -1,0 +1,153 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmRemocao extends MForm
+{
+    public $idauth;
+    public $idvinculo;
+    public $grid; 
+    public $insc;
+    public $idcursoinsc;
+    public $cursos;
+    public $vinculo;
+    
+
+	function __construct()
+    {   global $MIOLO, $action, $curso;
+
+        $this->insc = $MIOLO->getBusiness('rh','capacitacaoinsc');
+        parent::__construct('Remoção de Inscrições');
+        $this->box->AddStyle('padding',"10px");
+	    $this->eventHandler();
+	}
+
+    function CreateFields()
+	{  
+        $this->vinculo = $this->getFormValue('siape');
+        if ($this->vinculo == '')
+        {
+            $this->createFieldsFase1();
+        }
+        else
+        {
+            $this->createFieldsFase2();
+        }
+    }
+
+    function CreateFieldsFase1()
+    {
+        $fields = array(
+            new MLabel('Atenção: Este formulário permite que você REMOVA a inscrição de servidores em Cursos/Eventos de Capacitação.','red',true),
+            new MSpacer('15px'),
+            new MTextField('siape','','Siape do Servidor'),
+        );
+
+	    $this->SetFields($fields);
+        $buttons = array(
+            new MButton('btnPost1','Continuar >>'),
+        );
+
+	    $this->SetButtons($buttons);
+    }
+
+    function CreateFieldsFase2()
+    {
+        $this->insc->idvinculo = $this->vinculo;
+        $this->insc->getDadosPessoais();
+        $aTurno = array("M"=>"Manhã","T"=>"Tarde","N"=>"Noite");	
+        $aCursos = $this->insc->listCursosTree();
+
+        if (count($aCursos))
+        {
+    		foreach($aCursos as $n=>$c)
+	    	{
+		    	$opt = array(); 
+    			foreach($c as $c1)
+	    		{
+                    $opt[] = new MOption( $c1[2], $c1[2], $c1[0].'&nbsp;-&nbsp;'.$aTurno[$c1[1]], false);
+     			}
+                $optGroup[] = new MOptionGroup($c[2],'Curso: '.$n,$opt);
+		    }
+            $fCurso = new MSelection('idmodulo',$this->idcursoinsc,'Curso/Módulo',$optGroup);
+            $buttons = array(
+                new MButton('btnPost2', 'Continuar >>'),
+            );
+        }
+        else
+        {
+            $fCurso = new MLabel('Não há inscrições para este servidor','red',true);
+            $go = $this->manager->getActionURL('rh','capacitacao:remocao');
+            $buttons = array(
+                new MButton('btnPost2', '<< Voltar', $go),
+            );
+        }
+
+
+        $fields = array(
+            new MHiddenField('siape',$this->vinculo),
+            new MTextLabel('lblServidor',$this->vinculo . ' - ' . $this->insc->dadosPessoais->nome,'Servidor'),
+            $fCurso
+        );
+	    $this->SetFields($fields);
+
+	    $this->SetButtons($buttons);
+        $this->setLabelWidth('20'); 
+    }
+
+    function btnPost2_click()
+    {
+        global $MIOLO, $module, $self;
+
+        $inscricao = $this->getFormValue('inscricao');
+        if ($inscricao == '')
+        { 
+           $idmodulo = $this->getFieldValue('idmodulo');
+           $idvinculo = $this->vinculo;
+           $this->insc->getBySiapeCurso($idvinculo,$idmodulo);
+           $inscricao = $this->insc->inscricao;
+    	   $action_sim = $MIOLO->GetActionURL($module,$self,'',array('inscricao'=>$inscricao,'conf'=>'sim','event'=>'btnPost2:click'));
+           $action_nao = $MIOLO->GetActionURL($module,$self);
+           $modulo = $MIOLO->getBusiness('rh','capacitacaomodulo',$idmodulo);
+           $aTurno = array("M"=>"Manhã","T"=>"Tarde","N"=>"Noite");	
+		   $MIOLO->Question("Tem certeza que deseja excluir a inscrição de [{$this->vinculo} - {$this->insc->dadosPessoais->nome} no curso/módulo [{$modulo->curso->nome} - {$modulo->nome} - {$aTurno[$modulo->turno]}] ?",$action_sim,$action_nao);
+        }
+        else 
+        {
+           $this->insc->getById($inscricao);
+        }
+		$conf = $this->GetFormValue('conf');
+		if ($conf == 'sim')
+		{
+			$this->insc->Delete();
+			if (!$this->insc->CheckError())
+			{
+			    $MIOLO->Information('Inscrição excluída com sucesso',$MIOLO->GetActionURL($module,$self));
+			}
+			else
+			{
+				$MIOLO->Error($this->insc->getErrors());
+			}
+					
+	   }
+    }
+
+
+
+}
+?>

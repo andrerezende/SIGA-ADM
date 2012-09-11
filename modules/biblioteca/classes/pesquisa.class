@@ -1,0 +1,280 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+class Pesquisa extends Business
+{
+	var $etiquetas;
+
+	
+    function getEtiquetas($pesquisaXML)
+    { 
+	// Recebe um objeto XML representando as opçoes de pesquisa e preenche o array
+	// $this->etiquetas com as etiquetas correspondentes
+
+       	$list = array(); 
+       	foreach ($pesquisaXML as $node)
+	{
+       		$obj = $node[1]->campo_e_subcampo;
+    		if (!(is_array($obj)))
+		{
+			settype($obj,"array");
+		}
+            	foreach ($obj as $etiqueta)
+            	{
+                	$campo = explode('.',$etiqueta);
+                	$list[$campo[0]] = $campo[0];
+                	$this->etiquetas[$campo[0]][$campo[1]] = array(0,$node[3],$node[4],$node[5],$node[6]);
+            	}
+        }
+	$sql = new sql('tag,idetiqueta','bt_etiqueta','tag in ?');
+        $in = implode("','",$list);
+        $sql->setParameters(":('$in')");
+	$query = $this->Query($sql) ;
+        foreach($query->result as $row)
+        {
+            foreach($this->etiquetas[$row[0]] as $key=>$etiqueta)
+            $this->etiquetas[$row[0]][$key][0] = (int)$row[1];
+        }
+    }
+
+ 
+	function GetCamposByTitulo($campos, $camposPesquisa)
+	{
+		$result = array();
+		if (!(is_array($campos))) settype($campos,"array");
+        
+
+    
+    
+        
+		foreach($campos as $campo)
+		{
+			foreach($camposPesquisa as $c)
+			{
+                
+				if ($c[0] == $campo)
+				{
+                    
+					$obj = $c[1]->campo_e_subcampo;
+
+					if (!(is_array($obj))) settype($obj,"array");
+
+					foreach ($obj as $etiqueta)
+					{
+						$tag = substr($etiqueta,0,strpos($etiqueta,"."));
+						$subcampo = substr($etiqueta,-1);
+
+						$sql = new sql('idetiqueta','bt_etiqueta','tag=?');
+						$query = $this->Query($sql,$tag) ;
+
+						if ($query->result[0][0])
+							array_push($result,array($query->result[0][0],$subcampo));
+					}
+				}
+
+				if ($campo == 'Todos')
+				{
+					if ($c[3])
+					{
+						$obj = $c[1]->campo_e_subcampo;
+
+						if (!(is_array($obj))) settype($obj,"array");
+
+						foreach ($obj as $etiqueta)
+						{
+							$tag = substr($etiqueta,0,strpos($etiqueta,"."));
+							$subcampo = substr($etiqueta,-1);
+
+							$sql = new sql('idetiqueta','bt_etiqueta','tag=?');
+							$query = $this->Query($sql,$tag) ;
+
+							if ($query->result[0][0])
+								array_push($result,array($query->result[0][0],$subcampo));
+						}
+					}
+				}
+
+				if ($campo == 'Grid')
+				{
+					if ($c[4])
+					{
+						$obj = $c[1]->campo_e_subcampo;
+
+						if (!(is_array($obj))) settype($obj,"array");
+
+						foreach ($obj as $etiqueta)
+						{
+							$tag = substr($etiqueta,0,strpos($etiqueta,"."));
+							$subcampo = substr($etiqueta,-1);
+
+							$sql = new sql('idetiqueta','bt_etiqueta','tag=?');
+							$query = $this->Query($sql,$tag) ;
+
+							if ($query->result[0][0])
+								array_push($result,array($query->result[0][0],$subcampo));
+						}
+					}
+				}
+			}
+		}
+     
+		return $result;
+	}
+
+
+	function GetCampoObj($obj)
+	{ // Recebe um objeto 245.a e devolve um array ["62","a"]
+
+		$result = array();
+		
+		$obj = $obj->campo_e_subcampo;
+
+		if (!(is_array($obj))) settype($obj,"array");
+
+		foreach ($obj as $etiqueta)
+		{
+			$campo = substr($etiqueta,0,strpos($etiqueta,"."));
+			$subcampo = substr($etiqueta,-1);
+
+			// Aqui está "THE PROBLEMAN"
+			// Muitas SQLs para buscasr idetiquetas
+			// o jeito é armazenar num array...
+			
+			if ( (in_array($campo,$this->etiquetas)) )
+			{
+				$idetiqueta = array_keys($this->etiquetas,$campo);
+				$idetiqueta = $idetiqueta[0];
+				
+				array_push($result,array($idetiqueta,$subcampo));
+			}
+			else 
+			{
+				$sql = new sql('idetiqueta','bt_etiqueta','tag=?');
+				$query = $this->Query($sql,$campo) ;
+
+				$etiquetas[$query->result[0][0]] = $campo;
+
+				if ($query->result[0][0])
+					array_push($result,array($query->result[0][0],$subcampo));
+			}
+			return $result;
+		}
+	}
+	
+
+	function GetCampoArray($str)
+	{ // Recebe uma string 245.a e devolve um array ["62","a"]
+	
+		$result = array();
+		
+		$campo = substr($str,0,strpos($str,"."));
+		$subcampo = substr($str,-1);
+
+		$sql = new sql('idetiqueta','bt_etiqueta','tag=?');
+		if ($campo)
+		{
+			$query = $this->Query($sql,$campo);
+
+			if ($query->result[0][0])
+				array_push($result,array($query->result[0][0],$subcampo));
+
+			return $result;
+		}
+	}
+
+
+	function GetCamposString($campo)
+	{ // recebe "53,51,63" e retorna um array {"53","51"] ...
+		return split(',',$campo);
+	}
+
+
+	function RetirarCaracteresEspeciais($string)
+	{
+		// as linhas abaixo retiram os ç,ã,ú, ETC ! 
+		$string = eregi_replace("[áàâãä]","a",$string);
+		$string = eregi_replace("[éèêë]","e",$string);
+		$string = eregi_replace("[íìîï]","i",$string);
+  		$string = eregi_replace("[óòôõö]","o",$string);
+        /*
+        $u = array('ú','ù','û','ü');
+        $string = str_replace($u,"u",$string);
+        */
+		$string = eregi_replace("[úùûü]","u",$string);
+		$string = eregi_replace("[ñ]","n",$string);
+		$string = eregi_replace("[ç]","c",$string);
+
+		$string = eregi_replace("[ÁÀÂÃÄ]","A",$string);
+		$string = eregi_replace("[ÉÈÊË]","E",$string);
+		$string = eregi_replace("[ÍÌÎÏ]","I",$string);
+		$string = eregi_replace("[ÓÒÔÕÖ]","O",$string);
+		$string = eregi_replace("[ÚÙÛÜ]","U",$string);
+		$string = eregi_replace("[Ñ]","N",$string);
+		$string = eregi_replace("[Ç]","C",$string);
+		return $string;
+	}
+
+
+	function SubstituirPorBranco($string)
+	{
+		$string = eregi_replace('[/()":.?,&;\-]'," ",$string);
+				
+		return $string;
+	}
+
+	
+	function SubstituirPorVazio($string)
+	{
+		$string = eregi_replace('[/()"-:.?,&;\]',"",$string);
+				
+		return $string;
+	}
+
+	
+	function SubstituirAspas($string)
+	{
+		$string = eregi_replace('["]'," ",$string);
+				
+		return $string;
+	}
+
+
+	function RetirarVazios($array)
+	{
+		$array2 = array();
+		foreach($array as $a)
+		{
+			//if(strlen($a) > 2)
+			if($a != '')
+			{
+				$array2[] = $a;
+			}
+		}
+		return $array2;
+	}
+}
+
+?>

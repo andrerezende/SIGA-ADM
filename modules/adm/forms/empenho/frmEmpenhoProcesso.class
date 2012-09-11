@@ -1,0 +1,397 @@
+<?
+class frmEmpenhoProcesso extends MForm
+{
+    protected $objEmpenho;
+    function __construct($idEmpenho)
+    { 
+		global $MIOLO;
+		
+		$this->objEmpenho = $MIOLO->GetBusiness('adm','empenho',$idEmpenho);
+		parent::__construct("Gerar Processo - Empenho nº ".$this->objEmpenho->numero);
+		$this->eventHandler();
+    }
+
+	function CreateFields()
+    {
+		global $MIOLO, $module, $action, $item;
+
+		$this->objEmpenho->retrieveAssociation('empenhado');
+		$this->objEmpenho->retrieveAssociation('fornecedor');
+		$this->objEmpenho->fornecedor->retrieveAssociation('instituicao');
+
+		$fields = array(
+					//new MLabel('Número: '.$this->objEmpenho->numero),
+					//new MLabel('Fornecedor: '.$this->objEmpenho->fornecedor->instituicao->nome),
+					new MHiddenField('idEmpenho',$this->objEmpenho->idEmpenho),
+			);
+		$this->SetFields($fields);
+		$buttons = Array(
+	     //   	new MButton('btnReportCapaProcesso','Capa de Processo','pdf'),
+			//	new MButton('btnReportNota','Nota de Empenho','pdf'),
+				new MButton('btnVoltar','Voltar'),
+			);		
+			
+		$this->SetButtons($buttons);
+
+
+		$mensagem = "Empenho criado com sucesso.<br>Número: " . $this->objEmpenho->numero . "<br>Fornecedor: " . $this->objEmpenho->fornecedor->instituicao->nome;
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//se empenho for de distribuição direta, já faz esse passo
+//////
+////////////
+		try
+		{
+			$cf = new MCurrencyFormatter();
+			$idEmpenho = $this->objEmpenho->idEmpenho;
+			$empenho = $MIOLO->GetBusiness('adm','empenho',$idEmpenho);
+			$empenho->getEmpenhado();
+
+			/* Removida a referencia
+		$sql = new MSql('anoref','ad_controle');
+		$anoReferencia = $empenhado->Query($sql)->result[0][0];
+		*/
+		$anoReferencia = Date('Y');
+
+			$empenho->BeginTransaction();
+			$arrayOrcamentos = array();//operações relativas a orcamento interno: array[idUo][idRubrica][ano]['tipoOperacao'][i] = $valor
+			$totalItensDistribuidos = 0;
+
+			foreach($empenho->empenhado as $empenhado)
+			{
+				$totalUOReqs = $empenhado->GetCountUOReqs($empenhado->idEmpenhado);
+				$totalPedido = $cf->toDecimal($empenhado->GetQuantPedidaUOReqs($empenhado->idEmpenhado));
+				$totalDevolvido = $cf->toDecimal($empenhado->GetQuantDevolvidaUOReqs($empenhado->idEmpenhado));
+				$totalLicitado = $cf->toDecimal($empenhado->GetQuantLicitadaUOReqs($empenhado->idEmpenhado));
+				$totalADistribuir = $totalPedido - $totalDevolvido;
+				$totalEmpenhado = $cf->toDecimal($empenhado->quantidadeEmp);
+
+				//se há apenas 1 UO Req ou a quantidade a distribuir para o item de licitação for igual à quantidade empenhada, faz a distribuição
+				if((($totalUOReqs == 1) || ($totalADistribuir == $totalEmpenhado)) && ($empenhado->status == '1'))
+				{
+					$totalItensDistribuidos++;
+					$empenhado->retrieveAssociation('licitacao');
+					if(($empenhado->licitacao->idTipoLicitacao == '1') or ($empenhado->licitacao->idTipoLicitacao == '4'))//COMPRA
+					{
+						$empenhado->getItemReq();
+						$itensEmpenho = array();
+						foreach($empenhado->itemreq as $i)
+						{
+							if($i->status != '0')
+							{
+								$i->getRequisicao();
+								if(substr($i->requisicao->dataHora,6,4) == $anoReferencia)//requisicao tem que ser do ano corrente
+								{
+									$itensEmpenho[] = $i;
+								}
+							}
+						}
+						$totalUOs = count($itensEmpenho);
+					}
+					elseif($empenhado->licitacao->idTipoLicitacao == '2')//SERVICO
+					{
+						$empenhado->getItemServExt();
+						$itensEmpenho = array();
+						foreach($empenhado->itemServExt as $i)
+						{
+							if($i->status != '0')
+							{
+								$i->getRequisicao();
+								if(substr($i->requisicao->dataHora,6,4) == $anoReferencia)//requisicao tem que ser do ano corrente
+								{
+									$itensEmpenho[] = $i;
+								}
+							}
+						}
+						$totalUOs = count($itensEmpenho);
+					}
+					elseif($empenhado->licitacao->idTipoLicitacao == '3')//LIVRO
+					{
+						$empenhado->getItemReqBib();
+						$itensEmpenho = array();
+						foreach($empenhado->itemreqbib as $i)
+						{
+							if($i->status != '0')
+							{
+								$i->getRequisicao();
+								if(substr($i->requisicao->dataHora,6,4) == $anoReferencia)//requisicao tem que ser do ano corrente
+								{
+									$itensEmpenho[] = $i;
+								}
+							}
+						}
+						$totalUOs = count($itensEmpenho);
+					}
+					foreach($itensEmpenho as $i)
+					{
+						if(($empenhado->licitacao->idTipoLicitacao == '1') or ($empenhado->licitacao->idTipoLicitacao == '4'))//COMPRA
+						{
+							$quantPedida = $cf->toDecimal($i->quantPedida);
+							$valorEstimado = $cf->toDecimal($i->precoEstimado);
+						}
+						elseif($empenhado->licitacao->idTipoLicitacao == '2')//SERVICO
+						{
+							$quantPedida = $cf->toDecimal($i->quantidade);
+							$valorEstimado = $cf->toDecimal($i->valorEst);
+						}
+						elseif($empenhado->licitacao->idTipoLicitacao == '3')//LIVRO
+						{
+							$quantPedida = $cf->toDecimal($i->quantPedida);
+							$valorEstimado = $cf->toDecimal($i->precoEstimado);
+						}
+						if($totalUOReqs == 1)
+						{
+							$quantInformada = $cf->toDecimal($empenhado->quantidadeEmp);
+						}
+						else
+						{
+							$quantInformada = $cf->toDecimal($quantPedida) - $cf->toDecimal($i->quantDevolvida);
+						}
+						$quantEmpenhada = $cf->toDecimal($i->quantEmpenhada);
+						$valorReal = $cf->toDecimal($i->valorReal);
+						$valorInformado = $cf->toDecimal($empenhado->valorEmp) / $cf->toDecimal($empenhado->quantidadeEmp);
+
+						//gera ad_empenhadodist
+						$empenhadoDist = $MIOLO->GetBusiness('adm', 'empenhadodist');
+						$empenhadoDist->idEmpenhado = $empenhado->idEmpenhado;
+						$empenhadoDist->idRequisicao = $i->idRequisicao;
+						$empenhadoDist->quantidade = $quantInformada;
+						$empenhadoDist->valorUnitario = $valorInformado;
+						$empenhadoDist->setTransaction($empenho->getTransaction());
+						$empenhadoDist->save();
+
+						//definição dos valores totais de previsão e real
+						$totalPrevisao = $cf->toDecimal($quantInformada) * $cf->toDecimal($valorEstimado);
+						$totalReal = $cf->toDecimal($quantInformada) * $cf->toDecimal($valorInformado);
+						$valorRealMedio = (($cf->toDecimal($quantEmpenhada) * $cf->toDecimal($valorReal)) + ($cf->toDecimal($quantInformada) * $cf->toDecimal($valorInformado))) / ($cf->toDecimal($quantEmpenhada) + $cf->toDecimal($quantInformada));
+
+						//atualização do valor real (médio), da quantEmpenhada e da quantDevolvida
+						$i->setValorReal($valorRealMedio);
+						$i->quantEmpenhada = $cf->toDecimal($i->quantEmpenhada) + $cf->toDecimal($quantInformada);
+						$i->quantDevolvida = $cf->toDecimal($i->quantDevolvida) + $cf->toDecimal($quantInformada);
+
+						//se já distribuiu tudo que foi pedido, atualiza quantDevolvida para total de quantPedida
+						if(($totalADistribuir == $totalEmpenhado) && ($i->quantDevolvida != $quantPedida))
+						{
+							$i->quantDevolvida = $cf->toDecimal($quantPedida);
+							$totalPrevisao = ($cf->toDecimal($quantInformada) + ($quantPedida - $i->quantEmpenhada)) * $cf->toDecimal($valorEstimado);
+						}
+
+						//se há apenas 1 UO Req e a quantidade licitada == quantidade empenhada, atualiza quantDevolvida para total de quantPedida
+						if(($totalLicitado == $totalEmpenhado) && ($totalUOReqs == 1))
+						{
+							$i->quantDevolvida = $cf->toDecimal($quantPedida);
+							$totalPrevisao = ($cf->toDecimal($quantInformada) + ($quantPedida - $i->quantEmpenhada)) * $cf->toDecimal($valorEstimado);
+						}
+
+						$i->setTransaction($empenho->getTransaction());
+						$i->save();
+
+						////atualizações financeiras
+						////operações de retorno de Previsão, Débito e Crédito
+						////atualizações referentes a orçamento e a lançamento interno
+						$objRequisicao = $MIOLO->GetBusiness($module, 'requisicao', $i->idRequisicao);
+						$idUo = $objRequisicao->idUoRequisitante;
+						$ano = substr($objRequisicao->dataHoraAut,6,4);
+						if(!$ano)
+						{
+							$ano = substr($objRequisicao->dataHora,6,4);
+						}
+						$requisita = $MIOLO->getBusiness('adm','requisita');
+						$requisita->GetById($objRequisicao->idTipoReq, $objRequisicao->idUoRequisitante,$ano);
+						$executa = $MIOLO->getBusiness('adm','executa');
+						$executa->GetById($objRequisicao->idTipoReq, $objRequisicao->idUoExecutante,$ano);
+						$idRubrica = $requisita->idRubrica;
+					
+						// Remove a previsão de débito e adiciona o debito no orçamento da Uo requisitante
+						//atualiza array de orcamentos
+						$arrayOrcamentos[$idUo][$idRubrica][$ano]['addDebito'][] = $totalReal;
+						$arrayOrcamentos[$idUo][$idRubrica][$ano]['removePrevisao'][] = $totalPrevisao;
+
+						$objRequisicao->Log(OP_UPD,"Requisicao ".$objRequisicao->idRequisicao.": debito de ".$totalReal." na UO ".$objRequisicao->idUoRequisitante);
+						$objRequisicao->Log(OP_UPD,"Requisicao ".$objRequisicao->idRequisicao.": remocao da previsao de ".$totalPrevisao." na UO ".$objRequisicao->idUoRequisitante);
+
+						// Lançamento interno de retorno da previsão de débito
+						$lancamentoInt = $MIOLO->getBusiness('adm','lancamentoint');
+						$lancamentoInt->tipoLancamento = '7'; //retorno da previsão de débito
+						$lancamentoInt->data = date("d/m/Y");                
+						$lancamentoInt->valor = $totalPrevisao;
+						$lancamentoInt->ano = date("Y");
+						$lancamentoInt->idUoRequisitante = $objRequisicao->idUoRequisitante;       
+						$lancamentoInt->idUoExecutante = $objRequisicao->idUoExecutante;
+						$lancamentoInt->idRubrica = $requisita->idRubrica;           
+						$lancamentoInt->idRequisicao = $objRequisicao->idRequisicao;
+						$lancamentoInt->idUsuario = $MIOLO->GetLogin()->idkey;
+						$lancamentoInt->obs = "Distribuicao Automatica de Itens Empenhados - Empenhado " . $empenhadoDist->idEmpenhado . " Requisicao " . $empenhadoDist->idRequisicao;
+						$lancamentoInt->setTransaction($empenho->getTransaction());
+						$lancamentoInt->save();
+						$lancamentoInt->Log(OP_INS,"Lançamento Interno numero ".$lancamentoInt->idLancamentoInt." gerado com sucesso para a Requisicao ".$objRequisicao->idRequisicao.".");
+						
+						// Adiciona o credito na Uo Executante
+						//atualiza array de orcamentos
+						$idUo = $objRequisicao->idUoExecutante;
+						$idRubrica = $executa->idRubrica;
+						$ano = substr($objRequisicao->dataHoraAut,6,4);
+						if(!$ano)
+						{
+							$ano = substr($objRequisicao->dataHora,6,4);
+						}
+						$arrayOrcamentos[$idUo][$idRubrica][$ano]['addCreditoExecutante'][] = $totalReal;
+
+						$objRequisicao->Log(OP_UPD,"Requisicao ".$objRequisicao->idRequisicao.": credito de ".$totalReal." na UO ".$objRequisicao->idUoExecutante);
+
+						// Lançamento interno do crédito/débito
+						$lancamentoInt = $MIOLO->getBusiness('adm','lancamentoint');
+						$lancamentoInt->tipoLancamento = '5';
+						$lancamentoInt->data = date("d/m/Y");                
+						$lancamentoInt->valor = $totalReal;
+						$lancamentoInt->ano = date("Y");
+						$lancamentoInt->idUoRequisitante = $objRequisicao->idUoRequisitante;       
+						$lancamentoInt->idUoExecutante = $objRequisicao->idUoExecutante;
+						$lancamentoInt->idRubrica = $requisita->idRubrica;           
+						$lancamentoInt->idRequisicao = $objRequisicao->idRequisicao;
+						$lancamentoInt->idUsuario = $MIOLO->GetLogin()->idkey;
+						$lancamentoInt->obs = "Distribuicao Automatica de Itens Empenhados - Empenhado " . $empenhadoDist->idEmpenhado . " Requisicao " . $empenhadoDist->idRequisicao;
+						$lancamentoInt->setTransaction($empenho->getTransaction());
+						$lancamentoInt->save();
+						$lancamentoInt->Log(OP_INS,"Lançamento Interno numero ".$lancamentoInt->idLancamentoInt." gerado com sucesso para a Requisicao ".$objRequisicao->idRequisicao.".");                    
+					}
+
+					//alteração do status do empenhado
+					$empenhado->setTransaction($empenho->getTransaction());
+					$empenhado->status = '2';//DISTRIBUÍDO
+					$empenhado->save();
+				}
+			}
+
+			//updates nos orçamentos internos -> array[idUo][idRubrica][ano]['tipoOperacao'][i] = $valor
+			foreach($arrayOrcamentos as $uo=>$rubricas)
+			{
+				foreach($rubricas as $rubrica=>$anos)
+				{
+					foreach($anos as $ano=>$tipos)
+					{
+						$orcamento = $MIOLO->GetBusiness('adm','orcamentointerno');
+						$orcamento->GetById($uo,$rubrica,$ano);
+						foreach($tipos as $tipo=>$valores)
+						{
+							foreach($valores as $valor)
+							{
+								if($tipo == 'addDebito')
+								{
+									$orcamento->debito = $cf->toDecimal($orcamento->debito) + $cf->toDecimal($valor);
+								}
+								elseif($tipo == 'removePrevisao')
+								{
+									$orcamento->previsaoDebito = $cf->toDecimal($orcamento->previsaoDebito) - $cf->toDecimal($valor);
+								}
+								elseif($tipo == 'addCreditoExecutante')
+								{
+									$orcamento->creditoExecutante = $cf->toDecimal($orcamento->creditoExecutante) + $cf->toDecimal($valor);
+								}
+							}
+						}
+						$orcamento->setTransaction($empenho->getTransaction());
+						$orcamento->save();
+					}
+				}
+			}
+
+			//se todos os itens foram distribuidos, troca o status do empenho
+			if(count($empenho->empenhado) == $totalItensDistribuidos)
+			{
+				$empenho->status = 'B';//DISTRIBUÍDO
+				$empenho->save();
+				$mensagem .= "<BR><BR>Distribuição do empenho foi feita com sucesso.";
+			}
+			else
+			{
+				$go = $MIOLO->GetActionURL($module, 'main:financeiro:distribuiritens', '', array('empenho'=>$this->objEmpenho->numero, 'event'=>btnEnviar_click));
+				$botDistribuir = new MButton('', '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Distribuir&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;', $go);
+				$mensagem .= "<BR><BR>Clique para efetuar a distribuição do empenho.<BR><BR><BR>&nbsp;".$botDistribuir->generate();
+			}
+
+			$empenho->EndTransaction();
+
+			$this->addInfo($mensagem);
+		}
+		catch (Exception $e)
+		{
+			$this->addError($e->getMessage());
+		}
+//////
+////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	}
+
+	function btnReportCapaProcesso_click()
+	{
+		global $MIOLO;
+
+        $report = $MIOLO->getUI()->GetReport('adm','repCapaProcessoEmpenho',$this->objEmpenho);
+        $report->Generate();
+		
+    }
+	function btnReportNota_click()
+	{  global $MIOLO;
+
+        $report = $MIOLO->getUI()->GetReport('adm','repNotaProcessoEmpenho',$this->objEmpenho);
+        $report->Generate();
+    }
+	function btnVoltar_click()
+	{	
+		global $MIOLO;
+		$paginaEmpenho = $this->manager->GetActionURL('adm','main:empenho:find', '', '','','');
+		$this->page->redirect($paginaEmpenho);
+	}
+	
+	function extenso($valor=0,$tipo=0,$caixa="alta") {
+		$valor = strval($valor);
+	    $valor = str_replace(",",".",$valor);
+
+		if($tipo==1){
+			$singular = array("centavo", "real", "mil", "milhão", "bilhão", "trilhão", "quatrilhão");
+		    $plural = array("centavos", "reais", "mil", "milhões", "bilhões", "trilhões","quatrilhões");
+		}else{
+			$pos   = strpos($valor,".");
+		    $valor = substr($valor,0,$pos);
+		    $singular = array("", "", "mil", "milhão", "bilhão", "trilhão", "quatrilhão");
+		    $plural = array("", "", "mil", "milhões", "bilhões", "trilhões","quatrilhões");
+		}
+		$c = array("", "cem", "duzentos", "trezentos", "quatrocentos","quinhentos", "seiscentos", "setecentos", "oitocentos", "novecentos");
+	    $d = array("", "dez", "vinte", "trinta", "quarenta", "cinquenta","sessenta", "setenta", "oitenta", "noventa");
+	    $d10 = array("dez", "onze", "doze", "treze", "quatorze", "quinze","dezesseis", "dezesete", "dezoito", "dezenove");
+		$u = array("", "um", "dois", "três", "quatro", "cinco", "seis","sete", "oito", "nove");
+		$z=0;
+		$valor = number_format($valor, 2, ".", ".");
+	    $inteiro = explode(".", $valor);
+		for($i=0;$i<count($inteiro);$i++)
+			for($ii=strlen($inteiro[$i]);$ii<3;$ii++)
+				$inteiro[$i] = "0".$inteiro[$i];
+		$fim = count($inteiro) - ($inteiro[count($inteiro)-1] > 0 ? 1 : 2);
+	    for ($i=0;$i<count($inteiro);$i++) {
+		    $valor = $inteiro[$i];
+			$rc = (($valor > 100) && ($valor < 200)) ? "cento" : $c[$valor[0]];
+	        $rd = ($valor[1] < 2) ? "" : $d[$valor[1]];
+		    $ru = ($valor > 0) ? (($valor[1] == 1) ? $d10[$valor[2]] : $u[$valor[2]]) : "";
+	        $r = $rc.(($rc && ($rd || $ru)) ? " e " : "").$rd.(($rd && $ru) ? " e " : "").$ru;
+	        $t = count($inteiro)-1-$i;
+		    $r .= $r ? " ".($valor > 1 ? $plural[$t] : $singular[$t]) : "";
+			if ($valor == "000")$z++; elseif ($z > 0) $z--;
+		    if (($t==1) && ($z>0) && ($inteiro[0] > 0)) $r .= (($z>1) ? " de " : "").$plural[$t];
+			if ($r) $rt = $rt . ((($i > 0) && ($i <= $fim) &&($inteiro[0] > 0) && ($z < 1)) ? ( ($i < $fim) ? " e " : " e ") : " ") . $r;
+		}    
+	    if($caixa=="alta"){
+			$rt = strtoupper($rt);
+	    }
+		$maiusculas = array("Á","À","Â","Ã","É","Ê","Í","Ó","Ô","Õ","Ú","Û");
+	    $minusculas = array("á","à","â","ã","é","ê","í","ó","ô","õ","ú","û");
+		for($i=0;$i<count($maiusculas);$i++){
+            $rt = ereg_replace($minusculas[$i],$maiusculas[$i],$rt);    
+		}     
+    
+	    return $rt;                      
+    }
+ }
+?>

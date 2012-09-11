@@ -1,0 +1,172 @@
+<?php
+class repDespesasRestaurante extends PDFReport
+{
+	var $img;
+	var $timestamp;
+	var $objItemRestaurante;
+	var $objRestaurante;
+
+	function __construct()
+	{
+		global $MIOLO, $module, $page, $context, $self, $action, $perms;
+
+		$restaurante = Form::GetFormValue('selRestaurante');
+		$dataInicio = Form::GetFormValue('dtInicio');
+		$dataFim = Form::GetFormValue('dtFim');
+
+		parent::__construct(NULL, NULL, 55);
+	    
+		$ui = $MIOLO->GetUI();
+        $this->img = $ui->GetImageSrc('logo_siga.png',$module);
+
+		$this->SetOption('showLines',0);
+		$this->timestamp = date('d/m/Y G:i');
+
+		
+		$this->pdf->ezStartPageNumbers(580, 800, 10, 'rigth', 'Página: {PAGENUM}/{TOTALPAGENUM}');
+		$this->pdf->ezSetMargins(50, 30, 30, 30);
+		$this->SetOption('fontSize',8);
+
+		$objItemRestaurante = $MIOLO->GetBusiness($module,'itemrestaurante');
+		$objRestaurante = $MIOLO->GetBusiness($module,'restaurante');
+
+		$query = $objItemRestaurante->RepDespesasRestaurante($restaurante, $dataInicio, $dataFim);
+
+		if($query->result[0][0] <> null){
+
+			$query->SetOrder('idrequisicao');
+
+			$nomeRestaurante = $objRestaurante->GetById($restaurante)->nome;
+			$total = 0;
+
+			foreach($query->result as $row){
+				$total += floatval(str_replace(',','.',$row[6]));
+				$row[6] = number_format(str_replace(',','.',$row[6]),2,',','.');
+				$data[] = $row;
+			}
+
+			$columns = array(
+				new PDFReportColumn('idrequisicao','<b>Nº REQ</b>','center',true,8,true,null,true),
+				new PDFReportColumn('sigla','<b>UNIDADE</b>','left',true,18,true,null,true),
+				new PDFReportColumn('nome','<b>NOME DO CONVIDADO</b>','left',true,38,true,null,true),
+				new PDFReportColumn('datainicio','<b>ENTRADA</b>','center',true,10,true,null,true),
+				new PDFReportColumn('datafim','<b>SAÍDA</b>','center',true,10,true,null,true),
+				new PDFReportColumn('notafiscal','<b>FATURA</b>','right',true,10,true,null,true),
+				new PDFReportColumn('valorreal','<b>VALOR TOTAL</b>','right',true,10,true,null,true)
+			);
+
+			$this->SetColumns($columns);
+
+		}
+		
+		$this->GeneratePageHeader($nomeRestaurante, $dataInicio, $dataFim);
+		$this->GeneratePageFooter();
+		
+		if ($data == NULL) 
+		{
+			$this->GenerateDataNULL();
+		}
+		else 
+		{
+			$this->GenerateData($data);		
+			$this->GenerateResumoFinal($total);	
+		}
+		
+	}
+
+	function GeneratePageHeader($nomeRestaurante, $dataInicio, $dataFim)
+	{
+		global $MIOLO;
+
+		$h = $this->pdf->getFontHeight(12);
+		$x0=$this->pdf->left;	
+
+		$x00=$this->pdf->left;
+		$hh = $this->pdf->getFontHeight(12);
+		$this->pdf->addText($x00, 800, 12, $this->manager->getConf('instituicao.sigla')." - ".$this->manager->getConf('instituicao.nome'));
+		$this->pdf->addText($x00, 800 - $hh, 12, $this->manager->getConf('theme.system'));
+
+		/*$this->pdf->ezImage($this->img,5,50,'none','left');
+
+		$this->pdf->addText(90,800,12,'UFJF - Universidade Federal de Juiz de Fora');
+		$this->pdf->addText(90,800-$h,12,'CGCO - Centro de Gestão do Conhecimento Organizacional');
+		$this->pdf->addText(90,800-$h-$h,12,'SIGA - Sistema Integrado de Gestão Acadêmica');*/
+
+		$this->pdf->addTextWrap(450, 800-$h-$h, 100, 10, $this->timestamp,'right');
+		
+		//$this->pdf->addText(90,800-$h-$h-$h,12,'Pró-Reitor de Planejamento e Gestão');
+
+		$this->pdf->addTextWrap(0,800-5*$h,600,11,'Relatório de Despesas','center');
+		$this->pdf->addTextWrap(0,800-6*$h,600,11,$nomeRestaurante.' - Período de '.$dataInicio.' a '.$dataFim, 'center');
+
+		$this->pdf->ezSetY(800-$h-$h-$h-$h-$h-$h-$h);
+	}
+
+	function GenerateResumoFinal($valorTotal)
+	{
+		global $MIOLO, $module, $page, $context, $self, $action, $perms;
+
+		$this->pdf->SetStrokeColor(0,0,0); 
+		$this->pdf->ezSetDy(-10);
+    
+		$this->pdf->line(370,$this->pdf->y,560,$this->pdf->y);
+		$this->pdf->ezSetDy(-15);
+		$this->pdf->addTextWrap(360,$this->pdf->y,200,10,'Valor Total: R$'. number_format(str_replace(',','.',$valorTotal),2,',','.'),'right');
+
+		if($this->pdf->y < 160){
+			$this->pdf->ezNewPage();
+		}		
+
+		$this->pdf->ezSetDy(-50);
+		$this->pdf->addTextWrap(0,$this->pdf->y,600,10,'Atesto que foram prestados os serviços constantes das faturas acima:','center');
+
+		$data = date('d/m/Y');
+
+		$this->pdf->ezSetDy(-50);
+		$this->pdf->addTextWrap(30,$this->pdf->y,105,10,'Lucília F. de S. Talho','left');
+		$this->pdf->addTextWrap(30,$this->pdf->y-12,105,10,'Economista/PROPLAG','left');
+		$this->pdf->addTextWrap(0,$this->pdf->y,600,10,'Carlos Elizio Barral Fereira','center');
+		$this->pdf->addTextWrap(0,$this->pdf->y-12,600,10,'Pró-Reitor de Planejamento e Gestão','center');
+		$this->pdf->addTextWrap(360,$this->pdf->y,200,10,'Recebido em ' . $data,'right');
+		$this->pdf->addTextWrap(360,$this->pdf->y-20,200,10,'........................................', 'right');
+		$this->pdf->addTextWrap(460,$this->pdf->y-30,100,10,'PROPLAG','right');
+
+	}
+	
+	function GeneratePageFooter()
+	{
+		$x0 = $this->pdf->left;
+        $x1 = $this->pdf->right;
+        $footer = $this->pdf->openObject();
+        $this->pdf->saveState();
+        $this->pdf->SetStrokeColor(0, 0, 0);
+        $this->pdf->line($x0, 28, $x1, 28);
+        $this->pdf->addText($x0, 19, 9, $this->timestamp);
+        $this->pdf->restoreState();
+        $this->pdf->closeObject();
+        $this->pdf->addObject($footer, 'all');    		
+
+	}
+	function GenerateDataNULL()
+	{
+		$this->pdf->ezSetDy(-12);
+		$h = $this->pdf->getFontHeight(12);		
+		$this->pdf->addTextWrap(0,800-12*$h,600,11,' NÃO FORAM ENCONTRADOS DADOS RELATIVOS À CONSULTA SOLICITADA ', 'center');
+		
+	}
+
+	function GenerateData($data)
+	{
+		$this->pdf->ezSetDy(-12);
+		$this->SetData($data);
+		$this->rawdata = $this->GenerateTableData();
+		$this->GenerateBody($this->rawdata);
+	}
+
+	function Generate()
+	{
+		$this->SetOutput();
+		$this->Execute();
+	}
+}
+?>

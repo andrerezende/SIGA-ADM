@@ -1,0 +1,274 @@
+<?
+// 20-10-2011 - Daniel Bonfim
+MIOLO::Import('extensions::class.phpmailer.php','PHPMailer');
+
+class frmProcessoAnexar extends MFormAjax
+{
+	protected $processo;
+	protected $processoPai;
+	protected $setor;
+	protected $setoracesso;
+	protected $perms;
+	function __construct($objProcesso)
+	{
+		//      construct
+		global $MIOLO;
+		$this->processo = $objProcesso;
+		$this->processoPai = $MIOLO->getBusiness('protocolo','processo');
+		$this->setor = $MIOLO->getBusiness('protocolo','setor');
+		$this->setoracesso = $MIOLO->getBusiness('protocolo','setoracesso');
+		$this->perms  = $MIOLO->getPerms();
+		parent::__construct('Anexar processo');
+		$this->SetClose($MIOLO->GetActionURL('protocolo','main'));
+		$this->page->addJsCode(file_get_contents(dirname(__FILE__).'/js/frmProcessoAnexar.js'));
+		$this->eventHandler();
+	}
+	function CreateFields()
+	{
+		/* IFRO - Controle de segurança de acesso */
+		$setores = ($this->perms->checkAccess('PROT_ADMIN', A_ACCESS)) ? $this->setor->selAll() : $this->setoracesso->selSetoresAcesso($this->processo->getSetorUsuario());
+		if (
+			$this->processo->retencao->setor
+			&& in_array($this->processo->retencao->setor,$setores)
+		  )
+		{
+			//      processo a anexar
+			$numProcesso = new MLookupTextField('numProcesso','','Processo:',20);
+			$numProcesso->module = 'protocolo';
+			$numProcesso->item = 'processopertecente';
+			$numProcesso->event = 'filler';
+			$numProcesso->related = 'numProcesso';
+			$numProcesso->filter = 'numProcesso,numProcessoCorrente';
+			$numProcesso->addAttribute('maxlength','14');
+			$autor = new MTextField('autor','','Autor:',90);
+			$autor->addAttribute('maxlength','80');
+			$groupAnexo = new MBaseGroup('groupAnexo', 'Selecionar processo',array($numProcesso,new MSpacer(),$autor),'vertical','css');
+			$groupAnexo->addAttribute('style','padding:10px');
+
+			//      fields
+			$fields = array(
+				array(
+					new MHiddenField('numProcessoCorrente',$this->processo->numProcesso),
+					$groupAnexo,
+				),
+			);
+			$this->SetFields($fields);
+
+			//      required fields
+			$validators = array(
+				new MRequiredValidator('autor'),
+			);
+			$this->setValidators($validators);
+
+			//      buttons
+			$buttons = array(
+				new MButton('btnAnexar', 'Anexar'),
+			);
+			$this->SetButtons($buttons);
+
+		}else{
+			$msg = 'Este usuário não tem permissão para acessar este Processo/Protocolo';
+			$this->manager->Information($msg,$this->manager->GetActionURL('protocolo','main:processos',$this->processo->numProcesso));
+		}
+	}
+
+
+	public function btnAnexar_click()
+	{
+		/* IFRO - Controle de segurança de acesso */
+		$setores = ($this->perms->checkAccess('PROT_ADMIN', A_ACCESS)) ? $this->setor->selAll() : $this->setoracesso->selSetoresAcesso($this->processo->getSetorUsuario());
+		if (
+			$this->processo->retencao->setor
+			&& in_array($this->processo->retencao->setor,$setores)
+		)
+		{
+			//      data
+			$data = $this->getData();
+			$data->numProcesso = str_repeat('0',14-strlen($data->numProcesso)).$data->numProcesso;
+			$serie = substr($data->numProcesso,0,6);
+			$ano = substr($data->numProcesso,7,4);
+			$codigo = substr($data->numProcesso,12,2);
+
+			//      get processo pai
+			if (!is_numeric($codigo))
+				$this->processoPai->getByPartNumero($ano.$serie);
+			else
+				$this->processoPai->getByNumero($ano.$serie.$codigo);
+
+			//      error messages
+			if (!$this->processoPai->numProcesso)
+			{
+				$this->addError('O número de processo a ser anexado é inválido. Selecione um processo válido através da lupa.');
+				return;
+			}
+			if ($this->processoPai->numProcesso == $this->processo->numProcesso)
+			{
+				$this->addError('O processo '.$this->processo->numProcessoFormatado().' não pode ser anexado a ele mesmo.');
+				return;
+			}
+			if ($this->processoPai->tipo != $this->processo->tipo)
+
+			if ($this->processoPai->retencao->setor != $this->processo->retencao->setor)
+			{
+				$this->addError('O processo '.$this->processo->numProcessoFormatado().' não pode ser anexado a um processo não pertecente a este setor ('.$this->processoPai->numProcessoFormatado().').');
+				return;
+			}
+			if ($this->processoPai->status == 'A')
+			{
+				$this->addError('O processo '.$this->processo->numProcessoFormatado().' não pode ser anexado a um processo arquivado ('.$this->processoPai->numProcessoFormatado().').');
+				return;
+			}
+			if ($this->processoPai->status == 'J')
+			{
+				$this->addError('O processo '.$this->processo->numProcessoFormatado().' não pode ser anexado a um processo anexado ('.$ppai->numProcessoFormatado().').');
+				return;
+			}
+			//      set and save
+			try 
+			{
+				$this->processo->beginTransaction();
+				$andamento = $this->processo->getAndamento($this->processo->retencao->numAndamento);
+				$andamento->setData($data);
+				$andamento->dataSaida = date("YmdHi");
+				$andamento->dataDespacho = $andamento->dataSaida;
+				$andamento->status = 'J';
+				$andamento->setorDestino = $this->processo->retencao->setor;
+				$andamento->decisao = 'ANEXADO AO PROCESSO '.$this->processoPai->numProcessoFormatado();
+				$this->processo->addAndamento($andamento);
+				$this->processo->retencao->setData($andamento);
+				$andamento2 = $this->processoPai->getAndamento($this->processoPai->retencao->numAndamento);
+				$this->processoPai->retencao->numAndamento++;
+				$andamento3 = $this->processoPai->getAndamento($this->processoPai->retencao->numAndamento);
+				$andamento3->setData($andamento2);
+				$andamento2->dataSaida = $andamento->dataSaida;
+				$andamento2->dataDespacho = $andamento->dataDespacho;
+				$andamento2->setorDestino = $andamento2->setor;
+				$andamento2->decisao = 'RECEBEU COMO ANEXO O PROCESSO '.$this->processo->numProcessoFormatado();
+				$andamento2->autor = $andamento->autor;
+				$this->processoPai->addAndamento($andamento2);
+				$this->processoPai->addAndamento($andamento3);
+				$this->processoPai->retencao->setData($andamento3);
+				$this->processoPai->setTransaction($this->processo->getTransaction());
+				$this->processoPai->save();
+				$this->processo->save();
+				$this->processo->endTransaction();
+                            // 20-10-2011 - Daniel Bonfim
+                            $this->SendMailAnexar();
+				$msg = 'O processo '.$this->processo->numProcessoFormatado().' foi anexado ao processo '.$this->processoPai->numProcessoFormatado().' com sucesso.';
+				$this->processo->Log(OP_UPD,$msg);
+				$this->manager->Information($msg,$this->manager->GetActionURL('protocolo','main:processos',$this->processo->numProcesso));
+			}
+			catch(Exception $e) {$this->addError($e->getMessage());}
+		}else{
+			$msg = 'Este usuário não tem permissão para acessar este Processo/Protocolo';
+			$this->manager->Information($msg,$this->manager->GetActionURL('protocolo','main:processos',$this->processo->numProcesso));
+		}
+	}
+        
+                    // 20-10-2011 - Daniel Bonfim
+        // envia um email informando a cada observador que o processo foi anexado
+        private function SendMailAnexar() {
+            global $MIOLO;
+                        
+            $bussObservador = $MIOLO->getBusiness('common','observador');
+            $bussProcesso = $MIOLO->getBusiness('protocolo','processo');
+            
+            $numProcesso = $this->processo->numProcesso;
+            
+            // lista os observadores deste processo
+            $arrIds = $bussObservador->listIdUserObservadoresByProcesso($numProcesso);
+            if($arrIds) {
+                foreach($arrIds as $id) {
+                    $arrIdsUserObservadores[] = $id[0];
+                }
+            }
+             
+        // se houverem observadores
+        if($arrIdsUserObservadores) {
+            
+            // array com os ids dos observadores
+            foreach($arrIdsUserObservadores as $idUserObservador) {
+                
+                $bussUsuario = $MIOLO->getBusiness('common','usuario');
+                // no objPessoa já tem todas as informacoes de que preciso
+                $objUsuario = $bussUsuario->GetById($idUserObservador); 
+                                
+                $email = $objUsuario->pessoa->email;
+                
+                $mail = new PHPMailer();
+		$mail->IsSMTP(); // telling the class to use SMTP
+		$mail->Host = "smtp.ifbaiano.edu.br"; // SMTP server
+		$mail->From = 'sigaadm@ifbaiano.edu.br';
+		$mail->FromName = 'SIGA - Sistema Integrado de Gestão Acadêmica';
+		//$mail->Subject = "[SIGA] Monitoramento do processo ".$bussProcesso->numProcessoFormatado($this->processo->numProcesso);
+                $mail->Subject = "[SIGA] Processo ".$bussProcesso->numProcessoFormatado($this->processo->numProcesso).": anexado a {$this->processoPai->numProcessoFormatado()}";
+		$mail->WordWrap = 150;
+                
+                // 24-10-2011 - Daniel Bonfim
+                // informaçoes do processo para inserir no email
+                $tipo = $this->processo->tipo;
+                if($tipo == 'A')
+                    $tipo = "PROTOCOLADO";
+                else if($tipo == 'P')
+                    $tipo = "PROCESSO";
+                
+                $numFormatado = $this->processo->instituicao.".".$this->processo->numProcessoFormatado($this->processo->numProcesso);
+                $dataAbertura = $this->processo->dataFormatada($this->processo->dataAbertura);
+                $setor = $this->processo->setorOrigem;
+                
+                $status = $this->processo->retencao->status;
+                if($status == "N") {
+                    // 04-20-2011 - Daniel Bonfim
+                    if ($this->processo->retencao->setorDestino)
+                        $status = 'AGUARDANDO ENTRADA - '.$this->processo->retencao->setorDestino;
+                    else 
+                        $status = "NORMAL";
+                }
+                else if($status == "A")
+                    $status = "ARQUIVADO";
+                else if($status == "J")
+                    $status = "ANEXADO";
+                
+                $interessado = $this->processo->solicitante;
+                $titulo = $this->processo->titulo;
+                $assunto = $this->processo->assunto;
+                $arquivo = $this->processo->arquivo;
+                
+                // usuario
+                $auth = $this->manager->auth;
+                $usuario = $auth->login->id;
+                
+		$body =
+<<< HERE
+O sistema SIGA-ADM informa que o processo {$bussProcesso->numProcessoFormatado($this->processo->numProcesso)} foi anexado ao processo {$this->processoPai->numProcessoFormatado()} com sucesso.
+
+Tipo: {$tipo}
+Número: {$numFormatado}
+Data Abertura: {$dataAbertura}
+Setor: {$setor}
+Status: {$status}
+Interessado: {$interessado}
+Titulo: {$titulo}
+Assunto: {$assunto}
+Caixa: {$arquivo}
+Usuário: {$usuario}
+
+Atenciosamente,
+SIGA - Sistema Integrado de Gestão Acadêmica
+sigaadm@ifbaiano.edu.br
+
+HERE;
+
+		$mail->Body = $body;
+                $mail->AddAddress($email);
+                
+                $mail->Send();
+            }
+                
+        } else {
+            unset($bussObservador); 
+            unset($bussProcesso);
+        }   
+    }
+}
+?>

@@ -1,0 +1,304 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+class frmControleAcesso extends MForm
+{
+	var $home;
+    var $objGrupo;
+    var $objUsuario;
+
+	function __construct()
+    {   global $MIOLO, $module, $action;
+
+        $this->home = $MIOLO->GetActionURL('biblioteca',$action);
+        $this->objGrupo = $MIOLO->GetBusiness('common','grupo');
+        $this->objUsuario = $MIOLO->GetBusiness('common','usuario');
+		parent::__construct('Controle de Acesso');
+        $this->page->AddScript('m_md5.js');
+        $this->AddJsCode($this->doPasswordMD5());
+        $this->OnSubmit('doPasswordMD5()');
+        $this->SetWidth('65%');
+        $this->SetIcon($MIOLO->GetUI()->GetImage('common','controle_de_acesso.png'));
+        $this->SetClose($MIOLO->GetActionURL($module,'main'));
+	    $this->EventHandler();
+	    //seta o focus do form para o campo do login
+	    $this->page->onLoad("MIOLO_GetElementById('lkpLogin').focus();");
+	}
+
+    function CreateFields()
+	{  global $MIOLO;
+
+       $query = $this->objGrupo->ListByModule('biblioteca');
+       $challenge = uniqid(rand());
+       $mtField = array(array('mtgrupo','Grupos','',$query->chunkResult()));
+       $fields = array(
+           new MHiddenField('key',''),
+           new MHiddenField('newpass', ''),
+           new MTextLabel('txtIdUsuario','', 'Id'),
+		   new MLookupTextField('lkpLogin','','Login',20),
+//           new MPasswordField('edtPassword','','Senha',20),
+           new MHiddenField('hidIdPessoa',''),
+           new MTextField('lkpNome','','Nome',40),
+           new MTextField('edtNick','','Nick',30),
+           new MSelection('selIdSetor','','Setor'),
+           new MMultiTextField2('mtfGrupos',NULL,'Grupos',$mtField,300,true,'vertical'),
+           new MHiddenField('gruposOriginais')
+       );
+	   $this->SetFields($fields);
+
+	   $this->SetFieldAttr('lkpLogin','module','common');
+	   $this->SetFieldAttr('lkpLogin','item','usuario');
+	   $this->SetFieldAttr('lkpLogin','event', 'btnEdit:click');
+
+       $this->SetFieldsVisible(false);
+
+       $objSetor = $MIOLO->GetBusiness('common','setor');
+       $query = $objSetor->ListAtivos();
+        while ( !$query->eof() )
+        {
+            $options[$query->fields('idSetor')] = $query->fields('siglasetor')." - ".$query->fields('nomesetor');
+            $query->moveNext();
+        
+        }
+	   $this->SetFieldAttr('selIdSetor','options', $options);
+
+       $buttons = array(
+           new MButton('btnEdit',   'Enviar'),
+       );
+	   $this->SetButtons($buttons);
+	}
+
+    function SetFieldsVisible($value)
+    {
+	   $this->SetFieldAttr('txtIdUsuario','visible',$value);
+//	   $this->SetFieldAttr('edtPassword','visible',$value);
+	   $this->SetFieldAttr('hidIdPessoa','visible',$value);
+	   $this->SetFieldAttr('lkpNome','visible',$value);
+	   $this->SetFieldAttr('edtNick','visible',$value);
+	   $this->SetFieldAttr('selIdSetor','visible',$value);
+	   $this->SetFieldAttr('mtfGrupos','visible',$value);
+    }
+
+/*
+    GetData: obtém os valores fornecidos no formulario e cria um objeto FormData
+             cujos attributos têm o mesmo nome dos atributos do objeto que vai receber os valores.
+    A implementação default do GetData cria um objeto FormData cujos atributos têm
+    o mesmo nome dos campos do formulário.   
+*/
+	function GetData()
+	{
+        $data = new FormData();
+		$data->idUsuario = $this->GetFieldValue('key');
+		$data->idPessoa = $this->GetFieldValue('hidIdPessoa');
+		$data->idSetor = $this->GetFieldValue('selIdSetor');
+		$data->login = $this->GetFieldValue('lkpLogin');
+		$data->nick = $this->GetFieldValue('edtNick');
+		$data->nome = $this->GetFieldValue('lkpNome');
+		$data->newpass = $this->GetFieldValue('newpass');
+        return $data;
+	}
+
+/*
+    SetData: obtém os valores fornecidos através do parâmetro $data (geralmente um
+             objeto de negócio) e preenche os campos do formulário.
+    A implementação default do SetData assume que os atributos do objeto $data têm
+    o mesmo nome dos campos do formulário.   
+*/
+	function SetData($data)
+	{
+		$this->SetFieldValue('key', $data->idUsuario);
+		$this->SetFieldValue('txtIdUsuario', $data->idUsuario);
+		$this->SetFieldValue('hidIdPessoa', $data->idPessoa);
+		$this->SetFieldValue('selIdSetor', $data->idSetor);
+		$this->SetFieldValue('lkpLogin', $data->login);
+		$this->SetFieldValue('lkpNome', $data->nome);
+		$this->SetFieldValue('edtNick', $data->nick);
+        // $data->grupos é um array de objetos; GetAttribute percorre este array e obtem um array com 
+        // o atributo IdGrupo
+        $grupos = $this->GetAttribute($data->grupos,'idGrupo');
+        $this->mtfGrupos->SetCodeValue($grupos);
+	}
+
+	function btnPost_click()
+	{
+		global $MIOLO;
+
+        $key = $this->GetFieldValue('key');  // inclusão ou edição?
+        $objUsuario = $this->objUsuario;     // apenas um shortcut
+        if ($key != '')
+        {
+            $objUsuario->GetById($key); // se for edição, obtem os dados atuais do objeto
+        }
+        // seta os atributos do objeto com os valores dos campos do formulario
+		$objUsuario->SetData($this->GetData()); 
+        if ($key == '')
+        {
+            $objUsuario->password = '-';
+            $objUsuario->passMD5 = md5('010101');
+        }
+  
+        // os grupos devem ser tratados a parte, pois devem gerar um array de objetos
+        $grupos = $this->mtfGrupos->GetCodeValue();
+        $gruposOriginais = unserialize($this->getFormValue('gruposOriginais'));
+        if ( is_array($gruposOriginais) )
+        {
+            $gruposNovos = array_merge($grupos,$gruposOriginais);
+        }
+        else
+        {
+            $gruposNovos = $grupos;
+        }
+
+        if ( is_array($gruposNovos) )
+        {
+            foreach($gruposNovos as $g)
+            {
+                $data->grupos[] = $g[0]; // obtém o idGrupo
+            }
+            $objUsuario->SetArrayGroups($data->grupos);
+        }
+
+        try
+        {
+            if ( count($grupos) > 0 )
+            {
+                foreach( $grupos as $grupo )
+                {
+                    $msgGrupo[] = $grupo[0];
+                }
+                $msg = "Adicionado grupo(s) de acesso a biblioteca (".implode(",",$msgGrupo).") para o usuario $objUsuario->login, id: $objUsuario->idUsuario";
+            }
+            else
+            {
+                $msg = "Removido grupos de acesso a biblioteca para o usuario $objUsuario->login, id: $objUsuario->idUsuario";
+            }
+            $objUsuario->save();
+            if ( count($grupos) == 0 )
+            {
+                $objUsuario->getGroups();
+                if ( count($objUsuario->grupos) > 0 )
+                {
+                    foreach($objUsuario->grupos as $grupo)
+                    {
+                        $objUsuario->deleteAssociation("grupos",$grupo);
+                    }
+                }
+            }
+            $objUsuario->log(OP_UPD,$msg);
+            $MIOLO->Information('Usuários atualizados com sucesso.', $this->home );
+        }
+        catch (EMioloException $e)
+        {
+            $this->AddError($e->getMessage());
+	    }
+	}
+
+
+	function btnEdit_click($sender, $key='')
+	{   
+        global $item;
+
+        $login = $this->GetFieldValue('lkpLogin');
+        // verifica se está sendo executado através do evento do grid
+        $item = ($key != '') ? $key : $item;
+        if ($item != '')
+        {
+            $this->objUsuario->GetById($item);
+        }		
+        else
+        {
+            $this->objUsuario->GetByLogin($login);
+        }		
+        if ($this->objUsuario->idUsuario)
+        {
+            //grava os grupos do usuario que não eram da biblioteca
+            if ( is_array($this->objUsuario->grupos) )
+            {
+                foreach ( $this->objUsuario->grupos as $g )
+                {
+                    if ( ! $g->isGroupModule('biblioteca') )
+                    {
+                        $gruposOriginais[] = array($g->idGrupo);
+                    }
+                }
+            }
+            
+            $this->setFieldValue('gruposOriginais',serialize($gruposOriginais));
+            // coloca os dados do objeto nos campos do formulário
+            $this->SetData($this->objUsuario);
+            // exibe os campos
+            $this->SetFieldsVisible(true);
+            $this->SetFieldAttr('lkpLogin','readonly',true);
+            $this->SetFieldValue('key',$this->objUsuario->idUsuario);
+            $this->AddButton(new MButton('btnCancel', 'Cancelar', $this->home));
+            $this->SetButtonAttr('btnEdit','name','btnPost');
+            $this->SetButtonAttr('btnPost','label','Gravar');
+            
+	        $this->SetFieldAttr('lkpNome','readonly',TRUE);
+        	$this->SetFieldAttr('edtNick','readonly',TRUE);
+	        $this->SetFieldAttr('selIdSetor','readonly',TRUE);
+        }
+        else
+        {
+            $this->AddError("Usuário [$login] não encontrado!");
+        }
+	}
+
+	function btnCancel_click()
+	{   
+        $this->SetFieldValue('lkpLogin','');
+    }
+
+    function GetAttribute($array, $attr)
+    {
+        $rs = array();
+        if (!is_null($array))
+        {
+            foreach($array as $c)
+            {
+                if ( $c->isGroupModule('biblioteca') )
+                {
+                    $rs[] = $c->$attr;
+                }
+            }
+       }
+        return $rs;
+    }
+
+    function doPasswordMD5()
+    {
+       $code = "function doPasswordMD5() { \n".
+               "  MIOLO_SetElementValueById('newpass',MD5('010101'));\n".
+               "  return true;\n".
+               "}\n";
+       return $code;
+    }
+
+
+
+}
+
+?>

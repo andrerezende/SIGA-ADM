@@ -1,0 +1,275 @@
+<?
+class frmRequisicaoExterna extends Form
+{
+	var $requisicao;
+	/*------------------------------------------------
+	Construtor()
+	------------------------------------------------*/
+	Function __construct()
+	{   
+		global $MIOLO,$module;
+		$this->requisicao = $MIOLO->GetBusiness($module,'requisicao');
+		parent::__construct('Requisição de compra de material');
+		$this->EventHandler();
+	}
+	/*------------------------------------------------
+	Método createFields()
+	------------------------------------------------*/
+	Function createFields()
+	{
+		global $MIOLO,$module;
+		$fields = Array(
+			new HiddenField('idRequisicao','','Idrequisicao'),
+			new TextField('txtNumero','','Número'),
+			new TextField('txtSituacao','Inacabada','Situação'),
+			new TextField('idAlmox','Cosup','Almoxarifado'),
+			new TextField('txtAno',date("Y"),'Ano',5,'Ex: '.date("Y")),
+		);
+		$this->SetFields($fields);
+		$this->SetFieldAttr('txtSituacao','readonly',true);
+		$this->SetFieldAttr('idAlmox','readonly',true);
+		$this->SetFieldAttr('txtNumero','visible',false);
+		$buttons = Array(
+        	new FormButton('btnInserirRequisicao','Inserir Requisicão'),
+        	new FormButton('btnInserirMaterial','Adicionar Material'),
+        	new FormButton('btnFinalizarRequisicao','Finalizar Requisição'),
+        	new FormButton('btnExibirRequisicao','Cancelar'),
+        	new FormButton('btnApagarRequisicao','Apagar Requisição'),
+        	new FormButton('btnNova','Nova Requisição',$MIOLO->GetActionUrl($module,'main:requisicoes:listarrequisicoes')),
+	    );
+		$this->SetButtons($buttons);
+		$this->SetButtonAttr('btnInserirMaterial','visible',false);
+		$this->SetButtonAttr('btnFinalizarRequisicao','visible',false);
+		$this->SetButtonAttr('btnExibirRequisicao','visible',false);
+		$this->SetButtonAttr('btnNova','visible',false);
+		$this->SetButtonAttr('btnApagarRequisicao','visible',false);
+		if ($this->GetFormValue('idRequisicao'))
+		{
+			$this->requisicao->GetById($this->GetFormValue('idRequisicao'));
+			$this->SetFieldValue('idRequisicao',$this->requisicao->idrequisicao);
+			$this->SetFieldAttr('txtAno','visible',false);
+			$this->SetFieldValue('txtSituacao',$this->requisicao->getSituacao());
+			$this->SetButtonAttr('btnInserirRequisicao','visible',false);
+			$this->SetFieldAttr('txtNumero','visible',true);
+			$this->SetFieldAttr('txtNumero','readonly',true);
+			if ($this->requisicao->status == 6) $this->SetFieldValue('txtNumero','SN/'.$this->requisicao->ano);
+			else $this->SetFieldValue('txtNumero',$this->requisicao->numero.' / '.$this->requisicao->ano);
+		}	
+		if ($this->requisicao->idrequisicao && !$this->GetFormValue('frm_eventtargetvalue') && !$this->GetFormValue('event')) $this->btnExibirRequisicao_click();
+		$this->SetClose(false);
+	}
+	/*------------------------------------------------
+	Método createLookupField()
+	------------------------------------------------*/
+	Function createLookupField()
+	{
+		global $module;
+		$this->AddField(new HiddenField('idMaterial'));
+		$this->AddField(new LookupTextField('lkpMaterial','','Material',70));
+		$this->AddField(new TextField('qtdMaterial','','Quantidade',10,'Ex: 1000'));
+		$this->AddField(new TextField('prcMaterial','','Preço Estimado',10,'Ex: 40,00'));
+		$this->AddField(new MultilineField('descMaterial','','Descrição',25,5,60));
+		$this->SetFieldAttr('lkpMaterial','module',$module);
+		$this->SetFieldAttr('lkpMaterial','item','material');
+		$this->SetFieldAttr('lkpMaterial','event','lkpDadosMaterial:click');
+	}
+	/*------------------------------------------------
+	Método createDatagrid()
+	------------------------------------------------*/
+	Function createDatagrid()
+	{
+		global $MIOLO,$module,$self;
+		$query = $this->requisicao->ListItens();
+		if ($query->result)
+		{
+			$columns = array(
+				new DataGridColumn('idmaterial','IdMaterial','','','',false),
+				new DataGridColumn('quantitem','Quantidade','center','','15%'),
+				new DataGridColumn('material','Material','','','85%')
+			);
+			$datagrid = new DataGrid2($query,$columns,$action);
+			if ($this->requisicao->status == 6)
+			{
+				$args_del = array('idRequisicao'=>$this->requisicao->idrequisicao,'id'=>'%0%','event'=>'btnApagarMaterial:click');
+				$href_del = $MIOLO->GetActionURL($module,'main:requisicoes:requisicaoexterna','',$args_del);
+				$datagrid->AddActionDelete($href_del);
+			}
+			$this->AddField($datagrid);
+			$this->SetFieldAttr('lkpMaterial','visible',false);
+			if ($this->requisicao->status == 6) $this->SetButtonAttr('btnFinalizarRequisicao','visible',true);
+		}
+		if ($this->requisicao->status == 6) $this->SetButtonAttr('btnApagarRequisicao','visible',true);
+	}
+	/*------------------------------------------------
+	Método btnInserirRequisicao_click()
+	------------------------------------------------*/
+	Function btnInserirRequisicao_click()
+	{
+		global $MIOLO;
+		if (intval($this->GetFormValue('txtAno'))>0)
+		{
+			$login = $MIOLO->GetLogin();
+			$usuario = $MIOLO->GetBusiness('common','usuario');
+			$usuario->GetById($login->idkey);
+			$data = new FormData();
+			$data->idrequisicao = $this->requisicao->GetNewId();
+			$data->datarequisicao = $this->requisicao->GetCurrentDate();
+			$data->tiporequisicao = 2;
+			$data->status = 6;
+			$data->ano = $this->GetFormValue('txtAno');
+			$data->idsetor = $usuario->idsetor;
+			$data->idsetoralmox = 917;
+			$this->requisicao->SetData($data);
+			if ( $this->requisicao->Insert() )
+			{
+				$this->SetFieldValue('idRequisicao',$this->requisicao->idrequisicao);
+				$this->SetFieldAttr('txtAno','visible',false);
+				$this->SetFieldAttr('txtNumero','visible',true);
+				$this->SetFieldAttr('txtNumero','readonly',true);
+				$this->SetFieldValue('txtNumero','SN/'.$this->requisicao->ano);
+				$this->createLookupField();
+				$this->SetFieldAttr('qtdMaterial','visible',false);
+				$this->SetFieldAttr('prcMaterial','visible',false);
+				$this->SetFieldAttr('descMaterial','visible',false);
+				$this->SetButtonAttr('btnInserirRequisicao','visible',false);
+			}
+			else $this->AddError('A requisição não foi gravada.');
+		}
+		else $this->AddError('Campo ANO não numerico ou nulo');
+	}
+	/*------------------------------------------------
+	Método novoMaterial()
+	------------------------------------------------*/
+	Function novoMaterial()
+	{
+		$this->createLookupField();
+		$this->SetFieldAttr('lkpMaterial','readonly',true);
+		$this->SetButtonAttr('btnInserirRequisicao','visible',false);
+		$this->SetButtonAttr('btnInserirMaterial','visible',true);
+	}
+	/*------------------------------------------------
+	Método lkpDadosMaterial_click()
+	------------------------------------------------*/
+	Function lkpDadosMaterial_click($key="")
+	{
+		global $MIOLO,$module;
+        $item = ($key != '') ? $key : $item;
+		$material = $MIOLO->GetBusiness($module,'material');
+		$material->GetById($item);
+		$this->novoMaterial();
+		$this->SetFieldValue('idMaterial',$material->idmaterial);
+		$this->SetFieldValue('lkpMaterial',$material->descricao);
+		$this->SetButtonAttr('btnExibirRequisicao','visible',true);
+	}
+	/*------------------------------------------------
+	Método btnExibirRequisicao_click()
+	------------------------------------------------*/
+	Function btnExibirRequisicao_click()
+	{
+		if ($this->requisicao->status == 6)
+		{
+			$this->createLookupField();
+			$this->SetFieldValue('idMaterial','');
+			$this->SetFieldValue('lkpMaterial','');
+			$this->SetFieldAttr('qtdMaterial','visible',false);
+			$this->SetFieldAttr('prcMaterial','visible',false);
+			$this->SetFieldAttr('descMaterial','visible',false);
+			$this->createDatagrid();
+		}
+		else
+		{
+			$this->createDatagrid();
+			$actions[0]->enabled = false;
+		}
+	}
+	/*------------------------------------------------
+	Método btnInseirMaterial_click()
+	------------------------------------------------*/
+	Function btnInserirMaterial_click()
+	{
+		global $MIOLO,$module;
+		if (intval($this->GetFormValue('qtdMaterial'))>0)
+		{
+			if (intval($this->GetFormValue('prcMaterial'))>0)
+			{
+				$itemreq = $MIOLO->GetBusiness($module,'item');
+				$data = new FormData();
+				$data->idrequisicao = $this->requisicao->idrequisicao;
+				$data->idmaterial = $this->GetFormValue('idMaterial');
+				$data->precoestimado = $this->GetFormValue('prcMaterial');
+				$data->quantpedida = $this->GetFormValue('qtdMaterial');
+				$data->descricao = $this->GetFormValue('descMaterial');
+				$data->status = '0';
+				$itemreq->SetData($data);
+				if ($this->requisicao->status == 6 || $this->requisicao->status == 1)
+				{
+					if (!$itemreq->Insert())
+					{
+						$this->AddError('Este material já consta nesta requisição ou você está usando ponto no lugar de vírgula no campo PREÇO ESTIMADO.');
+						$this->novoMaterial();
+					}
+				}
+				else $this->AddError('Esta requisição já está sendo atendida.');
+				$this->btnExibirRequisicao_click();
+			}
+			else
+			{
+				$this->AddError('Campo PREÇO ESTIMADO não numerico ou nulo.');
+				$this->novoMaterial();
+			}
+		}	
+		else
+		{
+			$this->AddError('Campo QUANTIDADE não numerico ou nulo.');
+			$this->novoMaterial();
+		}
+	}
+	/*------------------------------------------------
+	Método btnApagarMaterial_click()
+	------------------------------------------------*/
+	Function btnApagarMaterial_click()
+	{
+		if ($this->requisicao->DeleteItem($this->GetFormValue('id'))) $this->AddInfo('O material foi apagado com sucesso.');
+		else $this->AddError('O material não consta em sua requisição.');
+		$this->btnExibirRequisicao_click();
+	}
+	/*------------------------------------------------
+	Método btnFinalizarRequisicao_click()
+	------------------------------------------------*/
+	Function btnFinalizarRequisicao_click()
+	{
+		global $MIOLO,$module;
+		$this->requisicao->status = 1;
+		if (!$this->requisicao->numero) $this->requisicao->numero = $this->requisicao->getNumeroRequisicaoPorSetor()+1;
+		if ($this->requisicao->Update())
+		{
+			$this->AddInfo('Requisição finalizada!<br />NR: '.$this->requisicao->numero.'/'.$this->requisicao->ano.'.');
+		}
+		else $this->AddError('Erro na finalização, tente mais tarde');
+		$this->SetFieldAttr('txtNumero','visible',false);
+		$this->SetFieldAttr('txtSituacao','visible',false);
+		$this->SetFieldAttr('idAlmox','visible',false);
+		$this->SetButtonAttr('btnNova','visible',true);
+	}
+	/*----------------------------------------
+	Método btnApagarRequisicao_click()
+	----------------------------------------*/
+    function btnApagarRequisicao_click()
+	{
+		global $MIOLO,$module;
+        $conf = $this->GetFormValue('conf');
+	    if ($conf == 'sim')
+	    {
+            if ($this->requisicao->Delete()) $MIOLO->Information("Requisição excluída!",$MIOLO->GetActionUrl($module,'main:requisicoes:listarrequisicoes'));
+	        else $MIOLO->Information('Requisição não excluída, tente novamente!',$MIOLO->GetActionURL($module,'main:requisicoes:requisicaoexterna','',array('idRequisicao'=>$this->requisicao->idrequisicao,'event'=>'btnExibirRequisicao:click')));
+	    }
+	    elseif ($conf == 'nao') $MIOLO->Information('Exclusão cancelada!',$MIOLO->GetActionURL($module,'main:requisicoes:requisicaoexterna','',array('idRequisicao'=>$this->requisicao->idrequisicao,'event'=>'btnExibirRequisicao:click')));
+	    else
+	    {
+		    $action_sim = $MIOLO->GetActionURL($module,'main:requisicoes:requisicaoexterna','',array('idRequisicao'=>$this->requisicao->idrequisicao,'event'=>'btnApagarRequisicao:click','conf'=>'sim'));
+		    $action_nao = $MIOLO->GetActionURL($module,'main:requisicoes:requisicaoexterna','',array('idRequisicao'=>$this->requisicao->idrequisicao,'event'=>'btnApagarRequisicao:click','conf'=>'nao'));
+	        $MIOLO->Question("Confirma a exclusão desta requisição?",$action_sim,$action_nao);
+	    }
+    }
+}
+?>

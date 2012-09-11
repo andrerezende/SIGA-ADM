@@ -1,0 +1,95 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmProadesDadosMetas extends MForm
+{
+    var $absoluto;
+    var $relativo;
+
+    function __construct()
+    {
+        parent::__construct('Metas Pactuadas');
+        $this->eventHandler();
+    }
+
+    function createFields()
+    {
+        $meta = $this->manager->getBusiness('rh','resultadoreuniaometa');
+        $todos = $meta->listAll();
+        
+        if ( ! $todos->eof() )
+        {
+            $total = count($todos->result);
+
+            $tg = $this->manager->getBusiness('common','tabelageral');
+            $qryResultMeta = $tg->listByTabela('RH_RESULTREUNIAO');
+
+            foreach ( $qryResultMeta->result as $rs )
+            {
+                $resultMeta[$rs[0]] = $rs[1];
+            }
+
+            foreach ( $todos->result as $rs2 )
+            {
+                $resultMarcado = $resultMeta[$rs2[2]];
+                $resultado[$resultMarcado]++;
+            }
+        }
+        ksort($resultado);
+        foreach ( $resultado as $chave => $valor )
+        {
+            $this->absoluto[] = array($chave,$valor);
+            $this->relativo[] = array($chave,round((100*$valor)/$total,2).'%');
+        }
+        $this->absoluto[] = array('TOTAL',$total);
+
+        $fields = array(
+                new MTableRaw('Valores absolutos',$this->absoluto),
+                new MTableRaw('Valores relativos',$this->relativo)
+            );
+
+        $this->setFields($fields);
+
+        $buttons = array(
+            new MButton('btnAbsoluto','Download valores absolutos'),
+            new MButton('btnRelativo','Download valores relativos'),
+        );
+
+        $this->setButtons($buttons);
+    }
+
+    function btnAbsoluto_click()
+    {
+        $this->download($this->absoluto);
+    }
+
+    function btnRelativo_click()
+    {
+        $this->download($this->relativo);
+    }
+
+    function download($data)
+    {
+        MIOLO::Import('extensions::mcsvdump');
+        $csvdump = new Mcsvdump(";");
+        $csvdump->dump($data,'fatores_dificultadores');
+        exit;
+    }
+}
+?>

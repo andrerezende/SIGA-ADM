@@ -1,0 +1,62 @@
+<?
+class frmAuthMd5 extends MForm
+{
+    function __construct()
+    {   
+       global $auth,$page;
+       parent::__construct('');
+       $fields = Array(
+	       new MTextField('uid','','Usuário',20),
+           new MPasswordField('pwd','','Senha',20),
+           new MHiddenField('tries', ''),
+           new MHiddenField('return_to', ''),
+           new MHiddenField('hash', '')
+       );
+	   $this->SetFields($fields);
+       $max_tries = 3;
+       $uid = trim($this->GetFormValue('uid'));
+       $pwd = trim($this->GetFormValue('pwd'));
+       $hash = $this->GetFormValue('hash');
+       $return_to_ok = $this->GetFormValue('return_to_ok');
+       $return_to_fail = $this->GetFormValue('return_to_fail');
+       $check_method = $this->GetFormValue('check_method');
+       $challenge = uniqid(rand());
+       $response = md5($uid . ':' . md5($pwd) . ':' . $challenge);
+
+       if ( $ok = $this->manager->auth->Authenticate($uid, $challenge, $response) )
+       {
+           if ($ok = ($check_method != '') ? $this->{$check_method}($uid) : TRUE)
+           {
+    	       if ( $return_to_ok )
+               {
+                   $url = $return_to_ok . (($hash != '') ? "?hash=$hash" : '');
+	           } 
+               else
+               {
+                   $url = "http://www.sigaept.br"; 
+               }
+           } 
+       }
+       if (!$ok)
+       {      
+           $url = $return_to_fail;
+       }
+       $page->Redirect($url);
+    }
+
+    function isAlunoMedicina($matricula)
+    {
+
+       $matricula = trim($matricula);
+       $db = $this->manager->getDatabase('sigaept');
+       $sql = new MSql('matricula,curso','ga_programa',"(matricula='$matricula') and (curso = '15A')");
+       $query = $db->getQuery($sql);
+       $ok = !$query->eof();
+       $sql = new MSql('idvinc','ga_docente',"(idvinc='$matricula')");
+       $query = $db->getQuery($sql);
+       $ok = $ok && !$query->eof();
+       return $ok;
+    } 
+
+}
+?>

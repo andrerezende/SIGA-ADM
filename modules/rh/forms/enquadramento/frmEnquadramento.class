@@ -1,0 +1,113 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmEnquadramento extends Form
+{
+    var $func;
+    var $pdf;
+	
+    function __construct()
+    {
+	    global $MIOLO;
+ 
+        $this->Form('Enquadramento');
+        $this->SetClose($MIOLO->GetActionURL('rh','main:enquadramento'));
+        $this->EventHandler();
+        $this->defaultButton = false;
+	}
+
+    function CreateFields()	
+	{
+        $usuario = $this->manager->GetBusiness('common','usuario');
+        $matricula = trim($this->manager->GetLogin()->id);
+        $usuario->GetByLogin($matricula); 
+        if ($usuario->IsMemberOf('RH_ENQUADRAMENTO'))
+        {
+           $this->AddField(new TextField('matricula','','Matrícula',15));
+           $this->AddButton(new FormButton('btnPost','Consultar'));
+        }
+        else
+        {
+           $this->ShowData($matricula);
+        }
+	}
+
+    function btnPost_click()
+    {
+        $matricula = $this->GetFieldValue('matricula');
+        $this->ShowData($matricula); 
+    }
+
+    function ShowData($matricula)
+    {
+        $this->func = $this->manager->GetBusiness('rh','ergonfunc', $matricula);
+        if ($this->func->matricula)
+        {
+           $this->AddField(new TextLabel('matricula',$this->func->matricula,'Matrícula'));
+           $this->AddField(new TextLabel('nome',$this->func->nome,'Nome'));
+           $this->AddField(new TextLabel('cargo',$this->func->cargo . ' - ' . $this->func->nomeCargo,'Cargo'));
+           $this->func->GetTempoServico();
+           $exercicio = $this->func->exercicio ? $this->func->exercicio . ' dias' : '-.-';
+           $this->AddField(new TextLabel('exercicio',$exercicio,'Exercício'));
+           $faltas = $this->func->faltas ? $this->func->faltas . ' dias' : '-.-';
+           $this->AddField(new TextLabel('falta',$faltas,'Faltas'));
+           $licenca = $this->func->licenca ? $this->func->licenca . ' dias' : '-.-';
+           $this->AddField(new TextLabel('licenca',$licenca,'Licença'));
+           $averbacao = $this->func->averbacao ? $this->func->averbacao . ' dias' : '-.-';
+           $this->AddField(new TextLabel('averbacao',$averbacao,'Averbação'));
+           $totalDias = $this->func->exercicio + $this->func->averbacao - $this->func->licenca - $this->func->faltas;
+           $totalAnos = number_format($totalDias / 365.25, 2,',','.');
+           $total = $totalDias . ' dias  =>  ' . $totalAnos . ' anos';
+           $this->AddField(new TextLabel('total',$total,'TEMPO TOTAL'));
+           $this->AddButton(new FormButton('btnTermo','Termo de Opção','PDF'));
+        }
+        else
+        {
+           $this->AddError('Registro não encontrado!');
+        }
+    }
+
+    function GetLine($size)
+    {
+        return $this->pdf->y - $this->pdf->getFontHeight($size);
+    }
+
+    function btnTermo_click()
+    {
+
+        $report = new ezPDFReport('2');
+        $this->pdf = $report->GetPdf(); 
+        $this->pdf->selectFont('tahoma.afm');
+        $top = 750;
+        $bottom = 300;
+        $left = 100;
+        $right = 480;
+        $this->pdf->line($left,$top,$right,$top);  
+        $this->pdf->line($left,$top,$left,$bottom);  
+        $this->pdf->line($left,$bottom,$right,$bottom);  
+        $this->pdf->line($right,$top,$right,$bottom);  
+        $this->pdf->addText(100,790,16,'<b>Termo de Opção pelo Plano de Carreira dos Cargos</b>');
+        $this->pdf->addText(100,$this->GetLine(16),16,'<b>Técnico-Administrativos em Educação</b>');
+        $this->pdf->addText(110,$top - $this->GetLine(14),14,'PLANO DE CARREIRA DOS CARGOS');
+        $this->pdf->addText(110,$this->GetLine(14),14,'TÉCNICO-ADMINISTARTIVOS EM EDUCAÇÃO');
+
+        $report->Execute();
+    }
+}
+?>

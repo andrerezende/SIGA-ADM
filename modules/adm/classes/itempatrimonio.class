@@ -1,0 +1,1219 @@
+<?php
+class BusinessAdmItemPatrimonio extends Business
+{
+	public $idItemPatrimonio;
+	public $descricao;
+	public $tipoIngresso;
+	public $dataAquisicao;
+	public $marcaModelo;
+	public $valor;
+	public $notaFiscal;
+	public $subelemento;
+	public $idMaterial;
+	public $idSetor;
+	public $idDependencia;
+	public $idEmpenhado;
+	public $idClassificador;
+	public $numPro;
+	public $ativo;
+	public $setor;
+	public $dependencia;
+	public $empenhado;
+	public $classificador;
+	public $material;
+	public $numeroSerie;
+	public $numeroEmpenho;
+	public $descricaoEstado;
+	// 15/05/2012 - Tiago Macedo
+	public $bloqueio;        
+	// 18/10/2010 - Vitor Pacheco
+	public $idvidautil;
+    public $datainiciouso;
+	// 16/03/2011 - Vitor Pacheco
+	public $idNotaFiscal;
+	// 26/08/2011 - Daniel Bonfim
+	public $tomboanterior;
+
+	function __construct($data = null) {
+		parent::__construct('sigaept',$data);
+	}
+
+	function GetById($idItemPatrimonio) {
+		$this->idItemPatrimonio = $idItemPatrimonio;
+		$this->retrieve();
+		return $this;
+	}
+
+	function update2() {
+		parent::update();
+
+	}
+
+	function OnCreate($data) {
+		if (empty($data)) {
+			//$this->initialize();
+		} else {
+			$this->GetById($data);
+		}
+	}
+
+	function ListById($desc) {
+		$query=	" i.iditempatrimonio, i.descricao, S.siglasetor, i.numeroserie, i.numeroempenho
+		  FROM ad_itempatrimonio i LEFT JOIN cm_setor s
+		  ON i.idsetor=s.idsetor
+		  where i.ativo='S' AND i.iditempatrimonio=$desc
+		";
+
+		$sql = new sql($query);
+
+		$query2 = $this->Query($sql);
+		return $query2;
+	}
+
+	function ListByIdNota($idnota) {
+		$query=	" i.iditempatrimonio, i.descricao, s.siglasetor, i.numeroserie
+		  FROM ad_itempatrimonio i INNER JOIN ad_notafiscal a ON (i.idnotafiscal=a.idnotafiscal)
+		INNER JOIN cm_setor s ON (i.idsetor=s.idsetor)
+		WHERE a.idnotafiscal=$idnota order by 1
+		";
+
+		$sql = new sql($query);
+
+		$query2 = $this->Query($sql);
+		return $query2;
+	}
+
+	function ListByDesc($desc) {
+		$empenhado = $this->_miolo->getBusiness('adm','empenhado');
+		$criteria2 = $empenhado->getCriteria();
+		//$criteria2->setAssociationAlias('empenho','E');
+		//$criteria2->setAssociationType('empenho','right');
+
+		$criteria = $this->getCriteria();
+		//$criteria->setAssociationAlias('empenhado','D');
+
+		$criteria->addColumnAttribute('idItemPatrimonio');
+		$criteria->addColumnAttribute('descricao');
+		$criteria->addColumnAttribute('setor.sigla', 'sigla');
+		//$criteria->addColumnAttribute('E.numero');
+		$criteria->addCriteria('descricao','like',"'%$desc%'");
+		$criteria->addCriteria('ativo','=',"'S'");
+		$criteria->addOrderAttribute('descricao');
+
+		//$criteria->setAssociationType('empenhado','right');
+		//$criteria->addJoinCriteria($criteria2);
+
+		return $criteria->retrieveAsQuery();
+	}
+
+	function Filtrar($campos, $validador) {//  Phillip  14 - 03 - 2012
+		$contador=-1; //Contador para a quantidade de AND
+		$desc_campo= array(
+			"i.descricao",//0
+			"i.idclassificador",  //1
+			"i.numeroempenho", //2
+			"i.tomboanterior", //3
+			"f.cnpj",     //4
+			"i.numeroserie", //5
+			"i.dataaquisicao",//6
+			"a.notafiscal"//7
+		);
+
+		$query=	" i.iditempatrimonio, i.descricao, s.siglasetor, i.numeroempenho
+			FROM ad_itempatrimonio i
+				LEFT JOIN ad_notafiscal a ON (i.idnotafiscal = a.idnotafiscal)
+				LEFT JOIN ad_fornecedor f ON (a.idfornecedor =f.idfornecedor)
+
+				INNER JOIN cm_setor s ON (i.idsetor=s.idsetor)";
+
+
+		for ($i=0;$i<8;$i++) {
+			if ($campos[$i] != '' && ($i == 6)) {
+				$desc_campo[$i] = "TO_CHAR($desc_campo[$i], 'DD/MM/YYYY')" . " = " . "'$campos[$i]' ";
+				$contador++;
+			} else {
+				if ($campos[$i] != '') {
+					$desc_campo[$i] = $desc_campo[$i] . " like '%$campos[$i]%'";
+					$contador++;
+				}
+			}
+		}
+
+		if ($validador == 1) {
+			$complemento = " AND i.dataaquisicao >=(current_date-7) ";
+		}
+
+		if ($contador >- 1) {
+			$query .= " WHERE i.ativo='S' $complemento  AND ";
+		} else {
+			$query .= " WHERE i.ativo='S' $complemento ";
+		}
+
+		for ($i=0;$i<8;$i++) {
+			if ($campos[$i] != '') {
+				$query .= $desc_campo[$i];
+				if ($contador > 0) {
+					$query .= " AND ";$contador--;
+				}
+			}
+		}
+
+		$query .= " order by i.iditempatrimonio ";
+		$sql = new sql($query);
+
+		$query2 = $this->Query($sql);
+		return $query2;
+	}
+
+	function listarUltimoByIdNota($idnota){
+
+		$query="MAX(iditempatrimonio) from ad_itempatrimonio where idnotafiscal=$idnota";
+
+		$sql = new sql($query);
+
+
+		$query2 = $this->Query($sql);
+		return $query2;
+
+	}
+   function ListByNumeroSerie($numeroserie){
+
+        $empenhado = $this->_miolo->getBusiness('adm','empenhado');
+		$criteria2 = $empenhado->getCriteria();
+		//$criteria2->setAssociationAlias('notafiscal','N');
+		//$criteria2->setAssociationType('notafiscal','right');
+
+		$criteria = $this->getCriteria();
+		//$criteria->setAssociationAlias('empenhado','D');
+
+		$criteria->addColumnAttribute('idItemPatrimonio');
+		$criteria->addColumnAttribute('descricao');
+		$criteria->addColumnAttribute('setor.sigla', 'sigla');
+		//$criteria->addColumnAttribute('E.numero');
+		$criteria->addCriteria('numeroserie','like',"'%$numeroserie%'");
+		$criteria->addCriteria('ativo','=',"'S'");
+		$criteria->addOrderAttribute('descricao');
+
+		//$criteria->setAssociationType('notafiscal','right');
+	   // $criteria->addJoinCriteria($criteria2);
+
+		return $criteria->retrieveAsQuery();
+
+    }
+
+   function ListByCnpj($cnpj){
+
+
+        $empenhado = $this->_miolo->getBusiness('adm','empenhado');
+		//$sigaept   = this->_miolo->getBusiness('sigaept',$aaa);
+        $criteria2 = $empenhado->getCriteria();
+
+        //$criteria2->setAssociationAlias('ad_notaFiscal','N');
+		//$criteria2->setAssociationType('notafiscal','right');
+
+		 $vinculo     = $this->_miolo->getBusiness('adm','notafiscal');
+          $cvinculo = $vinculo->getcriteria();
+          $cvinculo->setAssociationAlias('funcionario','F');
+          $cvinculo->addJoinCriteria($cfuncionario);
+
+		$criteria = $this->getCriteria();
+		//$criteria->setAssociationAlias('empenhado','D');
+
+		$criteria->addColumnAttribute('idItemPatrimonio');
+		$criteria->addColumnAttribute('descricao');
+		$criteria->addColumnAttribute('setor.sigla', 'sigla');
+		//$criteria->addColumnAttribute('E.numero');
+		$criteria->addCriteria('cnpj','like',"'%$cnpj%'");
+		$criteria->addCriteria('ativo','=',"'S'");
+		$criteria->addOrderAttribute('descricao');
+
+		//$criteria->setAssociationType('notafiscal','right');
+	   // $criteria->addJoinCriteria($criteria2);
+
+		return $criteria->retrieveAsQuery();
+
+     }
+
+	function ListByClassificadorOuEmpenho($classificador, $empenho, $descricao, $idItemPatrimonio)
+	{
+		$empenhado = $this->_miolo->getBusiness('adm','empenhado');
+		$criteria2 = $empenhado->getCriteria();
+		$criteria2->setAssociationAlias('empenho','E');
+		$criteria2->setAssociationType('empenho','right');
+
+		$criteria = $this->getCriteria();
+		//aqui
+		$criteria->setAssociationAlias('empenhado','D');
+
+		$criteria->addColumnAttribute('idItemPatrimonio');
+		$criteria->addColumnAttribute('descricao');
+		$criteria->addColumnAttribute('setor.sigla', 'sigla');
+		//aqui
+		$criteria->addColumnAttribute('E.numero');
+		$criteria->addColumnAttribute('numeroEmpenho');
+
+		if($classificador)
+		{
+			$cc = new CriteriaCondition();
+			$cc->addCriteria($criteria->getCriteria('upper(idClassificador)','like',"'%$classificador%'"));
+			$cc->addOrCriteria($criteria->getCriteria('upper(classificador.descricao)','like', "'%$classificador%'"));
+			$criteria->addCriteria($cc);
+		}
+		if($empenho)
+		{
+			$cc = new CriteriaCondition();
+			$cc->addCriteria($criteria->getCriteria('upper(E.numero)','like',"'%$empenho%'"));
+			$cc->addOrCriteria($criteria->getCriteria('upper(numeroEmpenho)','like',"'%$empenho%'"));
+			$criteria->addCriteria($cc);
+		}
+		if($descricao)
+		{
+			$criteria->addCriteria('upper(descricao)','like',"'%$descricao%'");
+		}
+		if($idItemPatrimonio)
+		{
+			$criteria->addCriteria('idItemPatrimonio','=',$idItemPatrimonio);
+		}
+
+		$criteria->addCriteria('ativo','=',"'S'");
+		$criteria->addOrderAttribute('descricao');
+
+		//aqui
+
+		$criteria->setAssociationType('empenhado','right');
+		$criteria->addJoinCriteria($criteria2);
+
+		$query = $criteria->retrieveAsQuery();
+		for($i = 0; $i < count($query->result); $i++)
+		{
+			if($query->result[$i][3] == null)
+			{
+				$query->result[$i][3] = $query->result[$i][4];
+			}
+		}
+		return $query;
+	}
+
+	function GetNewId()
+	{
+		return $this->_db->GetNewId('seq_ad_itempatrimonio');
+	}
+
+	function RepAquisicoesPorPeriodo($dataInicial, $dataFinal, $idSubelemento)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('classificador.idClassificador');
+		$criteria->addColumnAttribute('setor.sigla');
+		$criteria->addColumnAttribute('descricao');
+		$criteria->addColumnAttribute('dataAquisicao', 'dataAquisicao');
+		$criteria->addColumnAttribute('empenhado.empenho.numero');
+		$criteria->addColumnAttribute('notaFiscal');
+		$criteria->addColumnAttribute('idEmpenhado');
+		$criteria->addColumnAttribute('subelemento');
+		$criteria->addColumnAttribute('idItemPatrimonio');
+		$criteria->addColumnAttribute('valor');
+		$criteria->addCriteria("to_date(dataAquisicao, 'DD/MM/YYYY')", '>=', "to_date('$dataInicial','DD/MM/YYYY')");
+		$criteria->addCriteria("to_date(dataAquisicao,'DD/MM/YYYY')", '<=', "to_date('$dataFinal','DD/MM/YYYY')");
+		$criteria->addCriteria('subelemento','=', $idSubelemento);
+		$criteria->addCriteria('ativo','=',"'S'");
+		//comentado por Ítalo 23-06-2008
+		//$criteria->addCriteria('idEmpenhado','IS NOT',"NULL");
+		$criteria->addOrderAttribute('idEmpenhado');
+		$criteria->addOrderAttribute('descricao');
+		$criteria->addOrderAttribute('idItemPatrimonio');
+		$query = $criteria->retrieveAsQuery();
+
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('classificador.idClassificador');
+		$criteria->addColumnAttribute('setor.sigla');
+		$criteria->addColumnAttribute('descricao');
+		$criteria->addColumnAttribute('dataAquisicao', 'dataAquisicao');
+		$criteria->addColumnAttribute('numeroEmpenho');
+		$criteria->addColumnAttribute('notaFiscal');
+		$criteria->addColumnAttribute('idEmpenhado');
+		$criteria->addColumnAttribute('subelemento');
+		$criteria->addColumnAttribute('idItemPatrimonio');
+		$criteria->addColumnAttribute('valor');
+		$criteria->addCriteria("to_date(dataAquisicao, 'DD/MM/YYYY')", '>=', "to_date('$dataInicial','DD/MM/YYYY')");
+		$criteria->addCriteria("to_date(dataAquisicao,'DD/MM/YYYY')", '<=', "to_date('$dataFinal','DD/MM/YYYY')");
+		$criteria->addCriteria('subelemento','=', $idSubelemento);
+		$criteria->addCriteria('ativo','=',"'S'");
+		//comentado por Ítalo 23-06-2008
+		//$criteria->addCriteria('idEmpenhado','IS',"NULL");
+		$criteria->addOrderAttribute('numeroEmpenho');
+		$criteria->addOrderAttribute('descricao');
+		$criteria->addOrderAttribute('idItemPatrimonio');
+		$query2 = $criteria->retrieveAsQuery();
+
+		if((!$query->result) and (!$query2->result))
+		{
+			$result = array();
+		}
+		elseif(!$query->result)
+		{
+			$result = $query2->result;
+		}
+		elseif(!$query2->result)
+		{
+			$result = $query->result;
+		}
+		else
+		{
+			$result = array_merge($query->result, $query2->result);
+		}
+		return $result;
+	}
+
+	function RepAquisicoesPorSetorPeriodo($dataInicial, $dataFinal, $idSetor, $idClassificador)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('descricao');
+		$criteria->addColumnAttribute('dataAquisicao', 'dataAquisicao');
+		$criteria->addColumnAttribute('idEmpenhado');
+		$criteria->addColumnAttribute('subelemento');
+		$criteria->addColumnAttribute('idItemPatrimonio');
+		$criteria->addColumnAttribute('valor');
+		$criteria->addCriteria("to_date(dataAquisicao,'DD/MM/YYYY')", '>=', "to_date('$dataInicial','DD/MM/YYYY')");
+		$criteria->addCriteria("to_date(dataAquisicao,'DD/MM/YYYY')", '<=', "to_date('$dataFinal','DD/MM/YYYY')");
+		$criteria->addCriteria('idSetor','=',"$idSetor");
+		$criteria->addCriteria('idClassificador','=',"'$idClassificador'");
+		$criteria->addCriteria('tipoIngresso','=',"'1'");
+		$criteria->addCriteria('subelemento','is not',"null");
+		$criteria->addCriteria('idEmpenhado','is not',"null");
+		$criteria->addCriteria('ativo','=',"'S'");
+		$criteria->addOrderAttribute('idEmpenhado');
+		$criteria->addOrderAttribute('descricao');
+		$criteria->addOrderAttribute('idItemPatrimonio');
+		$query = $criteria->retrieveAsQuery();
+
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('descricao');
+		$criteria->addColumnAttribute('dataAquisicao', 'dataAquisicao');
+		$criteria->addColumnAttribute('numeroEmpenho');
+		$criteria->addColumnAttribute('subelemento');
+		$criteria->addColumnAttribute('idItemPatrimonio');
+		$criteria->addColumnAttribute('valor');
+		$criteria->addCriteria("to_date(dataAquisicao,'DD/MM/YYYY')", '>=', "to_date('$dataInicial','DD/MM/YYYY')");
+		$criteria->addCriteria("to_date(dataAquisicao,'DD/MM/YYYY')", '<=', "to_date('$dataFinal','DD/MM/YYYY')");
+		$criteria->addCriteria('idSetor','=',"$idSetor");
+		$criteria->addCriteria('idClassificador','=',"'$idClassificador'");
+		$criteria->addCriteria('tipoIngresso','=',"'1'");
+		$criteria->addCriteria('subelemento','is not',"null");
+		$criteria->addCriteria('numeroEmpenho','is not',"null");
+		$criteria->addCriteria('ativo','=',"'S'");
+		$criteria->addOrderAttribute('numeroEmpenho');
+		$criteria->addOrderAttribute('descricao');
+		$criteria->addOrderAttribute('idItemPatrimonio');
+		$query2 = $criteria->retrieveAsQuery();
+
+		if((!$query->result) and (!$query2->result))
+		{
+			$result = array();
+		}
+		elseif(!$query->result)
+		{
+			$result = $query2->result;
+		}
+		elseif(!$query2->result)
+		{
+			$result = $query->result;
+		}
+		else
+		{
+			$result = array_merge($query->result, $query2->result);
+		}
+		return $result;
+	}
+
+	function RepBaixasPorPeriodo($dataInicial, $dataFinal, $idElemento, $idSubelemento)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->setDistinct(true);
+		$criteria->addColumnAttribute('classificador.idClassificador');
+		$criteria->addColumnAttribute('classificador.descricao', 'classificador');
+		$criteria->addColumnAttribute('setor.sigla');
+		$criteria->addColumnAttribute('descricao');
+		$criteria->addColumnAttribute('movimentopat.dataMovimento', 'data');
+		$criteria->addColumnAttribute('idEmpenhado');
+		$criteria->addColumnAttribute('idMaterial');
+		$criteria->addColumnAttribute('idItemPatrimonio');
+		$criteria->addColumnAttribute('valor');
+		$criteria->addCriteria("to_date(movimentopat.dataMovimento,'DD/MM/YYYY')", '>=', "to_date('$dataInicial','DD/MM/YYYY')");
+		$criteria->addCriteria("to_date(movimentopat.dataMovimento,'DD/MM/YYYY')", '<=', "to_date('$dataFinal','DD/MM/YYYY')");
+		$criteria->addCriteria('material.idelemento','=', $idElemento);
+		$criteria->addCriteria('material.idsubelemento','=', "$idSubelemento");
+		$criteria->addCriteria('ativo','=',"'N'");
+		$criteria->addOrderAttribute('idEmpenhado');
+		$criteria->addOrderAttribute('idMaterial');
+		$criteria->addOrderAttribute('idItemPatrimonio');
+		$query = $criteria->retrieveAsQuery();
+		return $query->result;
+	}
+
+	function GetElementosSubelementosPorPeriodo($dataInicial, $dataFinal)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->setDistinct(true);
+		$criteria->addColumnAttribute('subelemento');
+		$criteria->addCriteria("to_date(dataAquisicao,'DD/MM/YYYY')", '>=', "to_date('$dataInicial','DD/MM/YYYY')");
+		$criteria->addCriteria("to_date(dataAquisicao,'DD/MM/YYYY')", '<=', "to_date('$dataFinal','DD/MM/YYYY')");
+		$criteria->addCriteria('subelemento','is not',"NULL");
+		$criteria->addOrderAttribute('subelemento');
+		return $criteria->retrieveAsQuery();
+	}
+
+	function GetClassificadoresPorSetorPeriodo($dataInicial, $dataFinal, $idSetor)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->setDistinct(true);
+		$criteria->addColumnAttribute('classificador.idClassificador');
+		$criteria->addColumnAttribute('classificador.descricao');
+		$criteria->addCriteria("to_date(dataAquisicao,'DD/MM/YYYY')", '>=', "to_date('$dataInicial','DD/MM/YYYY')");
+		$criteria->addCriteria("to_date(dataAquisicao,'DD/MM/YYYY')", '<=', "to_date('$dataFinal','DD/MM/YYYY')");
+		$criteria->addCriteria('idSetor','=',"$idSetor");
+		$criteria->addCriteria('subelemento','is not',"null");
+//		$criteria->addCriteria('idEmpenhado','is not',"null");
+		$criteria->addOrderAttribute('classificador.idClassificador');
+		return $criteria->retrieveAsQuery();
+	}
+
+	function GetElementosSubelementos()
+	{
+		$criteria = $this->getCriteria();
+		$criteria->setDistinct(true);
+		$criteria->addColumnAttribute('material.idelemento');
+		$criteria->addColumnAttribute('material.idsubelemento');
+		$criteria->addCriteria('ativo','=',"'S'");
+		$criteria->addOrderAttribute('material.idelemento');
+		$criteria->addOrderAttribute('material.idsubelemento');
+		return $criteria->retrieveAsQuery();
+	}
+
+	function GetElementosSubelementosBaixasPorPeriodo($dataInicial, $dataFinal)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->setDistinct(true);
+		$criteria->addColumnAttribute('material.idelemento');
+		$criteria->addColumnAttribute('material.idsubelemento');
+		$criteria->addCriteria("to_date(movimentopat.dataMovimento,'DD/MM/YYYY')", '>=', "to_date('$dataInicial','DD/MM/YYYY')");
+		$criteria->addCriteria("to_date(movimentopat.dataMovimento,'DD/MM/YYYY')", '<=', "to_date('$dataFinal','DD/MM/YYYY')");
+		$criteria->addCriteria('ativo','=',"'N'");
+		$criteria->addOrderAttribute('material.idelemento');
+		$criteria->addOrderAttribute('material.idsubelemento');
+		return $criteria->retrieveAsQuery();
+	}
+
+	function GetSubelementos()
+	{
+		$criteria = $this->getCriteria();
+		$criteria->setDistinct(true);
+		$criteria->addColumnAttribute('subelemento');
+		$criteria->addOrderAttribute('subelemento');
+		return $criteria->retrieveAsQuery();
+	}
+
+	function RepItensPorClassificador($idClassificador)
+	{
+        $criteria = $this->getCriteria();
+        $criteria->AddColumnAttribute('setor.idSetor');
+        $criteria->AddColumnAttribute('setor.sigla');
+		$criteria->AddColumnAttribute('descricao');
+        $criteria->AddColumnAttribute('dataAquisicao', 'dataAquisicao');
+        $criteria->AddColumnAttribute('valor');
+        $criteria->AddColumnAttribute('subelemento');
+        $criteria->AddColumnAttribute('idItemPatrimonio');
+        $criteria->AddColumnAttribute('idEmpenhado');
+        $criteria->addCriteria('idClassificador','=', "'$idClassificador'");
+        $criteria->addCriteria('ativo','=', "'S'");
+        $criteria->addOrderAttribute('setor.idSetor');
+        $criteria->addOrderAttribute('descricao');
+        $criteria->addOrderAttribute('idItemPatrimonio');
+        return $criteria->retrieveAsQuery();
+	}
+
+	function RepItensPorSetor($idSetor)
+	{
+        $criteria = $this->getCriteria();
+        $criteria->AddColumnAttribute('subelemento');
+        $criteria->AddColumnAttribute('classificador.idClassificador');
+        $criteria->AddColumnAttribute('classificador.descricao');
+        $criteria->AddColumnAttribute('descricao');
+        $criteria->AddColumnAttribute('dataAquisicao', 'dataAquisicao');
+        $criteria->AddColumnAttribute('valor');
+        $criteria->AddColumnAttribute('idItemPatrimonio');
+        $criteria->AddColumnAttribute('idEmpenhado');
+        $criteria->addCriteria('setor.idSetor','=', $idSetor);
+        $criteria->addCriteria('ativo','=', "'S'");
+        $criteria->addOrderAttribute('classificador.idClassificador');
+        $criteria->addOrderAttribute('descricao');
+        $criteria->addOrderAttribute('idItemPatrimonio');
+        return $criteria->retrieveAsQuery();
+	}
+
+	function GetSaldoPorRubrica($idSubelemento)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('sum(valor)');
+		$criteria->addCriteria('subelemento','=', $idSubelemento);
+		$criteria->addCriteria('ativo','=',"'S'");
+		$query = $criteria->retrieveAsQuery();
+		return $query->result[0][0];
+	}
+
+	function GetSaldoPorPeriodoRubrica($idSubelemento, $dataInicial, $dataFinal)
+	{
+		$k = new MKrono();
+		$dataInicial = $k->invertDate($dataInicial);
+		$dataFinal = $k->invertDate($dataFinal);
+
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('sum(valor)');
+		$criteria->addCriteria('subelemento','=', $idSubelemento);
+		$criteria->addCriteria("dataAquisicao", '<=', "'$dataFinal'");
+
+		$cc11 = new CriteriaCondition();
+		$cc11->addCriteria($criteria->getCriteria('movimentopat.tipoMovimento','=',"'1'"));
+		$cc11->addOrCriteria($criteria->getCriteria('movimentopat.tipoMovimento','IS',"NULL"));
+
+		$cc1 = new CriteriaCondition();//ATIVOS
+		$cc1->addCriteria($criteria->getCriteria('ativo','=',"'S'"));
+		$cc1->addCriteria($criteria->getCriteria($cc11));
+
+		$cc2 = new CriteriaCondition();//NÃO ATIVOS - ATIVOS ATÉ DATA FINAL
+		$cc2->addCriteria($criteria->getCriteria('ativo','=',"'N'"));
+		$cc2->addCriteria($criteria->getCriteria("movimentopat.dataMovimento", '>', "'$dataFinal'"));
+		$cc2->addCriteria($criteria->getCriteria('movimentopat.tipoMovimento','=',"'3'"));
+
+		$cc3 = new CriteriaCondition();
+		$cc3->addCriteria($criteria->getCriteria($cc1));
+		$cc3->addOrCriteria($criteria->getCriteria($cc2));
+
+		$criteria->addCriteria($cc3);
+		$criteria->setAssociationType('movimentopat','right');
+		$query = $criteria->retrieveAsQuery();
+		return $query->result[0][0];
+	}
+
+	function GetTotalItensPorRubrica($idSubelemento)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('count(idItemPatrimonio)');
+		$criteria->addCriteria('subelemento','=',$idSubelemento);
+		$criteria->addCriteria('ativo','=',"'S'");
+		$query = $criteria->retrieveAsQuery();
+		return $query->result[0][0];
+	}
+
+	function GetTotalItensPorPeriodoRubrica($idSubelemento, $dataInicial, $dataFinal)
+	{
+		$k = new MKrono();
+		$dataInicial = $k->invertDate($dataInicial);
+		$dataFinal = $k->invertDate($dataFinal);
+
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('count(distinct(idItemPatrimonio))');
+		$criteria->addCriteria('subelemento','=', $idSubelemento);
+		$criteria->addCriteria("dataAquisicao", '<=', "'$dataFinal'");
+
+		$cc1 = new CriteriaCondition();//ATIVOS
+		$cc1->addCriteria($criteria->getCriteria('ativo','=',"'S'"));
+
+		$cc2 = new CriteriaCondition();//NÃO ATIVOS - ATIVOS ATÉ JANEIRO
+		$cc2->addCriteria($criteria->getCriteria('ativo','=',"'N'"));
+		$cc2->addCriteria($criteria->getCriteria("movimentopat.dataMovimento", '>', "'$dataFinal'"));
+		$cc2->addCriteria($criteria->getCriteria('movimentopat.tipoMovimento','=',"'3'"));
+
+		$criteria->addCriteria($cc1);
+		$criteria->addOrCriteria($cc2);
+		$criteria->setAssociationType('movimentopat','right');
+		$query = $criteria->retrieveAsQuery();
+		return $query->result[0][0];
+	}
+	function GetValorAquisicoesPorPeriodoRubrica($dataInicial, $dataFinal, $idSubelemento)
+	{
+		$subCriteria = $this->getCriteria();
+		$subCriteria->setDistinct(true);
+		$subCriteria->addColumnAttribute('idItemPatrimonio');
+		//$subCriteria->addCriteria('movimentopat.tipoMovimento','=',"'4'");//ESTORNO
+		$subCriteria->addCriteria('tipoingresso','>',"'1'");//doações
+		$subCriteria->addCriteria('tipoingresso','<',"'8'");//
+
+
+
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('sum(valor)');
+		$criteria->addCriteria("to_date(dataAquisicao,'DD/MM/YYYY')", '>=', "to_date('$dataInicial','DD/MM/YYYY')");
+		$criteria->addCriteria("to_date(dataAquisicao,'DD/MM/YYYY')", '<=', "to_date('$dataFinal','DD/MM/YYYY')");
+		$criteria->addCriteria('subelemento','=',$idSubelemento);
+		$criteria->addCriteria('idItemPatrimonio', 'NOT IN', $subCriteria);
+
+		$query = $criteria->retrieveAsQuery();
+		return $query->result[0][0];
+	}
+   function GetValorExtraOrcaPorPeriodoRubrica($dataInicial, $dataFinal, $idSubelemento)
+	{
+
+		$subCriteria = $this->getCriteria();
+		$subCriteria->setDistinct(true);
+		$subCriteria->addColumnAttribute('idItemPatrimonio');
+    	//$subCriteria->addCriteria('movimentopat.tipoMovimento','=',"'4'");//ESTORNO
+        $subCriteria->addCriteria('tipoingresso','<>',"'1'");//cOMPRAS
+        $subCriteria->addCriteria('tipoingresso','<>',"'8'");//COMPRAS ANOS ANTERIORES
+
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('sum(valor)');
+		$criteria->addCriteria("to_date(dataAquisicao,'DD/MM/YYYY')", '>=', "to_date('$dataInicial','DD/MM/YYYY')");
+		$criteria->addCriteria("to_date(dataAquisicao,'DD/MM/YYYY')", '<=', "to_date('$dataFinal','DD/MM/YYYY')");
+		$criteria->addCriteria('subelemento','=', $idSubelemento);
+		$criteria->addCriteria('idItemPatrimonio','IN', $subCriteria);
+
+		$query = $criteria->retrieveAsQuery();
+		return $query->result[0][0];
+	}
+
+
+
+
+
+	function GetValorSaldoAnterior($dataInicial,$idSubelemento){
+
+		$subCriteria = $this->getCriteria();
+		$subCriteria->setDistinct(true);
+		$subCriteria->addColumnAttribute('idItemPatrimonio');
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('sum(valor)');
+		$criteria->addCriteria("to_date(dataAquisicao,'DD/MM/YYYY')", '<', "to_date('$dataInicial','DD/MM/YYYY')");
+		$criteria->addCriteria('subelemento','=',$idSubelemento);
+		$criteria->addCriteria('idItemPatrimonio','IN', $subCriteria);
+
+		$query = $criteria->retrieveAsQuery();
+		return $query->result[0][0];
+
+	}
+
+
+	function GetValorBaixasPorPeriodoRubrica($dataInicial, $dataFinal, $idSubelemento)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('sum(valor)');
+		$criteria->addCriteria("to_date(movimentopat.dataMovimento,'DD/MM/YYYY')", '>=', "to_date('$dataInicial','DD/MM/YYYY')");
+		$criteria->addCriteria("to_date(movimentopat.dataMovimento,'DD/MM/YYYY')", '<=', "to_date('$dataFinal','DD/MM/YYYY')");
+		$criteria->addCriteria('movimentopat.tipoMovimento','=',"'3'");
+		$criteria->addCriteria('subelemento','=', $idSubelemento);
+		$criteria->addCriteria('ativo','=',"'N'");
+		$query = $criteria->retrieveAsQuery();
+		return $query->result[0][0];
+	}
+
+	function GetValorSemDataPorRubrica($idSubelemento)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('count(*)');
+		$criteria->addColumnAttribute('sum(valor)');
+		$criteria->addCriteria('dataAquisicao','IS',"NULL");
+		$criteria->addCriteria('subelemento','=',$idSubelemento);
+		$criteria->addCriteria('ativo','=',"'S'");
+		$query = $criteria->retrieveAsQuery();
+		return $query->result[0];
+	}
+
+	function GetItensPorEmpenho($empenho)
+	{
+        $criteria = $this->getCriteria();
+        $criteria->AddColumnAttribute('subelemento');
+        $criteria->AddColumnAttribute('classificador.idClassificador');
+        $criteria->AddColumnAttribute('setor.sigla');
+		$criteria->AddColumnAttribute('descricao');
+        $criteria->AddColumnAttribute('dataAquisicao', 'dataAquisicao');
+        $criteria->AddColumnAttribute('notaFiscal');
+        $criteria->AddColumnAttribute('valor');
+        $criteria->AddColumnAttribute('idItemPatrimonio');
+        $criteria->AddColumnAttribute('idEmpenhado');
+        $criteria->AddColumnAttribute('idMaterial');
+
+		$cc = new CriteriaCondition();
+		$cc->addCriteria($criteria->getCriteria('empenhado.empenho.numero','=', "'$empenho'"));
+		$cc->addOrCriteria($criteria->getCriteria('numeroEmpenho', '=', "'$empenho'"));
+		$criteria->addCriteria($cc);
+
+        $criteria->addCriteria('ativo','=', "'S'");
+        $criteria->addOrderAttribute('classificador.idClassificador');
+        $criteria->addOrderAttribute('descricao');
+        $criteria->addOrderAttribute('idItemPatrimonio');
+		$criteria->setAssociationType('empenhado','right');
+		$criteria->setAssociationType('empenho','right');
+		return $criteria->retrieveAsQuery();
+	}
+
+	function RepTotaisPorClassificador()
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('subelemento');
+		$criteria->addColumnAttribute('classificador.idClassificador');
+		$criteria->addColumnAttribute('classificador.descricao');
+        $criteria->addColumnAttribute('count(idItemPatrimonio)','quant');
+        $criteria->addColumnAttribute('sum(valor)','valor');
+		$criteria->addGroupAttribute('subelemento');
+		$criteria->addGroupAttribute('classificador.idClassificador');
+		$criteria->addGroupAttribute('classificador.descricao');
+        $criteria->addCriteria('subelemento','is not', "NULL");
+		$criteria->addOrderAttribute('classificador.descricao');
+		$query = $criteria->retrieveAsQuery();
+		return $query->result;
+	}
+
+	function RepTotaisPorClassificadorPeriodo($dataInicial, $dataFinal)
+	{
+		$k = new MKrono();
+		$dataInicial = $k->invertDate($dataInicial);
+		$dataFinal = $k->invertDate($dataFinal);
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('subelemento');
+		$criteria->addColumnAttribute('classificador.idClassificador');
+		$criteria->addColumnAttribute('classificador.descricao');
+        $criteria->addColumnAttribute('count(idItemPatrimonio)','quant');
+        $criteria->addColumnAttribute('sum(valor)','valor');
+		$criteria->addGroupAttribute('subelemento');
+		$criteria->addGroupAttribute('classificador.idClassificador');
+		$criteria->addGroupAttribute('classificador.descricao');
+        $criteria->addCriteria('subelemento','is not', "NULL");
+        $criteria->addCriteria('dataAquisicao','>=', "'$dataInicial'");
+        $criteria->addCriteria('dataAquisicao','<=', "'$dataFinal'");
+		$criteria->addOrderAttribute('classificador.descricao');
+		$query = $criteria->retrieveAsQuery();
+		return $query->result;
+	}
+
+	function GetClassificadoresPorRubrica($idsubelemento)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('classificador.idClassificador');
+		$criteria->addColumnAttribute('classificador.descricao');
+        $criteria->addColumnAttribute('count(idItemPatrimonio)','quant');
+		$criteria->addGroupAttribute('classificador.idClassificador');
+		$criteria->addGroupAttribute('classificador.descricao');
+        $criteria->addCriteria('subelemento','=', $idsubelemento);
+		$criteria->addOrderAttribute('classificador.idClassificador');
+		$query = $criteria->retrieveAsQuery();
+		return $query->result;
+	}
+
+	function RepTermo($empenho)
+	{
+        $criteria0 = $this->getCriteria();
+		$criteria0->AddColumnAttribute('idItemPatrimonio');
+        $criteria0->addCriteria('upper(numeroEmpenho)','=', "upper('$empenho')");
+        $query0 = $criteria0->retrieveAsQuery();
+		if($query0->result)//COMPRAS 2006
+		{
+			$criteria = $this->getCriteria();
+			$criteria->AddColumnAttribute('min(idItemPatrimonio)', 'inicio');
+			$criteria->AddColumnAttribute('max(idItemPatrimonio)', 'final');
+			$criteria->AddColumnAttribute('descricao');
+			$criteria->AddColumnAttribute('numeroEmpenho');
+			$criteria->AddColumnAttribute('count(idItemPatrimonio)', 'quantidade');
+			//Ítalo 23-06-2008
+			//mantive unitario recebendo valor
+			//$criteria->AddColumnAttribute('null', 'unitario');
+			$criteria->AddColumnAttribute('valor', 'unitario');
+			$criteria->AddColumnAttribute('sum(valor)', 'total');
+			$criteria->addColumnAttribute('movimentopat.numeroTermo');
+			$criteria->addCriteria('upper(numeroEmpenho)','=', "upper('$empenho')");
+			$criteria->addCriteria('ativo','=', "'S'");
+			$criteria->addGroupAttribute('descricao');
+			$criteria->addGroupAttribute('numeroEmpenho');
+			$criteria->addGroupAttribute('movimentopat.numeroTermo');
+			$criteria->addGroupAttribute('idSetor');
+			$criteria->addGroupAttribute('valor');
+			$query = $criteria->retrieveAsQuery();
+			$query->SetOrder('inicio');
+	        return $query->result;
+		}
+		else//COMPRA
+		{
+			$criteria = $this->getCriteria();
+			$criteria->AddColumnAttribute('min(idItemPatrimonio)', 'inicio');
+			$criteria->AddColumnAttribute('max(idItemPatrimonio)', 'final');
+			$criteria->AddColumnAttribute('descricao');
+			$criteria->AddColumnAttribute('empenhado.empenho.numero');
+			$criteria->AddColumnAttribute('count(idItemPatrimonio)', 'quantidade');
+			//Ítalo 23-06-2008
+			//mantive unitario recebendo valor
+			//$criteria->AddColumnAttribute('null', 'unitario');
+			$criteria->AddColumnAttribute('valor', 'unitario');
+			$criteria->AddColumnAttribute('sum(valor)', 'total');
+			//Ítalo 23-06-2008
+			//$criteria->addColumnAttribute('movimentopat.numeroTermo');
+			$criteria->addColumnAttribute('empenhado.patrimonio.movimentopat.numeroTermo');
+			$criteria->addCriteria('upper(empenhado.empenho.numero)','=', "upper('$empenho')");
+			$criteria->addCriteria('ativo','=', "'S'");
+			$criteria->addGroupAttribute('descricao');
+			$criteria->addGroupAttribute('empenhado.empenho.numero');
+			//Ítalo 23-06-2008
+			//$criteria->addGroupAttribute('movimentopat.numeroTermo');
+			$criteria->addGroupAttribute('empenhado.patrimonio.movimentopat.numeroTermo');
+			$criteria->addGroupAttribute('idSetor');
+			$criteria->addGroupAttribute('valor');
+			$query = $criteria->retrieveAsQuery();
+			$query->SetOrder('inicio');
+	        return $query->result;
+		}
+	}
+
+	/* Criando um metodo para busca pelo id do patrimonio */
+
+function RepTermo2($idPatrimonio)
+	{
+        $criteria0 = $this->getCriteria();
+		$criteria0->AddColumnAttribute('idItemPatrimonio');
+        $criteria0->addCriteria('iditempatrimonio','=', "$idPatrimonio");
+        $query0 = $criteria0->retrieveAsQuery();
+		if($query0->result)//COMPRAS 2006
+		{
+			$criteria = $this->getCriteria();
+			$criteria->AddColumnAttribute('min(idItemPatrimonio)', 'inicio');
+			$criteria->AddColumnAttribute('max(idItemPatrimonio)', 'final');
+			$criteria->AddColumnAttribute('descricao');
+			$criteria->AddColumnAttribute('numeroEmpenho');
+			$criteria->AddColumnAttribute('count(idItemPatrimonio)', 'quantidade');
+			//Ítalo 23-06-2008
+			//mantive unitario recebendo valor
+			//$criteria->AddColumnAttribute('null', 'unitario');
+			$criteria->AddColumnAttribute('valor', 'unitario');
+			$criteria->AddColumnAttribute('sum(valor)', 'total');
+			$criteria->addColumnAttribute('movimentopat.numeroTermo');
+			$criteria->addCriteria('ad_itempatrimonio.iditempatrimonio','=', "$idPatrimonio");
+			$criteria->addCriteria('ativo','=', "'S'");
+			$criteria->addGroupAttribute('descricao');
+			$criteria->addGroupAttribute('numeroEmpenho');
+			$criteria->addGroupAttribute('movimentopat.numeroTermo');
+			$criteria->addGroupAttribute('idSetor');
+			$criteria->addGroupAttribute('valor');
+			$query = $criteria->retrieveAsQuery();
+			$query->SetOrder('inicio');
+	        return $query->result;
+		}
+
+		else//COMPRA
+		{
+			$criteria = $this->getCriteria();
+			$criteria->AddColumnAttribute('min(idItemPatrimonio)', 'inicio');
+			$criteria->AddColumnAttribute('max(idItemPatrimonio)', 'final');
+			$criteria->AddColumnAttribute('descricao');
+			$criteria->AddColumnAttribute('empenhado.empenho.numero');
+			$criteria->AddColumnAttribute('count(idItemPatrimonio)', 'quantidade');
+			//Ítalo 23-06-2008
+			//mantive unitario recebendo valor
+			//$criteria->AddColumnAttribute('null', 'unitario');
+			$criteria->AddColumnAttribute('valor', 'unitario');
+			$criteria->AddColumnAttribute('sum(valor)', 'total');
+			//Ítalo 23-06-2008
+			//$criteria->addColumnAttribute('movimentopat.numeroTermo');
+			$criteria->addColumnAttribute('empenhado.patrimonio.movimentopat.numeroTermo');
+			$criteria->addCriteria('upper(empenhado.empenho.numero)','=', "upper('$empenho')");
+			$criteria->addCriteria('ativo','=', "'S'");
+			$criteria->addGroupAttribute('descricao');
+			$criteria->addGroupAttribute('empenhado.empenho.numero');
+			//Ítalo 23-06-2008
+			//$criteria->addGroupAttribute('movimentopat.numeroTermo');
+			$criteria->addGroupAttribute('empenhado.patrimonio.movimentopat.numeroTermo');
+			$criteria->addGroupAttribute('idSetor');
+			$criteria->addGroupAttribute('valor');
+			$query = $criteria->retrieveAsQuery();
+			$query->SetOrder('inicio');
+	        return $query->result;
+		}
+
+	}
+
+
+	function GetIdAproximada($id, $posicao='posterior')
+	{
+		$criteria = $this->getCriteria();
+		if($posicao == 'posterior')
+		{
+			$criteria->AddColumnAttribute('min(idItemPatrimonio)');
+			$criteria->addCriteria('idItemPatrimonio','>', $id);
+			$criteria->addCriteria('ativo','=', "'S'");
+		}
+		else
+		{
+			$criteria->AddColumnAttribute('max(idItemPatrimonio)');
+			$criteria->addCriteria('idItemPatrimonio','<', $id);
+			$criteria->addCriteria('ativo','=', "'S'");
+		}
+		$query = $criteria->retrieveAsQuery();
+        return $query->result[0][0];
+	}
+
+	function GetByRequisicaoMaterialAtivo($requisicao,$idmaterial=null)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addCriteria('empenhado.itemreq.idRequisicao','=', "$requisicao");
+		if($idmaterial)
+		{
+			$criteria->addCriteria('idMaterial','=', "$idmaterial");
+		}
+		$criteria->addCriteria('ativo','=', "'S'");
+		return $criteria->retrieveAsQuery();
+	}
+
+	function ListItensMesmoBloco()
+	{
+		$criteria = $this->getCriteria();
+		$criteria->AddColumnAttribute('idItemPatrimonio');
+		$criteria->AddColumnAttribute('numeroSerie');
+		$criteria->addCriteria('ativo','=', "'S'");
+		if($this->idClassificador)
+		{
+			$criteria->addCriteria('idClassificador','=', "'$this->idClassificador'");
+		}
+		if($this->idEmpenhado)
+		{
+			$criteria->addCriteria('idEmpenhado','=', "$this->idEmpenhado");
+		}
+		if($this->numeroEmpenho)
+		{
+			$criteria->addCriteria('numeroEmpenho','=', "'$this->numeroEmpenho'");
+		}
+		if($this->descricao)
+		{
+			$criteria->addCriteria('descricao','=', "'$this->descricao'");
+		}
+		if($this->subelemento)
+		{
+			$criteria->addCriteria('subelemento','=', "$this->subelemento");
+		}
+		if($this->dataAquisicao)
+		{
+			$k = new MKrono();
+			$dataAquisicao = $k->invertDate($this->dataAquisicao);
+			$criteria->addCriteria('dataAquisicao','=', "'$dataAquisicao'");
+		}
+		if($this->valor)
+		{
+			$criteria->addCriteria('valor','=', "$this->valor");
+		}
+		if($this->idMaterial)
+		{
+			$criteria->addCriteria('idMaterial','=', "$this->idMaterial");
+		}
+		if($this->numPro)
+		{
+			$criteria->addCriteria('numPro','=', "'$this->numPro'");
+		}
+		if($this->idSetor)
+		{
+			$criteria->addCriteria('idSetor','=', "$this->idSetor");
+		}
+		if($this->idDependencia)
+		{
+			$criteria->addCriteria('idDependencia','=', "$this->idDependencia");
+		}
+		$criteria->addOrderAttribute('idItemPatrimonio');
+		$query = $criteria->retrieveAsQuery();
+		return $query;
+	}
+
+	function GetItemReqByIdItemPatrimonio($idItemPatrimonio)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->AddColumnAttribute('empenhado.itemreq.idRequisicao');
+		$criteria->AddColumnAttribute('empenhado.itemreq.idMaterial');
+		$criteria->addCriteria('idItemPatrimonio','=', $idItemPatrimonio);
+		$query = $criteria->retrieveAsQuery();
+		return $query->result;
+	}
+	function ContaItemNota($idNotaFiscal)
+	{
+		global $MIOLO;
+		new sql(" count(*) "," ad_itemnota ", " idnotafiscal = $idNotaFiscal " );
+		$query= $this->Query($sql);
+		return $query;
+	}
+
+
+	function DeleteItemNota($idNotaFiscal)
+         {
+        	$sql = new sql("","ad_itemnota", "idnotafiscal = $idNotaFiscal");
+        	$ok = $this->Execute( $sql->Delete($this->idnotafiscal) );
+       	 	if ($ok) {$this->Log(OP_DEL,"idnotafiscal = $this->idnotafiscal");}
+        	return $ok;
+   	}
+   	function DeleteNota($idNotaFiscal)
+   	{
+   		$sql = new sql("","ad_notafiscal", "idnotafiscal = $idNotaFiscal");
+        	$ok = $this->Execute( $sql->Delete($this->idnotafiscal) );
+       	 	if ($ok) {$this->Log(OP_DEL,"idnotafiscal = $this->idnotafiscal");}
+        	return $ok;
+   	}
+   	function NotaFiscal($notafiscal, $idempenho)
+   	{
+
+   		$sql = new sql("idnotafiscal", "ad_notafiscal", "notafiscal =  '$notafiscal' and idempenho = $idempenho");
+   		$query = $this->Query($sql);
+   		return $query;
+   	}
+   	function SomaValorEmpenho($idempenho, $idnota)
+   	{
+   		$sql = new sql("sum(valor)", "ad_notafiscal", "idempenho = $idempenho and idnotafiscal != $idnota");
+   		$query = $this->Query($sql);
+   		return $query;
+   	}
+   	function NotaExistente($notafiscal, $idempenho, $idnota)
+   	{
+   		$sql = new sql("idnotafiscal", "ad_notafiscal", "notafiscal = '$notafiscal' and idempenho = $idempenho and idnotafiscal != $idnota");
+   		$query = $this->Query($sql);
+   		return $query;
+   	}
+   	function getEmpenho($idempenho)
+	{
+		global $MIOLO;
+		$sql  = new sql("numero"," ad_empenho "," idempenho = $idempenho ");
+		$query= $this->Query($sql);
+		return $query;
+	}
+	function getEmpenhoByIdNota($id){
+		 global $MIOLO;
+
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('iditempatrimonio');
+        $criteria->addColumnAttribute('numeroempenho');
+        $criteria->addCriteria('idnotafiscal','=',"'$id'");
+        //$criteria->addCriteria('ativo','=',"'S'");
+        return $criteria->retrieveAsQuery()->result[0][1];
+	}
+
+	/**
+   	 * Retorna a descrição de uma Conta contábil.
+   	 *
+   	 * @author Vitor Pacheco 18/10/2010
+   	 * @param $idvidautil ID da conta contábil
+   	 * @return array
+   	 */
+   	public function getContaContabil($idvidautil) {
+		global $MIOLO;
+		$sql = new sql("descricao", "ad_vidautil", " idvidautil = $idvidautil");
+		$query = $this->Query($sql);
+		return $query;
+	}
+	/**
+	 * Caso o subelemento passado como parâmetro seja menor que 10, ou seja,
+	 * tenha apenas um algarismo, retorna o mesmo subelemento com um zero a
+	 * esquerda.
+	 *
+	 * @author Vitor Pacheco 20/10/2010
+	 * @param int $subelemento SubElemento dos itens
+	 * @return int
+	 */
+	public function getSubelementoComZeroEsquerda($subelemento = null) {
+		$subelemento = ($subelemento == null) ? $this->subelemento : $subelemento;
+		if ($subelemento < 10)
+		{
+			$subelemento = str_pad($subelemento, 2, '0', STR_PAD_LEFT);
+		}
+		return $subelemento;
+	}
+	/**
+	 * Retorna os valores dos itens de um subelemento.
+	 *
+	 * @author Vitor Pacheco 25/10/2010
+	 * @param int $subelemento SubElemento dos itens
+	 * @return array
+	 */
+	public function getValores($subelemento) {
+        global $MIOLO;
+		$subelemento = ($subelemento == null) ? $this->subelemento : $subelemento;
+		$sql = new sql('valor', 'ad_itempatrimonio', "subelemento = $subelemento");
+		$query = $this->Query($sql);
+		return $query->result;
+	}
+
+    // 09/05/2011 - Daniel Bonfim
+
+    function ContaItemPatrimonioNotaFiscal($idNotaFiscal) {
+        global $MIOLO;
+
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('count(*)');
+        $criteria->addCriteria('idnotafiscal','=',"'$idNotaFiscal'");
+        //$criteria->addCriteria('ativo','=',"'S'");
+        return $criteria->retrieveAsQuery();
+	}
+
+    // 10/05/2011 Daniel Bonfim
+    function getDescricaoByIDNotaFiscal($idNotaFiscal) {
+        global $MIOLO;
+
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('iditempatrimonio');
+        $criteria->addColumnAttribute('descricao');
+        $criteria->addCriteria('idnotafiscal','=',"'$idNotaFiscal'");
+        //$criteria->addCriteria('ativo','=',"'S'");
+        return $criteria->retrieveAsQuery()->result[0][1];
+	}
+
+    function getValorByIDNotaFiscal($idNotaFiscal) {
+        global $MIOLO;
+
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('iditempatrimonio');
+        $criteria->addColumnAttribute('valor');
+        $criteria->addCriteria('idnotafiscal','=',"'$idNotaFiscal'");
+        //$criteria->addCriteria('ativo','=',"'S'");
+        return $criteria->retrieveAsQuery()->result;
+	}
+
+	function getMaxIDItem($idNotaFiscal){
+		global $MIOLO;
+
+		$criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('MAX(iditempatrimonio)');
+        $criteria->addCriteria('idnotafiscal','=',"'$idNotaFiscal'");
+        //$criteria->addCriteria('ativo','=',"'S'");
+        return $criteria->retrieveAsQuery()->result;
+	}
+        
+        //24-07-2012 Tiago macedo
+        function getMinIDItem($idNotaFiscal){
+		global $MIOLO;
+
+		$criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('MIN(iditempatrimonio)');
+        $criteria->addCriteria('idnotafiscal','=',"'$idNotaFiscal'");
+        //$criteria->addCriteria('ativo','=',"'S'");
+        return $criteria->retrieveAsQuery()->result[0][0];
+	}
+
+    function getNotaByIDNotaFiscal($idNotaFiscal) {
+        global $MIOLO;
+
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('iditempatrimonio');
+        $criteria->addColumnAttribute('notafiscal');
+        $criteria->addCriteria('idnotafiscal','=',"'$idNotaFiscal'");
+        //$criteria->addCriteria('ativo','=',"'S'");
+        return $criteria->retrieveAsQuery()->result;
+	}
+
+        // 04/10/2011 - Daniel Bonfim
+        function getNextId() {
+   		$sql = new sql("MAX(iditempatrimonio)", "ad_itempatrimonio");
+   		$query = $this->Query($sql);
+   		return $query->result[0][0] + 1;
+   	}
+        //
+        //Tiago Macedo
+        function getBloqueio($idnota){
+
+		if($idnota){
+		    $sql = new sql("bloqueio", "ad_notafiscal", "idnotafiscal = ".$idnota);
+		}else{
+
+		    return 'N';
+		}
+   		$query = $this->Query($sql);
+   		return $query->result[0][0];
+	}
+
+}

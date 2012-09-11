@@ -1,0 +1,225 @@
+<?php
+
+class MBaseGroup extends MContainer
+{
+    public $borderType;
+    public $scrollable;
+    public $scrollHeight;
+
+    public function __construct( $name = '', $caption = '', $controls = '', $disposition = 'none', $border = 'css' )
+    {
+        parent::__construct( $name, $controls, $disposition );
+
+        $this->scrollable   = false;
+        $this->scrollHeight = '';
+        $this->borderType   = $border;
+        $this->caption      = $caption;
+    }
+
+
+    function setScrollHeight( $height )
+    {
+        $this->scrollable   = true;
+        $this->scrollHeight = $height;
+    }
+
+
+    function setBorder( $border )
+    {
+        $this->borderType = $border;
+    }
+
+
+    function generateInner()
+    {
+        switch ( $this->borderType )
+        {
+            case 'none':
+            case '':
+                $this->border = '0';
+
+                break;
+
+            case 'css': break;
+
+            default: $this->addStyle('border', $this->border);
+        }
+
+        $attrs = $this->getAttributes();
+
+        parent::generateInner();
+
+        $html = $this->getInnerToString();
+
+        if ( $this->scrollable )
+        {
+            $f[]  = new MDiv( '', $this->caption, 'm-scrollable-label' );
+            $this->setClass('field');
+            $f[]  = $div = new MDiv( '', $html, 'm-scrollable-field' );
+            $div->height = $this->scrollHeight;
+            $this->inner = new MDiv( '', $f, '' );
+        }
+        else
+        {
+            $this->width = MUtil::NVL( $this->width, '98%' );
+            $this->inner = $this->getRender( 'fieldset' );
+        }
+    }
+}
+
+
+class MCheckBoxGroup extends MBaseGroup
+{
+    // options:
+    //    - a simple array of values
+    //    - a array of key/value pairs
+    //    - an array of Option objects
+    //    - an array of CheckBox objects
+    function __construct( $name = '', $label = '', $options = '', $hint = '', $disposition = 'horizontal', $border = 'none' )
+    {
+        $controls = array();
+
+        if ( ! is_array( $options ) )
+        {
+            $options = array($options);
+        }
+
+        $n = count($options);
+
+        for ( $i = 0; $i < $n; $i++ )
+        {
+            // we will accept an array of CheckBox ...
+            if ( $options[$i] instanceof MCheckBox )
+            {
+                $controls[] = clone $options[$i];
+            }
+            else
+            {
+                // we will accept an array of Options ...
+                if ( $options[$i] instanceof MOption )
+                {
+                    $oName    = $name . '_' . $options[$i]->name;
+                    $oLabel   = $options[$i]->label;
+                    $oValue   = $options[$i]->value;
+                    $oChecked = $options[$i]->checked || ( $oValue == MIOLO::_REQUEST($oName) );
+                }
+                // or an array of label/value pairs ...
+                elseif ( is_array( $options[$i] ) )
+                {
+                    $oName    = $name . '_' . $i;
+                    $oLabel   = $options[$i][0];
+                    $oValue   = $options[$i][1];
+                    $oChecked = $oValue == MIOLO::_REQUEST($oName);
+                }
+                // or a simple array of values
+                else
+                {
+                    $oName    = $name . '_' . $i;
+                    $oLabel   = $oValue = $options[$i];
+                    $oChecked = $oValue == MIOLO::_REQUEST($oName);
+                }
+
+                $controls[] = new MCheckBox( $oName, $oValue, $oLabel, $oChecked, $oLabel );
+            }
+        }
+
+        parent::__construct($name, $label, $controls, $disposition, $border);
+    }
+
+
+    function getValue()
+    {
+        $value    = array();
+        $controls = $this->GetControls();
+
+        foreach( $controls as $control )
+        {
+            $value[$control->GetName()] = $control->checked ? $control->GetValue() : NULL;
+        }
+
+        return $value;
+    }
+
+}
+
+
+class MRadioButtonGroup extends MBaseGroup
+{
+    var $default;
+    // options:
+    //    - a simple array of values
+    //    - a array of key/value pairs
+    //    - an array of Option objects
+    //    - an array of RadioButton objects
+
+
+    function __construct( $name = '', $label = '', $options = '', $default = false, $hint = '', $disposition = 'vertical', $border = 'none' )
+    {
+        $controls = array();
+
+        if ( ! is_array( $options ) )
+        {
+            $options = array( $options );
+        }
+
+        $n = count( $options );
+
+        for ( $i = 0; $i < $n; $i++ )
+        {
+            // we will accept an array of RadioButton ... 
+            if ( $options[$i] instanceof MRadioButton )
+            {
+                $options[$i]->SetName( $name );
+                $options[$i]->SetId( $name . '_' . $i );
+                $options[$i]->checked = ( $options[$i]->checked || ( $options[$i]->value == $default ) );
+                $controls[] = clone $options[$i];
+            }
+            else
+            {
+                $oName = $name;
+
+                // we will accept an array of Options ... 
+                if ( $options[$i] instanceof MOption )
+                {
+                    $oName    = $name . '_' . $options[$i]->name;
+                    $oLabel   = $options[$i]->label;
+                    $oValue   = $options[$i]->value;
+                    $oChecked = ( $oValue == $default ) || $options[$i]->checked || ( $oValue == MIOLO::_REQUEST($oName) );
+                }
+                // or an array of label/value pairs ... 
+                elseif ( is_array( $options[$i] ) )
+                {
+                    $oName    = $name . '_' . $i;
+                    $oLabel   = $options[$i][0];
+                    $oValue   = $options[$i][1];
+                    $oChecked = ( $oValue == $default ) || ( $oValue == MIOLO::_REQUEST($oName) );
+                }
+                // or a simple array of values
+                else
+                {
+                    $oName    = $name . '_' . $i;
+                    $oLabel   = $oValue = $options[$i];
+                    $oChecked = ( $oValue == $default ) || ( $oValue == MIOLO::_REQUEST($oName) );
+                }
+
+                $control = new MRadioButton( $oName, $oValue, $oLabel, $oChecked, $oLabel, $hint );
+                $control->SetName( $name );
+                $controls[] = $control;
+            }
+        }
+
+        parent::__construct( $name, $label, $controls, $disposition, $border );
+    }
+}
+
+
+class MLinkButtonGroup extends MBaseGroup
+{
+    // options: array of LinkButton objects
+    function __construct( $name = '', $label = '', $options = '', $disposition = 'horizontal', $border = 'css' )
+    {
+        parent::__construct( $name, $label, $options, $disposition, $border );
+    }
+}
+
+?>

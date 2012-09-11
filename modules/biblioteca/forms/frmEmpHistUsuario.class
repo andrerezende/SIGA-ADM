@@ -1,0 +1,259 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+class frmEmpHistUsuario extends MFormAJAX
+{
+    public $objEmprestimo;
+    public $objUsuario;
+	public $login;
+	public $user;
+	public $idusuario;
+	public $idEmprestimo;
+	public $grid;
+
+	function __construct()
+    {   
+		global $MIOLO, $action, $module, $objExemplar;
+
+        $this->objUsuario = $MIOLO->GetBusiness($module,'usuario');
+        parent::__construct('Histórico de Empréstimos do Usuário');
+        $this->box->AddStyle('padding',"10px");
+	    $this->eventHandler();
+		$this->defaultButton = false;
+		// Botão 'fechar', direcionando para o handler biblioteca/main/emprestimos
+		$this->SetClose($this->manager->GetActionURL($module, 'main:emprestimos'));
+	}
+
+
+	function CreateFields()
+	{
+		global $MIOLO, $action, $module, $item, $page;
+
+		if (! $this->page->IsPostBack())
+		{
+			$fields = Array (
+				new MText('txtAviso','<b>Informe:</b>'),
+                                          new MText('txtLogin', '<b>> o login para usuário pertencente à Instituição (aluno, professor ou funcionário)</b>'),
+                                                          new MText('txtRG', '<b>> o número do RG para usuário pertencente à comunidade, sem vínculo com a Instituição</b>'),
+				new MSpacer(1),
+				array(
+					new MLookupTextField('usuario','','Login do Usuário',20),
+					new MTextLabel('txtOu','&nbsp;&nbsp;&nbsp;-OU-&nbsp;&nbsp;&nbsp;','&nbsp;'),
+					new MLookupTextField('rg','','Número do RG',20),
+				),
+			);
+			$this->SetFields($fields);
+
+			//As 4 propriedades de um lookup
+			// module = módulo usado
+			// item = A funcao que chama no arquivo classes/lookup.class
+			// event = O evento relacionado quando o usuário clica em "acao"
+			// related = Os campos retornados após a ação
+			$this->SetFieldAttr('usuario','module',$module);
+			$this->SetFieldAttr('usuario','item','Usuario');
+			$this->SetFieldAttr('usuario','event','filler');
+			$this->SetFieldAttr('usuario','related','usuario,"",""');
+
+			$this->SetFieldAttr('rg','module',$module);
+			$this->SetFieldAttr('rg','item','rg');
+			$this->SetFieldAttr('rg','event','filler');
+			$this->SetFieldAttr('rg','related', 'rg,""');
+
+			$buttons = Array(
+				new MButton('btnProcurar', 'Procurar'),
+			);
+			$this->SetButtons($buttons);
+			
+			if (!$item)
+			{
+				$this->page->onLoad("MIOLO_GetElementById('usuario').focus();");
+			}
+		}
+	}
+
+
+	function btnProcurar_click()
+	{
+		global $MIOLO, $module, $self, $theme, $action, $page, $item;
+
+		if($item == null)
+		{
+			$this->login = $this->getFormValue('usuario');
+			if($this->login == null)
+			{
+				$this->login = $this->getFormValue('rg');
+			}
+
+			if($this->login == null)
+			{
+				$MIOLO->Prompt(Prompt::Error("Por favor, informe o usuário.", $MIOLO->GetActionURL($module,$self)));
+			}
+		}
+		else
+		{
+			$this->login = $item;
+		}
+
+		$this->user = $this->objUsuario->GetUsuarioByLogin($this->login);
+
+		if (!$this->user)
+		{
+			$MIOLO->Prompt(Prompt::Error("<font color=red>Usuário não encontrado</font>",$MIOLO->GetActionURL($module,$self)));
+		}
+		else 
+		{
+			$this->idusuario = $this->user[0];
+		}
+
+		$this->SetTitle("Histórico de Empréstimos do Usuário " . $this->login . " - " . $this->user[1]);
+
+		$this->objEmprestimo = $MIOLO->GetBusiness($module,'emprestimo');
+		$query = $this->objEmprestimo->SelectEmprestimoHistUsuario($this->idusuario);
+
+		$this->idEmprestimo = $query->idemprestimo;
+        $this->grid = $this->manager->getUI()->getGrid($module,'gridHistUsuario',$query);
+
+		$fields = array(
+			$this->grid,
+			new MHiddenField('usuario',$this->login)
+		);
+		$this->setFields($fields);
+
+		$buttons = Array(
+			new MButton('btnVoltar', 'Voltar', $MIOLO->GetActionURL($module = $module, $action = $action)),
+   						);
+		$this->SetButtons($buttons);
+
+        $this->SetButtonAttr('btnProcurar','visible',false);
+	}
+
+
+	function ajax_detail($id)
+    {
+        // this method is called by CPAINT at doDetail execution
+
+		global $MIOLO, $module;
+        $log = $MIOLO->GetBusiness($module,'log');
+		$opempr = $log->GetOperadorEmprByOperacao($id);
+		$opdevol = $log->GetOperadorDevolByOperacao($id);
+        $data = array();
+        $data[] = "Operador de Empréstimo: " . $opempr[0][0] . " - " . $opempr[0][1];
+		if ($opdevol != null)
+			$data[] = "Operador de Devolução  : " . $opdevol[0][0] . " - " . $opdevol[0][1];    
+        $control = new MTableRaw('',$data);
+        $control->setAlternate(true);
+        $MIOLO->getTheme()->setAjaxContent($control);
+	}
+
+
+	function btnEdit_click()
+	{
+		global $MIOLO, $module, $action, $item;
+
+		$fields = array(
+			new MTextField('idemprestimo','','Código do Empréstimo',20),
+			new MTextField('loginPessoa','','Login do Usuário',20),
+			new MTextField('numerodotombo','','Número do Exemplar',20),
+			new MTextField('datahoradoemprestimo','','Data/Hora do Empréstimo',20),
+			new MTextField('datahoraprevisaodevolucao','','Data/Hora Previsão Devolução',20),
+			new MTextField('datahoradadevolucao','','Data/Hora da Devolução',20),
+		);
+		$this->SetFields($fields);
+
+		$this->setFieldAttr('idemprestimo','readonly',true);
+		$this->setFieldAttr('loginPessoa','readonly',true);
+		$this->setFieldAttr('numerodotombo','readonly',true);
+
+		$this->objEmprestimo = $MIOLO->GetBusiness($module,'emprestimo');
+		$emprestimo = $this->objEmprestimo->GetEmprestimoById($item);
+		$this->setData($emprestimo);
+
+		$go = $this->manager->GetActionURL($module, $action,$emprestimo->login,array('event'=>'btnProcurar:click'));
+		
+		$buttons = Array(
+			new MButton('btnSalvar', 'Salvar'),
+			new MButton('btnVoltar', 'Voltar', $go),
+		);
+		$this->SetButtons($buttons);
+		$this->SetButtonAttr('btnProcurar','visible',false);
+	
+		if ($emprestimo->datahoradadevolucao)
+			$this->SetFieldAttr('datahoradadevolucao','visible',true);
+		else
+			$this->SetFieldAttr('datahoradadevolucao','visible',false);
+	}
+
+
+	function getData()
+	{
+		$data = new FormData();
+		$data->idemprestimo = $this->GetFormValue('idemprestimo');
+		$data->login = $this->GetFormValue('loginPessoa');
+		$data->numerodotombo = $this->GetFormValue('numerodotombo');
+		$data->datahoradoemprestimo = $this->GetFormValue('datahoradoemprestimo');
+		$data->datahoraprevisaodevolucao = $this->GetFormValue('datahoraprevisaodevolucao');
+		$data->datahoradadevolucao = $this->GetFormValue('datahoradadevolucao');
+		return $data;
+	}
+
+
+	function setData($data)
+	{
+		$this->SetFieldValue('idemprestimo',$data->idemprestimo);
+		$this->SetFieldValue('loginPessoa',$data->login);
+		$this->SetFieldValue('numerodotombo', $data->numerodotombo);
+		$this->SetFieldValue('datahoradoemprestimo',$data->datahoradoemprestimo);
+		$this->SetFieldValue('datahoraprevisaodevolucao',$data->datahoraprevisaodevolucao);
+		$this->SetFieldValue('datahoradadevolucao',$data->datahoradadevolucao);
+	}
+
+
+	function btnSalvar_click()
+	{
+		global $MIOLO,$self,$item,$action,$module;
+		$this->objEmprestimo = $MIOLO->GetBusiness($module,'emprestimo');
+		$data = $this->getData();
+		try
+		{
+			$result = $this->objEmprestimo->saveEmprestimo($data);
+
+			if($result == true)
+			{
+				$go = $this->manager->GetActionURL($module, $action, $data->login, array('event'=>'btnProcurar:click'));
+				$MIOLO->Information("Empréstimo Modificado", $go );
+			}
+			else
+			{
+				$this->addError($result);
+			}
+		}
+		catch (Exception $e)
+		{
+			$this->addError($e->getMessage());
+		}
+	}
+}
+?>

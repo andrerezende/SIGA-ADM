@@ -1,0 +1,62 @@
+<?
+class frmMultiplosAberturaPrint extends MForm
+{
+    protected $processo;
+    protected $perms;
+    protected $setor;
+    protected $setorAcesso;
+
+    public function __construct()
+    {
+//      construct
+        global $MIOLO;
+        $this->processo  = $MIOLO->GetBusiness('protocolo','processo');
+        $this->setor  = $MIOLO->GetBusiness('protocolo','setor');
+        $this->setorAcesso  = $MIOLO->GetBusiness('protocolo','setoracesso');
+        $this->perms  = $MIOLO->getPerms();
+        parent::__construct('Abertura Múltiplos Solicitantes');
+        $this->SetClose($MIOLO->GetActionURL('protocolo','main'));
+        $inicio = $this->getFormValue('inicio');
+        $fim = $this->getFormValue('fim');
+        $ano = substr($inicio,0,4);
+        
+//      report
+        $report = new MEzPDFReport('2','portrait');
+        $report->pdf->ezSetCmMargins(8.5,2.5,3.5,2.5);
+//      text report
+        $tipo = array('P'=>'PROCESSO','A'=>'PROTOCOLADO');
+//      table report
+        $options['textCol'] = array(0,0,0);
+        $options['shaded'] = 0;
+        $options['showLines'] = 0;
+        $options['fontSize'] = 12;
+        $options['maxWidth'] = 480;
+        $options['xPos'] = 'left';
+        $options['xOrientation'] = 'right';
+        $cols = array('','');
+        for ($i=intval(substr($inicio,4,6));$i<=intval(substr($fim,4,6));$i++)
+        {
+            $serie = str_repeat("0",6-strlen($i)).$i;
+            $this->processo->getByPartNumero($ano.$serie);
+            $report->pdf->ezText($tipo[$this->processo->tipo],12);
+            $report->pdf->ezText($this->processo->instituicao.'.'.$this->processo->numProcessoFormatado(),24);
+            $dataRel[] = array('INTERESSADO:',$this->processo->solicitante);
+            $dataRel[] = array('','');
+            $dataRel[] = array('ENTRADA SISTEMA:',$this->processo->dataFormatada($this->processo->dataAbertura));
+            $dataRel[] = array('','');
+            $dataRel[] = array('SETOR ORIGEM:',$this->processo->setorOrigem);
+            $dataRel[] = array('','');
+            $dataRel[] = array('TÍTULO:',$this->processo->titulo);
+            $dataRel[] = array('','');
+            $dataRel[] = array('','');
+            $dataRel[] = array('ASSUNTO:',$this->processo->assunto);
+            $report->pdf->ezTable($dataRel,$cols,'',$options);
+			if ($i != intval(substr($fim,4,6))) $report->pdf->ezNewPage();
+            unset($dataRel);
+        }
+//      report
+        $report->Execute();
+        $this->EventHandler();
+    }    
+}
+?>

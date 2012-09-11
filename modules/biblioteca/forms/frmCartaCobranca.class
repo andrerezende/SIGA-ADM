@@ -1,0 +1,206 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+class frmCartaCobranca extends Form
+{
+    protected $objEmprestimo;
+
+	function frmCartaCobranca()
+    {
+	    global $MIOLO, $action, $module, $item;
+
+	    //parent::__construct('Empréstimos Atrasados');
+		$this->Form("Carta de cobrança");
+		$this->EventHandler();
+  		$this->defaultButton = false;
+ 		// Botão 'fechar', direcionando para o handler biblioteca/main/circulacao/emprestimo
+		$this->SetClose($this->manager->GetActionURL($module, 'main:circulacao:emprestimo'));
+	}
+
+	function CreateFields()
+	{
+		global $MIOLO, $module, $self, $theme, $action, $page, $item;
+		
+		$this->SetTitle('Carta de cobrança');
+		//datagrid
+		$perms = $this->manager->getPerms();
+		if ( $perms->checkAccess('BIB_CIRCULACAO_TOT',A_ACCESS) )
+		{
+			$columns = array(
+				new DataGridColumn('login','Usuário','center',true, '10%',true, null, false, false),
+				new DataGridColumn('nome','Nome','left',false, '24%',true, null, false, false),
+				new DataGridColumn('telefone','Telefone','center',true, '14%',true, null, false, false),
+				new DataGridColumn('numerodotombo','Exemplar','center',true, '15%',true, null, false, false),
+				new DataGridColumn('datahoradoemprestimo','Empréstimo','center',true, '12%',true, null, false, false),
+				new DataGridColumn('datahoraprevisaodevolucao','Prev. Dev.','center',true, '11%',true, null, false, false),
+				new DataGridColumn('emprhoras','Emp. Horas?','center', true,'6%'),
+				);
+		}
+		else
+		{
+			$columns = array(
+				new DataGridColumn('login','Usuário','center',true, '10%',true, null, false, false),
+				new DataGridColumn('nome','Nome','left',false, '32%',true, null, false, false),
+				new DataGridColumn('telefone','Telefone','center',true, '14%',true, null, false, false),
+				new DataGridColumn('numerodotombo','Exemplar','center',true, '15%',true, null, false, false),
+				new DataGridColumn('datahoradoemprestimo','Empréstimo','center',true, '12%',true, null, false, false),
+				new DataGridColumn('datahoraprevisaodevolucao','Prev. Dev.','center',true, '11%',true, null, false, false),
+				new DataGridColumn('emprhoras','Emp. Horas?','center', true,'6%'),
+				);
+		}
+
+		//Instancia o objeto emprestimo
+	    $this->objEmprestimo = $MIOLO->GetBusiness($module,'emprestimo');
+
+		$query = $this->objEmprestimo->SelectEmprestimoAtrasadoSemData();
+
+		$href_datagrid = $MIOLO->GetActionURL($module,$action,$data,Array('event'=>'btnProcurar_click'));
+		$this->page->SetAction($href_datagrid);
+
+		$datagrid = new DataGrid2($query, $columns, $href_datagrid,25);
+		$datagrid->SetWidth('99%');
+
+		if ( $perms->checkAccess('BIB_CIRCULACAO_TOT',A_ACCESS) )
+		{
+			$href_edit = $MIOLO->GetActionURL($module, $action, '%6%', array('event'=>'btnEdit_click'));
+			$datagrid->AddActionIcon('Editar', 'edit', $href_edit);
+		}
+
+		$fields = array(
+						$datagrid,
+						new HiddenField('dataIni', $dataIni),
+						new HiddenField('dataFim', $dataFim),
+						);
+
+		$this->SetFields($fields);
+
+		$buttons = Array(
+			new FormButton('btnCobranca', 'Gerar cartas de cobrança'),
+   		);
+   		
+		$this->SetButtons($buttons);
+		$this->SetButtonAttr('btnProcurar','visible',false);
+	}
+
+	function btnCobranca1_click()
+	{
+		global $MIOLO, $module, $item;
+
+		$report = new MJasperReport('sigaept');
+
+		$parameters['str_mensagem'] =  $this->GetFormValue('mensagem');
+		$parameters['str_saudacao'] =  $this->GetFormValue('saudacao');
+		$parameters['SUBREPORT_DIR']	= $MIOLO->GetConf('home.modules');
+       	$parameters['int_pIdUsuario']	= $MIOLO->login->idkey;
+       	$parameters['pURL']		= $MIOLO->GetConf('home.url');
+      	
+       	$report->Execute('biblioteca', 'cartaCobrancaTodos', $parameters);
+	}
+
+	function btnCarta_click()
+	{
+		global $MIOLO, $module, $item;
+
+		$report = new MJasperReport('sigaept');
+		//var_dump($this->GetFormValue('idEmprestimo'));die();
+		$this->objEmprestimo = $MIOLO->GetBusiness($module,'emprestimo');
+		//$idUsuario = $this->objEmprestimo->SelectIdUsuariobyId($item);
+		$idUsuario = $this->objEmprestimo->SelectIdUsuariobyId($this->GetFormValue('idEmprestimo'));
+		
+		
+		$parameters['str_mensagem'] =  $this->GetFormValue('mensagem');
+		$parameters['str_saudacao'] =  $this->GetFormValue('saudacao');
+		$parameters['int_idUsuarioBiblioteca'] = $idUsuario[0][0];
+		$parameters['SUBREPORT_DIR']	= $MIOLO->GetConf('home.modules');
+       	$parameters['int_pIdUsuario']	= $MIOLO->login->idkey;
+       	$parameters['pURL']		= $MIOLO->GetConf('home.url');
+      
+       	//var_dump($parameters);die();
+       	$report->Execute('biblioteca', 'cartaCobranca', $parameters);
+	}
+	
+	function btnEdit_click()
+	{
+		global $MIOLO, $module, $action, $item;
+
+		$fields = array(
+			new TextField('saudacao','','Saudação',20),
+			new MultiLineField('mensagem','','Mensagem','',3,50),
+			new MHiddenField('idEmprestimo',$item)
+		);
+		$this->SetFields($fields);
+		
+		$go = $this->manager->GetActionURL($module, $action);
+		
+		$buttons = Array(
+			new FormButton('btnCarta', 'Gerar'),
+			new FormButton('btnVoltar', 'Voltar', $go)			
+		);
+		$this->SetButtons($buttons);
+		$this->SetButtonAttr('btnCobranca','visible',false);
+    }
+
+	function btnCobranca_click()
+	{
+		global $MIOLO, $module, $action, $item;
+
+		$fields = array(
+			new TextField('saudacao','','Saudação',20),
+			new MultiLineField('mensagem','','Mensagem','',3,50)
+		);
+		$this->SetFields($fields);
+		
+		$go = $this->manager->GetActionURL($module, $action);
+		
+		$buttons = Array(
+			new FormButton('btnCobranca1', 'Gerar', 'PDF')		
+		);
+		$this->SetButtons($buttons);
+		$this->SetButtonAttr('btnCobranca','visible',false);
+    }
+       
+	function getData()
+	{
+		$data = new FormData();
+		$data->idemprestimo = $this->GetFormValue('idemprestimo');
+		$data->login = $this->GetFormValue('loginPessoa');
+		$data->numerodotombo = $this->GetFormValue('numerodotombo');
+		$data->datahoradoemprestimo = $this->GetFormValue('datahoradoemprestimo');
+		$data->datahoraprevisaodevolucao = $this->GetFormValue('datahoraprevisaodevolucao');
+		$data->datahoradadevolucao = null;
+		return $data;
+	}
+
+	function setData($data)
+	{
+		$this->SetFieldValue('idemprestimo',$data->idemprestimo);
+		$this->SetFieldValue('loginPessoa',$data->login);
+		$this->SetFieldValue('numerodotombo', $data->numerodotombo);
+		$this->SetFieldValue('datahoradoemprestimo',$data->datahoradoemprestimo);
+		$this->SetFieldValue('datahoraprevisaodevolucao',$data->datahoraprevisaodevolucao);
+	}
+}
+?>

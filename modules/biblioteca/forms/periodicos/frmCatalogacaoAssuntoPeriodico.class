@@ -1,0 +1,266 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+class frmCatalogacaoAssuntoPeriodico extends MForm
+{
+    	public $periodico;
+    	public $etiqueta;
+    	public $assunto;
+	    public $item;
+        
+
+    	function __construct($item)
+    	{
+       		parent::__construct('Catalogação dos Assuntos do Periódico');
+		$this->SetClose($this->manager->GetActionURL($module, 'main:catalogacao:periodicos:catalogacaoperiodico'));
+		$this->EventHandler();
+    	}
+
+
+    function CreateFields()
+    {
+		global $item;
+
+		$this->periodico = $this->manager->getBusiness('biblioteca','periodico');
+        $this->etiqueta = $this->manager->getBusiness('biblioteca','etiqueta');
+		
+		$tagAssuntos = $this->etiqueta->ListAssuntos(1, 5)->result;
+
+		$x = 0;
+		while ($tagAssuntos[$x][0] <> null)
+		{
+			$resultTag[$x] = $tagAssuntos[$x][0];
+			$x++;
+		}
+
+		$array = array( 
+              		new MHiddenField('hidFieldList',''),
+              		new MHiddenField('idassunto',''),
+              		new MHiddenField('ocorrencia',''),
+              		new MHiddenField('idetiqueta',''),
+                    new MTextLabel('lbl1','Obra',null,'black'),
+                    array(
+                        new MTextField('issn','','ISSN',10),
+		                new MTextLabel('ou','-OU-','&nbsp;'),
+		                new MLookupTextField('lkpperiodico','','Título',30),
+                    ),
+			new MButton('btnEdit','Buscar'),
+			new MButton('btnChoose','Outra Obra'),
+          //  new MButton('btnNovoAss','Novo Assunto'),
+
+			new MTextLabel('lbl2','Pesquisar assunto:',null,'black'),
+			array(
+				//new LookupTextField('lkpassunto','',null,27,'Pesquisar'),
+                new MlookupFieldValue('lkpassunto','',null,27,'Pesquisar'),
+               	new MHiddenField('numero',''),
+                
+				),
+            new MButton('btnAlterar','Associar'),
+           
+                                
+                                
+        		);
+
+        	$this->setFields($array);
+
+
+
+	       	$tipo = $this->getFormValue('tipo');
+		if ($tipo == 'indice')
+		{
+            $buttons = array(
+                new MButton('btnPost', '<b>Gravar</b>'),
+            );
+
+            $this->SetButtons($buttons);
+        }
+
+        $this->SetFieldAttr('lkpperiodico','module','biblioteca');
+        $this->SetFieldAttr('lkpperiodico','item','obra');
+        $this->SetFieldAttr('lkpperiodico','event','filler');
+        $this->SetFieldAttr('lkpperiodico','related','issn,lkpperiodico');
+
+        $this->setFieldAttr('lbl2','visible',false);
+        $this->setFieldAttr('lkpassunto','visible',false);
+        $this->setFieldAttr('btnAlterar','visible',false);
+        $this->setFieldAttr('btnChoose','visible',false);
+        $this->defaultButton = false;
+
+        //var_dump($item);
+		if ($item != null)
+		{
+            $idperiodico = $item;
+            $this->periodico->GetById($idperiodico);
+            $this->SetFieldValue('issn', $this->periodico->issn);
+            $titulo = $this->periodico->titulo;
+			$this->SetFieldValue('lkpperiodico', $titulo);
+			$this->btnEdit_click();
+		}
+        
+		
+	}
+
+
+    	function btnEdit_click()
+    	{
+		global $MIOLO, $module, $self, $theme, $action, $page, $item;
+		
+		if ($this->getFormValue('issn')==NULL) 
+		{
+			$idperiodico= $item;
+            $this->periodico->GetById($idperiodico);
+            $this->SetFieldValue('issn', $this->periodico->issn);
+			
+            $titulo = $this->periodico->titulo;
+            $this->SetFieldValue('lkpperiodico', $titulo);
+		}
+		else
+		{
+			$issn = $this->GetFormValue('issn');
+            $this->periodico->GetByIssn($issn);
+            $idperiodico = $this->periodico->idPeriodico;
+		}
+
+
+		/*if ($this->getFormValue('lkpobra') == null)
+		{
+			$MIOLO->Information("Por favor, selecione uma obra.", $MIOLO->GetActionURL($module,$action) );
+		}*/
+
+		$this->setFieldAttr('lbl1','readonly',true);
+		$this->setFieldAttr('issn','readonly',true);
+        $this->setFieldAttr('lkpperiodico','readonly',true);
+        	$this->setFieldAttr('btnEdit','visible',false);
+        	$this->setFieldAttr('btnChoose','visible',true);
+		$this->setFieldAttr('lbl2','visible',true);
+		$this->setFieldAttr('lkpassunto','visible',true);
+		$this->setFieldAttr('btnAlterar','visible',true);
+		$this->setFieldAttr('lblRep','visible',false);
+		$this->setFieldAttr('numero','value',"$idobra");
+
+        $this->SetFieldAttr('lkpassunto','module','biblioteca');
+        $this->SetFieldAttr('lkpassunto','item','assunto');
+   		$this->SetFieldAttr('lkpassunto','event','filler');     
+		$this->SetFieldAttr('lkpassunto','related','idassunto,lkpassunto,ocorrencia,idetiqueta');
+   		$this->SetFieldAttr('lkpassunto','filter','lkpassunto,numero');     
+
+        
+		$columns = array(
+			//new DataGridColumn('idmaterial','Código','left',true, '10%',true, null, true,true),
+            new DataGridColumn('classificacao','Classificação','left',true, '15%',true, null, true,true),
+			new DataGridColumn('conteudo','Conteúdo','left',true, '75%',true, null, true,true),
+			);
+
+		$href_datagrid = $MIOLO->GetActionURL($module,$self,'', Array('event'=>'btnEdit_click'));
+		$page->SetAction($href_datagrid);
+        
+        $query = $this->periodico->AssuntosPorPeriodico($idperiodico);
+
+		$datagrid = new DataGrid2($query, $columns, $href_datagrid,20);
+		$datagrid->SetTitle('Relação de assuntos');
+		$datagrid->SetLinkType('linkbutton');
+		$datagrid->SetWidth('100%');
+		$href_dele = $MIOLO->GetActionURL($module,$self,'%0%',Array('event'=>'btnExcluir:click'));
+			
+		$datagrid->AddActionIcon('Excluir', 'delete.gif', $href_dele);
+		
+		$this->addField($datagrid);
+    	}
+
+    	function btnAlterar_click($idobra, $idassunto)
+    	{
+		global $MIOLO;
+		
+		$this->assunto = $this->manager->getBusiness('biblioteca','assunto');
+		$issn = $this->GetFormValue('issn');
+
+		if ($this->getFormValue('lkpassunto')==NULL) 
+		{
+			$MIOLO->Information("Por favor, selecione um assunto a ser adicionado.", $MIOLO->GetActionURL('biblioteca',"main:catalogacao:periodicos:assuntoperiodico&item=$issn"));
+		}
+
+		$idperiodico = $this->periodico->GetByIssn($issn);		
+		$idassunto = $this->GetFieldValue('idassunto');
+
+		//Após inserir o assunto, se a página for atualizada, o assunto será inserido novamente. Por isso é verificado se o assunto já esta 			//cadastrado, caso positivo ocorre mensagem de erro
+		$ok = $this->assunto->verificar($idobra, $idassunto);
+		//PAREI AQUI, FAZER ESSE METODO ACIMA PARA VERIFICAR ASSUNTO E PERIODICO. 21/10/2010
+		if ($ok)
+		{
+			$idassunto = null;
+			$idobra=null;
+			$MIOLO->Error("Assunto já vinculado a obra, por favor, selecione outro assunto.", $MIOLO->GetActionURL('biblioteca','main:catalogacao:assunto'));
+		}
+
+		$ocorrencia = $this->GetFieldValue('ocorrencia');
+		$idetiqueta = $this->GetFieldValue('idetiqueta');
+
+		$arrayAssuntos = $this->assunto->GetAssuntoCompleto($idetiqueta,$ocorrencia);
+		$arrayIndicadores = $this->assunto->GetIndicadorAssunto($idetiqueta,$ocorrencia);
+		$ocorrencia = $this->obra->GetNextOcorrencia($idobra,$idetiqueta);
+		for ($x=0;$x<sizeof($arrayAssuntos);$x++)
+		{
+			$idmaterial = $this->obra->saveMaterialAssunto($idobra,$idetiqueta,$arrayAssuntos[$x][0],$arrayAssuntos[$x][1],$arrayAssuntos[$x][2],$ocorrencia+1);
+		}
+		for ($x=0;$x<sizeof($arrayIndicadores);$x++)
+		{
+			$this->obra->saveIndicadorObra($idobra,$idetiqueta,$ocorrencia+1,$arrayIndicadores[$x][0],$arrayIndicadores[$x][1],0);
+		}	
+		$this->assunto->saveAssuntoObra($idassunto,$idobra,$ocorrencia+1,$idetiqueta);
+	}
+
+	function btnExcluir_click()
+    	{
+		global $MIOLO, $module, $item, $action;
+		$idmaterial = $item;
+		$this->assunto = $this->manager->getBusiness('biblioteca','assunto');
+		$ok = $this->assunto->desvinculaObra($idmaterial);
+		$numerodaobra = $this->GetFormValue('numerodaobra');
+		$idobra = $this->obra->GetIdByNumero($numerodaobra);
+		if ( $ok )
+			$MIOLO->Information("Registro deletado da base de dados", $MIOLO->GetActionURL('biblioteca',"main:catalogacao:assunto&item=$numerodaobra"));
+		else
+			$MIOLO->Error("As informações não foram deletadas", $MIOLO->GetActionURL('biblioteca',"main:catalogacao:assunto&item=$numerodaobra"));
+
+		$MIOLO->GetActionURL($module,$action);
+	}
+
+    	function btnChoose_click()
+    	{
+		$go = $this->manager->getActionURL('biblioteca','main:catalogacao:assunto');
+            	$this->page->redirect($go);
+	}
+
+
+// Solicitado incluir Novo Assunto na tela de Catalogação- Assuntos
+        //
+// $buttons = array(
+  //new MButtonWindow('btnAutor', 'Novo Autor', $MIOLO->GetActionURL($module,'main:admin:autor', 'autor', '')),
+                //        );
+    //        $this->SetButtons($buttons);
+
+}
+?>

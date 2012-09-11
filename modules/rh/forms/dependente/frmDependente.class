@@ -1,0 +1,105 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+MIOLO::Import('modules::rh::forms::pessoa::frmPessoa');
+
+class frmDependente extends frmPessoa
+{
+    protected $dependente;
+    protected $idVinculo;
+    
+    /**
+     * Construtor
+     */
+    function __construct($data)
+    {
+        global $MIOLO;
+        $this->dependente = $data[0];
+        $this->idVinculo = $data[1];
+
+        parent::__construct($this->dependente->pessoa);
+        $this->SetClose(null);
+        $this->SetIcon($MIOLO->GetUi()->GetImage('','default_mini.png'));
+        $this->SetTitle("Dependente");
+    }
+
+    function CreateFields()
+    {
+        global $context;
+        
+        Util::SetIfNull($this->oid, $this->dependente->idDependente);
+        parent::CreateFields();
+        $ui = $this->manager->GetUI();
+        
+        //forms
+
+
+        $form = Form::GetFormValue('form');
+        switch ($form)
+        {
+            case 'parentesco':
+                //echo $tabelaGeral->item2."<FONT size =2 COLOR=red> [" . $this->oid  . "]<FONT COLOR=black><BR>" . $this->dependente->parentesco ;
+                $this->_form[] = $ui->GetForm('rh','frmDependenteParentesco',$this->oid,'dependente');
+                //echo ' $dependencia   <font color=red> [' . $dependencia    . '] <font color=black><BR>';
+                break;
+                
+            case 'dependencias':
+				 $this->dependente->getDependencias();
+				 if ( ($id = Form::GetFormValue('idTipoDependencia')) != NULL )
+				 {
+				 	$dependencia = $this->dependente->GetDependencia($id);
+					if ($dependencia != NULL)
+					{
+						$this->_form[] = $ui->GetForm('rh','frmDependenteDependencia',$dependencia,'dependente');
+					}
+				 }
+                 array_unshift($this->_form,$ui->GetGrid('rh','gridDependencias', $this->dependente)); 
+                break;
+                
+            case 'excluir'     : 
+                 $this->_form[0] = $ui->GetForm('rh','frmDependenteDel', $this->dependente, 'dependente'); 
+                 break;
+        }
+        
+        // info
+//echo 'SEMPRE';
+        $funcionario = $this->manager->getBusiness('rh','funcionario',$this->dependente->idFuncionario);
+        $tabelaGeral = $this->manager->getBusiness('common','tabelageral');
+        $tabelaGeral->getByItem('RH_PARENTESCO',$this->dependente->parentesco);
+        
+		$this->_info[1]	= new MTextLabel('nome',$this->dependente->pessoa->nome,'Nome');
+		$this->_info[2]	= new MTextLabel('dataNascimento',$this->dependente->pessoa->datanasc,'Nascimento');
+		$this->_info[3]	= new MTextLabel('parentesco',$tabelaGeral->item2,'Parentesco');
+        
+        // panel        
+        
+        $panel = $this->_panel[0];
+         $panel->AddUserAction('rh_info',A_EXECUTE,'Dependências',
+            $ui->GetImage('','default.png'),'rh',$action, $this->oid, array("form"=>"dependencias"));
+
+         $panel->AddUserAction('rh_cadastro_servidor',A_EXECUTE,'Parentesco',
+            $ui->GetImage('rh','dependente_mini.png'),'rh',$action, $this->oid, array("form"=>"parentesco"));
+
+         $panel->AddUserAction('rh_cadastro_servidor',A_EXECUTE,'Excluir',
+            $ui->GetImage('rh','excluir.png'),'rh',$action, $this->oid, array("form"=>"excluir"));
+	}
+
+
+}
+?>

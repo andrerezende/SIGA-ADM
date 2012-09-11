@@ -1,0 +1,225 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+class frmEtiquetaLombada extends Form
+{
+   var $objEtiqueta;
+
+   function frmEtiquetaLombada()  // construtor da Classe
+   {
+      global $MIOLO,$module;
+
+      $this->objEtiqueta = $MIOLO->GetBusiness($module,'etiquetaLombada');
+
+      // Título do Formulário
+      $this->Form('Etiqueta Lombada');
+
+      //Chama o CreateFileds, etc.
+      $this->EventHandler();
+
+      // Botão "enviar" não aparece
+      $this->defaultButton = false;
+
+      // Botão 'fechar', direcionando para o handler biblioteca/main/admin
+      $this->SetClose($this->manager->GetActionURL($module, 'main:admin'));
+   }
+   
+   function CreateFields()
+   {
+      global $MIOLO,$module;
+
+      $ui = $MIOLO->getUI();
+  
+      $fields = array(
+         new MTextLabel('dica0','&nbsp; -Selecione o intervalo de exemplares para criação da etiqueta - &nbsp;','&nbsp;'),
+         new TextField('edtExemplares','','Exemplares', '15'," Número do Tombo. <b>Ex: 1-100 </b>"),
+         new MTextLabel('dica2','&nbsp; -Selecione os campos que devem ser exibidos na etiqueta - &nbsp;','&nbsp;'),
+         new TextField('edtTags','','TAG', '10'," Tag-Subcampo. <b>Ex: 245-a</b>"),
+         new MButton('btnMais','Adicionar Tags','',$ui->getImage($module,'cartao_mini.png')),
+         new HiddenField('listaTags',''),
+         new MultiLineField('mlinTags','','Tags Selecionadas',35,7, 35,"<b>Só é possível inserir até 4 tags</b>"),
+         new MTextLabel('dica3','&nbsp; -Outros Campos - &nbsp;','&nbsp;'),
+         new CheckBox('chkVolume',true,'Volume',false,'','Volume do exemplar' ),
+         new CheckBox('chkNumeroTombo',true,'Número do Tombo',false,'','Número do tombo do exemplar' ),
+      );
+
+      $this->SetFields($fields);     
+      
+      // validators
+		$this->AddValidator(new RequiredValidator('edtExemplares'));
+
+      $this->SetFieldAttr('mlinTags','readonly',true);   
+ 	
+      $buttons = Array(
+          new FormButton('btnCriar', 'Gerar Etiquetas','PDF'),
+          new MButton('btnLimpar', 'Nova Etiqueta'),
+      );
+
+      //Insere os Botões
+      $this->SetButtons($buttons);
+
+      $escolhaAnterior = $this->objEtiqueta->getTagEscolhidas();
+      if($escolhaAnterior->result)
+      {                  
+         $value = '';
+         $num = 2;
+         $lista = $escolhaAnterior->result[0][0].'-'.$escolhaAnterior->result[0][1];
+         $valorTag2 = $this->objEtiqueta->getDescricaoMarcByTag($escolhaAnterior->result[0][0]);
+         $value .= "1- ". $valorTag2."\n";
+
+         for($i = 1 ; $i<count($escolhaAnterior->result);$i++){
+            $tag1 = $escolhaAnterior->result[$i][0];
+            $lista .= '[-]'.$tag1.'-'.$escolhaAnterior->result[$i][1];
+            $valorTag2 = $this->objEtiqueta->getDescricaoMarcByTag($tag1);
+            $value .= "$num- ". $valorTag2."\n";
+            $num++;
+         }                  
+
+         $this->SetFieldValue('mlinTags',$value);
+         $this->SetFieldValue('listaTags',$lista);
+      }
+   }
+
+
+	// pega os dados que estão no formulário   
+   function GetData()
+   {
+      $data = new FormData();
+      $data->listaTags = $this->GetFieldValue('listaTags');
+      $data->NumeroTombo = $this->GetFormValue('chkNumeroTombo');
+      $data->VolumeExemplar = $this->GetFormValue('chkVolume');
+      return $data;
+   }
+
+   function btnMais_click()
+   { 
+      global $MIOLO,$module,$item;
+
+      //Escondendo alguns campos
+      $this->SetFieldAttr('dica0', 'visible',false);
+      $this->SetFieldAttr('edtExemplares', 'visible',true);
+      
+
+      //Mostrando campos                          
+      $this->SetFieldAttr('dica0', 'visible', true);
+      $this->SetFieldAttr('dica2', 'visible', true);
+      $this->SetFieldAttr('edtTags', 'visible', true);
+      $this->SetFieldAttr('btnMais', 'visible', true);
+      $this->SetFieldAttr('dica3', 'visible', true);
+      $this->SetFieldAttr('chkVolume', 'visible', true);
+      $this->SetFieldAttr('chkNumeroTombo', 'visible', true);   
+      $this->SetFieldAttr('mlinTags', 'visible', true);
+      $this->SetFieldAttr('mlinTags','readonly',true);
+      
+      $this->SetButtonAttr('btnEscolher','visible',false);
+      $this->SetButtonAttr('btnCriar','visible',true);
+      $this->SetButtonAttr('btnLimpar','visible',true); 
+          
+      $tag = $this->GetFieldValue('edtTags');  
+      $this->SetFieldValue('edtTags','');
+      $lista = $this->GetFieldValue('listaTags');
+      $tags = explode('-',$tag);
+      $valorTag = $this->objEtiqueta->getDescricaoMarcByTag($tags[0]);
+
+      if($valorTag != null)
+      {
+         if($lista =='')
+         {
+            $lista = $tag;      
+         }         
+         else
+         {
+            $lista .= '[-]'.$tag;
+         }
+         $tagsEscolhidas = explode('[-]',$lista);     
+         $this->SetFieldValue('listaTags',$lista);
+         if(count($tagsEscolhidas) <= 4)         
+         {         
+            $valor = '';
+            $num = 1;
+            foreach($tagsEscolhidas as $tag1){
+               $tags = explode('-',$tag1);
+               $valorTag2 = $this->objEtiqueta->getDescricaoMarcByTag($tags[0]);
+               $valor .= "$num- ". $valorTag2."\n";
+               $num++;
+            }                        
+            $this->SetFieldValue('mlinTags',$valor);
+         }
+         else
+         {
+            $go = $this->manager->GetActionURL('biblioteca','main:admin:etiqueta');
+            $MIOLO->Error('Não é possível inserir mais do que 4 tags na etiqueta', $go );         
+         }
+      }
+      else
+      {
+         $go = $this->manager->GetActionURL('biblioteca','main:admin:etiqueta');
+         $MIOLO->Error("A tag " . $tag . " não foi encontrada", $go );         
+      }      
+   }
+
+   function btnLimpar_click()
+   { 
+      global $MIOLO,$module;
+      $this->objEtiqueta->delete();
+      $this->SetFieldValue('listaTags','');
+      $this->SetFieldValue('mlinTags','');         
+   } 
+  
+   
+   function btnCriar_click()
+   {
+      global $MIOLO,$module;
+      $data = $this->GetData();
+      $this->objEtiqueta->delete();
+      $interval = $this->GetFieldValue('edtExemplares');
+      $intervalo = explode('-',$interval);
+      $exemplares = $this->objEtiqueta->getExemplaresByInterval($intervalo[0],$intervalo[1]);    
+     
+      if($exemplares->result)
+      {
+         $tagsEscolhidas = explode('[-]',$data->listaTags);
+         $idetiqueta = 1 ;    
+         foreach($tagsEscolhidas as $tag1)
+         {
+           $tags = explode('-',$tag1);
+           $this->objEtiqueta->insert($idetiqueta,'t',$tags[0],$tags[1]);
+           $idetiqueta++;
+         }   
+         $ui = $MIOLO->GetUI();
+         $report = $ui->GetReport($module,'repEtiquetasLombada',$data);
+         $report->gerarParaMuitosExemplares(19,420,450,$data,$exemplares->result);
+         $report->Generate();	
+      }
+      else
+      {
+         $go = $this->manager->GetActionURL('biblioteca','main:admin:etiqueta');
+         $MIOLO->Error("Nao existe exemplares para o intervalo solicitado", $go );
+      }
+
+   }  
+}
+?>

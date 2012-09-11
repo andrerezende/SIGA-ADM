@@ -1,0 +1,144 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmVinculoAtividade extends MForm
+{
+    protected $objAtividade;
+    protected $vinculo;
+
+    function __construct($objects)
+    {
+        $this->objAtividade = $objects[0];
+        $this->vinculo = $objects[1];
+        parent::__construct('Atividades');
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+
+		$fields = array(
+            new MHiddenField('idAtividade',''),
+			new MCalendarField('dataInicio',date('d/m/Y'),'Data de início','10','DD/MM/YYYY'),
+            new MCalendarField('dataFim','','Data final','10','DD/MM/YYYY'),
+			new MultiLineField('atividade','','Atividade',500,5,40,'Máx. 500 caracteres'),
+        );
+		
+        $this->setFields($fields);
+        $this->setFieldAttr('dataInicio','visible',TRUE);
+        $this->setFieldAttr('dataFim','visible',TRUE);
+		$this->setFieldAttr('atividade','visible',TRUE);
+		
+		$buttons = array(
+            new MButton('btnPost','Enviar'),
+			new MButton('btnExcluir','Excluir')
+            );
+        
+		$this->setButtons($buttons);
+		$this->SetFieldAttr('btnExcluir','visible',$this->objAtividade->isPersistent());
+
+		$validators = array(
+			new MDateDMYValidator('dataInicio','','required'),
+			new MDateDMYValidator('dataFim'),
+			new RequiredValidator('atividade')
+			);
+
+		$this->SetValidators($validators);
+
+        if ( $this->objAtividade->isPersistent() )
+        {
+            $this->setData();
+        }
+        
+    }
+
+	function SetData()
+	{
+		$this->SetFieldValue('idAtividade',$this->objAtividade->idAtividade);
+		$this->SetFieldValue('dataInicio',$this->objAtividade->dataInicio);
+		$this->SetFieldValue('dataFim',$this->objAtividade->dataFim);
+		$this->SetFieldValue('atividade',$this->objAtividade->atividade);
+	}
+	function GetData()  
+	{
+        $data = new FormData();
+		$data->dataInicio = $this->GetFieldValue('dataInicio');
+		$data->dataFim    = $this->GetFieldValue('dataFim');
+		$data->atividade  = $this->GetFieldValue('atividade'); 
+		return $data;
+	}
+
+	
+	function btnPost_click()
+    {
+    	$data = $this->getData();
+        $this->objAtividade->setData($data);
+                    
+   		try
+		{
+			$update = $this->objAtividade->isPersistent();
+			$this->objAtividade->save();
+            $this->objAtividade->log($op,"vinculo: ".$this->objAtividade->idVinculo." idAtividade: ".$this->objAtividade->idAtividade." data de inicio: ".$this->objAtividade->dataInicio." data fim: ".$this->objAtividade->dataFim);
+			
+        	$go = $this->manager->getActionURL('rh','main:vinculo',$this->objAtividade->idVinculo, array('form'=>'atividade'));
+			
+        	if ($update)
+			{
+    	   	    $this->manager->information('Atividade atualizada com sucesso.', $go );
+			}
+			else	
+			{
+    	   	    $this->manager->information('Atividade inserida com sucesso.', $go );
+			}
+		}
+		
+		catch ( ESimpleRnException $e )
+		{
+			$this->AddError($e->getMessage());
+        }
+	}
+	
+	function btnExcluir_click()
+	{
+		$action_sim = $this->manager->getActionURL('rh','main:vinculo',$this->objAtividade->idVinculo,array('form'=>'atividade','id'=>$this->objAtividade->idAtividade,'conf'=>'sim','event'=>'btnExcluir:click'));
+		$action_nao = $this->manager->getActionURL('rh','main:vinculo',$this->objAtividade->idVinculo,array('form'=>'atividade','id'=>$this->objAtividade->idAtividade));
+
+		$conf = $this->GetFormValue('conf');
+
+		if ($conf == 'sim')
+		{
+			try
+			{
+				$this->objAtividade->delete();
+                $this->objAtividade->log(OP_DEL,"vinculo: ".$this->objAtividade->idVinculo." data de inicio: ".$this->objAtividade->dataInicio." data fim: ".$this->objAtividade->dataFim);
+                $this->manager->information('Atividade excluída com sucesso',$this->manager->GetActionURL('rh','main:vinculo',$this->objAtividade->idVinculo,array('form'=>'atividade')));
+			}
+			catch ( Exception $e )
+			{
+				$this->manager->error("Informe o seguinte erro à equipe do CGCO: ".$e->getMessage());
+			}
+					
+	   }
+	   else
+	   {
+		   $this->manager->question("Tem certeza que deseja excluir a atividade ".$this->objAtividade->atividade."?",$action_sim,$action_nao);
+		}
+	}
+} 	
+?>

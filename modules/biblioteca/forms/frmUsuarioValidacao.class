@@ -1,0 +1,434 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?
+class frmUsuarioValidacao extends Form
+{
+	var $objUsuarioValidacao;
+	var $objusuario;
+	
+    function frmUsuarioValidacao()  // construtor da Classe
+    {
+		global $MIOLO,$module;
+
+		// Título do Formulário
+		$this->Form('Habilitação do Cartão de Acesso para o Usuário');
+
+		//Chama o CreateFileds, etc.
+		$this->EventHandler();
+
+		// Botão "enviar" não aparece
+		$this->defaultButton = false;
+		
+		// Botão 'fechar', direcionando para o handler biblioteca/main/circulacao/usuario
+		$this->SetClose($this->manager->GetActionURL($module, 'main:circulacao:usuario'));
+	}
+   
+    function CreateFields()
+    {	
+		global $MIOLO,$module,$action;
+
+		//Instancia o objeto usuariovalidacao
+	    $this->objUsuarioValidacao = $MIOLO->GetBusiness($module,'usuariovalidacao');
+		$query = $this->objUsuarioValidacao->ListGrupos();
+
+		// Campos que aparecem no formulário
+		$fields = Array (
+			new MText('aviso','<font color=red><b>O usuário não está vinculado a um grupo. Se preferir, selecione um dos grupos abaixo e clique em "Incluir Vínculo".</b></font>'),
+			new MSpacer(1),
+			new LookupTextField('lkpUsuario','','Usuário',30),
+			new TextField('edtNome','','Nome',60),
+			new Selection('selGrupo','','Grupo',$query),
+			new TextField('edtCartao','','Cartão de Acesso',15),
+			new HiddenField('hidDtValidacao'),
+			new HiddenField('hidIDusuario'),
+			new HiddenField('hidIDValidacao'),
+			new HiddenField('hidCA'),
+			new HiddenField('hidGrupo'),
+			new HiddenField('hidKey') // controla Incluir/Editar
+			);
+		
+		// Insere os campos
+		$this->SetFields($fields);
+
+		// Botões que aparecem no formulário
+		$buttons = Array(
+			new FormButton('btnEnviar', 'Procurar'),
+			new FormButton('btnValidar', 'Validar'),
+			new FormButton('btnVoltar', 'Voltar', $MIOLO->GetActionURL($module, $action)),
+			);
+
+		//Insere os Botões
+		$this->SetButtons($buttons);
+
+		//As 4 propriedades de um lookup
+		// module = módulo usado
+		// item = A funcao que chama no arquivo classes/lookup.class
+		// event = O evento relacionado quando o usuário clica em "acao"
+		// related = Os campos retornados após a ação
+		$this->SetFieldAttr('lkpUsuario','module','biblioteca');
+		$this->SetFieldAttr('lkpUsuario','item','usuario');
+		$this->SetFieldAttr('lkpUsuario','event','filler');
+		$this->SetFieldAttr('lkpUsuario','related','hidIDusuario,lkpUsuario',"","");
+
+		//Esconde os campos exceto o lookup do usuario
+		$this->SetFieldAttr('edtNome','visible', false);
+		$this->SetFieldAttr('selGrupo','visible',false);
+		$this->SetFieldAttr('edtCartao','visible', false);
+		$this->SetFieldAttr('aviso','visible', false);
+		
+		$this->AddValidator(new MCompareValidator('selGrupo','','>=','1','i','required','No campo Grupo, por favor escolha uma opção válida'));		
+		$this->AddValidator(new MRequiredValidator('edtCartao'));
+		
+		$this->SetButtonAttr('btnVoltar','visible',false);
+		$this->SetButtonAttr('btnValidar','visible',false);
+		
+		$this->page->onLoad("MIOLO_GetElementById('lkpUsuario').focus();");
+   }
+
+
+	// pega os dados que estão no formulário   
+    function GetData()
+    {
+		$data = new FormData();
+        $data->usuario = $this->GetFieldValue('lkpUsuario');
+		$data->nome = $this->GetFieldValue('edtNome');
+        $data->idgrupo = $this->GetFieldValue('selGrupo');
+		$data->codigoacesso = $this->GetFieldValue('edtCartao');
+		$data->dtvalidacao = $this->GetFieldValue('hidDtValidacao');
+		$data->idvalidacao = $this->GetFieldValue('hidIDValidacao');
+		$data->idusuario = $this->GetFieldValue('hidIDusuario');
+		$data->CA = $this->GetFieldValue('hidCA');
+		$data->hidGrupo = $this->GetFieldValue('hidGrupo');
+		
+		if ( ($this->GetFieldValue('lkpUsuario') != null) and ($this->GetFieldValue('hidIDusuario') == null) )
+		{
+			$data->idusuario = $this->GetFieldValue('lkpUsuario');
+		}
+
+		return $data;
+    }
+
+	
+	// usada para inserir valores no formulário
+	function SetData($data)
+	{
+		$this->SetFieldValue('lkpUsuario',$data->usuario);
+		$this->SetFieldValue('edtNome',$data->nome);
+		$this->SetFieldValue('selGrupo',$data->idgrupo);
+		$this->SetFieldValue('edtCartao',$data->codigoacesso);
+		$this->SetFieldValue('hidDtValidacao',$data->dtvalidacao);
+		$this->SetFieldValue('hidIDValidacao',$data->idvalidacao);
+		$this->SetFieldValue('hidIDusuario',$data->idusuario);
+		$this->SetFieldValue('hidCA',$data->CA);
+		$this->SetFieldValue('hidGrupo',$data->hidGrupo);		
+	}
+	
+
+	function btnEnviar_click()
+	{ 
+		global $MIOLO,$theme,$module,$item,$action;
+
+		/*
+		* Novo código vindo do Loockup
+		*/
+
+				//Validators
+				$validators = array(
+							  new MaskValidator('edtCartao','9999999999','required')  
+					               );
+				$this->SetValidators($validators);
+
+				$data = $this->GetData();
+
+				//A linha abaixo verifica se existe um idusuariovalidacao
+				//Se nao existir, ela tenta pegar $item que é passada
+				//pelo botao editar do "relação"
+				$login = ($login != '') ? $login : $item;
+
+				if ($login == null)
+				{
+					$login = $data->idusuario;
+				}
+
+     			//Instancia os objetos 
+				$this->objusuario = $MIOLO->GetBusiness($module,'usuario');
+				$objUsuario = $MIOLO->GetBusiness('common','usuario');		
+				$objEmprestimo = $MIOLO->GetBusiness($module,'emprestimo');
+				// ok retorna os dados de nome
+				$dados = $this->objusuario->GetByCodigo($login);	
+					
+                                if($dados[0][2]== NULL){
+                                     $MIOLO->Error("Usuário não encontrado", $MIOLO->GetActionURL($module,$self));
+                                     return;
+                                }
+				$checkvinculo = $objEmprestimo->ValidateVinculo($dados[0][2]);
+				$checkvinculo = $checkvinculo[0][0];
+
+					if(!$checkvinculo)
+					{
+						$perms = $this->manager->getPerms();
+						if ( $perms->checkAccess('BIB_CIRCULACAO_TOT',A_ACCESS) )
+						{
+							$this->SetFieldValue('edtNome',$dados[0][1]);
+							$this->SetFieldAttr('lkpUsuario', 'readonly', true);
+							$this->SetFieldAttr('edtNome', 'readonly', true);
+							$this->SetFieldAttr('aviso','visible', true);
+							$this->SetFieldAttr('edtNome', 'visible', true);
+							$this->SetFieldAttr('selGrupo', 'visible', true);
+							$this->AddButton(new MButton('btnGrupo', 'Incluir Vínculo'));
+							$this->SetButtonAttr('btnVoltar','visible',true);
+							$this->SetButtonAttr('btnEnviar','visible',false);
+							return;
+						}
+						else
+						{
+							$MIOLO->Prompt(Prompt::Error("Usuário não possui vínculo com a biblioteca. Por favor, entre em contato com a sua Gerência.",$MIOLO->GetActionURL($module,$self)));
+						}
+					}
+					elseif ( $checkvinculo == 1 ) 
+					{
+
+						
+
+					//	$objAcademico = $MIOLO->GetBusiness($module,'aluno');
+						// mudar $module para 'academico'
+					//	$objAcademico->GetById($dados[0][0]);
+//						$checkativo = $objAcademico->isSituacaoAtivo($dados[0][0]);
+					//	$situacao = $objAcademico->GetSituacaoAluno($dados[0][0]);
+					//	if($situacao == 'Ativo')
+					//	{
+					//		$checkativo = true;
+					//	}
+					//	else
+					//	{
+					//		$checkativo = false;
+					//	}
+					}
+					else 
+					{
+					//	$objRH = $MIOLO->GetBusiness('rh','vinculo');
+					//	$objRH->GetById($dados[0][0]);
+					//	$checkativo1 = $objRH->isAtivo();
+					//	$checkativo2 = $objRH->isAposentado();
+					//	$checkativo = $checkativo1 || $checkativo2;
+					}
+
+					$checkativo = true;
+
+					if ($checkativo)
+					{
+						$this->SetFieldValue('edtNome',$dados[0][1]);
+						$this->SetFieldValue('hidIDusuario',$dados[0][2]);
+						$this->SetFieldValue('selGrupo',$checkvinculo);
+						$this->SetFieldValue('hidGrupo',$checkvinculo);
+						$this->SetFieldValue('lkpUsuario',$login);
+	
+						$this->SetFieldAttr('lkpUsuario','readonly',true);
+						$this->SetFieldAttr('edtNome','visible',true);
+						$this->SetFieldAttr('edtNome','readonly',true);
+						$this->SetFieldAttr('selGrupo','visible',true);
+						$this->SetFieldAttr('edtCartao','visible',true);				
+												
+						$dados2 = $this->objUsuarioValidacao->GetCartao($dados[0][2]);
+						
+						if ($dados2->result[0][1])
+						{
+							//Valores dos campos
+							$this->SetFieldValue('hidIDValidacao',$dados2->result[0][0]);
+							$this->SetFieldValue('edtCartao',$dados2->result[0][1]);
+							$this->SetFieldValue('hidCA',$dados2->result[0][1]);
+						}
+					}
+					else 
+					{
+						if($checkvinculo == 1)
+						{
+							$MIOLO->Prompt(Prompt::Error("Aluno não está ativo.<BR>Situação atual: $situacao.<BR>Procure a Central de Atendimento.", $MIOLO->GetActionURL($module,$self)));
+						}
+						else
+						{
+							$MIOLO->Prompt(Prompt::Error("Usuário não está ativo",$MIOLO->GetActionURL($module,$self)));
+						}
+					}	
+					$this->SetButtonAttr('btnValidar','visible',true);
+					$this->SetButtonAttr('btnVoltar','visible',true);
+					$this->SetButtonAttr('btnEnviar','visible',false);
+	}
+	
+	function btnGrupo_click()
+	{
+		global $MIOLO,$module,$theme;
+		
+		$data = $this->GetData();
+
+		$this->objusuario = $MIOLO->GetBusiness($module,'usuario');
+		$dados = $this->objusuario->GetByLogin($data->usuario);
+		$idusuario = $dados[0][0];
+		$ok = $this->objusuario->insertVinculo($idusuario, $data->idgrupo);
+		if ($ok)
+		{
+			$identificador = $data->idusuario;
+			$ident1 = $data->idgrupo;
+			$mnemonicogrupo = 'INCVINCULO';
+	
+			// LOG
+			$log = $MIOLO->GetBusiness($module,'log');
+			$log->SetData($this->getDataLog($identificador,$ident1,'',$mnemonicogrupo));
+			$log->save();
+			$theme->ClearContent();
+			$MIOLO->Prompt(Prompt::Information("Vínculo incluído com  sucesso.",$MIOLO->GetActionURL($module,$self)));
+		}
+	}
+
+	function btnValidar_click()
+	{
+		global $MIOLO,$module,$theme;
+		
+		//Instancia os objetos 
+		$this->objusuario = $MIOLO->GetBusiness($module,'usuario');	
+
+		$dataHoje = date("d/m/Y H:i:s");
+		$alteragrupo = false;
+		$alteracartao = false;
+		        
+		$data = $this->GetData();
+				
+		if ( $data->idgrupo <> $data->hidGrupo )
+		{
+			$identificadorgrupo = $data->idusuario;
+			$ident1 = $data->hidGrupo;
+    		$ident2 = $data->idgrupo;
+			$mnemonicogrupo = 'ALTGRUPO';
+			$alteragrupo = true;
+		}
+
+		if ( $data->codigoacesso <> $data->CA )
+		{
+			$data->dtvalidacao = $dataHoje;
+			$identificadorcartao = $data->idvalidacao;
+			$mnemonicocartao = 'VALIDACARTAO';
+			$alteracartao = true;	
+		}	
+		
+		 //Instancia o objeto usuariovalidacao
+	    $this->objUsuarioValidacao = $MIOLO->GetBusiness($module,'usuariovalidacao');
+		
+		//Verifica se o código de acesso já está validado para outro usuário
+		if ($data->codigoacesso)
+		{
+			$jaEstaValidado = $this->objUsuarioValidacao->verificaEstaValidado($data);
+		}	
+		else 
+		{
+			$jaEstaValidado = null;	
+		}
+			
+		if (!$jaEstaValidado->result[0][0])
+		{
+			if ( $data->idvalidacao )
+			{ 
+				$what = " atualizados ";
+
+				if ($alteragrupo)
+				{
+					$ok = $this->objUsuarioValidacao->UpdateGrupo($data);
+					if ($ok)
+					{
+						// LOG
+					    $log = $MIOLO->GetBusiness($module,'log');				$log->SetData($this->getDataLog($identificadorgrupo,$ident1,$ident2,$mnemonicogrupo));
+						$log->save();	
+					}
+				}
+				if ($alteracartao)
+				{
+					$ok = $this->objUsuarioValidacao->Update($data);
+					if ($ok)
+					{
+						// LOG
+						$log = $MIOLO->GetBusiness($module,'log');
+						$log->SetData($this->getDataLog($identificadorcartao,'','',$mnemonicocartao));
+						$log->save();	
+					}
+				}
+			}
+			else
+			{ 
+				$what = " validados ";
+				$data->idvalidacao = $this->objUsuarioValidacao->GeraSequencia();
+				$ok = $this->objUsuarioValidacao->Insert($data);
+				if ($ok)
+				{
+					if ($alteragrupo)
+					{
+						// LOG
+				   		$log = $MIOLO->GetBusiness($module,'log');			   		$log->SetData($this->getDataLog($identificadorgrupo,$ident1,$ident2,$mnemonicogrupo));
+						$log->save();	
+					}				
+					// LOG validação
+					$log = $MIOLO->GetBusiness($module,'log');
+					$log->SetData($this->getDataLog($data->idvalidacao,'','','VALIDACARTAO'));
+					$log->save();	
+				}			
+			}
+			if ($ok)
+			{	
+				$theme->ClearContent();
+				$MIOLO->Prompt(Prompt::Information("Os dados do usuário '" . $data->nome . "' foram  $what com sucesso.",$MIOLO->GetActionURL($module,$self)));
+			}
+			else
+			{
+				$theme->ClearContent();
+				$MIOLO->Error("Os dados do usuário '" . $data->nome  . "' não foram $what. ",$MIOLO->GetActionURL($module,$self));
+			}	
+		}
+		else
+		{
+			$theme->ClearContent();
+			$MIOLO->Prompt(Prompt::Error("O cartão de acesso " . $data->codigoacesso . " já está validado para o usuário " . $jaEstaValidado->result[0][0] ,$MIOLO->GetActionURL($module,$self)));
+		}
+	}
+	
+	
+	function getDataLog($Identificador,$Ident1,$Ident2,$Mnemonico)
+	{
+		global $MIOLO;
+		$data = new FormData();
+		$data->data = date("d/m/Y H:i:s");
+        if ($Mnemonico == 'ALTGRUPO')
+		{
+			$data->identificador = $Identificador . '/De grupo ' . $Ident1 . ' para ' . $Ident2;	
+		}
+		elseif ($Mnemonico == 'VALIDACARTAO')
+		{
+			$data->identificador = $Identificador;
+		}
+		elseif ($Mnemonico == 'INCVINCULO')
+		{
+			$data->identificador = $Identificador . ' com vinculo no grupo ' . $Ident1;
+		}
+
+		$data->idusuario = $MIOLO->GetLogin()->idkey;
+		$operacao = $MIOLO->GetBusiness('biblioteca','operacao');
+		$operacao = $operacao->GetIdoperacaoByMnemonico($Mnemonico);
+		$data->idoperacao = $operacao->GetIdoperacao();
+		return $data;
+	}
+}
+?>

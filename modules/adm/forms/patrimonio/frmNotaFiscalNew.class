@@ -1,0 +1,239 @@
+<?php
+// 28/09/2011 - Daniel bonfim
+
+//ini_set('display_errors', 1);
+class frmNotaFiscalNew extends MForm
+{
+    function __construct()
+    {
+        parent::__construct('DADOS DO ITEM DE NOTA FISCAL');
+        $this->EventHandler();
+        $this->defaultButton = false;
+		$this->page->addJsCode(file_get_contents(dirname(__FILE__) . '/../../ui/js/mask.js'));
+    }
+
+    function CreateFields() {
+        global $MIOLO, $module, $action, $item, $theme, $event;
+
+        $cf = new MCurrencyFormatter();
+        $options = Array('COMPRA', 'DOAÇÃO', 'CESSÃO', 'F. PRÓPRIO', 'PERMUTA', 'COMODATO', 'OUTROS', 'COMPRAS 2006');
+
+        // NOTA FISCAL
+        $fields = array(
+            new MTextField('notaFiscal', '', 'Número', 20),
+            new MTextField('cnpj', '', 'CNPJ',18, "Apenas números"),
+            new MCalendarField('dataNotaFiscal', '', 'Data', 10),
+            new MTextField('valorTotal', '', 'Valor Total', 20),
+            new MTextField('desconto', '', 'Desconto', 20),
+            new MCalendarField('dataAteste', '', 'Data do Ateste', 10),
+            new MHiddenField('idEmpenhado'),
+            new MTextField('numeroEmpenho', '', 'Número de Empenho',20, 'Máx. 12 caracteres'),
+            //new MSpacer(1),
+            //new MMultiLineField('descricao','','Descrição',60,5,60,'Máx. 500 caracteres'),
+            new MMultiLineField('obs', '', 'Observação', 60,2,60),
+
+            // ITEM PATRIMONIAL
+            new MSpacer(2),
+            new MSeparator('DADOS DO ITEM PATRIMONIAL'),
+            new MSpacer(1),
+
+            new MHiddenField('idMaterial'),
+            new MLookupTextField('filterCodigo','','Código do Material',20),
+            new MMultiLineField('descricao','','Descrição',60,5,60,'Máx. 500 caracteres'),
+            new MTextField('numeroSerie','','Número de Série',20),
+            new MTextField('tomboanterior', '', 'Tombo anterior',18, "Máx. 20 caracteres"),
+            new MTextField('marcaModelo','','Marca/Modelo',60,'Máx. 50 caracteres'),
+            new MLookupTextField('idClassificador','','Classificador',50),
+            new MMultiLineField('descricaoEstado','','Estado do Material', 50, 5, 50),
+            new MCalendarField('dataAquisicao','','Data de Aquisição',20),
+            new MHiddenField('idSetor'),
+            new MLookupTextField('setor','','Setor',50),
+
+            //new MLookupTextField('numPro','','Processo',20),
+            new MTextField('numPro','','Processo',25,'Ex: Processo: 23059.000707/2009-92, coloca-se 000707/2009-92'),
+            new MCalendarField('datainiciouso','','Data de Início de uso',20),
+            new MLookupTextField('contacontabil', '', 'Conta contábil', 50, NULL, NULL, NULL, 'adm', 'contacontabil'),
+            new MHiddenField('subelemento'),
+            new MHiddenField('idvidautil'),
+
+            new MSelection('tipoIngresso','','Tipo de Ingresso',$options),
+            new MTextField('quantidadeItemNF','','Quantidade',10),
+        );
+        $this->SetFields($fields);
+
+        // Atributos dos campos
+        $this->cnpj->addAttribute('maxlength',18);
+        $this->cnpj->addAttribute('onKeyUp', 'makeMask(this, \'##.###.###/####-##\');');
+	$this->cnpj->addAttribute('onBlur', 'makeMask(this, \'##.###.###/####-##\');');
+
+        // Processo
+        $this->numPro->addAttribute('onKeyUp', 'makeMask(this, \'######/####-##\');');
+        $this->numPro->addAttribute('onBlur', 'makeMask(this, \'######/####-##\');');
+
+        // Numero empenho
+        $this->numeroEmpenho->addAttribute('onKeyUp', 'makeMask(this, \'############\');');
+        $this->numeroEmpenho->addAttribute('onBlur', 'makeMask(this, \'############\');');
+
+        // tombo anterior
+        $this->tomboanterior->addAttribute('onKeyUp', 'makeMask(this, \'####################\');');
+        $this->tomboanterior->addAttribute('onBlur', 'makeMask(this, \'####################\');');
+
+
+        $this->SetFieldAttr('setor','module','common');
+        $this->SetFieldAttr('setor','item','setor');
+        $this->SetFieldAttr('setor','related','idSetor,setor');
+
+        // Processo
+        //$this->SetFieldAttr('numPro','module','protocolo');
+        //$this->SetFieldAttr('numPro','item','AllProcessos');
+        //$this->SetFieldAttr('numPro','related','numPro');
+
+        $this->SetFieldAttr('idClassificador','module',$module);
+        $this->SetFieldAttr('idClassificador','item','classificador');
+        $this->SetFieldAttr('idClassificador','related','idClassificador');
+        $this->SetFieldAttr('filterCodigo','module',$module);
+        $this->SetFieldAttr('filterCodigo','item','materialPermanente');
+        $this->SetFieldAttr('filterCodigo','related','idMaterial,descricao,filterCodigo');
+        $this->SetFieldAttr('contacontabil', 'related', 'idvidautil,contacontabil');
+
+
+        $buttons = array(
+            new MButton('btnNew', 'Cadastrar Nota')
+        );
+        $this->SetButtons($buttons);
+
+    }
+
+
+
+    function btnNew_click() {
+        global $MIOLO, $module, $action, $item, $theme;
+
+        $data = $this->GetData();
+
+        $data->numPro = str_replace("/", "", $data->numPro);
+        $data->numPro = str_replace("-", "", $data->numPro);
+        $data->numPro = trim($data->numPro);
+
+        // Tratamento de Erros
+
+        $desc = $this->GetFormValue('descricao');
+	$idsetor = $this->GetFormValue('idSetor');
+        $quantidadeItemNF = $this->GetFormValue('quantidadeItemNF');
+
+        if (($desc == '') or ($desc == NULL))
+            $this->addError("Descrição não informada.");
+
+        if (($idsetor == '') or ($idsetor == NULL))
+            $this->addError("Clique na lupa para buscar o setor.");
+
+        if(!is_numeric($quantidadeItemNF))
+            $this->addError("Insira apenas números no campo Qt. Item Nota");
+
+        if($data->cnpj) {
+            $data->cnpj = str_replace('.', '', $data->cnpj);
+            $data->cnpj = str_replace('-', '', $data->cnpj);
+            $data->cnpj = str_replace('/', '', $data->cnpj);
+            if(!is_numeric($data->cnpj))
+                $this->addError("Insira apenas números no campo CNPJ");
+        }
+
+        // validadacao do precesso digitado
+        $processo = $this->manager->GetBusiness('protocolo','processo');
+        if(!$processo->processoExiste($data->numPro)) {
+            $this->addError("Processo inexistente");
+        }
+
+
+        if ($this->errors != '') //Caso haja algum erro, exibe na tela.
+            $this->GenerateErrors();
+
+        else {
+                // NOTA FISCAL
+                $notaFiscal = $this->manager->GetBusiness('adm','notafiscal');
+
+                $idNotaFiscal = $notaFiscal->getNextId();
+
+                $notaFiscal->idNotaFiscal = $idNotaFiscal;
+                $notaFiscal->notaFiscal = trim($data->notaFiscal);
+                $notaFiscal->cnpj = trim($data->cnpj);
+                $notaFiscal->dataNotaFiscal = trim($data->dataNotaFiscal);
+                $notaFiscal->dataAteste = trim($data->dataAteste);
+                $notaFiscal->obs = trim($data->obs);
+                $notaFiscal->valor = trim(str_replace(',','.',str_replace('.','',$data->valorTotal)));
+                $notaFiscal->desconto = trim(str_replace(',','.',str_replace('.','',$data->desconto)));
+                $notaFiscal->bloqueio = 'N';
+
+                try {
+                    $notaFiscal->save();
+                    //$notaFiscal->Log(OP_INS,"Nova nota fiscal: " . $notaFiscal->idNotaFiscal);
+
+                } catch (Exception $e) {
+                    $this->AddInfo("ad_notafiscal: Falha ao atualizar o registro $idNotaFiscal");
+                    $this->addError($e->getMessage());
+                }
+
+
+                for($i=0; $i<$quantidadeItemNF; $i++) {
+
+                        // ITEM PATRIMONIO
+                        $itemPatrimonio = $this->manager->GetBusiness('adm','itempatrimonio');
+
+                        // valor de cada item
+                        $valorUnit = ($data->valorTotal) / $quantidadeItemNF;
+
+                        $itemPatrimonio->idItemPatrimonio = $itemPatrimonio->getNextId();
+                        $itemPatrimonio->notaFiscal = trim(strtoupper($data->notaFiscal));
+                        $itemPatrimonio->valor = $valorUnit;
+                        $itemPatrimonio->descricao = trim(strtoupper($data->descricao));
+                        $itemPatrimonio->numeroEmpenho = trim($data->numeroEmpenho);
+                        $itemPatrimonio->tipoIngresso = $data->tipoIngresso;
+                        $itemPatrimonio->dataAquisicao = $data->dataAquisicao;
+                        $itemPatrimonio->marcaModelo = trim(strtoupper($data->marcaModelo));
+                        $itemPatrimonio->valor = $valorUnit;
+                        // subelemento ?
+                        $itemPatrimonio->idMaterial = $data->idMaterial;
+                        // idEmpenhado ?
+                        // idClassificador ?
+
+                        // numPro é uma foreig key para ad_processo. deve-se listar todos os processos dessa tabela
+                        // para exibi-los aqui para a seleção
+                        $itemPatrimonio->numPro = $data->numPro;
+                        $itemPatrimonio->ativo = 'S';
+                        // idDependencia ? (encontrado apenas no banco)
+                        $itemPatrimonio->idSetor = $data->idSetor;
+                        $itemPatrimonio->numeroSerie = trim($data->numeroSerie);
+                        $itemPatrimonio->numeroEmpenho = trim($data->numeroEmpenho);
+                        $itemPatrimonio->descricaoEstado = trim(strtoupper($data->descricaoEstado));
+                        $itemPatrimonio->idvidautil = $data->idvidautil;// idVidaUtil ?
+                        $itemPatrimonio->datainiciouso = $data->datainiciouso;
+                        $itemPatrimonio->idNotaFiscal = $idNotaFiscal;
+                        $itemPatrimonio->tomboanterior = $data->tomboanterior;
+
+                    try {
+                        $itemPatrimonio->save();
+
+                    } catch (Exception $e) {
+                        $this->AddInfo("ad_itempatrimonio: Falha ao atualizar o registro $itemPatrimonio->idItemPatrimonio");
+                        $this->addError($e->getMessage());
+                    }
+                }
+
+            if ($this->errors != '') {  //Caso haja algum erro, exibe na tela.
+                $this->GenerateErrors();
+
+            } else {
+
+                $go = $this->manager->GetActionURL('adm','main:notafiscal:find');
+                $MIOLO->Information("Nota Fiscal $notaFiscal->notaFiscal criada com sucesso!", $go);
+            }
+
+        }
+    }
+
+
+
+}
+
+
+?>

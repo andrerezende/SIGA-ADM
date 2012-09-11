@@ -1,0 +1,100 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmAverbacaoDados extends MForm
+{
+    protected $averbacao;
+    protected $dias;
+    
+    function __construct($averbacao)
+    {
+        $this->averbacao = $averbacao;
+        $this->dias = $this->averbacao->getDaysDiff();
+        parent::__construct('Dados da Averbacao');
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+        $tabelaGeral = $this->manager->GetBusiness('common','tabelageral');
+        $query = $tabelaGeral->listByTabela('RH_TIPOTEMPO');
+		$fields = array(
+            new MTextField('processo','','Processo','21','Máx. 21 caracteres'),
+            new MCalendarField('dataInicio','','Data Início'),
+            new MCalendarField('dataFim','','Data Fim'),
+            new MTextField('totalDias','','Total Dias',5,"Máx. $this->dias"),
+            new MSelection('tipoTempo','','Tipo Tempo'),
+            new MTextField('instituicao','','Instituição',50)
+        );
+		
+        $this->setFields($fields);
+        $this->setFieldAttr('tipoTempo','options',$query->chunkResult());
+        $this->setFieldAttr('totalDias','readonly',$this->averbacao->temAssociacoes());
+        $this->setFieldAttr('dataInicio','readonly',$this->averbacao->temAssociacoes());
+        $this->setFieldAttr('dataFim','readonly',$this->averbacao->temAssociacoes());
+		
+		$buttons = array(
+        	new MButton('btnSalvar', 'Enviar')
+            );
+		$this->setButtons($buttons);
+
+		$validators = array(
+		   new MRangeValidator('totalDias','',1,$this->dias,'i','required'),
+		);
+		$this->setValidators($validators);
+        $this->setData();
+
+    }
+
+    function setData()
+    {
+        $this->setFieldValue('processo',$this->averbacao->processo);
+        $this->setFieldValue('dataInicio',$this->averbacao->dataInicio );
+        $this->setFieldValue('dataFim',$this->averbacao->dataFim );
+        $this->setFieldValue('totalDias',$this->averbacao->totalDias );
+        $this->setFieldValue('tipoTempo',$this->averbacao->tipoTempo );
+        $this->setFieldValue('instituicao',$this->averbacao->instituicao );
+    }
+
+    function btnSalvar_click()
+    {
+        $data = $this->getData();
+        $err = FALSE;
+        if ( $data->totalDias > $this->dias )
+        {
+            $this->addError("O total de dias da averbação não pode ultrapassar $this->dias dias.");
+            $err = TRUE;
+        }
+        if ( ! $err )
+        {
+    		$this->averbacao->SetData($data);
+            try
+            {
+                $this->averbacao->save();
+                $this->averbacao->log(OP_INS,"vinculo: ".$this->averbacao->idVinculo." data de inicio: ".$this->averbacao->dataInicio." data fim: ".$this->averbacao->dataFim." processo: ".$this->averbacao->processo." instituicao: ".$averbacao->instituicao);
+            }
+            catch ( Exception $e )
+            {
+                $this->addError($e->getMessage);
+            }
+        }
+    }
+
+ }
+?>

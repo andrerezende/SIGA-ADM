@@ -1,0 +1,175 @@
+<?php
+class MLookup
+{
+    var $listingTitle = 'Resultado da pesquisa';
+    var $dbconf;
+    var $sql;
+    var $labels;
+    var $formName;
+    var $module;
+    var $item;
+    var $lheight;
+    var $lwidth;
+    var $event;
+    var $filterValue = '';
+    var $filterFields;
+    var $type;
+    var $form;
+    var $pageLength = 20;
+    var $keyColumn;
+    var $title;
+    var $grid;
+    var $related;
+    var $baseModule;
+    var $gridClass = 'MLookupGrid';
+
+    function __construct($baseModule = 'admin')
+    {
+        global $MIOLO;
+
+        $this->baseModule = $baseModule;
+        $this->formName = $_GET['name'];
+        $this->module = $_GET['lmodule'];
+        $this->item = $_GET['item'];
+        $this->event = $_GET['event'];
+        $this->lheight = $_GET['lheight'];
+        $this->lwidth = $_GET['lwidth'];
+        $this->related = $_GET['related'];
+        $this->filterValue = $_GET['filter'];
+        $this->type = $_GET['type'];
+        $url = $MIOLO->GetActionURL($this->baseModule, 'lookup', urlencode($this->item), array('name' => urlencode($this->formName), 'lmodule' => urlencode($this->module), 'event' => urlencode($this->event), 'type' => urlencode($this->type)), NULL, false);
+        $this->href = $url;
+    }
+
+    function getFilterValue($name = '')
+    {
+        global $page;
+
+        $value = ($name != '') ? $page->Request($name) : $this->filterValue;
+        $value = str_replace("'", '', $value);
+        $value = str_replace("\"", '', $value);
+        $value = str_replace("#", '', $value);
+        return $value;
+    }
+
+    function getHRef()
+    {
+        return $this->href;
+    }
+
+    function &getQuery($dbconf, $sql)
+    {
+        global $MIOLO;
+        $db = $MIOLO->GetDatabase($dbconf);
+        return $db->GetQuery($sql);
+    }
+
+    function addFilterField(&$field)
+    {
+        $this->filterFields[] = &$field;
+    }
+
+    function setTitle($title)
+    {
+        $this->title = $title;
+    }
+
+    function setGridClass($class, $module, $classFile)
+    {
+        global $MIOLO;
+
+        $MIOLO->Uses($classFile, $module);
+        $this->gridClass = $class;
+    }
+
+    function getGrid($query, $columns, $href, $pageLength, $indexColumn)
+    {
+        return new $this->gridClass($query, $columns, $href, $pageLength, $indexColumn);
+    }
+
+    function setCursorGrid($cursor, $columns, $title = 'Pesquisa', $pageLength = 15, $indexColumn = 0)
+    {
+        global $MIOLO;
+
+        $objects = $cursor->getObjects();
+        $this->grid = new MLookupObjectGrid($objects, $columns, $this->href, $pageLength, $indexColumn);
+
+        for ($i = 0; $i < count($this->filterFields); $i++)
+            $this->grid->AddFilterControl($i, $this->filterFields[$i]);
+
+        $this->grid->setFilter(true);
+        $this->grid->setLinkType('hyperlink');
+        $this->grid->setTitle($title);
+        $data = $this->grid->GetData();
+
+        for ($i = 0; $i < count($cursor->getQuery()->result[0]); $i++)
+        {
+            $args .= ($i ? ',' : '') . "&quot;#$i#&quot;";
+        }
+
+        $MIOLO->getPage()->addJsCode("var mLookup = new Miolo.lookup();"); 
+
+        $this->grid->setActionDefault("javascript:mLookup.deliver('$this->formName', {$indexColumn}, $args)");
+        $this->grid->setButtonSelectClass('grid_select');
+    }
+
+    function setQueryGrid($query, $columns, $title = 'Pesquisa', $pageLength = 15, $indexColumn = 0)
+    {
+        global $MIOLO;
+
+        $this->grid = $this->GetGrid($query, $columns, $this->href, $pageLength, $indexColumn);
+
+        for ($i = 0; $i < count($this->filterFields); $i++)
+            $this->grid->AddFilterControl($i, $this->filterFields[$i]);
+
+        $this->grid->setFilter(true);
+        $this->grid->setLinkType('hyperlink');
+        $this->grid->setTitle($title);
+        $data = $this->grid->GetData();
+
+        for ($i = 0; $i < count($query->result[0]); $i++)
+        {
+            $args .= ($i ? ',' : '') . "&quot;#$i#&quot;";
+        }
+
+        $MIOLO->getPage()->addJsCode("var mLookup = new Miolo.lookup();"); 
+
+        $this->grid->setActionDefault("javascript:mLookup.deliver('$this->formName', {$indexColumn}, $args)");
+        $this->grid->setButtonSelectClass('grid_select');
+    }
+
+    function setMLookupGrid($dbconf, $sql, $columns, $title = 'Pesquisa', $pageLength = 15, $indexColumn = 0)
+    {
+        $query = &$this->GetQuery($dbconf, $sql);
+        $this->setQueryGrid($query, $columns, $title, $pageLength, $indexColumn);
+    }
+
+    function setGrid($dbconf, $sql, $columns, $title = 'Pesquisa', $pageLength = 15, $indexColumn = 0)
+    {
+        $method = "Set" . $this->gridClass;
+        $this->$method($dbconf, $sql, $columns, $title, $pageLength, $indexColumn);
+    }
+
+    function setContent()
+    {
+        global $MIOLO;
+
+        $theme = $MIOLO->getTheme();
+        if ($this->type == 'dialog')
+        {
+           $form = new MFormDialog($this->grid->caption);
+           $this->grid->caption = '';
+           $form->addField($this->grid);
+           $theme->setContent($form);
+        }
+        else
+        {
+           $MIOLO->getPage()->setAction($this->href);
+           $MIOLO->getPage()->setTitle($this->title);
+           $theme->setLayout('lookup');
+           $theme->setContent($this->grid);
+        }
+    }
+
+}
+?>

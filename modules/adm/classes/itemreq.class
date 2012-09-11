@@ -1,0 +1,861 @@
+<?php
+class BusinessAdmItemReq extends Business
+{
+    var $idRequisicao;
+    var $idMaterial;
+    var $status;
+    var $idLicitacao;
+    var $item;
+    var $quantPedida;
+    var $quantAutorizada;
+    var $quantEmpenhada;
+    var $quantDevolvida;
+    var $precoEstimado;
+    var $prioridade;
+    var $descricao;
+    var $material;
+    var $estoque;
+    var $movimento;
+    var $requisicao;
+    var $mapa;
+    var $valorTotalPedido;
+    var $valorReal;
+
+    var $empenhado;
+    
+    function __construct($data = null)
+    {
+	parent::__construct('sigaept', $data);
+    }
+
+    function GetById($idRequisicao,$idMaterial)
+    {
+	$this->idRequisicao = $idRequisicao;
+	$this->idMaterial = $idMaterial;
+	$this->retrieve();
+
+	return $this;
+    }
+    
+
+    function getCodigoByItemLicitacao($idLicitacao,$item)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('material.codmaterial');
+        $criteria->addCriteria('idLicitacao','=',"$idLicitacao");
+        $criteria->addCriteria('item','=',"$item");
+        return $criteria->retrieveAsQuery();
+    }
+
+    function getIdMaterialByItemLicitacao($idLicitacao,$item)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('idMaterial');
+        $criteria->addCriteria('idLicitacao','=',"$idLicitacao");
+        $criteria->addCriteria('item','=',"$item");
+        $query = $criteria->retrieveAsQuery();
+		return $query->result[0][0];
+    }
+
+    function getDescricaoByItemLicitacao($idLicitacao,$item)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('material.descricao');
+        $criteria->addCriteria('idLicitacao','=',"$idLicitacao");
+        $criteria->addCriteria('item','=',"$item");
+        return $criteria->retrieveAsQuery();
+    }
+
+    function getRequisicao()
+    {
+        if (!$this->requisicao) $this->retrieveAssociation('requisicao');
+        return $this->requisicao;
+    }
+    
+    function getUoRequisitante()
+    {
+        $this->getRequisicao();
+        if (!$this->requisicao->uoRequisitante) $this->requisicao->retrieveAssociation('uoRequisitante');
+        return $this->requisicao->uoRequisitante;
+    }
+   
+    function setStatus($status)
+    {
+        $this->status = $status;
+    }
+	
+	function setPrecoEstimado($precoEstimado)
+    {
+        $this->precoEstimado = $precoEstimado;
+    }
+    
+    function setPrioridade($p)
+    {
+        $this->prioridade = $p;
+    }
+    
+    function setLicitacao($id)
+    {
+        $this->idLicitacao = $id;
+    }
+    
+    function setItem($item)
+    {
+        $this->item = $item;
+    }
+
+    function setValorTotalPedido()
+    {
+        $cf = new MCurrencyFormatter();
+        $this->valorTotalPedido = $this->quantPedida * $cf->toDecimal($this->precoEstimado);
+    }
+    
+    function setValorReal($valorReal)
+    {
+        $cf = new MCurrencyFormatter();
+        $this->valorReal = $cf->toDecimal($valorReal);
+    }
+
+    function saveMovimento($tipoMovimento)
+    {
+        $today = getDate();
+        $movimento = $this->getMovimento();
+        $movimento->tipoMovimento = $tipoMovimento;
+        $movimento->dataMovimento = $today['mday']."/".$today['mon']."/".$today['year'];
+        $movimento->quantidade = $this->quantAutorizada;        
+        $movimento->valorTotal = str_replace('.',',',$this->quantAutorizada*$this->getValorMedio());
+        $movimento->save();
+    }
+    
+    function addMovimento($tipo,$quantidade,$valor,$nota)
+    {
+        global $MIOLO;
+        $today = getDate();
+        $movimento = $MIOLO->getBusiness('adm','movimento');
+        $movimento->idMaterial = $this->idMaterial;
+        $movimento->idRequisicao = $this->idRequisicao;
+        $movimento->tipoMovimento = $tipo;
+        $movimento->dataMovimento = $today['mday']."/".$today['mon']."/".$today['year'];
+        $movimento->quantidade = $quantidade;        
+        $movimento->valorTotal = $valor;
+        $movimento->idItemNota = $nota;
+        $movimento->save();
+    }
+
+    function getMovimento()
+    {
+        global $MIOLO;
+        if (!$this->movimento) $this->retrieveAssociation('movimento');
+        if ($this->movimento) return $this->movimento;
+        $movimento = $MIOLO->getBusiness('adm','movimento');
+        $movimento->idMaterial = $this->idMaterial;
+        $movimento->idRequisicao = $this->idRequisicao;
+        return $movimento;
+    }
+
+    function getValorMedio()
+    {
+        $this->retrieveAssociation('estoque');
+        return ($this->estoque) ? $this->estoque->valorTotal/$this->estoque->estoque : 0;
+    
+    }
+
+    /**********************************************
+    
+    Método ListItensAtendidosByCosup()
+    
+    Retorna todos os itens das requisições atendidas
+    (status 4) pela COSUP (tiporequisição = 7)
+
+    ***********************************************/
+    function ListItensAtendidosByCosup($status = 0,$uoHU = 0,$tipoRequisicao = '7')
+    {	
+	$sql = new sql("i.idmaterial, m.descricao, r.idrequisicao, i.quantpedida, i.quantentregue, i.precoestimado as valor, m.idsubelemento, m.idelemento, i.idmaterial||'_'||r.idrequisicao as iditemreq, m.descricao as descreq, uo.sigla, m.unidade, (i.quantpedida*i.precoestimado) as valortotal,i.prioridade,i.descricaodetalhada","ad_itemreq i, ad_material m, ad_requisicao r, ad_uo uo","m.idmaterial = i.idmaterial and i.idrequisicao = r.idrequisicao and r.iduoreq = uo.iduo");
+
+	if ($tipoRequisicao == '2')
+	    $sql->SetWhereAnd("(r.tiporequisicao = '6' OR r.tiporequisicao = '7')");
+	else
+	    $sql->SetWhereAnd("r.tiporequisicao = $tipoRequisicao");
+	
+	$sql->SetWhereAnd("(r.status = '4' or r.status = '7' or r.status = '8')");
+	$sql->SetWhereAnd("r.suplementar <> 'S'");
+	$sql->SetWhereAnd("i.status = '$status'");
+	//$sql->SetWhereAnd('m.idsubelemento = 17');		// Alteracao Temp Cleber/Ninja
+	//$sql->SetWhereAnd("m.permcons = 'P'");			// Alteracao Temp Cleber/Ninja
+	//$sql->SetWhereAnd("r.datahoraautreq < '2009-03-13'");	// Alteracao Temp Cleber/Ninja
+
+
+	//Todo: setar para a UO do HU
+	if ($uoHU != 0)
+	    $sql->SetWhereAnd("r.iduoreq = '325'");
+	else
+	    $sql->SetWhereAnd("r.iduoreq != '325'");
+	    
+
+	$sql->SetOrderBy("m.idelemento");
+	$sql->SetOrderBy("m.idsubelemento");
+	$sql->SetOrderBy("m.descricao");
+
+	$query = $this->ObjQuery($sql->Select());
+
+
+	return $query;
+    }
+
+
+	/**********************************************
+
+	Método ListItensAtendidos
+
+	Retorna todos os itens das requisições atendidas
+	(status 4) pela COSUP (tiporequisição = 7)
+
+	Acrescentado por Ronaldo para filtar a lista
+	por elemento e subelemento e retirado
+	o parametro uoHU que não e utilizado em SP
+
+	***********************************************/
+	function ListItensAtendidos($status = 0,$tipoRequisicao = 7, $elemento, $subelemento,$licitacao,$idinstituicao,$grp)
+
+	{
+		//IFSP
+		//Alteração 15/09/2009
+		$sql = new sql("i.idmaterial, m.descricao, r.idrequisicao,i.quantpedida, i.quantentregue, i.precoestimado as valor, m.idsubelemento, m.idelemento, i.idmaterial||'_'||r.idrequisicao as iditemreq, m.descricao as descreq, uo.sigla, m.unidade, (i.quantpedida*i.precoestimado) as valortotal,i.prioridade,i.descricaodetalhada,r.datahoraautreq, inst.idinstituicao as campus","ad_itemreq i, ad_material m, ad_requisicao r, ad_uo uo , cm_setor s, cm_instituicao inst","m.idmaterial = i.idmaterial and i.idrequisicao = r.idrequisicao and r.iduoreq = uo.iduo and uo.idsetor = s.idsetor and s.idinstituicao = inst.idinstituicao");
+
+		if ($tipoRequisicao == 2)
+			$sql->SetWhereAnd("(r.tiporequisicao = 6 OR r.tiporequisicao = 7)");
+		else
+			$sql->SetWhereAnd("r.tiporequisicao = $tipoRequisicao");
+
+		$sql->SetWhereAnd("(r.status = '4' or r.status = '7' or r.status = '8')");
+		$sql->SetWhereAnd("r.suplementar <> 'S'");
+		$sql->SetWhereAnd("i.status = '$status'");
+
+		if ($licitacao != null)
+			$sql->SetWhereAnd("uo.iduo = $licitacao");
+
+		if ($elemento != null) //filtrar somente se for informado o elemento
+			$sql->SetWhereAnd("m.idelemento = $elemento");
+
+		if ($subelemento != null) //filtrar somente se for informado o subelemento
+			$sql->SetWhereAnd("m.idsubelemento = $subelemento");
+
+		//IFSP
+		if ($idinstituicao !=  null)
+		{
+			//modif $sql = new sql("i.idmaterial, m.descricao, r.idrequisicao,i.quantpedida, i.quantentregue, i.precoestimado as valor, m.idsubelemento, m.idelemento, i.idmaterial||'_'||r.idrequisicao as iditemreq, m.descricao as descreq, uo.sigla, m.unidade, (i.quantpedida*i.precoestimado) as valortotal,i.prioridade,i.descricaodetalhada,r.datahoraautreq, inst.idinstituicao as campus","ad_itemreq i, ad_material m, ad_requisicao r, ad_uo uo, cm_setor s, cm_instituicao inst","m.idmaterial = i.idmaterial and i.idrequisicao = r.idrequisicao and r.iduoreq = uo.iduo and uo.idsetor = s.idsetor and s.idinstituicao = $idinstituicao");
+			$sql = new sql("i.idmaterial, m.descricao, r.idrequisicao,i.quantpedida, i.quantentregue, i.precoestimado as valor, m.idsubelemento, m.idelemento, i.idmaterial||'_'||r.idrequisicao as iditemreq, m.descricao as descreq, uo.sigla, m.unidade, (i.quantpedida*i.precoestimado) as valortotal,i.prioridade,i.descricaodetalhada,r.datahoraautreq","ad_itemreq i, ad_material m, ad_requisicao r, ad_uo uo, cm_setor s","m.idmaterial = i.idmaterial and i.idrequisicao = r.idrequisicao and r.iduoreq = uo.iduo and uo.idsetor = s.idsetor and s.idinstituicao = $idinstituicao");
+
+			if ($tipoRequisicao == 2)
+				$sql->SetWhereAnd("(r.tiporequisicao = 6 OR r.tiporequisicao = 7)");
+			else
+				$sql->SetWhereAnd("r.tiporequisicao = $tipoRequisicao");
+
+			$sql->SetWhereAnd("(r.status = '4' or r.status = '7' or r.status = '8')");
+			$sql->SetWhereAnd("r.suplementar <> 'S'");
+			$sql->SetWhereAnd("i.status = '$status'");
+
+			if ($elemento != null) //filtrar somente se for informado o elemento
+				$sql->SetWhereAnd("m.idelemento = $elemento");
+			if ($subelemento != null) //filtrar somente se for informado o subelemento
+				$sql->SetWhereAnd("m.idsubelemento = $subelemento");
+		}
+		//
+
+		//Ordenar primeiro pelo Campus
+		if ($grp == 1)
+		{
+			$sql->SetOrderBy("s.idinstituicao");  //modif $sql->SetOrderBy("campus");
+		}
+
+		//var_dump($grp);
+		$sql->SetOrderBy("m.idelemento");
+		$sql->SetOrderBy("m.idsubelemento");
+		$sql->SetOrderBy("m.descricao");
+
+		$query = $this->ObjQuery($sql->Select());
+
+		return $query;
+	}
+    
+
+
+    function limpaInstituicao($idinstituicao)
+    {
+    	return ($idinstituicao = null);	
+    }
+    function listItens($idRequisicao,$status = 0)
+    {
+        if (!$status)
+            $status = 0;
+        $criteria = $this->getCriteria();
+    	$criteria->addColumnAttribute('requisicao.uoRequisitante.sigla');
+    	$criteria->addColumnAttribute('material.descricao');
+    	$criteria->addColumnAttribute('idRequisicao');
+    	$criteria->addColumnAttribute('quantPedida');
+    	$criteria->addColumnAttribute('quantPedida*ad_itemreq.precoEstimado','valortotal');
+        $criteria->addColumnAttribute('material.unidade');
+    	$criteria->addColumnAttribute('idMaterial');
+        $criteria->addCriteria('idRequisicao','=',$idRequisicao);
+        $criteria->addCriteria('status','=','0');
+        return $criteria->retrieveAsQuery();
+    }
+    
+    function listItensPermanentesALicitar()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('requisicao.idRequisicao');
+    	$criteria->addColumnAttribute('requisicao.uoRequisitante.sigla');
+    	$criteria->addColumnAttribute('material.codmaterial');
+    	$criteria->addColumnAttribute('material.descricao');
+        $criteria->addColumnAttribute('idRequisicao');
+    	$criteria->addColumnAttribute('quantPedida');
+    	$criteria->addColumnAttribute('precoEstimado');
+        $criteria->addColumnAttribute('material.unidade');
+        $criteria->addColumnAttribute('idMaterial');
+        $criteria->addColumnAttribute("idRequisicao");
+        $criteria->addCriteria('requisicao.idTipoReq','=',"6"); 
+        $criteria->addCriteria("requisicao.suplementar","<>","'S'");
+        $criteria->addCriteria('status','=',"'0'");
+	
+	 $criteria->addCriteria('material.idsubelemento','=',"51");		// Alteracao Temp Cleber/Ninja
+	//$criteria->addCriteria('requisicao.dataHoraAut','<',"'2009-03-13'");	// Alteracao Temp Cleber/Ninja
+		
+
+        $cc = new CriteriaCondition();
+            $cc->addCriteria($criteria->getCriteria('requisicao.status','=',"'4'"));
+            $cc->addOrCriteria($criteria->getCriteria('requisicao.status','=',"'7'"));
+            $cc->addOrCriteria($criteria->getCriteria('requisicao.status','=',"'8'"));
+        $criteria->addCriteria($cc);
+
+        return $criteria->retrieveAsQuery();
+    }
+    /* ---------------------------------------
+
+    Método SetIdLicitacao($idlicitacao)
+
+    ----------------------------------------*/
+    function SetIdLicitacaoItem($idrequisicao,$idmaterial,$idlicitacao,$item)
+    {
+            $status = 8;
+            $sql = new sql();
+            $sql->SetColumns('
+                    status,
+                    idlicitacao,
+                    item
+            ');
+            $sql->SetTables('
+                    ad_itemreq
+            ');
+            $sql->SetWhere('idrequisicao = ? and idmaterial = ?');
+            $values = array(
+                    $status,
+                    $idlicitacao,
+                    $item,
+                    $idrequisicao,
+                    $idmaterial
+            );
+            $ok = $this->Execute($sql->Update($values));
+
+            return $ok;
+    }
+    
+    function ListByLicitacao($id)
+    {
+            $sql = new sql();
+            $sql->SetColumns('distinct(idmaterial)');
+            $sql->SetTables('ad_itemreq');
+            $sql->SetWhere('idlicitacao = ?');
+            $query = $this->ObjQuery($sql->Select($id));
+            return $query->result;
+    }
+    
+    function getUoRequisitantesForConsolidacao($idUoExecutante,$es)
+    {
+        $criteria =  $this->getCriteria();
+		$criteria->addColumnAttribute('distinct(requisicao.idUoRequisitante)','idUoRequisitante');
+        $criteria->addCriteria('movimento.idOrdemEntrega','is','null');
+        if ($es)
+        {
+            $cc = new CriteriaCondition();
+                $ccc = new CriteriaCondition();
+                $ccc->addCriteria($criteria->getCriteria('requisicao.idUoExecutante','=',$idUoExecutante));
+                $ccc->addCriteria($criteria->getCriteria('movimento.tipoMovimento','=', "'3'"));
+            $cc->addCriteria($ccc);
+            $cc->addOrCriteria($criteria->getCriteria('movimento.tipoMovimento','=', "'5'"));
+            $criteria->addCriteria($cc);
+        }
+        else
+        {
+            $criteria->addCriteria('requisicao.idUoExecutante','=',$idUoExecutante);
+            $criteria->addCriteria('movimento.tipoMovimento','=',"'3'");
+        }
+        $criteria->addOrderAttribute('requisicao.idUoRequisitante');
+        return $criteria->retrieveAsQuery();
+    }
+    
+    function getMovimentosByConsolidacao($idUoExecutante,$idUoRequisitante,$es)
+    {
+        $criteria =  $this->getCriteria();
+		$criteria->addColumnAttribute('movimento.idMovimento','idMovimento');
+        $criteria->addCriteria('movimento.idOrdemEntrega','is','null');
+        $criteria->addCriteria('requisicao.idUoRequisitante','=',$idUoRequisitante);
+        if ($es)
+        {
+            $cc = new CriteriaCondition();
+                $ccc = new CriteriaCondition();
+                $ccc->addCriteria($criteria->getCriteria('requisicao.idUoExecutante','=',$idUoExecutante));
+                $ccc->addCriteria($criteria->getCriteria('movimento.tipoMovimento','=', "'3'"));
+            $cc->addCriteria($ccc);
+            $cc->addOrCriteria($criteria->getCriteria('movimento.tipoMovimento','=', "'5'"));
+            $criteria->addCriteria($cc);
+        }
+        else
+        {
+            $criteria->addCriteria('requisicao.idUoExecutante','=',$idUoExecutante);
+            $criteria->addCriteria('movimento.tipoMovimento','=',"'3'");
+        }
+        $criteria->addOrderAttribute('movimento.idMovimento');
+        return $criteria->retrieveAsQuery();
+    }
+
+   /**********************************************
+
+   Método ListItensSemDescricaoByLicitacao($idLicitacao,$idParticipante)
+
+   Lista todos os itens de requisicao sem descricao
+   com o idLicitacao informado
+
+   ***********************************************/
+    function ListItensSemDescricaoByLicitacao($idLicitacao,$idFornecedor)
+    {
+           $sql = new sql("m.descricao as material, ml.quantidade, m.descricao, i.item, ml.preco, ml.marcamodelo, ml.status, sum(quantpedida)","ad_requisicao r, ad_itemreq i, ad_material m, ad_mapalicitacao ml, cm_tabelageral tg, ad_itemlicitacao il","r.idrequisicao = i.idrequisicao and m.idmaterial = i.idmaterial and i.idlicitacao = ml.idlicitacao and ml.item = i.item and i.idlicitacao = il.idlicitacao and il.item = i.item and il.excecao = tg.item1 and tg.tabela = 'AD_STATUSITEMREQ'");
+           $sql->SetWhereAnd("(i.status = '1' OR i.status = '2' OR i.status = '3' OR i.status = '4')"); //Itens nÃ£o cancelados
+//           $sql->SetWhereAnd("r.datahorareq > '31/12/2007'"); //Somente para requisicoes feitas depois de 31/12/2007
+           $sql->SetWhereAnd("i.idlicitacao = ?");
+           $sql->SetWhereAnd("ml.idfornecedor = ?");
+           $sql->SetGroupBy("m.descricao, ml.quantidade, m.descricao, i.item, ml.preco, ml.marcamodelo, ml.status");
+           $sql->SetOrderBy("i.item");
+
+           $args = array($idLicitacao,$idFornecedor);
+           $query = $this->Query($sql,$args);
+
+           return $query;
+   }
+
+   /**********************************************
+
+   Método ListItensComDescricaoByLicitacao($idLicitacao,$idParticipante)
+
+   Lista todos os itens de requisicao com descricao
+   com o idLicitacao informado
+
+   ***********************************************/
+   function ListItensComDescricaoByLicitacao($idLicitacao,$idParticipante)
+   {
+           $sql = new sql("m.descricao as material, i.quantpedida, m.descricao,i.item, ml.preco, ml.marcamodelo, tg.item2","ad_itemreq i, ad_material m, ad_mapalicitacao ml, cm_tabelageral tg","m.idmaterial = i.idmaterial and i.idlicitacao = ml.idlicitacao and ml.item = i.item and i.status = tg.item1 and tg.tabela = 'AD_STATUSITEMREQ'");
+           $sql->SetWhereAnd("m.descricao IS NOT NULL");
+           $sql->SetWhereAnd("i.idlicitacao = ?");
+           $sql->SetWhereAnd("ml.idparticipante = ?");
+           $sql->SetOrderBy("i.item");
+
+           $args = array($idLicitacao,$idParticipante);
+           $query = $this->Query($sql,$args);
+
+           return $query;
+   }   
+
+   function setItemByLicitacaoItem($idLicitacao,$itemAntigo,$itemNovo)
+   {
+        $sql = new sql("item","ad_itemreq");
+        $sql->SetWhere("idlicitacao = ?");
+        $sql->SetWhereAnd("item = ?");
+
+        $args = array($itemNovo,$idLicitacao,$itemAntigo);
+
+        $query = $this->Execute($sql->Update($args));
+        return $query->result;
+    } 
+
+   function setStatusByLicitacao($idLicitacao,$item,$status)
+   {
+        $sql = new sql("status","ad_itemreq");
+        $sql->SetWhere("idlicitacao = ?");
+
+        if ($item == 'all') // se forem todos os itens
+        {
+            $args = array($status,$idLicitacao);
+        }
+        else
+        {
+            $sql->SetWhereAnd("item = ?"); // senao especifica um item a ser alterado
+            $args = array($status,$idLicitacao,$item);
+        }
+
+        $query = $this->Execute($sql->Update($args));
+        return $query->result;
+    }   
+
+	/*
+    function removeDaLicitacao($idLicitacao,$idMaterial)
+    {
+        $sql = new sql("status,item","ad_itemreq");
+        $sql->SetWhere("idlicitacao = ?");
+        $sql->SetWhereAnd("idmaterial = ?"); 
+
+        $args = array("0",NULL,$idLicitacao,$idMaterial);
+        $query = $this->Execute($sql->Update($args));
+        return $query->result;
+    }
+*/
+
+
+  function removeDaLicitacao($idLicitacao,$numitem,$param)
+    {
+        $sql = new sql("status,item","ad_itemreq");
+        $sql->SetWhere("idlicitacao = ?");
+        $sql->SetWhereAnd("item = ?"); 
+		$sql->SetWhereAnd("idrequisicao = ?"); 
+
+        $args = array("0",NULL,$idLicitacao,$numitem,$param);
+        $query = $this->Execute($sql->Update($args));
+        return $query->result;
+    }
+
+
+
+    function getByIdLicitacao($idLicitacao)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addCriteria('idLicitacao','=',$idLicitacao);
+        $criteria->addCriteria("item > 0");
+
+        $this->retrieveFromCriteria($criteria);
+        return $this;
+    }
+
+    function getByIdLicitacaoItem($idLicitacao,$item)
+    {
+        $criteria = $this->getCriteria();
+    	$criteria->addColumnAttribute('codMaterial');
+        $criteria->addColumnAttribute('descricao');
+    	$criteria->addColumnAttribute('material.descricao','material');
+        $criteria->addColumnAttribute('quantPedida');
+        $criteria->addColumnAttribute('material.unidade','unidade');
+        $criteria->addColumnAttribute('status');
+        $criteria->addColumnAttribute('precoEstimado');
+		        $criteria->addCriteria('idLicitacao','=',$idLicitacao);
+        $criteria->addCriteria('item','=',$item);
+        return $criteria->retrieveAsQuery();
+    }
+//Função Nova 11/5/2009
+	
+	function getByLicitacaoEItem($idLicitacao,$numitem)
+    {
+        $criteria = $this->getCriteria();
+    	$criteria->addColumnAttribute('idMaterial');
+		$criteria->addColumnAttribute('descricao');
+    	$criteria->addColumnAttribute('material.descricao','material');
+        $criteria->addColumnAttribute('quantPedida');
+        $criteria->addColumnAttribute('material.unidade','unidade');
+        $criteria->addColumnAttribute('status');
+        $criteria->addColumnAttribute('precoEstimado');
+		$criteria->addColumnAttribute('idRequisicao');
+		$criteria->addCriteria('idLicitacao','=',$idLicitacao);
+        $criteria->addCriteria('item','=',$numitem);
+		//var_dump($numitem);
+		
+		return $criteria->retrieveAsQuery();
+    }
+	
+	
+//fim Função nova	11/5/2009
+    function getByLicitacaoEMaterial($idLicitacao,$idMaterial,$idRequisi)
+    {
+        $criteria = $this->getCriteria();
+    	$criteria->addColumnAttribute('idMaterial');
+		$criteria->addColumnAttribute('descricao');
+    	$criteria->addColumnAttribute('material.descricao','material');
+        $criteria->addColumnAttribute('quantPedida');
+        $criteria->addColumnAttribute('material.unidade','unidade');
+        $criteria->addColumnAttribute('status');
+        $criteria->addColumnAttribute('precoEstimado');
+		$criteria->addColumnAttribute('idRequisicao');
+		$criteria->addColumnAttribute('item');			//adicionado ao retorno da pesquisa 11/5/2009
+        $criteria->addCriteria('idLicitacao','=',$idLicitacao);
+        $criteria->addCriteria('idMaterial','=',$idMaterial);
+		$criteria->addCriteria('idRequisicao','=',$idRequisi);//adicionado nova condição da pesquisa 11/5/2009
+		
+		return $criteria->retrieveAsQuery();
+    }
+
+    function getTotalByIdLicitacao($idLicitacao)
+    {
+            $criteria = $this->getCriteria();
+    		$criteria->addColumnAttribute('sum(quantPedida*precoEstimado)');
+            $criteria->addCriteria('idLicitacao','=',$idLicitacao);
+            return $criteria->retrieveAsQuery();
+    }
+    
+    function temPrioridade()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('count(idMaterial)');
+        $criteria->addCriteria('prioridade','<',$this->prioridade);
+        $criteria->addCriteria("status","=","'8'");
+        $criteria->addCriteria("requisicao.status","=","'7'");
+        $query = $criteria->retrieveAsQuery();
+
+        if ($query->result[0][0] == 0)
+            return true;
+        else
+            return false;
+    }
+    
+  	function getTotalDeLicitacoesDeDispensaPorMaterial($idMaterial)
+	{
+        $ano = date("Y");
+        $data = "01/01/".$ano;
+		$sql = new sql();        
+		$sql->SetColumns('count(i.idlicitacao)');
+		$sql->SetTables('ad_itemreq i, ad_licitacao l');
+		$sql->SetWhere("l.idlicitacao = i.idlicitacao and l.idmodalidadelicitacao = '1' and l.dataabertura > TO_DATE('$data','DD/MM/YYYY') and i.idmaterial = ?");
+		$query = $this->ObjQuery($sql->Select($idMaterial));
+		return $query->result[0][0];
+	}
+  
+    function getMapa()
+    {
+        $this->retrieveAssociation('mapa');
+        return $this->mapa;
+    }
+
+	function GetEmpenhadoByItemReq($requisicao, $itemreq=null)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('empenhado.idEmpenhado');
+		$criteria->addColumnAttribute('empenhado.idEmpenho');
+		$criteria->addCriteria('idRequisicao','=',$requisicao);
+		if($itemreq)
+		{
+			$criteria->addCriteria('item','=',$itemreq);
+		}
+		return $criteria->retrieveAsQuery();
+	}
+
+	function ListByRequisicao($idRequisicao)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('material.idMaterial');
+        $criteria->addColumnAttribute('material.descricao');
+		$criteria->addColumnAttribute('status');
+		$criteria->addColumnAttribute('idLicitacao');
+		$criteria->addColumnAttribute('item');
+        
+		$criteria->addCriteria('idRequisicao','=',"$idRequisicao");
+        
+        return $criteria->retrieveAsQuery();
+    }
+    
+    /**********************************************
+	
+	Método ListItensAtendidosByCosupPorRequisicao()
+	
+	Retorna todos os itens das requisições atendidas
+	(status 4) pela COSUP (tiporequisição = 7)
+
+	***********************************************/
+	function ListItensAtendidosByCosupPorRequisicao($numeroRequisicao,$status = 0,$uoHU = 0)
+	{	
+		$sql = new sql(" i.idmaterial||'_'||i.idrequisicao as iditemreq ,m.descricao, m.idelemento||'/'||m.idsubelemento,i.quantpedida,m.unidade,i.precoestimado as valor,  i.quantpedida*i.precoestimado as valortotal","ad_itemreq i, ad_material m, ad_requisicao r, ad_uo uo","m.idmaterial = i.idmaterial and i.idrequisicao = r.idrequisicao and r.iduoreq = uo.iduo");
+
+		$sql->SetWhereAnd("i.status = '$status'");
+		$sql->SetWhereAnd("r.idrequisicao = $numeroRequisicao");
+ 
+
+		$sql->SetOrderBy("m.idelemento");
+		$sql->SetOrderBy("m.idsubelemento");
+		$sql->SetOrderBy("m.descricao");
+
+		$query = $this->ObjQuery($sql->Select());
+
+		return $query;
+	}
+	
+	function anularItemByMaterialRequisicao($motivo="")
+    {
+        global $MIOLO;
+		
+    	/**
+		 * Obtém o ID do item anulado
+		 */
+		$tblGeral = $MIOLO->GetBusiness('common','tabelageral');
+		$tblGeral->GetByItem2("AD_STATUSITEMREQ","RECUSADO UO EXEC");
+		
+		$statusAnulado = $tblGeral->item1;
+		
+        $sql = new sql();
+            $sql->SetColumns('
+                    status,
+                    motivorejeicao
+            ');
+            $sql->SetTables('
+                    ad_itemreq
+            ');
+            $sql->SetWhere('idrequisicao = ? and idmaterial = ?');
+            $values = array(
+                    $statusAnulado,
+                    $motivo,
+                    $this->idRequisicao,
+                    $this->idMaterial
+            );
+            $this->Execute($sql->Update($values));
+    }
+
+	function getStatusByItem($idLicitacao, $item)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('status');
+		$criteria->addCriteria('idLicitacao','=', "$idLicitacao");
+		$criteria->addCriteria('item','=', $item);
+		$query = $criteria->retrieveAsQuery();
+		return $query->result[0][0];
+	}
+
+	function getByIdLicitacaoItemIdRequisicao($idLicitacao,$item,$idRequisicao)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addCriteria('idLicitacao','=',$idLicitacao);
+		$criteria->addCriteria('item','=',$item);
+		$criteria->addCriteria('idRequisicao','=',$idRequisicao);
+		$cursor = $criteria->retrieveAsCursor();
+		return $cursor->getObject();
+	}
+	function getMaterialByCod($idRequisicao,$codMaterial)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('material.idMaterial');
+        $criteria->addColumnAttribute('material.descricao');
+		$criteria->addColumnAttribute('quantPedida');
+		$criteria->addColumnAttribute('unidade');
+		$criteria->addColumnAttribute('status');
+		$criteria->addCriteria('idRequisicao','=', $idRequisicao);
+		$criteria->addCriteria('material.codmaterial','=',$codMaterial);
+		
+        return $criteria->retrieveAsQuery();
+    }
+
+    function getItemByLicitacaoUo($lic,$uo)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('count(idMaterial)');
+        $criteria->addCriteria('idMaterial','=',$this->idMaterial);
+        $criteria->addCriteria("idLicitacao","=",$lic);
+        $criteria->addCriteria("requisicao.idUoRequisitante","=",$uo);
+        $query = $criteria->retrieveAsQuery();
+
+        if ($query->result[0][0] == 0)
+            return false;
+        else
+            return true;
+    }
+	
+	function listValorByUoRubrica($dataInicio, $dataFim, $tipoLicitacao,$uo)
+    {
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('requisicao.uoRequisitante.sigla', 'uo');
+		$criteria->addColumnAttribute('licitacao.idTipoLicitacao','idtipolicitacao');
+		$criteria->addColumnAttribute('quantPedida');
+		$criteria->addColumnAttribute('precoEstimado');
+		$criteria->addColumnAttribute('quantEmpenhada');
+		$criteria->addColumnAttribute('valorReal');
+
+		$criteria->addCriteria('licitacao.status','=',"'4'");
+		$criteria->addCriteria('licitacao.idTipoLicitacao','=',"'$tipoLicitacao'");
+		$criteria->addCriteria('requisicao.idUoRequisitante','=', $uo);		
+		$criteria->addCriteria('requisicao.dataHora','>=',"'$dataInicio'");
+		$criteria->addCriteria('requisicao.dataHora','<=',"'$dataFim'");
+		
+        return $criteria->retrieveAsQuery();
+    }
+
+	/* ---------------------------------------
+
+    Método GetNewItemLicitacao($idlicitacao)
+
+    Retorna o próximo numero de item de licitacao
+    para ad_itemreq 
+
+    ----------------------------------------*/
+    function GetNewItemLicitacao($id)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('max(item)');
+        $criteria->addCriteria("idLicitacao","=","$id");
+        $query = $criteria->retrieveAsQuery();
+
+        return $query->result[0][0]+1;
+    }
+    /* ---------------------------------------
+
+    Método GetCampusByReq($idRequisicao)
+
+    Retorna o id da instituição a partir de um id de uma requisição
+
+    ----------------------------------------*/
+    function GetCampusByReq($idRequisicao)
+    {
+      $sql = new sql("inst.idinstituicao","cm_instituicao inst, cm_setor se, ad_uo uo, ad_requisicao req");
+        $sql->SetWhereAnd('(req.iduoreq = uo.iduo) and (uo.idsetor = se.idsetor) and (se.idinstituicao = inst.idinstituicao)');
+		$sql->SetWhereAnd("req.idrequisicao = $idRequisicao");
+       $query = $this->ObjQuery($sql->Select());
+        return $query->result;
+    }
+	
+    //Taka
+    /**********************************************
+	
+    Método ListItensAtendidosByCosupPorRequisicao()
+    
+    Retorna todos os itens das requisições atendidas
+    (status 4) pela COSUP (tiporequisição = 7)
+
+    ***********************************************/
+    function ListItensAtendidosByCosupPorRequisicaoPermanente($numeroRequisicao,$status = 0,$uoHU = 0)
+    {	
+	    $sql = new sql(" i.idmaterial||'_'||i.idrequisicao as iditemreq ,m.descricao, m.idelemento||'/'||m.idsubelemento,i.quantpedida,m.unidade,i.precoestimado as valor,  i.quantpedida*i.precoestimado as valortotal","ad_itemreq i, ad_material m, ad_requisicao r, ad_uo uo","m.idmaterial = i.idmaterial and i.idrequisicao = r.idrequisicao and r.iduoreq = uo.iduo");
+
+	    $sql->SetWhereAnd("i.status = '$status'");
+	    $sql->SetWhereAnd("r.idrequisicao = $numeroRequisicao");
+
+
+	    $sql->SetOrderBy("m.idelemento");
+	    $sql->SetOrderBy("m.idsubelemento");
+	    $sql->SetOrderBy("m.descricao");
+
+	    $query = $this->ObjQuery($sql->Select());
+
+	    return $query;
+    }
+	
+    //Taka
+
+    function setMotivoRejeita($idRequisicao,$item,$motivo)
+    {
+        global $MIOLO;
+		
+    	/**
+		 * Obtém o ID do item anulado
+		 */
+			
+        $sql = new sql();
+            $sql->SetColumns('motivorejeicao');
+            $sql->SetTables('ad_itemreq');
+            $sql->SetWhere("idrequisicao = $idRequisicao and item = $item");
+            $values = array($motivo,);
+            $this->Execute($sql->Update($values));
+    }
+	
+	
+}
+?>

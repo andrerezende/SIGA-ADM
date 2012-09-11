@@ -1,0 +1,253 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+$MIOLO->Uses('ui/controls/lkppublicacao.class','rh');
+/*
+Objetivo: realizar mudança de ambiente organizacional para um Técnico-Admistrativo.
+          O Técnico-Admistrativo já foi previamente escolhido ($item no endereço)
+
+Algoritmo:
+    - recupera o último provimento
+    - mostra o provimento atual do Técnico-Admistrativo
+    - oferece digitação do novo ambiente
+    - grava o novo provimento com a mudança
+*/
+
+class frmMudarAmbiente extends MForm
+{
+    protected $ULTIMOprovimento;
+
+
+    function __construct()
+    {
+        parent::__construct('Mudança de Ambiente Organizacional');
+        $this->EventHandler();
+    } // __construct
+
+
+    function CreateFields()
+    {
+        global $module;
+
+        //PRIMEIRO QUADRO: mostra provimento atual
+
+        $C_dataInicioATUAL = new MHContainer('',
+                                 array( new MLabel('Data de início:'),
+                                        new MTextLabel('dataInicioATUAL'  ,'','') ) );
+        $C_publicacaoATUAL = new MHContainer('',
+                                 array( new MLabel('Publicação:'),
+                                        new MTextLabel('idPublicacaoATUAL','','') ) );
+        $C_setorATUAL      = new MHContainer('',
+                                 array( new MLabel('Setor:'),
+                                        new MTextLabel('idsetorATUAL'     ,'','') ) );
+        $C_ambienteATUAL   = new MHContainer('',
+                                 array( new MLabel('Ambiente:'),
+                                        new MTextLabel('idAmbienteATUAL'  ,'','') ) );
+
+        $bgATUAL = new MBaseGroup('bg1','Provimento Atual:',array($C_dataInicioATUAL,
+                                                                  $C_publicacaoATUAL,
+                                                                  $C_setorATUAL     ,
+                                                                  $C_ambienteATUAL  ),'vertical','css');
+        $bgATUAL->addStyle('backgroundColor','white');
+        $bgATUAL->addStyle('fontStyle','bold');
+
+        $fields[] = $bgATUAL;
+        $fields[] = new MHiddenField('idVinculo');
+
+        $fields[] = new MSpacer(2);
+
+        //SEGUNDO QUADRO: edição do novo Ambiente
+
+        $nbsp = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
+        $bg2      = new MBaseGroup('bg2','',array(new MHContainer('',
+                                                  array( new MLabel("$nbsp$nbsp$nbsp$nbsp$nbsp Novo Provimento (novo ambiente):",'blue',TRUE)))));
+        $bg2->addStyle('backgroundColor','white');
+        $fields[] = $bg2;
+
+        $fields[] = new MCalendarField  ('dataInicio','','Data de início',10);
+        $objambiente = $this->manager->GetBusiness($module,'ambiente');
+        $ambientes = $objambiente->ListAll()->result;
+        $fields[] = new MSelection('idAmbiente','','Novo ambiente',$ambientes);
+
+        lkppublicacao($fields,'idPublicacao','Publicação');
+        $fields[] = new MSpacer(1);
+        $fields[] = new MMultiLineField ('obs','','Observação',25,5,40,'Máx. 500');
+
+        $this->SetFields($fields);
+                
+        $buttons = array( new MButton('btnPost','Salvar novo ambiente') );
+        $this->setButtons($buttons);
+
+        $this->setData();
+
+        $validators[] = new MRequiredValidator('dataInicio');
+        $validators[] = new MRequiredValidator('idAmbiente','Ambiente','required');
+        $this->SetValidators($validators);
+    } // CreateFields
+
+
+    function SetData()
+    {
+        global $module;
+
+        $this->ULTIMOprovimento = $this->manager->GetBusiness($module,'provimento');
+        $this->ULTIMOprovimento->getUltimoProvimento( MForm::GetFormValue('item') );
+
+        $this->SetFieldValue('idVinculo'        ,$this->ULTIMOprovimento->idVinculo);
+
+        $this->SetFieldValue('dataInicioATUAL'  ,$this->ULTIMOprovimento->dataInicio);
+
+        $this->ULTIMOprovimento->retrieveAssociation('publicacao');
+        $this->SetFieldValue( 'idPublicacaoATUAL',$this->ULTIMOprovimento->publicacao->diplomaLegal->descricao.' '.
+                                                  $this->ULTIMOprovimento->publicacao->numero.' de '.
+                                                  $this->ULTIMOprovimento->publicacao->data.' - '.
+                                                  $this->ULTIMOprovimento->publicacao->autoridade );
+
+        $obj = $this->manager->getBusiness('common','setor');
+        $obj->getById($this->ULTIMOprovimento->idSetor);
+        $this->SetFieldValue('idsetorATUAL'   ,$obj->sigla);
+
+        $obj = $this->manager->getBusiness($module,'ambiente');
+        $obj->getById($this->ULTIMOprovimento->idAmbiente);
+        $this->SetFieldValue('idAmbienteATUAL',$obj->descricao);
+    } // SetData
+
+
+    function btnPost_click()
+    {
+        $data = $this->GetData();
+
+        $k = new MKrono();
+        
+        $vinculo = $this->manager->GetBusiness('rh','vinculo', $data->idVinculo);
+        $vinculo->getProvimentos();
+        
+        $numProv = count($vinculo->provimentos);
+        
+        $vinculo->ordenaProvimentos();
+    	
+    	$i = 0;        	
+    	
+    	//laço para encontrar o provimento anterior ao provimento a ser inserido
+    	while(($k->CompareDate($vinculo->provimentos[$i]->dataInicio, '>', $data->dataInicio)) && ($i < $numProv))
+    	{
+    		$i++; //a variável i determina a posição do provimento anterior
+    	}
+
+        if ($data->idAmbiente == $vinculo->provimentos[$i]->idAmbiente)
+        {
+            //$go = $this->manager->getActionURL('rh','main:vinculo',$data->idVinculo);
+            //$this->manager->Information("Nada alterado",$go);
+            $this->addError('O Ambiente não foi alterado');
+            RETURN; //aborta gravação
+        }
+        
+        //verifica se o provimento será inserido antes do provimento atual
+		$insercaoEspecial = false;
+        if ( $k->compareDate($data->dataInicio, '<=', $this->ULTIMOprovimento->dataInicio) )
+        {
+        	$insercaoEspecial = true;
+            /*$this->addError('Erro: data de início do novo ambiente não pode ser menor ou igual à do anterior');
+            RETURN; //aborta gravação*/
+        }
+        
+        if($insercaoEspecial)
+        {
+        	try
+        	{
+        		
+        		$vinculo->insereEspecial($data->dataInicio,        	
+			                            '6',
+			                            '998',
+			                            '',
+			                            $data->idPublicacao,
+			                            '',
+			                            '',
+			                            '',
+			                            '',
+			                            '',
+			                            '',
+			                            $obs=$data->obs,
+			                            $data->idAmbiente);
+			                            
+			    $go = $this->manager->getActionURL('rh','main:vinculo',$data->idVinculo);
+	            $this->manager->information('Mudança de ambiente realizada, novo provimento criado.', $go );                        
+			    $gravou = true;
+        	}
+        	catch (Exception $e)
+        	{
+        		$gravou = false;
+	            $this->AddError($e->GetMessage());
+        	}
+        }
+        else
+        { 
+        
+        	$this->ULTIMOprovimento->BeginTransaction();
+        
+	        TRY
+	        {
+	        	
+	        	$this->ULTIMOprovimento->dataFim = $k->Operation('-',$data->dataInicio,1 . '%D');
+	            $this->ULTIMOprovimento->save();
+	        		
+	            $this->SalvaprovimentoNOVO($data);
+	            $this->ULTIMOprovimento->EndTransaction();
+	
+	            $go = $this->manager->getActionURL('rh','main:vinculo',$data->idVinculo);
+	            $this->manager->information('Mudança de ambiente realizada, novo provimento criado.', $go );
+	            $gravou = TRUE;
+	        }
+	        CATCH (Exception $e)
+	        {
+	            $gravou = false;
+	            $this->AddError($e->GetMessage());
+	        }
+	
+	        if ($gravou)
+	        {
+	            $this->ULTIMOprovimento->log(OP_INS,'vinculo: '                . $data->idVinculo .
+	                                       ' Mudado ambiente organizacional: ' . $data->idAmbiente);
+	        }
+        }
+
+    } // btnPost_click
+
+
+    function SalvaprovimentoNOVO($data)
+    {
+        global $module;
+
+        $provimentoNOVO = $this->manager->GetBusiness($module,'provimento');
+        $provimentoNOVO = $this->ULTIMOprovimento; //copia o anterior para o novo, inclusive transação e estado de persistência
+        $provimentoNOVO->setPersistent(false);     //muda estado de persistência para inserção
+
+        $provimentoNOVO->dataInicio        = $data->dataInicio;
+        $provimentoNOVO->dataFim           = '';
+        $provimentoNOVO->idAmbiente        = $data->idAmbiente;
+        $provimentoNOVO->idPublicacao      = $data->idPublicacao;//$data->publicacao;
+        $provimentoNOVO->obs               = $data->obs;
+        $provimentoNOVO->idGrupoOcorrencia = '6';
+        $provimentoNOVO->idOcorrencia      = '998';
+        $provimentoNOVO->save();
+    } // SalvaprovimentoNOVO
+
+
+}
+?>

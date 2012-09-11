@@ -1,0 +1,177 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+/**
+ * Formulário de edição de dados da vaga
+ */
+class frmVagaUtilDados extends Form
+{
+	/**
+	 * Objeto Vaga
+	 * @access protected
+	 * @var BusinessRhVaga
+	 */
+	protected $objVaga;
+
+    function __construct($objVaga)
+    {
+        global $MIOLO, $module;
+
+		$this->objVaga = $objVaga;
+        parent::__construct('Dados da Vaga');
+        $this->SetClose($MIOLO->GetActionURL($module,'main:vaga:find'));
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+        global $MIOLO, $module, $action, $item;
+        
+        $fldnumerovaga =  new TextField('numeroVaga','','Número da Vaga','20');
+
+        $fields = array(
+            new Spacer('2px'),
+       	    array($fldnumerovaga),
+            new Spacer('10px'),
+            new Separator('<b>Observação:</b> Use a lupa para alterar o <b>Grupo do Cargo</b> e/ou o <b>Cargo</b>.'),
+            new Spacer('5px'),
+            new LookupTextField('descGrupoCargo','','Grupo','60'),
+            new HiddenField('idGrupoCargo',''),
+            new LookupTextField('descCargo','','Cargo','60'),
+            new HiddenField('idCargo',''),
+            new Spacer('10px'),
+            array (
+                new Text('comentario1','<b>Atenção:</b>'),
+                new Text('comentario2','Só serão aceitos <b>Grupo do Cargo</b> e <b>Cargo</b> alterados através de pesquisa.'),
+            ),
+            new Spacer('10px'),
+         );
+		
+        $this->SetFields($fields);
+
+
+        $this->SetFieldAttr('comentario1','color','red');
+        $this->SetFieldAttr('comentario2','color','blue');
+
+        $fldnumerovaga->AddAttribute('maxlength','7');
+
+	$this->SetFieldAttr('descGrupoCargo','module',$module);
+	$this->SetFieldAttr('descGrupoCargo','item','GrupoCargo');
+//        $this->SetFieldAttr('descGrupoCargo','event','filler');
+//        $this->SetFieldAttr('descGrupoCargo','related','idGrupoCargo,descGrupoCargo,idCargo,descCargo');
+        $this->SetFieldAttr('descGrupoCargo','event','btnShowCargo:click');
+
+	$this->SetFieldAttr('descCargo','module',$module);
+	$this->SetFieldAttr('descCargo','item','Cargo');
+        $this->SetFieldAttr('descCargo','event','filler');
+        $this->SetFieldAttr('descCargo','related','idCargo,descCargo');
+	$this->SetFieldAttr('descCargo','filter','idGrupoCargo,descCargo');
+
+        $this->SetFieldAttr('descCargo','visible',true);
+
+//        $this->SetFieldAttr('idGrupoCargo','visible',false);
+//        $this->SetFieldAttr('idCargo','visible',false);
+
+        $validators = array(
+            new RequiredValidator('numeroVaga'),
+            new RequiredValidator('descGrupoCargo'),
+            new RequiredValidator('descCargo'),
+        );
+        
+        $this->SetValidators($validators);
+
+        $cancel = $MIOLO->GetActionURL($module,'main:vaga:dados', $item, array('form'=>'dados') );
+
+	$buttons = array(
+	  	    new FormButton('btnSalvar','Enviar'),
+        	    new FormButton('btnCancelar','Cancelar', $cancel)
+        );
+		$this->SetButtons($buttons);
+		$this->SetData();
+    }
+
+	function GetData()
+	{
+        $data = new FormData();
+		$data->numeroVaga   = $this->GetFormValue('numeroVaga');
+		$data->idGrupoCargo = $this->GetFormValue('idGrupoCargo');
+        $data->idCargo      = $this->GetFormValue('idCargo');
+        return $data;
+	}
+
+	function SetData()
+	{
+        global $MIOLO, $module;
+
+		$data = $this->objVaga;
+        	$grupoC = $MIOLO->GetBusiness($module,'grupocargo');    
+	   	$grupoC = $grupoC->GetById($data->idGrupoCargo);
+        	$cargoC = $grupoC->getCargo($data->idCargo);
+        	$this->SetFieldValue('numeroVaga',$data->numeroVaga);
+        	$this->SetFieldValue('descGrupoCargo',strtoupper($grupoC->descricao));
+		$this->SetFieldValue('descCargo',strtoupper($cargoC->descricao));
+        	$this->SetFieldValue('idGrupoCargo',$grupoC->idGrupoCargo);
+		$this->SetFieldValue('idCargo',$cargoC->idCargo);
+	}
+
+	public function btnSalvar_click()
+	{
+		global $MIOLO, $module, $self;
+
+        $this->objVaga->SetData($this->GetData());
+/*
+        $grupoC = $MIOLO->GetBusiness($module,'grupocargo');    
+        $grupoC = $grupoC->GetById($data->idGrupoCargo);
+        $cargoC = $grupoC->getCargo($this->objVaga->idCargo);
+        if (empty($cargoC->descricao))
+        {
+            $msg = 'Escrever aqui!';
+            $goto = $MIOLO->GetActionURL($module,$self);
+            $caption = 'error caption';
+            $event = "promptHandler;error";
+            $MIOLO->Error($msg, $goto, $caption, $event);
+        }
+        var_dump($this->objVaga->idCargo);
+        echo"<pre>";var_dump($grupoC);echo"</pre>";
+*/
+		$this->objVaga->save();
+		if ( $this->objVaga->CheckError() )
+		{
+			foreach( $this->objVaga->GetErrors() as $e )
+			{
+				$this->AddError("Informe o seguinte erro a equipe do CGCO: ".$e);
+			}
+		}
+	}
+
+    function btnShowCargo_click($key='')
+    {
+        global $MIOLO, $module;
+
+        $grupoC = $MIOLO->GetBusiness($module,'grupocargo');    
+        $grupoC = $grupoC->GetById($key);
+//        $this->SetFieldAttr('descGrupoCargo','readonly',true);
+        $this->SetFieldAttr('descCargo','visible',true);
+        $this->SetFieldAttr('idGrupoCargo','value',$key);
+        $this->SetFieldAttr('descGrupoCargo','value',$grupoC->nome);
+        $this->SetFieldAttr('descGrupoCargo','readonly',true);
+    }
+
+ }
+?>

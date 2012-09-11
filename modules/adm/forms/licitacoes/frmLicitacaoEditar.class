@@ -1,0 +1,95 @@
+<?
+class frmLicitacaoEditar extends form
+{
+	protected $licitacao;
+	
+    function __construct($licitacao)
+    {
+		$this->licitacao = $licitacao;
+		$this->Form('Editar Licitação');
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+        global $MIOLO;
+       
+        $modalidadeLicitacao = $this->manager->getBusiness('adm','modalidadelicitacao');        
+        $modalidadeLicitacao = $modalidadeLicitacao->listAll();
+    	$queryStatus = $this->licitacao->ListAllStatus();
+
+        $tabelaGeral = $this->manager->getBusiness('common','tabelageral');    
+        $tiposDeEntrega = $tabelaGeral->listByTabela('AD_TIPOENTREGA');
+
+        $optYesNo = array("1"=>"SIM","0"=>"NÃO");
+
+        $fields = array
+        (
+            new MTextLabel('dataCriacao',$this->licitacao->dataCriacao,'Criação',10),
+            new MCalendarField('dataAbertura',substr($this->licitacao->dataAbertura,0,10),'Abertura',10),
+            new Selection('imediata',$this->licitacao->imediata,'Abert. Imediata',$optYesNo),
+            new MTextField('horaAbertura',substr($this->licitacao->dataAbertura,11,5),'Hora Abertura',4,'Ex: 19:30'),
+            new MTextField('numero',$this->licitacao->numero,'Número',12),
+            new MSelection('status',$this->licitacao->status,'Status',$queryStatus),
+            new MSelection('idModalidadeLicitacao',$this->licitacao->idModalidadeLicitacao,'Modalidade',$modalidadeLicitacao->result),
+            new MTextField('validade',$this->licitacao->validade,'Validade',3,'dias'),
+            new MSelection('tipoEntrega',$this->licitacao->tipoEntrega,'Entrega',$tiposDeEntrega->result),
+            new MMultiLineField('obs',$this->licitacao->obs,'Observações','',3,50),
+        );
+		
+        $this->SetFields($fields);
+
+        $buttons = array
+		(
+        	  new FormButton("btnSalvar","Salvar")
+        );
+        $this->SetButtons($buttons);
+    }
+	
+	public function btnSalvar_click()
+	{
+        $data = $this->GetData();
+        if ($this->licitacao->checkNumero($data->numero) && ($this->licitacao->numero != $data->numero))
+        {
+            $this->manager->error("O número ".$data->numero." já foi utilizado em outra licitação.");
+        }
+        else
+        {
+			$statusAnterior = $this->licitacao->status;
+			$data->dataAbertura = $data->dataAbertura." ".$data->horaAbertura.":00";
+			$this->licitacao->setImediata($data->imediata);
+			$this->licitacao->SetData($data);
+			try
+			{
+				$this->licitacao->save();
+				$this->licitacao->Log(OP_UPD,"Licitacao ".$this->licitacao->idLicitacao.". Dados modificados. Status: ".$this->licitacao->status.".");
+			}
+			catch (Exception $e)
+			{
+				$this->addError($e->getMessage());
+			}			
+			if($data->status != $statusAnterior && $data->status == 1)
+			{
+				$msg = 'Deseja apagar o mapa da licitação?';
+				$action_sim = $this->manager->GetActionURL('adm','main:licitacoes','',array('form'=>'editar','item'=>$this->licitacao->idLicitacao,'event'=>'btnDeleteMapa:click','apagar'=>'sim'));
+				$action_nao = $this->manager->GetActionURL('adm','main:licitacoes','',array('form'=>'editar','item'=>$this->licitacao->idLicitacao,'event'=>'btnDeleteMapa:click','apagar'=>'nao'));
+				$this->manager->Question($msg,$action_sim,$action_nao);
+			}
+			$this->manager->Information("Dados da licitação modificados.",$this->manager->getActionUrl('adm','main:licitacoes',$this->licitacao->idLicitacao,array('form'=>'item')));
+        }
+	}
+	
+	function btnDeleteMapa_click()
+	{
+		$conf = $this->GetFormValue('apagar');
+		$idLicitacao = $this->GetFormValue('item');
+	    if ($conf == 'sim')
+		{
+			$licitacao = $this->manager->getBusiness('adm', 'licitacao', $idLicitacao);
+			$licitacao->deleteItemDoMapa('all');
+		}
+		$this->manager->Information("Dados da licitação modificados.",$this->manager->getActionUrl('adm','main:licitacoes',$idLicitacao,array('form'=>'item')));
+	}
+	
+ }
+?>

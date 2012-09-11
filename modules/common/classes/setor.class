@@ -1,0 +1,497 @@
+<?php
+/**
+ * Brief Class Description.
+ * Complete Class Description.
+ * @author UFJF/CGCO
+ * @access public
+ */
+class BusinessCommonSetor extends MBusiness
+{
+    var $idSetor;
+    var $sigla;
+    var $siglai;
+    var $dataInicio;
+    var $dataFim;
+    var $nome;
+    var $tipo;
+    var $fone;
+    var $fax;
+    var $centroCusto;
+    var $obs;
+    var $localizacao;
+    var $paiSetor;
+    var $paiRelat;
+    var $idSetorSiape;
+    var $idPaiSetor;
+    var $organogramas;
+    var $equivalentes;
+    var $departamentos; // PROFCON Target do relacionamento
+    var $idinstituicao;
+    var $siglas;
+    var $siglainst;
+    public $idinst;
+    public $idinst1;
+
+   
+    /**
+     * Brief Description.
+     * Complete Description.
+     * @name __construct
+     * @param  $data
+     * @return
+     */
+    function __construct($data=NULL)
+    {
+        parent::__construct('common',$data);
+    }
+
+   
+    /**
+     * Brief Description.
+     * Complete Description.
+     * @name setData
+     * @param  $data
+     * @return
+     */
+    function setData($data)
+    {
+       
+        $this->sigla = strtoupper($data->sigla);
+        $this->dataInicio = $data->dataInicio;
+        $this->nome = $data->nome;
+        $this->tipo = $data->tipo;      
+        $this->dataFim = $data->dataFim;      
+        $this->fone = $data->fone;      
+        $this->fax = $data->fax;      
+        $this->centroCusto = $data->centroCusto;      
+        $this->obs = $data->obs;
+        $this->localizacao = $data->localizacao;
+        $this->paiSetor = $data->paiSetor;
+        $this->paiRelat = $data->paiRelat;
+        $this->idSetorSiape = $data->idSetorSiape;
+        $this->setOrganogramas($data->organograma);
+    $this->idinstituicao = $data->idinstituicao;
+    $this->siglainst = strtoupper($data->siglainst);
+    $this->siglas = strtoupper($data->siglas);
+    $this->siglai = strtoupper($data->siglai);
+   
+    }
+
+   
+    /**
+     * Brief Description.
+     * Complete Description.
+     * @name getById
+     * @param  $id
+     * @return
+     */
+    function getById($id)
+    {
+        $this->idSetor = $id;
+        $this->retrieve();
+        $this->retrieveOrganogramas();
+        return $this;
+    }
+
+    function getById2($id)
+    {
+    $sql = new sql("nomesetor from cm_setor where idsetor=$id");
+    $query = $this->Query($sql);
+    return $query->result;
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     * @name save
+     * @param void
+     * @return
+     */
+    function save()
+    {
+        $this->beginTransaction();
+        parent::save();
+        $this->saveOrganogramas();
+        $this->endTransaction();
+    }
+
+   
+    /**
+     * Brief Description.
+     * Complete Description.
+     * @name listRange
+     * @param  $range
+     * @return
+     */
+    function listRange($range=NULL)
+    {
+        $sql = $this->sqlAllFields();
+        $sql->setOrderBy('siglasetor');
+        $sql->setRange($range);
+        $query = $this->Query($sql);
+        return $query;
+    }
+   
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     * @name listAll
+     * @param void
+     * @return
+     */
+    function listAll()
+    {
+        $criteria =  $this->getCriteria();
+        return $criteria->retrieveAsQuery();
+    }
+
+   
+    /**
+     * Brief Description.
+     * Complete Description.
+     * @name listUnidadeAcademica
+     * @param void
+     * @return
+     */
+    function listUnidadeAcademica()
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->addColumnAttribute('idSetor');
+        $criteria->addColumnAttribute('nome');
+      
+        $criteria->addCriteria('tipo','=', "'UNIDADE ACAD'");
+        $criteria->addCriteria('dataFim','is', "null");
+        return $criteria->retrieveAsQuery();
+    }
+
+   
+    /**
+     * Brief Description.
+     * Complete Description.
+     * @name listUnidade
+     * @param void
+     * @return
+     */
+    function listUnidade()
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->addColumnAttribute('idSetor');
+        $criteria->addColumnAttribute('nome');
+       
+        $criteria->addCriteria('tipo','LIKE', "'UNIDADE%'");
+        $criteria->addCriteria('dataFim','is', "null");
+        $criteria->addOrderAttribute('nome');
+        return $criteria->retrieveAsQuery();
+    }
+
+   
+    /**
+     * Brief Description.
+     * Complete Description.
+     * @name lisByTipo
+     * @param  $tipo
+     * @return
+     */
+    function listByTipo($tipo)
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->setDistinct(true);
+        $criteria->addColumnAttribute('idSetor');
+        $criteria->addColumnAttribute('nome');
+        $criteria->addCriteria('tipo','IN', "($tipo)");
+        $criteria->addCriteria('dataFim','is', "null");
+        $criteria->addOrderAttribute('nome');
+        return $criteria->retrieveAsQuery();
+    }
+
+   
+    /**
+     * Brief Description.
+     * Complete Description.
+     * @name listBySigla
+     * @param  $sigla,$ativos
+     * @return
+     */
+    function listBySigla($sigla, $ativos)
+    {
+        $sigla = strtoupper($sigla);
+        $criteria =  $this->getCriteria();
+        $criteria->setDistinct(true);
+        $criteria->addColumnAttribute('idSetor');
+        $criteria->addColumnAttribute('sigla');
+        $criteria->addColumnAttribute('nome');
+        $criteria->addColumnAttribute('dataFim');
+        $criteria->addColumnAttribute('idSetorSiape');
+        $criteria->addCriteria('sigla','LIKE', "'$sigla%'");
+        if ($ativos != NULL)
+        {
+            $criteria->addCriteria('dataFim','is', "null");
+        }
+        $criteria->addOrderAttribute('sigla');
+        return $criteria->retrieveAsQuery();
+    }
+
+   
+    /**
+     * Brief Description.
+     * Complete Description.
+     * @name listAtivos
+     * @param void
+     * @return
+     */
+    function listAtivos()
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->setDistinct(true);
+        $criteria->addColumnAttribute('idSetor');
+        $criteria->addColumnAttribute('sigla');
+        $criteria->addColumnAttribute('nome');
+        $criteria->addCriteria('dataFim','is', "null");
+        $criteria->addOrderAttribute('sigla');
+        return $criteria->retrieveAsQuery();
+    }
+
+   
+    /**
+     * Brief Description.
+     * Complete Description.
+     * @name setOrganogramas
+     * @param  $organogramas
+     * @return
+     */
+    function setOrganogramas($organogramas)
+    {
+        $this->organogramas = NULL;
+        if (count($organogramas))
+        {
+           $this->organogramas = $organogramas;
+        }
+    }
+
+   
+    /**
+     * Brief Description.
+     * Complete Description.
+     * @name retrieveOrganogramas
+     * @param void
+     * @return
+     */
+    function retrieveOrganogramas()
+    {
+        $o = $this->_miolo->GetBusiness('common','organograma');
+        $query = $o->listByIdSetor($this->idSetor);
+        $this->setOrganogramas($query->result);
+    }
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     * @name saveOrganogramas
+     * @param void
+     * @return
+     */
+    function saveOrganogramas()
+    {
+        $obj = $this->_miolo->getBusiness('common','organograma');
+        $obj->setTransaction($this->getTransaction());
+        $obj->deleteByIdSetor($this->idSetor);
+        if (count($this->organogramas))
+        {
+            foreach($this->organogramas as $o)
+            {
+                $obj->setPersistent(false);
+                $obj->idTipoOrganograma = $o[0];
+                $obj->idSetor = $this->idSetor;
+                $obj->idSetorPai = $o[2];
+                $obj->save();
+            }
+        }
+    }
+
+  
+    /**
+     * Brief Description.
+     * Complete Description.
+     * @name getOrganogramas
+     * @param void
+     * @return
+     */
+    function getOrganogramas()
+    {
+        $aOrganograma = array();
+        if (count($this->organogramas))
+        {
+            $aOrganograma = $this->organogramas;
+        }
+        return $aOrganograma;
+    }
+
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     * @name retrieveEquivalencia
+     * @param void 
+     * @return
+     */
+    function retrieveEquivalencia()
+    {
+        $equivalentes = array();
+        $this->retrieveAssociation('equivalentes');
+        if (count($this->equivalentes))
+        {
+            foreach($this->equivalentes as $e)
+            {
+                $obj = $this->_miolo->getBusiness('common','setor', $e->idSetorEquivalente);
+                $equivalentes[] = array($obj->sigla, $obj->idSetor);
+            }
+        }
+        return $equivalentes;
+    }
+
+   
+    /**
+     * Brief Description.
+     * Complete Description.
+     * @name saveEquivalencia
+     * @param  $equivalencia
+     * @return
+     */
+    function saveEquivalencia($equivalencia)
+    {
+        $this->equivalentes = array();
+        if (count($equivalencia))
+        {
+            foreach($equivalencia as $e)
+            {
+                $obj = $this->equivalentes[] = $this->_miolo->getBusiness('common','setorequivalente', $this->idSetor);
+                $obj->idSetorEquivalente = $e[1];
+            }
+            $this->saveAssociation('equivalentes');
+        }
+    }
+
+   
+    /**
+     * Brief Description.
+     * Complete Description.
+     * @name listDependencias
+     * @param void
+     * @return
+     */
+    function listDependencias()
+    {
+        $sql = new msql('d.iddependencia,d.dependencia,d.ativa,d.numalunos,d.idsetor,d.idtipodependencia,d.temaula','','(d.idsetor = ?)');
+        $sql->setJoin('cm_setor s','ga_dependencia d','(d.idsetor=s.idsetor)');
+        $sql->setWhere("d.ativa = 'S'");
+        $sql->setOrderBy("d.dependencia");
+        $query = $this->Query($sql,$this->idSetor);
+        return $query;
+    }     
+
+    /**
+     * Brief Description.
+     * Complete Description.
+     * @name getSetoresFilhos
+     * @param  $idSetorPai
+     * @return
+     */
+    function getSetoresFilhos($idSetorPai)
+    {
+        /*
+        $o = $this->_miolo->GetBusiness('common','organograma');
+        $query = $o->ListByIdSetorPai($idSetorPai);
+        */
+        $subCriteria = $this->getCriteria();
+        $subCriteria->addColumnAttribute('idSetor');
+        $subCriteria->addCriteria('idPaiSetor','=',$idSetorPai);
+        $criteria = $this->getCriteria();
+        $criteria->addCriteria('idPaiSetor','IN',$subCriteria);
+        $criteria->addOrCriteria('idPaiSetor','=',$idSetorPai);
+        $criteria->addOrCriteria('idSetor','=',$idSetorPai);
+
+        $query = $criteria->retrieveAsQuery();
+       
+        if ( ! $query->eof() )
+        {
+            foreach ($query->result as $result)
+            {
+                $setores[] = $result[0];
+            }
+            return $setores;
+        }
+        return array();
+    }
+   
+   
+    /**
+     * Brief Description.
+     * Complete Description.
+     * @name listPaiSetorUnidadeAcademica
+     * @param void
+     * @return
+     */
+    function listPaiSetorUnidadeAcademica()
+    {
+        $sql = new sql('distinct paisetor','cm_setor',"(tiposetor = 'DEPTO') and (datafim is null)");
+        $query = $this->objQuery($sql->Select());
+        return $query;
+    }
+
+    function isUnidade($tiposetor)
+    {
+        return ((trim($tiposetor) == 'UNIDADE')
+             || (trim($tiposetor) == 'UNIDADE ACAD')
+             || (trim($tiposetor) == 'UNIDADE ADM')
+             || (trim($tiposetor) == 'DIRETORIA')
+             || (trim($tiposetor) == 'COORDENADORIA'));
+    }
+
+    function getUnidade()
+    {
+        if ($this->isUnidade($this->tipo))
+            return $this->sigla;
+        $unidade = 'SEM UNIDADE';
+        $found = false;
+        $setor = $this->idSetor;
+
+        while (!$found)
+        {
+        if ($setor == null)
+        {   
+        $found = true;   
+        }
+          else
+          {
+        $sql = new MSQL('idpaisetor,tiposetor,siglasetor','cm_setor',"(idsetor = '{$setor}' )");
+            $query = $this->objQuery($sql->Select());
+        }
+            if ($query->eof())
+            {
+                $found = true;
+            }
+            else if ($this->isUnidade($query->fields('tiposetor')))
+            {
+                $unidade = $query->fields('siglasetor');
+                $found = true;
+            }
+            else
+            {
+                $setor = $query->fields('idpaisetor');
+            }
+        }
+        return $unidade;
+    }
+   function getCampusInstituicao($idinst)
+    {
+        global $MIOLO;
+        $db   = $MIOLO->GetDatabase('sigaept');
+        $sql  = new sql(" i.instituicao"," cm_instituicao i ","i.idinstituicao = ".$idinst,"");
+        $query= $db->GetQuery($sql);
+        return $query;   
+    }
+
+   
+}
+?>

@@ -1,0 +1,336 @@
+<? 
+
+class frmPagBolsabloco extends Form
+{
+	var $pagbolsa;
+	
+	function __construct()
+	{
+		global $MIOLO, $module, $page, $self;
+        
+        $urlBase = $MIOLO->getActionUrl($module,$self);
+        $page->setAction($urlBase);
+        
+		$this->pagbolsa = $MIOLO->GetBusiness($module,'pagbolsa');
+		
+		parent::Form("Pagamento Bolsistas");
+
+		$this->SetClose($MIOLO->GetActionURL($module,'main:sispag'));
+		$this->EventHandler();
+	}
+	
+	function CreateFields()
+	{
+		global $module,$MIOLO,$self;
+		
+		if( ! $this->pagbolsa->DesTravado() )
+		{
+			$MIOLO->Information('Sistema de Pagamento Travado!',true);
+			return;
+		}
+		
+		$base1 = array(
+				new TextField('mesano','','Mes/Ano',10),
+				new Selection('idbolsa','','Bolsa'),
+				new Selection('selTipo','','Tipo de Bolsa')
+		);
+
+		$baseCpPag = array(
+			new Selection('idbolsaCpPag','','Bolsa'),
+			new Selection('tipoFolhaCpPag','','Tipo de Bolsa'), //modificacao
+			new TextField('dataorigem','','Data Origem',10,'MM/YYYY'),
+			new TextField('datadestino','','Data Destino',10,'MM/YYYY'),
+			new TextField('valorCpPag','','Valor',8)
+		);
+	
+		$basePag = array(
+			new TextField('horastrabalhadas','','Hs Trabalhadas',4),
+			new TextField('valor','','Valor',8)	
+		);
+	
+		$fields = array(
+			new Separator('Dados do pagamento'),
+			new BaseGroup('bg1','', $base1,'horizontal','none'),
+			new BaseGroup('bgCpPag','', $baseCpPag,'vertical','none'),
+			new BaseGroup('bg2','', $base2,'horizontal','none'),
+			new BaseGroup('bg3','', $base3,'horizontal','none'),
+			new BaseGroup('bgPag','', $basePag,'horizontal','none'),
+			new HiddenField('estado','insert')
+		);
+
+		$this->SetFields($fields);
+		$this->setFieldAttr('bg1','showLabel',true);
+		$this->setFieldAttr('bgCpPag','showLabel',true);
+		$this->setFieldAttr('bg2','showLabel',true);
+		$this->setFieldAttr('bg3','showLabel',true);
+		$this->setFieldAttr('bgPag','showLabel',true);
+
+		$this->setFieldAttr('bgCpPag','visible',false);
+		$this->setFieldAttr('bg2','visible',false);
+		$this->setFieldAttr('bg3','visible',false);
+		$this->setFieldAttr('bgPag','visible',false);
+
+		$login = $MIOLO->auth->GetLogin();
+		
+		$bolsa = $MIOLO->GetBusiness($module,'cadastrobolsa');
+		$query = $bolsa->ListAll($login->idkey,'paga');
+
+		$this->SetFieldAttr('idbolsa','options',($query->result) ? $query->result : Array('vazio'=>'vazio'));
+		$this->SetFieldAttr('idbolsaCpPag','options',($query->result) ? $query->result : Array('vazio'=>'vazio'));
+		
+		//modificacao
+		$tipo = array('1'=>'NORMAL','2'=>'SUPLEMENTAR');
+		$this->SetFieldAttr('selTipo','options',$tipo);
+		$this->SetFieldAttr('tipoFolhaCpPag','options',$tipo);
+		
+		
+		$buttons = array(
+			new FormButton('btnPost','Novo'),
+			new FormButton('btnGravar','Efetuar Pagamento'),
+			new FormButton('btnEnviar','Enviar'),
+			new FormButton('btnCopiarPag','Copiar Pagamento'),
+			new FormButton('btnCancelar','Cancelar',$MIOLO->GetActionURL($module,'main:listapagbolsa',$this->GetFormValue('idbolsa'). '_'. $this->GetFormValue('mesano')))
+		);
+		
+		$this->SetButtons($buttons);
+
+		$validators = array(
+			new RequiredValidator('mesano'),
+			new RequiredValidator('valor'),
+			new CompareValidator('horastrabalhadas','','<=','999','i'),
+		);
+
+		$this->SetValidators($validators);
+		$this->SetButtonAttr('btnGravar','visible',false);
+		$this->SetButtonAttr('btnCancelar','visible',false);
+		$this->SetButtonAttr('btnPost','visible',false);
+		$this->SetButtonAttr('btnCopiarPag','visible',false);
+		
+		if( ! $query->result )
+		{
+			$this->SetButtonAttr('btnEnviar','visible',false);
+		}  
+
+	} 
+	
+	function SetData($data)
+	{
+		$this->SetFieldValue('mesano',$data->mesano);
+		$this->SetFieldValue('valor',number_format(str_replace(',','.',$data->valor),2,',',''));
+		$this->SetFieldValue('horastrabalhadas',$data->horastrabalhadas);
+		$this->SetFieldValue('idbolsa',$data->idbolsa);
+		
+		//modificacoes
+		$this->SetFieldValue('selTipo',$data->folha);
+	}
+
+	function btnEnviar_click()
+	{
+		global $MIOLO, $module, $page;
+		
+		$mesano = $this->GetFormValue('mesano');
+		
+		$msgErroMesAno = $this->FormatMesAno($mesano);
+
+        if( $msgErroMesAno != 'ok' )
+        {
+            $MIOLO->Error($msgErroMesAno,$action);
+            return;
+        }
+
+		$chaves = trim($this->GetFormValue('idbolsa')).'_'. $this->GetFormValue('mesano').'_'.$this->GetFormValue('selTipo');
+		$lstPagBolsa = $MIOLO->GetActionURL($module,'main:listapagbolsa',$chaves);		
+		$page->Redirect($lstPagBolsa);
+	}
+
+	function btnPost_click()
+	{
+		global $action, $item;
+
+		$mesano = $this->GetFormValue('mesano');
+		$idbolsa = $this->GetFormValue('idbolsa');
+		
+		if( !$mesano )
+		{
+			$vaux = explode('_',$item);
+			$idbolsa = $vaux[0];
+			$mesano = $vaux[1];
+
+			$this->SetFieldValue('idbolsa',$idbolsa);
+			$this->SetFieldValue('mesano',$mesano);
+		}
+		
+		$this->SetButtonAttr('btnEnviar','label','Cancelar');
+
+		$this->SetFieldAttr('mesano','readonly',true);
+		$this->SetFieldAttr('idbolsa','readonly',true);
+		
+		$this->SetFieldAttr('nome','visible',true);
+	}
+	
+	function btnGravar_click()
+	{
+		global $MIOLO, $module, $action, $self;
+		
+		$data = $this->GetData();
+
+		$pagbolsa = $MIOLO->GetBusiness($module,'pagbolsa');	
+		
+		/*+++ Usando ate problema com BaseGroup estiver ok +++*/
+		/*+++ vide: btnPrepara e btnEdit                      */
+		$data->mesano = $this->GetFormValue('mesanoProvisorio');
+		$data->idbolsa = $this->GetFormValue('idbolsaProvisorio');
+		
+		//modificacoes
+		$data->folha = $this->GetFormValue('folhaProvisoria');
+		/*----------------------------------------------------*/
+		$idbolsa = $data->idbolsa;
+		$mesano = $data->mesano;
+		$folha = $data->folha;
+		
+		//modificacoes
+		$linkVoltar = $MIOLO->GetActionURL($module,'main:listabolsistaporbolsa',$idbolsa.'_'.$mesano.'_'.$folha, array('pgGeral'=>'sim'));
+				
+	    //Tratando campo Valor
+		$pagbolsa->valor = str_replace(',','.',$data->valor);
+		if( !is_numeric($data->valor) )
+		{
+			$MIOLO->Error('Campo VALOR inválido!',$linkVoltar);
+			return;
+		}
+		$pagbolsa->valor = str_replace('.',',',$pagbolsa->valor);		
+		
+		$objBolsista = $MIOLO->GetBusiness($module,'bolsista');
+		$query2 = $objBolsista->ListBolsistasNaoPagosPorBolsa($idbolsa,$mesano,$folha);
+		
+        try
+        {
+			//Pagamento em Bloco
+			if ($query2->result)
+			{
+				$pagbolsa->beginTransaction();
+			    foreach ($query2->result as $n)
+	            {
+	            	$data->idbolsista = $n[0];
+	                $pagbolsa->SetData($data);
+	                $pagbolsa->insert(); 
+	            }
+	            $pagbolsa->endTransaction();
+			}
+			$MIOLO->Information("Pagamento efetuado com sucesso!",$linkVoltar);
+        }
+        catch (Exception $e)
+        {
+            $this->addError($e->getMessage());
+        }
+
+	}
+
+	function btnPrepara_click($key='')
+	{
+		global $MIOLO,$module,$item;
+
+		if( $key == '' )
+		{
+			$aux = explode('_',$item);
+			$mesano = $aux[0];
+			$idbolsa = $aux[1];
+			
+			//modificacoes
+			$folha = $aux[2];
+		}
+
+		//modificacoes
+		$this->SetClose($MIOLO->GetActionURL($module,'main:listapagbolsa',$idbolsa.'_'.$mesano.'_'.$folha));
+		
+		//$this->SetData($this->pagbolsa->GetDadosBolsista($idbolsista));
+
+		$this->SetFieldValue('mesano',$mesano);
+		$this->SetFieldValue('idbolsa',$idbolsa);
+		//modificacoes
+		$this->SetFieldValue('selTipo',$folha);
+
+		$this->SetButtonAttr('btnGravar','visible',true);
+		$this->SetButtonAttr('btnGravar','label','Efetuar Pagamento');
+		
+		$this->SetButtonAttr('btnEnviar','visible',false);
+		
+		$this->setFieldAttr('bg2','visible',true);
+		$this->setFieldAttr('bg3','visible',true);
+		$this->setFieldAttr('bgPag','visible',true);
+
+		$this->setFieldAttr('mesano','readonly',true);
+		$this->setFieldAttr('idbolsa','readonly',true);
+		
+		//modificacoes
+		$this->setFieldAttr('selTipo','readonly',true);
+		
+		/*+++ Usando ate problema com BaseGroup estiver ok +++*/
+		/*+++ vide: btnGravar                                 */
+		$mesanoProvisorio = new HiddenField('mesanoProvisorio',$mesano);
+		$this->addField($mesanoProvisorio);
+		$idbolsaProvisorio = new HiddenField('idbolsaProvisorio',$idbolsa);
+		$this->addField($idbolsaProvisorio);
+		
+		//modificacoes
+		$folhaProvisoria = new HiddenField('folhaProvisoria',$folha);
+		$this->addField($folhaProvisoria);
+
+	}
+
+	function btnPreparaCopiarPag_click()
+	{
+		global $MIOLO,$module,$item;
+
+		$aux = explode('_',$item);
+		$idbolsa = $aux[0];
+		$mesano = $aux[1];
+		
+		//modificacoes
+		$folha = $aux[2];
+		
+		$this->SetFieldValue('dataorigem',$mesano);
+		
+		$this->SetData($data);
+
+		$this->setFieldAttr('bg1','visible',false);
+		$this->setFieldAttr('bgCpPag','visible',true);
+
+		$this->SetFieldValue('idbolsaCpPag',$idbolsa);
+		
+		//modificacoes
+		$this->SetFieldValue('tipoFolhaCpPag',$folha);
+		
+		$this->SetFieldValue('valorCpPag',number_format(str_replace(',','.',''),2,',',''));
+		
+		$this->SetButtonAttr('btnCopiarPag','visible',true);
+		$this->SetButtonAttr('btnCancelar','visible',true);
+		$this->SetButtonAttr('btnEnviar','visible',false);
+		$this->SetButtonAttr('btnCancelar','action',$MIOLO->GetActionURL($module,'main:listapagbolsa',$item));
+	}
+	
+	function FormatMesAno($mesano) // private
+	{
+		$msg = 'ok';
+
+		$vet = explode('/',$mesano);
+		
+		if( strlen($mesano)!=7 )
+		{
+			$msg = 'O campo Mês/Ano deve ter exatamente 7 caracteres';
+		}
+		elseif( (count($vet)!=2) || (!is_numeric($vet[0]) || !is_numeric($vet[1])) )
+		{
+			$msg = 'o campo mês/ano deve ter o seguinte formato: mm/yyyy';
+		}
+		elseif( ($vet[0]>12 ) || ($vet[0]<1) )
+		{
+			$msg = 'Mês inválido!';
+		}
+
+		return $msg;
+	}
+
+}
+
+?>

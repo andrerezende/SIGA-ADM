@@ -1,0 +1,249 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+class frmGrupo extends Form
+{
+
+
+    
+	var $objGrupo;
+
+    function frmGrupo()  // construtor da Classe
+    {
+		global $MIOLO,$module;
+
+		// Título do Formulário
+		$this->Form('Grupos de Usuários');
+
+		//Chama o CreateFileds, etc.
+		$this->EventHandler();
+
+		// Botão "enviar" não aparece
+		$this->defaultButton = false;
+		
+		// Botão 'fechar', direcionando para o handler biblioteca/main/admin
+		$this->SetClose($this->manager->GetActionURL($module, 'main:admin'));
+	 
+	}
+   
+    function CreateFields()
+    {
+        // Campos que aparecem no formulário
+		$fields = Array (
+			//new Text('','Use o formulário abaixo para cadastrar um novo grupo da biblioteca'),
+			new LookupTextField('lkpDescricao','','Descrição',60),
+			new HiddenField('hidKey') // controla Incluir/Editar
+			);
+
+		// Insere os campos
+		$this->SetFields($fields);
+
+		// Botões que aparecem no formulário
+		$buttons = Array(
+			new FormButton('btnEnviar', 'Incluir'),
+			new FormButton('btnExcluir', 'Excluir'),
+			//new FormButton('btnList', 'Relação'),
+			new MLink('btnLinkRelacao','Relação de Grupos de Usuários',$this->manager->getActionURL($module,$self,'',array('event'=>'btnList:click'))),
+    		);
+
+		//Insere os Botões
+		$this->SetButtons($buttons);
+
+		//As 4 propriedades de um lookup
+		// module = módulo usado
+		// item = A funcao que chama no arquivo classes/lookup.class
+		// event = O evento relacionado quando o usuário clica em "acao"
+		// related = Os campos retornados após a ação
+		$this->SetFieldAttr('lkpDescricao','module','biblioteca');
+		$this->SetFieldAttr('lkpDescricao','item','grupo');
+		$this->SetFieldAttr('lkpDescricao','event','btnConsulta:click');
+		$this->SetFieldAttr('lkpDescricao','related', 'idgrupo');
+
+		// Botão excluir nao aparece, pois o formulário está em branco
+		$this->SetButtonAttr('btnExcluir','visible',false);
+
+		// validators
+		$this->AddValidator(new RequiredValidator('lkpDescricao'));
+		//$this->AddValidator(new RequiredValidator('edtMnemonico'));
+   }
+
+	// pega os dados que estão no formulário   
+    function GetData()
+    {
+        $data = new FormData();
+        $data->idgrupo = $this->GetFormValue('hidKey');
+        $data->descricao = $this->GetFormValue('lkpDescricao');
+        return $data;
+    }
+	
+	// usada para inserir valores no formulário
+	function SetData($data)
+	{
+		$this->SetFieldValue('lkpDescricao',$data->descricao);
+		$this->SetFieldValue('hidKey',$data->idgrupo);
+	}
+
+    
+    
+	// Consulta: função chamada após o usuário usar o lookup
+	function btnConsulta_click($sender,$idgrupo)
+	{ 
+		
+		global $MIOLO,$module, $item;
+
+		//A linha abaixo verifica se existe um idgrupo
+		//Se nao existir, ela tenta pegar $item que é passada
+		//pelo botao editar do "relação"
+		$idgrupo = ($idgrupo != '') ? $idgrupo : $item;
+	
+		//Instancia o objeto grupo
+		$this->objGrupo = $MIOLO->GetBusiness($module,'grupo');
+
+
+        
+		// Já considera que o usuário quer excluir,editar uma grupo
+		$this->SetButtonAttr('btnExcluir','visible',true);	
+ 		$this->SetButtonAttr('btnEnviar','label','Salvar');	
+
+		// ok retorna os dados de idgrupo
+		$ok = $this->objGrupo->GetByCodigo($idgrupo);	
+
+		//var_dump($ok);
+		
+		// este é o setdata deste arquivo. não é o setdata da classe de negócios
+		// veja que é $this->SetData e nao $this->objgrupo->SetData
+		$this->SetData($ok);
+			
+	}
+
+	// Enviar pode ser inserir ou editar
+	function btnEnviar_click()
+	{ global $MIOLO,$module;
+	
+		$data = $this->GetData();
+		
+		//var_dump($data);
+
+		//Instancia o objeto grupo
+		$this->objGrupo = $MIOLO->GetBusiness($module,'grupo');
+		
+		if ( $data->idgrupo )
+		{ // Usuário quer editar um item
+			$what = " atualizado ";
+			$ok = $this->objGrupo->Update($data);
+			$this->objGrupo->Log(OP_UPD,'Grupo atualizado: '.$data->descricao.' com o id = '.$data->idgrupo);
+		}
+		else
+		{ // Usuário quer inserir novo item
+			$what = " inserido ";
+
+			// verificar se já existe idgrupo
+			$ok = $this->objGrupo->Insert($data);
+			$this->objGrupo->Log(OP_INS,'Grupo inserido: '.$data->descricao.' com o id = '.$ok);
+
+		}
+		
+		$action = $this->manager->GetActionURL($module,$self);
+	
+        if ( $ok )
+			$MIOLO->Information($data->descricao . " $what com sucesso.", $action );
+		else
+			$MIOLO->Error("'" . $data->descricao  . "' não foi $what. ", $action );
+
+	}
+
+
+    
+
+
+	function btnExcluir_click()
+	{ 
+		global $MIOLO, $module, $item;
+		
+	    $data = $this->GetData();
+
+	    //Instancia o objeto grupo
+	    $this->objGrupo = $MIOLO->GetBusiness($module,'grupo');
+
+       //A linha abaixo verifica se existe um data->key
+       //Se nao existir, ela tenta pegar $item que é passada
+       //pelo botao editar do "relação"
+	   if (!($data->idgrupo))
+	   {
+		 $this->objGrupo->GetByCodigo($item);
+		 $data = $this->objGrupo->GetData();
+	   }
+	   
+  
+       $ok = $this->objGrupo->Delete($data);
+       $this->objGrupo->Log(OP_DEL,'Grupo deletado: '.$data->descricao.' com o id = '.$data->idgrupo);
+
+       $action = $this->manager->GetActionURL($module,$self);
+       
+	   if ( $ok )
+			$MIOLO->Information($data->descricao . " deletado da base de dados", $action );
+	   else
+			$MIOLO->Error("As informações não foram deletadas", $action );
+
+	}
+
+	function btnList_click()
+	{
+		global $MIOLO, $module, $self, $theme, $action, $page;
+
+		//Instancia o objeto grupo
+		$this->objGrupo = $MIOLO->GetBusiness($module,'grupo');
+
+		$columns = array(
+			new DataGridColumn(0),
+			new DataGridColumn('descricao','Descrição','left',true, '100%',true, null, true,true),
+			);
+
+		$href_datagrid = $MIOLO->GetActionURL($module,$self,'', Array('event'=>'btnList_click'));
+		$page->SetAction($href_datagrid);
+
+		$query = $this->objGrupo->Listgrupo();
+		
+		$datagrid = new DataGrid2($query, $columns, $href_datagrid,20);
+		$datagrid->SetTitle('Relação de grupos');
+		$datagrid->SetLinkType('linkbutton');
+		$datagrid->SetWidth('100%');
+		$href_edit = $MIOLO->GetActionURL($module,$self,'%0%',Array('event'=>'btnConsulta:click'));
+		$href_dele = $MIOLO->GetActionURL($module,$self,'%0%',Array('event'=>'btnExcluir:click'));
+		
+		$datagrid->AddActionIcon('Salvar', 'edit', $href_edit);
+		$datagrid->AddActionIcon('Excluir', 'delete.gif', $href_dele);
+		$datagrid->HeaderLink('new', 'Novo Registro',
+		
+		$MIOLO->GetActionURL($module,$self,'',Array('event'=>'')));
+
+		$theme->InsertContent($datagrid);
+	
+	}
+
+}
+
+?>

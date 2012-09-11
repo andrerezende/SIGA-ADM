@@ -1,0 +1,87 @@
+<?php
+class frmUoAlmoxarifadoEstorno2006 extends Form {
+	protected $objEstoque;
+
+	function __construct($objEstoque) {
+		$this->objEstoque = $objEstoque;
+		$this->Form('Entrada de Material');
+		$this->EventHandler();
+	}
+
+	public function CreateFields() {
+		$this->objEstoque->retrieveAssociation('material');
+		// Zera os itens para gravação
+		$this->objEstoque->estoque = 0;
+		$this->objEstoque->valorTotal = 0;
+
+		$fields = array(
+			new MHiddenField('idMaterial', $this->objEstoque->idMaterial, 'Idmaterial'),
+			new MHiddenField('lkpMaterial', $this->objEstoque->material->descricao, 'Material', 40),
+			new MTextField('estoque', $this->objEstoque->estoque, 'Quantidade Total', 10, 'Ex: 1000'),
+			new MTextField('valorTotal', $this->objEstoque->valorTotal, 'Valor Total', 10, 'Ex: 45,00'),
+			new MCalendarField('datamov', date('d/m/Y'), 'Data de Entrada', 8),
+		);
+
+		$this->SetFields($fields);
+
+		$this->SetFieldAttr('lkpMaterial', 'module', 'adm');
+		$this->SetFieldAttr('lkpMaterial', 'item', 'material');
+		$this->SetFieldAttr('lkpMaterial', 'event', 'filler');
+		$this->SetFieldAttr('lkpMaterial', 'related', 'idMaterial,lkpMaterial');
+		$validators = array(
+			new MCNPJValidator('cnpj'),
+			new MRequiredValidator('idMaterial'),
+			new MRequiredValidator('estoque'),
+			new MRequiredValidator('valorTotal'),
+		);
+		$this->SetValidators($validators);
+
+		$buttons = array(
+			new FormButton('btnPost', 'Enviar'),
+		);
+		$this->SetButtons($buttons);
+	}
+
+	public function btnPost_click() {
+		global $item, $MIOLO, $module;
+
+		$data = $this->getData();
+		$cf = new MCurrencyFormatter();
+
+		$go = $this->manager->GetActionURL($module, 'main:uoalmoxarifado', $item, array('form' => 'estorno2006', 'estorno' => '1'));
+
+		// Antes de tudo, deve haver um movimento igual ao movimento
+		// criado anteriormente
+		$objMovimento = $MIOLO->GetBusiness($module, 'movimento');
+		$movAntigo = $objMovimento->getByValorQuantidade($cf->toDecimal($data->valorTotal), $data->estoque, $data->idMaterial);
+		if ($movAntigo->result) { // existe movimento
+			// Gera uma alteração no AD ESTOQUE
+			$this->objEstoque->getById($item, $data->idMaterial);
+			$this->objEstoque->estoque = $this->objEstoque->estoque - $data->estoque;
+			$this->objEstoque->valorTotal = $cf->toDecimal($this->objEstoque->valorTotal - $data->valorTotal);
+
+			try {
+				$this->objEstoque->save();
+				// Adiciona o movimento na AD_MOVIMENTO
+				$objMovimento = $MIOLO->GetBusiness($module, 'movimento');
+				$objMovimento->idMovimentoRef = $movAntigo->result[0][1];
+				$objMovimento->idUoAlmoxarifado = $movAntigo->result[0][2];
+				$objMovimento->tipoMovimento = "2";
+				$objMovimento->dataMovimento = date("d/m/Y");
+				$objMovimento->quantidade = $data->estoque;
+				$objMovimento->valorTotal = $cf->toDecimal($data->valorTotal);
+				$objMovimento->idMaterial = $data->idMaterial;
+				$objMovimento->save();
+
+				$movimentoEntrada = $movimento = $MIOLO->getBusiness('adm', 'movimento', $movAntigo->result[0][1]);
+				$movimentoEntrada->idMovimentoRef = $objMovimento->idMovimento;
+				$movimentoEntrada->save();
+				$this->manager->Information('Material atualizado com sucesso.', $go);
+			} catch (Exception $e) {
+				$this->AddError('Não foi possível realizar a operação. Motivo: ' . $e->getMessage());
+			}
+		} else { // não existe movimento
+			$this->AddError("Não existe um movimento com estes valores para ser estornado.", $go);
+		}
+	}
+}

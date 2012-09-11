@@ -1,0 +1,131 @@
+<?php
+class repMaterial extends PDFReport
+{
+	var $img;
+    var $timestamp;
+	var $objEstoque;
+	var $objExecutor;
+
+	function __construct()
+	{
+		global $MIOLO, $module, $page, $context, $self, $action, $perms;
+
+		parent::__construct(NULL, NULL, 55);
+	    $ui = $MIOLO->GetUI();
+		$this->img = $ui->GetImageSrc('logonet.png'); 
+
+		$this->SetOption('showLines',0);
+		$this->timestamp = date('d/m/Y G:i');
+
+		$this->pdf->ezStartPageNumbers(520, 800, 11, 'rigth', 'Página: {PAGENUM}');
+		$this->pdf->ezSetMargins(50, 30, 30, 30);
+		$this->GeneratePageHeader();
+		$this->SetOption('fontSize',10);
+
+		$objEstoque = $MIOLO->GetBusiness($module,'estoque');
+		$objMaterial = $MIOLO->GetBusiness($module,'material');    
+		$objSubElemento = $MIOLO->GetBusiness($module,'subelemento'); 
+		$subElementos = $objMaterial->listSubElementos();
+        
+		$quant_el = count($subElementos->result);
+		$j = 0;
+   
+        // TODO: Tirar o limite
+		for($i=0; $i<$quant_el; $i++)
+        {
+			$query = $objMaterial->ListByIdSubElemento($subElementos->result[$i][1],$subElementos->result[$i][0]);
+
+			if($query->result[0][0] <> null)
+            {
+				$j++;
+				unset($dataini);
+
+				foreach($query->result as $row)
+                {
+					$dataini[] = $row;
+				}
+
+				$data[$i]=$dataini;
+
+				$columns = array(
+					new PDFReportColumn('idMaterial','CÓD','center',true,7,true,null,true),
+					new PDFReportColumn('descricao','NOME','left',true,69,true,null,true),
+					new PDFReportColumn('unidade','UN','center',true,10,true,null,true),
+    				new PDFReportColumn('permcons','P/C','center',true,7,true,null,true),
+	 				new PDFReportColumn('estocavel','EST','center',true,7,true,null,true),
+				);
+
+				$this->SetColumns($columns);
+				$colDetail[$i] = $this->columns;
+			}
+		}
+
+		// gera o report
+		for($i=0; $i<$j; $i++)
+        {
+			$this->columns = $colDetail[$i];
+			$this->GenerateGroupHeader($subElementos->result[$i][1],$subElementos->result[$i][0],$subElementos->result[$i][2]);
+			$this->GenerateData($data[$i]);
+		}
+
+		$this->GeneratePageFooter();
+	}
+
+	function GeneratePageHeader()
+	{   
+		$h = $this->pdf->getFontHeight(12);
+    
+		$x00=$this->pdf->left;
+		$hh = $this->pdf->getFontHeight(12);
+		$this->pdf->addText($x00, 800, 12, $this->manager->getConf('instituicao.sigla')." - ".$this->manager->getConf('instituicao.nome'));
+		$this->pdf->addText($x00, 800 - $hh, 12, $this->manager->getConf('theme.system'));
+
+/*
+		$this->pdf->ezImage($this->img,5,50,'none','left');
+		$this->pdf->addText(90,800,12,'UFJF - Universidade Federal de Juiz de Fora');
+		$this->pdf->addText(90,800-$h,12,'CGCO - Centro de Gestão do Conhecimento Organizacional');
+		$this->pdf->addText(90,800-$h-$h,12,'SIGA - Sistema Integrado de Gestão Acadêmica');
+*/
+
+		$this->pdf->addText(90,800-$h-$h-$h,12,'Módulo Administrativo');
+
+		$this->pdf->ezSetY(800-$h-$h-$h-$h);
+		$this->pdf->ezText("Relação de Itens do Cadastro de Material",14,array('justification'=>'center'));
+		$this->pdf->ezSetY(800-$h-$h-$h-$h-$h);		
+	}
+
+	function GenerateGroupHeader($elemento,$subelemento,$descricao)
+	{
+		$this->pdf->SetStrokeColor(0, 0, 0);
+		$x0 = $this->pdf->left;
+
+		$this->pdf->ezSetDy(-32, 'makeSpace');
+		$y = $this->pdf->y-20;
+		$this->pdf->addText($x0, $y + 19, 12, 'ELEMENTO: ' .$elemento. '-'. $subelemento. ': '. $descricao);
+		$this->pdf->line($x0, $y + 15, 550, $y + 15);
+	}
+
+	function GeneratePageFooter()
+	{
+		global $MIOLO, $module, $item;
+
+		$this->pdf->ezSetDy(-12);
+		$this->pdf->ezText($this->timestamp,10,array('justification'=>'right'));
+	}
+
+	function GenerateData($data)
+	{
+		$this->pdf->ezSetDy(-12);
+		$this->SetData($data);
+		$this->rawdata = $this->GenerateTableData();
+		$this->GenerateBody($this->rawdata);
+	}
+
+	function Generate()
+	{
+		$this->SetOutput();
+		$this->Execute();
+	}
+
+}
+?>

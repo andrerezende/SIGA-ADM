@@ -1,0 +1,328 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmFuncionarioFormacao extends MForm
+{
+	var $formacao;
+	var $funcionario;
+	
+    function __construct($objFormacao)
+    {
+	    global $MIOLO, $module, $page, $context, $self;
+ 
+        $this->formacao = $objFormacao;
+        parent::__construct('Escolaridade');
+        $this->SetClose($MIOLO->GetActionURL('rh','main:funcionario',$this->formacao->idFuncionario, array('form'=>'formacoes')));
+        $this->EventHandler();
+       
+    }
+
+    function CreateFields()	
+	{ 
+		global $MIOLO, $module, $self, $action;
+
+		$fields = array(
+		    new MLabel('ATENÇÃO: Do nível Alfabetizado, passando pelos Ensinos Fundamental e Médio, até o Superior!','red'),
+		    new MSpacer('1'),
+            new Separator(),	
+			new MHiddenField('idFormacao','', 'Formacao'),
+			new MLookupFieldValue('lkpFormacao','','Formação',50),
+			new MTextField('nomeCurso','','Nome do curso',50),
+            new MCalendarField('dataFim','','Data Fim',15),
+            new MTextField('entidade','','Instituição',50),
+            new MSelection('idEscolaridadePCCTAE','','Escolaridade PCCTAE'),
+            new MSpacer('1'),
+            new MText('lblDataAtualizacao',''),            
+            new MHiddenField('idHistFormacao','', 'HistFormacao'),
+            new MHiddenField('idFuncionario','', 'idFuncionario'),
+            new MHiddenField('dataAtualizacao','', 'Data de Atualização'),
+            
+        );
+        
+        $fields2= array(
+            new MSeparator(),
+            new MLabel('Utilize essa opção caso deseje escolher a escolaridade independente da formação:'),
+            new MActionHyperLink('forcar','Forçar escolaridade','rh','main:funcionario',$this->formacao->idFuncionario,array("form"=>"forcarescolaridade"))
+		);
+			
+		
+		
+		
+		$validators = array(
+			new MRequiredValidator('idFormacao'),
+			new MDATEDMYValidator('dataFim','','required'),
+			new MRequiredValidator('entidade'),
+			
+		);
+       
+        $this->funcionario = $MIOLO->getBusiness('rh','funcionario');
+        $objFuncionario =$this->funcionario->getById($this->formacao->idFuncionario);
+	
+        		
+        /*
+		$vinculo->getProvimentos();
+		
+        $objProvimento = $vinculo->getProvimentoAtual();*/
+        
+        if ($this->funcionario->escolaridade<10) $fields = array_merge($fields, $fields2);
+                        
+        $this->SetFields($fields);
+
+        $this->SetFieldAttr('lkpFormacao','module','rh');
+	    $this->SetFieldAttr('lkpFormacao','item','formacao');
+	    $this->SetFieldAttr('lkpFormacao','event','filler');
+	    $this->SetFieldAttr('lkpFormacao','related','idFormacao,null,null,lkpFormacao');
+
+        
+        
+	    
+        $this->entidade->AddAttribute('maxlength','50');
+	    $this->SetData();
+        $buttons = Array(
+           new MButton('btnPost1', 'Enviar'),
+           new MButton('btnPost2', 'Enviar'),
+		   new mButton('btnExcluir', 'Excluir'),
+        );
+	    
+        $this->SetButtons($buttons);
+	    
+	    $this->SetFieldAttr('btnPost1','visible',!$this->formacao->isPersistent());
+        $this->SetFieldAttr('btnPost2','visible',false);
+	    $this->SetFieldAttr('btnExcluir','visible',$this->formacao->isPersistent());
+                
+        $vinculo=$this->funcionario->getVinculoAtivo();
+		//Usando o método getVinculoAtivo() está dando erro em alguns servidores, quem sabe por inconsistência do banco frio.	            
+
+	if (!$vinculo)
+	{	
+		$idVinculo = $this->funcionario->GetVinculoByIdFuncionario($this->formacao->idFuncionario);
+		$url = $MIOLO->GetActionURL('rh','main:vinculo',$idVinculo);
+		$MIOLO->information("Situação funcional não permite tal operação. Entre em contato com o administrador do sistema",$url);
+	}
+	else
+	{
+		$visibilidadePCCTAE = (($vinculo->isTA()) && ($this->formacao->isPersistent())) ? TRUE : FALSE;
+	        $this->SetFieldAttr('idEscolaridadePCCTAE','visible', $visibilidadePCCTAE);
+	}
+
+        
+        		
+	    $this->SetValidators($validators);
+			
+		if ($this->formacao->isPersistent())
+		{
+			$this->SetFieldAttr('lkpFormacao','readonly',true);
+			$this->SetFieldAttr('dataFim','readonly',true);
+			$this->SetFieldAttr('entidade','readonly',true);
+            $this->SetFieldAttr('idEscolaridadePCCTAE','readonly',true);
+            $this->SetFieldAttr('nomeCurso','readonly',true);
+		}
+		
+		$this->lblDataAtualizacao->setPosition('100','0',false);
+
+	}
+	
+    function SetData()
+    {
+		global $MIOLO;
+        		
+        $tabelaGeral = $MIOLO->GetBusiness('common','tabelageral');
+        $query = $tabelaGeral->ListByTabela('RH_ESCOLARIDADE');
+		$escolaridades=$query->chunkResult();
+		
+            
+        if (isset($this->formacao->formacao->formacao))
+            $this->SetFieldValue('lkpFormacao', $this->formacao->formacao->formacao . ' - ' . $escolaridades[$this->formacao->formacao->escolaridade]);
+		
+		$this->SetFieldValue('dataFim', $this->formacao->dataFim);
+        $this->SetFieldValue('entidade', $this->formacao->entidade);
+        $this->SetFieldValue('nomeCurso', $this->formacao->nomeCurso);
+        $this->SetFieldValue('dataAtualizacao', $this->formacao->nomeCurso);
+        
+        $objFormacao = $MIOLO->getBusiness('rh','formacao', $this->getFieldValue('idFormacao'));
+                
+        $objEscolaridadePCCTAE = $MIOLO->getBusiness('rh','escolaridadepcctae');
+        $this->idEscolaridadePCCTAE->SetOptions($objEscolaridadePCCTAE->listEscolaridadesPCCTAE($objFormacao->escolaridade)->chunkResult());
+        $this->SetFieldValue('idEscolaridadePCCTAE', $this->formacao->idEscolaridadePCCTAE);
+
+        $this->SetFieldValue('idFuncionario', $this->formacao->idFuncionario);
+        $this->SetFieldValue('idFormacao', $this->formacao->idFuncionario);
+        
+        $dataAtualizacao = $this->formacao->dataAtualizacao;
+        if ($dataAtualizacao)
+            $this->SetFieldValue('lblDataAtualizacao', "<i>Informações atualizadas em {$this->formacao->dataAtualizacao}.</i>");
+        
+               
+    }
+
+	function btnExcluir_click()
+	{
+		global $MIOLO, $module, $self,$action;
+
+ 	$action_sim = $MIOLO->GetActionURL($module,$self,$this->formacao->idFuncionario,array('form'=>'formacoes','conf'=>'sim','id'=>$this->formacao->idHistFormacao,'event'=>'btnExcluir:click'));
+
+	$action_nao = $MIOLO->GetActionURL($module,$self,$this->formacao->idFuncionario,array('form'=>'formacoes','conf'=>'nao','id'=>$this->formacao->idHistFormacao));
+
+	$conf = $this->GetFormValue('conf');
+
+	if ($conf == 'sim')
+	{
+        $funcionario = $MIOLO->getBusiness('rh','funcionario',$this->formacao->idFuncionario);
+		try
+		{
+            if ( ! $funcionario->hasTitulacao() )
+            {
+                $escolaridade = $funcionario->getFormacaoMaiorEscolaridade($this->formacao->idHistFormacao) ;
+            }
+            else
+            {
+                $escolaridade = '10'; //ENSINO SUPERIOR
+            }
+
+            if ( $funcionario->hasVinculoDocencia() )
+            {
+                $escolaridade = '10'; //ENSINO SUPERIOR
+            }
+
+            $vinculo=$this->funcionario->getVinculoAtivo();
+            $vinculo->getProvimentos();
+            $objProvimento = $vinculo->getProvimentoAtual();
+            $objProvimento->getCargo();
+            $escolaridadeMinima = $objProvimento->cargo->getEscolaridadeMinimaSIAPE();//Escolaridade mínima do cargo
+
+            if ($escolaridade < $escolaridadeMinima) $escolaridade = $escolaridadeMinima;
+            
+            $this->formacao->beginTransaction();
+			$this->formacao->delete();
+            $this->formacao->log(OP_DEL,"id funcionario: ".$this->formacao->idFuncionario." id formacao: ".$this->formacao->idFormacao." data fim: ".$this->formacao->dataFim." entidade: ".$this->formacao->entidade);
+            $funcionario->setTransaction($this->formacao->getTransaction());
+            $funcionario->setEscolaridade($escolaridade);
+            $funcionario->save();
+            $this->formacao->endTransaction();
+
+			$MIOLO->Information('Escolaridade excluída com sucesso',$MIOLO->GetActionURL('rh','main:funcionario',$this->formacao->idFuncionario, array('form'=>'formacoes')));
+		
+		}
+		catch ( Exception $e )
+		{
+			$this->manager->error("Informe o seguinte erro à equipe do SIGA: ".$e->getMessage());
+		}
+	}
+	else
+	{
+		   $MIOLO->Question("Tem certeza que deseja excluir a escolaridade ".$this->formacao->formacao->formacao." ?",$action_sim,$action_nao);
+	}
+		
+}
+
+	function btnPost1_click()
+    {
+	    global $MIOLO, $module, $self, $action;
+        
+        $vinculo=$this->funcionario->getVinculoAtivo();	    
+
+        $this->SetFieldAttr('btnPost2','visible',true);
+        $this->SetFieldAttr('btnPost1','visible',false);
+        $this->SetFieldAttr('lkpFormacao','readonly',true);
+	    $this->SetFieldAttr('dataFim','readonly',true);
+	    $this->SetFieldAttr('entidade','readonly',true);
+	    $this->SetFieldAttr('nomeCurso','readonly',true);
+
+        
+        $this->SetFieldAttr('idEscolaridadePCCTAE','visible',$vinculo->isTA());
+
+        if ($vinculo->isTA()) {
+            $this->SetFieldAttr('btnPost2','visible',true);
+            $this->SetFieldAttr('btnPost1','visible',false);
+        } else $this->btnPost2_click();
+
+        
+	}
+
+    function btnPost2_click()
+    {
+	    global $MIOLO, $module, $self, $action;
+        
+        $data = $this->GetData();
+        //var_dump($data, $this->formacao);
+        
+        $this->formacao->SetData($data);
+        $this->formacao->idFuncionario = $this->funcionario->idFuncionario;
+        $this->formacao->dataAtualizacao = date("d\/m\/Y");
+
+        $funcionario = $MIOLO->getBusiness('rh','funcionario',$this->formacao->idFuncionario);
+        $funcionario->getFormacoes();
+        if ( is_array($funcionario->formacao) )
+        {
+            foreach($funcionario->formacao as $f)
+            {
+                if ( $f->idFormacao == $this->formacao->idFormacao )
+                {
+                    $duplicado = true;
+                }
+            }
+        }
+        if ( $duplicado ) 
+        {
+            $erro[] = "Escolaridade já registrada para o servidor.";
+        }
+        $today = date("d/m/Y");
+        $k = new MKrono();
+        if ( $k->compareDate($data->dataFim,">",$today) )
+        {
+            $erro[] = "Data fim não pode ser posterior a data atual.";
+        }
+        if ( ! count($erro) > 0 )
+        {
+            try 
+	        {
+                $this->formacao->beginTransaction();
+                $this->formacao->save();
+                $this->formacao->log(OP_INS,"id funcionario: ".$this->formacao->idFuncionario." id formacao: ".$this->formacao->idFormacao." data fim: ".$this->formacao->dataFim." entidade: ".$this->formacao->entidade);
+                $this->formacao->getFormacao();
+
+                if ( $funcionario->escolaridade < $this->formacao->formacao->escolaridade )
+                {
+                    $funcionario->setTransaction($this->formacao->getTransaction());
+                    $funcionario->setEscolaridade($this->formacao->formacao->escolaridade);
+                    $funcionario->save();
+                }
+                $this->formacao->endTransaction();
+
+                $this->formacao->save();
+
+                $go = $MIOLO->GetActionURL('rh','main:funcionario',$this->formacao->idFuncionario, array('form'=>'formacoes'));
+                $MIOLO->Information('Dados de Escolaridade atualizados com sucesso.', $go );
+            }
+            catch (Exception $e)
+            {
+                $this->AddError($e->getMessage());
+            }
+        }
+        else
+        {
+            foreach($erro as $e)
+            {
+                $this->addError($e);
+            }
+        }
+    }
+
+}
+?>

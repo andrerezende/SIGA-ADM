@@ -1,0 +1,92 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmFaltasNaoJustificadas extends MForm
+{
+    function __construct()
+    {
+        global $MIOLO, $module;
+        parent::__construct('Relatório de Faltas Não Justificadas');
+        $this->SetClose($this->manager->GetActionURL('rh','main:relatorio'));
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+        $k = new MKrono();
+        $fields = array(
+                new MSelection('selMes','','Mês',$k->months,true),
+                new MTextField('txtAno','','Ano',5,'use 4 dígitos'),
+        );
+        $this->SetFields($fields);
+        $buttons = array(
+            new MButton('btnReport','Gerar Relatório','PDF'),
+            new MButton('btnGerarCSV','Gerar Planilha')
+        );
+        $this->SetButtons($buttons);
+        $validators = array(
+            new MRangeValidator('txtAno','Ano','1970',date(Y)+10,'i','required'),
+        );
+        $this->SetValidators($validators);
+        $this->defaultButton = false;
+    }
+    
+    function btnGerarCSV_click()
+	{
+        $licAfast = $this->manager->GetBusiness('rh','licafast');
+        
+        $selMes = $this->GetFormValue('selMes'); 
+        $txtAno = $this->GetFormValue('txtAno'); 
+        
+        $k = new MKrono();
+        $ultimoDiaDoMes = $k->getLastDayOfMonth($selMes);                
+        
+        $consulta = $licAfast->getFaltasNaoJustificadas($selMes,$txtAno,$ultimoDiaDoMes);
+        
+        
+      
+	    $resultAux[] = array('Matrícula','Nome','Data de Início','Data de Fim','Setor');
+	    
+	    if ( is_array($consulta->result) )
+	    {
+			foreach ($consulta->result as $result)		  
+	    	{
+	    		$resultAux[] = array($result[0],$result[1],$result[2],$result[3],$result[4]);		
+	    	}
+	    }
+	    else 
+	    {
+	    	$resultAux[] = ""; 
+	    }
+			     
+	    $consulta->result = $resultAux;
+		$consulta->getCSV("FALTAS_NAO_JUSTIFICADAS");
+    
+	}
+    
+    function btnReport_click()
+    {
+        $data = $this->getData();
+        $data->tipoLicAfast = 'RH_SAUDE';
+        $ui = $this->manager->getUi();
+        $report = $ui->getReport('rh','repFaltasNaoJustificadas',$data);
+        $report->generate();
+    }
+ }
+?>

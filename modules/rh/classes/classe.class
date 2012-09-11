@@ -1,0 +1,228 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class BusinessRhClasse extends MBusiness
+{
+	public $idClasse;
+	public $classe;
+	public $nome;
+	public $categoria;
+	public $referencias;
+	public $ordemprogressao;
+	
+	function __construct($data = null)
+	{
+		parent::__construct('sigaept', $data);
+	}
+	
+    function OnCreate($data)
+    {
+        if (empty($data))
+        {
+//            $this->initialize();
+        }
+        else
+        {
+            $this->GetById($data);
+        }
+    }
+
+	function GetById($id)
+	{
+		$this->idClasse = $id;
+		$this->retrieve();
+		return $this;
+	}
+	
+    function getReferencias()
+    {
+        $this->retrieveAssociation('referencias');
+        if ($this->referencias != NULL)
+        {
+            if (!is_array($this->referencias))
+            {
+                $this->referencias = array($this->referencias);  
+            }
+        }
+    }
+
+	function getReferencia($idReferencia)
+	{
+		global $MIOLO;
+		if ( $this->referencias != NULL )
+		{
+			foreach ( $this->referencias as $r )
+			{
+				if ( $r->idReferencia == $idReferencia )
+					return $r;
+			}
+		}
+		$r = $MIOLO->GetBusiness('rh','referencia');
+		$r->idClasse = $this->idClasse;
+		return $r;
+	}
+
+	function ListByClasse($classe)
+	{
+        $criteria = $this->getCriteria();
+        $criteria->addCriteria('classe','LIKE', "$classe");
+        $criteria->addOrderAttribute('classe');
+        return $criteria->retrieveAsQuery();
+	}
+
+    function listClasseReferencia($idGrupoCargo)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('referencias.idClasse');
+        $criteria->addColumnAttribute('referencias.idReferencia');
+        $criteria->addColumnAttribute('nome');
+        $criteria->addColumnAttribute('referencias.nivelPadrao');
+        $criteria->addColumnAttribute('categoria');
+        $criteria->addCriteria('referencias.classeGrupoCargo.idGrupoCargo','=',$idGrupoCargo);
+        return $criteria->retrieveAsQuery();
+    }
+
+	function listAll()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('idclasse');
+        $criteria->addColumnAttribute('classe');
+        $criteria->addOrderAttribute('classe');
+        return $criteria->retrieveAsQuery();
+    }
+    
+    
+    function listClasseProgressao()
+    {
+    	
+    	if ((strtoupper($this->classe) == '1') and (strtoupper($this->categoria) == 'TA')) 
+    	{
+    		return array('1' => 'CLASSE 1 - PF');
+    	}
+	    else 
+	    {
+	        $criteria = $this->getCriteria();
+	        $criteria->addColumnAttribute('idclasse');
+        	$criteria->addColumnAttribute('nome');
+	        $criteria->addCriteria('categoria','=', "'$this->categoria'");
+	        if (strtoupper($this->categoria) == 'TA')
+	        {
+//	        	$criteria->addCriteria('classe','<>', 1);
+	        }
+	        $criteria->addCriteria('classe','>', "'$this->classe'");
+	        $criteria->addOrderAttribute('categoria');
+	        $query = $criteria->retrieveAsQuery();
+	        return $query;
+	    }
+    }
+
+    
+    function setDescricao($descricao)
+    {
+        $this->descricao = $descricao;
+    }
+    
+    function getUltimaProgressao()
+    {
+    	/**
+    	 * Retorna a última progressão de acordo com 
+    	 * a classe e a Categoria, olhandoverificando o campo
+    	 * OrdemProgressão
+    	 */
+    	
+    	//var_dump($this);
+    	
+    	$criteria = $this->getCriteria();
+    	$criteria->addColumnAttribute('idClasse');
+    	$criteria->addColumnAttribute('nome');
+    	$criteria->addColumnAttribute('ordemprogressao');
+    	$criteria->addCriteria('categoria','=', "'$this->categoria'");
+    	$criteria->addOrderAttribute('ordemprogressao',false);
+    	$query = $criteria->retrieveAsQuery();
+	    return $query->result[0][0];
+    }
+    
+    function getProximaProgressao()
+    {
+    	/**
+    	 * Retorna a próxima progressão de acordo com 
+    	 * a classe e a Categoria, verificando o campo
+    	 * OrdemProgressão
+    	 */
+    	
+    	if ($this->idClasse == $this->getUltimaProgressao())
+    	{
+    		return $this->idClasse;
+    	}
+    	    	
+    	$criteria = $this->getCriteria();
+    	$criteria->addColumnAttribute('idClasse');
+    	$criteria->addColumnAttribute('nome');
+    	$criteria->addColumnAttribute('ordemprogressao');
+    	$criteria->addCriteria('categoria','=', "'$this->categoria'");
+    	$criteria->addOrderAttribute('ordemprogressao');
+    	$query = $criteria->retrieveAsQuery();
+    	    	
+    	// Pega o próximo registro da classe atual
+    	// de acordo com ordemprogressão.
+    	// Como são poucos registros (<100), um foreach
+    	// resolve tranquilo 
+    	foreach ($query->result as $key=>$row)
+    	{
+    		if ( ($row[0] == $this->idClasse) )
+    		{// se é a classe,retorne a última.		
+    			return $query->result[$key+1][0];
+    		}
+    	}
+    	
+		return null;    	
+    }
+
+    function isAssociado()
+    {
+        return $this->nome == "ASSOCIADO";
+    }
+
+    function getByOrdemProgressao($ordemProgressao,$categoria)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addCriteria('ordemprogressao','=',"'$ordemProgressao'");
+        $criteria->addCriteria('categoria','=',"'$categoria'");
+        $this->retrieveFromCriteria($criteria);
+        return $this;
+    }
+
+    /*
+    retorna um array com o idclasse e o id da primeira referencia da classe
+    */
+    
+    function getDataProgressao()
+    {
+        $data['idClasse'] = $this->idClasse;
+var_dump($this->idClasse);
+        $this->getReferencias();
+        foreach ( $this->referencias as $referencia )
+        {
+            $idRefs[] = $referencia->idReferencia;
+        }
+        sort($idRefs);
+        $data['idReferencia'] = $idRefs[0];
+        return $data;
+    }
+}

@@ -1,0 +1,459 @@
+<?
+class frmRequisicaoServicoExterno extends MForm
+{
+	protected $objRequisicao;
+    function __construct($objRequisicao)
+    {
+		$this->objRequisicao = $objRequisicao;
+        parent::__construct('Requisição de Serviço Externo');
+        $this->eventHandler();
+    }
+    function CreateFields()
+    {
+        $cf = new MCurrencyFormatter();
+        $this->addField(
+            array(
+                new MHiddenField('idServico',$data->idServico,'Código ou Descrição do Serviço'),
+                new MMultiLineField('descricao',$data->descricao,'Código ou Descrição do Serviço:',400,3,70),
+                new MLookupField('lkpServico','&npsp;','&nbsp;')
+            )
+        );
+        $url = $this->manager->getActionURL('adm','main:requisicoes',$this->objRequisicao->idRequisicao,array('form'=>'sugere'));
+        $this->addField(new MLink('sugere','',$url,'Desejo solicitar a inclusão de um novo serviço externo'));
+        $this->addField(new MMultiLineField('complemento','','Complemento',400,3,70));
+        $valorTotal = round($cf->toDecimal(Form::getFormValue('quantidade'))*$cf->toDecimal(Form::getFormValue('valorEst')),2);
+        $this->addField(
+            array(
+                new MTextField('quantidade',$data->descricao,'Quantidade:',10,''),
+                new MTextField('unidade',$data->unidade,'Unidade:',10,''),
+                new MTextField('elemento',$data->elemento,'Elemento:',10,''),
+                new MTextField('subelemento',$data->subelemento,'Subelemento:',10,''),
+                new MCurrencyField('valorEst',$data->valorEst,'Valor Unitário:',12,''),
+                new MCurrencyField('valorTotal',$valorTotal,'Valor Total Estimado:',24,''),
+            )
+        );
+        $this->SetFieldAttr('lkpServico','module','adm');
+        $this->SetFieldAttr('lkpServico','item','servicoExterno');
+        $this->SetFieldAttr('lkpServico','event','filler');
+	    $this->SetFieldAttr('lkpServico','filter','descricao');
+        $this->SetFieldAttr('lkpServico','related','idServico,descricao');
+        $validators = array(
+            new MRequiredValidator('idServico'),
+            new MRequiredValidator('complemento'),
+            new MCompareValidator('quantidade','','>','0','i','required'),
+            new MRequiredValidator('unidade'),
+            new MRequiredValidator('valorEst'),
+        );		
+        $this->SetValidators($validators);
+        switch ( $this->objRequisicao->status )
+        {
+            case '1':
+                $this->SetFieldAttr('elemento','visible',false);
+                $this->SetFieldAttr('subelemento','visible',false);
+                $this->SetFieldAttr('valorTotal','visible',false);
+                if ($this->objRequisicao->idUsuarioRequisitante == $this->manager->GetLogin()->idkey)
+                {
+                    $this->addButton(new MButton('btnConfirmarSolicitar','Solicitar'));
+                    $this->addButton(new MButton('btnSolicitar','Confirmar'));
+                    $this->setButtonAttr('btnSolicitar','visible',false);
+                }
+                else
+                {
+                    $this->setFieldAttr('lkpServico','visible',false);
+                    $this->setFieldAttr('sugere','visible',false);
+                    $this->SetFieldAttr('descricao','readonly',true);
+                    $this->SetFieldAttr('complemento','readonly',true);
+                    $this->SetFieldAttr('quantidade','readonly',true);
+                    $this->SetFieldAttr('unidade','readonly',true);
+                    $this->SetFieldAttr('valorEst','readonly',true);
+                }
+            break;
+            case '2':
+                $this->SetFieldAttr('elemento','visible',false);
+                $this->SetFieldAttr('subelemento','visible',false);
+                $this->SetFieldAttr('valorTotal','visible',true);
+                $this->setFieldAttr('lkpServico','visible',false);
+                $this->setFieldAttr('sugere','visible',false);
+                $this->objRequisicao->retrieveAssociation('servicoExterno');
+                $this->setFieldValue('idServico',$this->objRequisicao->servicoExterno->idRequisicao);
+                $this->setFieldValue('descricao',$this->objRequisicao->servicoExterno->servico->descricao);
+                $this->setFieldValue('complemento',$this->objRequisicao->servicoExterno->complemento);
+                $this->setFieldValue('quantidade',$this->objRequisicao->servicoExterno->quantidade);
+                $this->setFieldValue('unidade',$this->objRequisicao->servicoExterno->unidade);
+                $this->setFieldValue('valorEst',$this->objRequisicao->servicoExterno->valorEst);
+                $quantidade = $cf->toDecimal($this->objRequisicao->servicoExterno->quantidade);
+                $valorEst = $cf->toDecimal($this->objRequisicao->servicoExterno->valorEst);
+                $valorTotal = round($quantidade*$valorEst,2);
+                $this->setFieldValue('valorTotal',$valorTotal);
+                $this->SetFieldAttr('descricao','readonly',true);
+                $this->SetFieldAttr('complemento','readonly',true);
+                $this->SetFieldAttr('quantidade','readonly',true);
+                $this->SetFieldAttr('unidade','readonly',true);
+                $this->SetFieldAttr('valorEst','readonly',true);
+                $this->SetFieldAttr('valorTotal','readonly',true);
+        		$this->objRequisicao->getUoRequisitante();
+                if ($this->objRequisicao->uoRequisitante->isGestorOf($this->manager->GetLogin()->idkey))
+                {
+                    $tipoAcao = array(
+                        "4"=>"AUTORIZAR",
+                        "5"=>"DEVOLVER",
+                        "6"=>"RECUSAR"
+                    );
+                    $this->addField(new MSeparator('<b>AÇÕES DO GESTOR DA UO REQUISITANTE</b>'));
+                    $this->addField(new MSelection('acaoGestorUoReq',$this->objRequisicao->status,'Ação',$tipoAcao));
+                    $this->addField(new MMultiLineField('motivoRejeicao',$this->objRequisicao->motivoRejeicao,'Motivo','',3,50));
+                    $this->addButton(new MButton('btnDecidir','Enviar'));
+                }
+            break;
+            case '5':
+                $this->SetFieldAttr('elemento','visible',false);
+                $this->SetFieldAttr('subelemento','visible',false);
+                $this->objRequisicao->retrieveAssociation('servicoExterno');
+                $this->setFieldValue('idServico',$this->objRequisicao->servicoExterno->idRequisicao);
+                $this->setFieldValue('descricao',$this->objRequisicao->servicoExterno->servico->descricao);
+                $this->setFieldValue('complemento',$this->objRequisicao->servicoExterno->complemento);
+                $this->setFieldValue('quantidade',$this->objRequisicao->servicoExterno->quantidade);
+                $this->setFieldValue('unidade',$this->objRequisicao->servicoExterno->unidade);
+                $this->setFieldValue('valorEst',$this->objRequisicao->servicoExterno->valorEst);
+                if ($this->objRequisicao->idUsuarioRequisitante == $this->manager->GetLogin()->idkey)
+                {
+                    $this->SetFieldAttr('valorTotal','visible',false);
+                    $this->addButton(new MButton('btnConfirmarSolicitar','Solicitar'));
+                    $this->addButton(new MButton('btnSolicitar','Confirmar'));
+                    $this->setButtonAttr('btnSolicitar','visible',false);
+                    $tipoAcao = array(
+                        "4"=>"AUTORIZAR",
+                        "5"=>"DEVOLVER",
+                        "6"=>"RECUSAR"
+                    );
+                    $this->addField(new MSeparator('<b>AÇÕES DO GESTOR DA UO REQUISITANTE</b>'));
+                    $this->addField(new MSelection('acaoGestorUoReq',$this->objRequisicao->status,'Ação',$tipoAcao));
+                    $this->addField(new MMultiLineField('motivoRejeicao',$this->objRequisicao->motivoRejeicao,'Motivo','',3,50));
+                    $this->SetFieldAttr('acaoGestorUoReq','readonly',true);
+                    $this->SetFieldAttr('motivoRejeicao','readonly',true);
+                }
+                else
+                {
+                    $this->setFieldAttr('lkpServico','visible',false);
+                    $this->setFieldAttr('sugere','visible',false);
+                    $quantidade = $cf->toDecimal($this->objRequisicao->servicoExterno->quantidade);
+                    $valorEst = $cf->toDecimal($this->objRequisicao->servicoExterno->valorEst);
+                    $valorTotal = round($quantidade*$valorEst,2);
+                    $this->setFieldValue('valorTotal',$valorTotal);
+                    $this->SetFieldAttr('descricao','readonly',true);
+                    $this->SetFieldAttr('complemento','readonly',true);
+                    $this->SetFieldAttr('quantidade','readonly',true);
+                    $this->SetFieldAttr('unidade','readonly',true);
+                    $this->SetFieldAttr('valorEst','readonly',true);
+                    $this->SetFieldAttr('valorTotal','readonly',true);
+                }
+            break;
+            case '6':
+                $this->SetFieldAttr('elemento','visible',false);
+                $this->SetFieldAttr('subelemento','visible',false);
+                $this->setFieldAttr('lkpServico','visible',false);
+                $this->setFieldAttr('sugere','visible',false);
+                $this->objRequisicao->retrieveAssociation('servicoExterno');
+                $this->setFieldValue('idServico',$this->objRequisicao->servicoExterno->idRequisicao);
+                $this->setFieldValue('descricao',$this->objRequisicao->servicoExterno->servico->descricao);
+                $this->setFieldValue('complemento',$this->objRequisicao->servicoExterno->complemento);
+                $this->setFieldValue('quantidade',$this->objRequisicao->servicoExterno->quantidade);
+                $this->setFieldValue('unidade',$this->objRequisicao->servicoExterno->unidade);
+                $this->setFieldValue('valorEst',$this->objRequisicao->servicoExterno->valorEst);
+                $quantidade = $cf->toDecimal($this->objRequisicao->servicoExterno->quantidade);
+                $valorEst = $cf->toDecimal($this->objRequisicao->servicoExterno->valorEst);
+                $valorTotal = round($quantidade*$valorEst,2);
+                $this->setFieldValue('valorTotal',$valorTotal);
+                $this->SetFieldAttr('descricao','readonly',true);
+                $this->SetFieldAttr('complemento','readonly',true);
+                $this->SetFieldAttr('quantidade','readonly',true);
+                $this->SetFieldAttr('unidade','readonly',true);
+                $this->SetFieldAttr('valorEst','readonly',true);
+                $this->SetFieldAttr('valorTotal','readonly',true);
+                if ($this->objRequisicao->idUsuarioRequisitante == $this->manager->GetLogin()->idkey)
+                {
+                    $tipoAcao = array(
+                        "4"=>"AUTORIZAR",
+                        "5"=>"DEVOLVER",
+                        "6"=>"RECUSAR"
+                    );
+                    $this->addField(new MSeparator('<b>AÇÕES DO GESTOR DA UO REQUISITANTE</b>'));
+                    $this->addField(new MSelection('acaoGestorUoReq',$this->objRequisicao->status,'Ação',$tipoAcao));
+                    $this->addField(new MMultiLineField('motivoRejeicao',$this->objRequisicao->motivoRejeicao,'Motivo','',3,50));
+                    $this->SetFieldAttr('acaoGestorUoReq','readonly',true);
+                    $this->SetFieldAttr('motivoRejeicao','readonly',true);
+                }
+            break;
+            default:
+                $this->SetFieldAttr('elemento','visible',false);
+                $this->SetFieldAttr('subelemento','visible',false);
+                $this->setFieldAttr('lkpServico','visible',false);
+                $this->setFieldAttr('sugere','visible',false);
+                $this->objRequisicao->retrieveAssociation('servicoExterno');
+                $this->setFieldValue('idServico',$this->objRequisicao->servicoExterno->idRequisicao);
+                $this->setFieldValue('descricao',$this->objRequisicao->servicoExterno->servico->descricao);
+                $this->setFieldValue('complemento',$this->objRequisicao->servicoExterno->complemento);
+                $this->setFieldValue('quantidade',$this->objRequisicao->servicoExterno->quantidade);
+                $this->setFieldValue('unidade',$this->objRequisicao->servicoExterno->unidade);
+                $this->setFieldValue('valorEst',$this->objRequisicao->servicoExterno->valorEst);
+                $quantidade = $cf->toDecimal($this->objRequisicao->servicoExterno->quantidade);
+                $valorEst = $cf->toDecimal($this->objRequisicao->servicoExterno->valorEst);
+                $valorTotal = round($quantidade*$valorEst,2);
+                $this->setFieldValue('valorTotal',$valorTotal);
+                $this->SetFieldAttr('descricao','readonly',true);
+                $this->SetFieldAttr('complemento','readonly',true);
+                $this->SetFieldAttr('quantidade','readonly',true);
+                $this->SetFieldAttr('unidade','readonly',true);
+                $this->SetFieldAttr('valorEst','readonly',true);
+                $this->SetFieldAttr('valorTotal','readonly',true);
+                $this->objRequisicao->getUoRequisitante();
+                if (
+                    $this->objRequisicao->idUsuarioRequisitante == $this->manager->GetLogin()->idkey ||
+                    $this->objRequisicao->uoRequisitante->isGestorOf($this->manager->GetLogin()->idkey)
+                   )
+                {
+                    $quantEmpenhada = $cf->toDecimal($this->objRequisicao->servicoExterno->quantEmpenhada);
+                    $valorReal = $cf->toDecimal($this->objRequisicao->servicoExterno->valorReal);
+                    $valorEmpenhado = round($quantEmpenhada*$valorReal,2);
+                    $this->objRequisicao->retrieveAssociation('movimentoserv');
+                    if ($this->objRequisicao->movimentoserv)
+                    {
+                        foreach ($this->objRequisicao->movimentoserv as $movimento)
+                        {
+                            $valorEntregue = $cf->toDecimal($valorEntregue) + $cf->toDecimal($movimento->valorTotal);
+                        }
+                    }
+                    $this->addField(array(new MCurrencyField('valorEmpenhado',$valorEmpenhado,'Valor Empenhado',24,''),new MCurrencyField('valorEntregue',$valorEntregue,'Valor Entregue',24,'')));
+                    $this->SetFieldAttr('valorEmpenhado','readonly',true);
+                    $this->SetFieldAttr('valorEntregue','readonly',true);
+                }
+            break;
+        }
+        $this->addButton(new MButton('btnVoltar','Voltar',$this->manager->getActionUrl('adm','main:requisicoes:find')));       
+    }
+	function btnConfirmarSolicitar_click()
+	{
+        $cf = new MCurrencyFormatter();
+        switch (true)
+        {
+            case ($cf->toDecimal(MForm::getFormValue('valorEst')) <= $cf->toDecimal(0)):
+                $this->addError('O valor unitário não pode ser nulo ou negativo.');
+            return;
+        }
+		$this->setTitle("Confirmação da requisição de Servico Externo");
+        $this->setFieldAttr('lkpServico','visible',false);
+        $this->setFieldAttr('sugere','visible',false);
+        $this->SetFieldAttr('valorTotal','visible',true);
+        $this->SetFieldAttr('descricao','readonly',true);
+        $this->SetFieldAttr('complemento','readonly',true);
+        $this->SetFieldAttr('quantidade','readonly',true);
+        $this->SetFieldAttr('unidade','readonly',true);
+        $this->SetFieldAttr('elemento','readonly',true);
+        $this->SetFieldAttr('subelemento','readonly',true);
+        $this->SetFieldAttr('valorEst','readonly',true);
+        $this->SetFieldAttr('valorTotal','readonly',true);
+        $this->setButtonAttr('btnConfirmarSolicitar','visible',false);
+        $this->setButtonAttr('btnSolicitar','visible',true);
+    }
+	function btnSolicitar_click()
+	{
+        if (
+            $this->objRequisicao->status == '1' ||
+            $this->objRequisicao->status == '5'
+           )
+        {
+            try
+            {
+                $cf = new MCurrencyFormatter();
+                $this->objRequisicao->beginTransaction();
+                $itemRequisicao = $this->manager->getBusiness('adm','itemservext');
+                $itemRequisicao->getById($this->objRequisicao->idRequisicao,Form::getFormValue('idServico'));
+                if (!$itemRequisicao->isPersistent())
+                {
+                    $itemRequisicao->idRequisicao = $this->objRequisicao->idRequisicao;
+                    $itemRequisicao->idServico = Form::getFormValue('idServico');
+                }
+                $itemRequisicao->complemento = Form::getFormValue('complemento');
+                $itemRequisicao->quantidade = $cf->toDecimal(Form::getFormValue('quantidade'));
+                $itemRequisicao->valorEst = $cf->toDecimal(Form::getFormValue('valorEst'));
+                $itemRequisicao->unidade = Form::getFormValue('unidade');
+                $itemRequisicao->status = 0;
+                $itemRequisicao->setTransaction($this->objRequisicao->getTransaction());
+                $itemRequisicao->save();
+                $this->objRequisicao->getUoRequisitante();
+                if ($this->objRequisicao->uoRequisitante->isGestorOf($this->manager->GetLogin()->idkey))
+                {
+                    $requisita = $this->manager->getBusiness('adm','requisita');
+                    $requisita->GetById($this->objRequisicao->idTipoReq,$this->objRequisicao->idUoRequisitante);
+                    if ($requisita->ativo == 'S')
+                    {
+                        $saldo = $this->objRequisicao->uoRequisitante->getSaldoByRubrica($requisita->idRubrica,$requisita->ano);
+                        $valorTotal = round($cf->toDecimal($itemRequisicao->quantidade)*$cf->toDecimal($itemRequisicao->valorEst),2);
+                        if ($cf->toDecimal($saldo) > $valorTotal)
+                        {
+                            $msg = "Requisicao ".$this->objRequisicao->idRequisicao." solicitada e autorizada pelo gestor.";
+                            $this->objRequisicao->status = '4';
+                            $this->objRequisicao->idUsuarioGestor = $this->manager->GetLogin()->idkey;
+                            $this->objRequisicao->dataHoraAut = date("d/m/Y H:i:s");
+                            $lancamentoInt = $this->manager->getBusiness('adm','lancamentoint');
+                            $lancamentoInt->tipoLancamento = '4';
+                            $lancamentoInt->data = date("d/m/Y");                
+                            $lancamentoInt->valor = $valorTotal;
+                            $lancamentoInt->ano = date("Y");
+                            $lancamentoInt->idUoRequisitante = $this->objRequisicao->idUoRequisitante;       
+                            $lancamentoInt->idUoExecutante = $this->objRequisicao->idUoExecutante;
+                            $lancamentoInt->idRubrica = $requisita->idRubrica;           
+                            $lancamentoInt->idRequisicao = $this->objRequisicao->idRequisicao;
+                            $lancamentoInt->setTransaction($this->objRequisicao->getTransaction());
+                            $lancamentoInt->save();                
+                            $orcamento = $this->manager->getBusiness('adm','orcamentointerno');
+                            $orcamento->getById($requisita->idUo,$requisita->idRubrica,$requisita->ano);
+                            $orcamento->previsaoDebito = $cf->toDecimal($orcamento->previsaoDebito) + $cf->toDecimal($valorTotal);
+                            $orcamento->setTransaction($this->objRequisicao->getTransaction());
+                            $orcamento->save();
+                        }
+                        else
+                        {
+                            $this->addError('Saldo insuficiente.');
+                        }
+                    }
+                    else
+                    {
+                        $this->addError('Orçamento inativo.');
+                    }
+                }
+                else
+                {
+                    $msg = "Requisicao ".$this->objRequisicao->idRequisicao." submetida a avaliação do gestor.";
+                    $this->objRequisicao->status = '2';
+                    $this->objRequisicao->motivoRejeicao = null;
+                    $this->objRequisicao->idUsuarioGestor = null;
+                    $this->objRequisicao->dataHoraAut = null;
+                }
+                $this->objRequisicao->suplementar = 'N';
+                $this->objRequisicao->save();
+                $this->objRequisicao->endTransaction();
+                if ($msg)
+                {
+                    $this->objRequisicao->Log(OP_INS,$msg);
+                    $url = $this->manager->getActionUrl('adm','main:requisicoes',$this->objRequisicao->idRequisicao,array('form'=>'item','idTipoReq'=>'9'));
+                    $this->manager->information($msg,$url);
+                }
+            }
+            catch (Exception $e) {$this->addError($e->getMessage());}
+        }
+        else
+        {
+            switch ($this->objRequisicao->status)
+            {
+                case '2':
+                    $this->addError('A requisição já foi solicitada.');
+                break;
+                case '4':
+                    $this->addError('A requisição já foi autorizada.');
+                break;
+            }
+
+        }
+    }
+	function btnDecidir_click()
+	{
+        if (in_array($this->objRequisicao->status,array('2','5')))
+        {
+            try
+            {
+                $cf = new MCurrencyFormatter();
+                $this->objRequisicao->beginTransaction();
+                switch ($status = MForm::getFormValue('acaoGestorUoReq'))
+                {
+                    case '4':
+                        $requisita = $this->manager->getBusiness('adm','requisita');
+                        $requisita->GetById($this->objRequisicao->idTipoReq,$this->objRequisicao->idUoRequisitante);
+                        if ($requisita->ativo == 'S')
+                        {
+                            $saldo = $this->objRequisicao->uoRequisitante->getSaldoByRubrica($requisita->idRubrica,$requisita->ano);
+                            $valorTotal = round($cf->toDecimal($this->objRequisicao->servicoExterno->quantidade)*$cf->toDecimal($this->objRequisicao->servicoExterno->valorEst),2);
+                            if ($cf->toDecimal($saldo) > $valorTotal)
+                            {
+                                $msg = "Requisição {$this->objRequisicao->idRequisicao} autorizada com sucesso.";
+                                $this->objRequisicao->status = $status;
+                                $this->objRequisicao->motivoRejeicao = null;
+                                $this->objRequisicao->idUsuarioGestor = $this->manager->GetLogin()->idkey;
+                                $this->objRequisicao->dataHoraAut = date("d/m/Y H:i:s");
+                                $lancamentoInt = $this->manager->getBusiness('adm','lancamentoint');
+                                $lancamentoInt->tipoLancamento = '4';
+                                $lancamentoInt->data = date("d/m/Y");                
+                                $lancamentoInt->valor = $valorTotal;
+                                $lancamentoInt->ano = date("Y");
+                                $lancamentoInt->idUoRequisitante = $this->objRequisicao->idUoRequisitante;       
+                                $lancamentoInt->idUoExecutante = $this->objRequisicao->idUoExecutante;
+                                $lancamentoInt->idRubrica = $requisita->idRubrica;           
+                                $lancamentoInt->idRequisicao = $this->objRequisicao->idRequisicao;
+                                $lancamentoInt->setTransaction($this->objRequisicao->getTransaction());
+                                $lancamentoInt->save();                
+                                $orcamento = $this->manager->getBusiness('adm','orcamentointerno');
+                                $orcamento->getById($requisita->idUo,$requisita->idRubrica,$requisita->ano);
+                                $orcamento->previsaoDebito = $cf->toDecimal($orcamento->previsaoDebito) + $cf->toDecimal($valorTotal);
+                                $orcamento->setTransaction($this->objRequisicao->getTransaction());
+                                $orcamento->save();
+                            }
+                            else
+                            {
+                                $this->addError('Saldo insuficiente.');
+                            }
+                        }
+                        else
+                        {
+                            $this->addError('Orçamento inativo.');
+                        }
+                    break;
+                    case '5':
+                        if ($motivo = MForm::getFormValue('motivoRejeicao'))
+                        {
+                            $msg = "Requisição {$this->objRequisicao->idRequisicao} devolvida com sucesso.";
+                            $this->objRequisicao->status = $status;
+                            $this->objRequisicao->idUsuarioGestor = $this->manager->GetLogin()->idkey;
+                            $this->objRequisicao->dataHoraAut = date("d/m/Y H:i:s");
+                            $this->objRequisicao->motivoRejeicao = $motivo;
+                        }
+                        else
+                        {
+                            $this->addError('O motivo é obrigatório.');
+                        }
+                    break;
+                    case '6':
+                        if ($motivo = MForm::getFormValue('motivoRejeicao'))
+                        {
+                            $msg = "Requisição {$this->objRequisicao->idRequisicao} recusada com sucesso.";
+                            $this->objRequisicao->status = $status;
+                            $this->objRequisicao->idUsuarioGestor = $this->manager->GetLogin()->idkey;
+                            $this->objRequisicao->dataHoraAut = date("d/m/Y H:i:s");
+                            $this->objRequisicao->motivoRejeicao = $motivo;
+                        }
+                        else
+                        {
+                            $this->addError('O motivo é obrigatório.');
+                        }
+                    break;
+                    default:
+                        $this->addError('A ação é obrigatória.');
+                    break;
+                }
+                $this->objRequisicao->save();
+                $this->objRequisicao->endTransaction();
+                if ($msg)
+                {
+                    $this->objRequisicao->Log(OP_INS,$msg);
+                    $url = $this->manager->getActionUrl('adm','main:requisicoes',$this->objRequisicao->idRequisicao,array('form'=>'item','idTipoReq'=>'9'));
+                    $this->manager->information($msg,$url);
+                }
+            }
+            catch (Exception $e) {$this->addError($e->getMessage());}
+        }
+        else
+        {
+            $this->addError('A requisição já foi autorizada.');
+        }
+    }
+}
+?>

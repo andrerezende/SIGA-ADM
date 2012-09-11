@@ -1,0 +1,178 @@
+<?
+class frmMultiplosDecisao extends MFormAjax
+{
+    protected $processo;
+    protected $perms;
+    protected $setor;
+    public function __construct()
+    {
+//      construct
+        global $MIOLO;
+        $this->processo  = $MIOLO->GetBusiness('protocolo','processo');
+        $this->perms = $MIOLO->getPerms();
+        $this->setor = $MIOLO->getBusiness('protocolo','setor');
+        parent::__construct('Decisão Múltipla');
+        $this->SetClose($MIOLO->GetActionURL('protocolo','main'));
+        $this->page->addJsCode(file_get_contents(dirname(__FILE__).'/js/frmMultiplosDecisao.js'));
+        $this->eventHandler();
+    }    
+    public function CreateFields()
+    {
+//      decisão
+        $decisao = new MMultiLineField('decisao',$andamento->decisao,'Decisão:',240,5,88);
+        // 07-12-2011 - Daniel Bonfim
+        $decisao->addAttribute('maxlength','1000');
+        $autor = new MTextField('autor',$andamento->autor,'Autor:',90);
+        $autor->addAttribute('maxlength','40');
+        
+        $setorInOp = new MComboBox('setorInOp','','Só permitir decisão se o processo estiver no setor abaixo (opcional)<br>Setor:',$this->setor->selAll(),'','',15);
+        $setorInOp->addAttribute('maxlength','15');
+        $setorInOp->addAttribute("onkeyup","toUpperCase('setorInOp')");
+        $setorInOp->addAttribute('style','text-transform:uppercase');
+        
+        $clearDecisao = new MButton('clearDecisao','Limpar',"toClearDecisao()");
+        $clearDecisao->visible = false;
+        $groupDecisao = new MBaseGroup('groupDecisao', 'Decisão do processo',array($decisao,$autor,$setorInOp,$clearDecisao),'vertical','css');
+        $groupDecisao->addAttribute('style','padding:10px');
+//      setor de destino
+        $setorDestino = new MComboBox('setorDestino','','Setor:',$this->setor->selAll(),'','',15);
+        $setorDestino->addAttribute('maxlength','15');
+        $setorDestino->addAttribute("onkeyup","toUpperCase('setorDestino')");
+        $setorDestino->addAttribute('style','text-transform:uppercase');
+        $clearSetor = new MButton('clearSetor','Limpar',"toClearSetor()");
+        $clearSetor->visible = false;
+        $groupSetor = new MBaseGroup( 'groupSetor', 'Setor de Saída (opcional)',array($setorDestino,$clearSetor),'vertical','css');
+        $groupSetor->addAttribute('style','padding:10px');
+//      processos afetados
+        $numProcesso = new MLookupTextField('numProcesso','','Processo:',22);
+        $numProcesso->addAttribute("onkeypress","return setValue(this,event)");
+        $numProcesso->module = 'protocolo';
+        $numProcesso->item = 'processosaida';
+        $numProcesso->event = 'filler';
+        $numProcesso->related = 'none,numProcesso';
+        $numProcesso->filter = 'setorUsuario,numProcesso';
+        $numProcesso->addAttribute('onkeypress',"return&nbsp;setValue(this,event)");
+        $numProcessos = new MMultiTextField3( 'numProcessos', null, 'Seleção de processos',array($numProcesso), 200, true, 'horizontal' );
+        $numProcessos->fieldWidth = 200;       
+//      fields
+        $setorUsuario = ($this->perms->checkAccess('PROT_ADMIN', A_ACCESS)) ? '%' : $this->processo->getSetorUsuario();
+        $fields = array(
+            new MHiddenField('setorUsuario',$setorUsuario),
+            array(
+                $groupDecisao,
+                $groupSetor,
+            ),
+            $numProcessos,
+        );
+        $this->SetFields($fields);
+//      required fields
+        $validators = array(
+			new MRequiredValidator('decisao'),
+			new MRequiredValidator('autor'),
+        );
+        $this->setValidators($validators);
+//      buttons
+        $buttons = array(
+           new MButton('btnExecutar', 'Executar'),
+        );
+        $this->SetButtons($buttons);
+    }
+    public function btnExecutar_click()
+    {
+//      atributte fields
+        $this->setFieldAttr('clearDecisao','visible',true);
+        $this->setFieldAttr('clearSetor','visible',true);
+//      data
+        $data = $this->getData();
+        $this->setData($data);
+//      errors
+        if (!$numProcessos = $this->numProcessos->getCodeValue())
+        {
+            $this->addError('Você deve selecionar pelo menos um processo para realizar a decisão.');
+            return;
+        }
+        foreach ($numProcessos as $key => $numProcesso)
+        {
+//          get object
+            $numProcesso = $numProcesso[0];
+            $numProcesso = str_repeat('0',14-strlen($numProcesso)).$numProcesso;
+            $serie = substr($numProcesso,0,6);
+            $ano = substr($numProcesso,7,4);
+            $codigo = substr($numProcesso,12,2);
+            $$numProcesso = $this->manager->getBusiness('protocolo','processo');
+            if (!is_numeric($codigo)) $$numProcesso->getByPartNumero($ano.$serie);
+            else $$numProcesso->getByNumero($ano.$serie.$codigo);
+//          errors
+            if (!$$numProcesso->isPersistent())
+            {
+                $mensagem[] = array($numProcesso,'Número de processo inválido.');
+                continue;
+            }
+            if ( ($$numProcesso->retencao->setor != $data->setorUsuario) && (!$this->perms->checkAccess('PROT_ADMIN', A_ACCESS)) )
+            {
+                $mensagem[] = array($numProcesso,'O processo não está disponível para este setor.');
+                continue;
+            }
+            if (($data->setorInOp) && ($$numProcesso->retencao->setor != $data->setorInOp))
+            {
+                $mensagem[] = array($numProcesso,'O setor atual do processo é diferente do setor assinalado.');
+                continue;
+            }
+            switch ($$numProcesso->retencao->status)
+            {
+                case 'J':
+                    $mensagem[] = array($numProcesso,'O processo encontra-se anexado.');
+                break;
+                case 'A':
+                    $mensagem[] = array($numProcesso,'O processo encontra-se arquivado.');
+                break;
+                case 'N':
+                    $decisao[] = $numProcesso;
+                    $mensagem[] = array($numProcesso,'Decisão realizada com sucesso.');
+                    unset($numProcessos[$key]);
+                break;
+            }
+        }
+//      set and save
+        if (is_array($decisao))
+        {
+            $transaction = $$decisao[0];
+            $transaction->beginTransaction();
+            foreach ($decisao as $numProcesso)
+            {
+                $$numProcesso->setTransaction($transaction->getTransaction());
+                $andamento = $$numProcesso->getAndamento($$numProcesso->retencao->numAndamento);
+                $andamento->decisao = $data->decisao;
+                $andamento->autor = $data->autor;
+                $andamento->dataDespacho = date("YmdHi");
+                if ($data->setorDestino)
+                {
+                    $andamento->setorDestino = $data->setorDestino;
+                    $andamento->dataSaida = $andamento->dataDespacho;
+                }
+                $$numProcesso->addAndamento($andamento);
+                $$numProcesso->retencao->setData($andamento);
+                unset($andamento);
+                try 
+                {
+                    $$numProcesso->save();
+                    $msg = 'O processo '.$$numProcesso->numProcessoFormatado().' deu entrada no setor '.$$numProcesso->retencao->setor.' com sucesso.';
+                    $$numProcesso->Log(OP_UPD,$msg);
+                }
+                catch(Exception $e) {$this->addError($e->getMessage());}
+            }
+            $transaction->endTransaction();
+            $this->numProcessos->setCodeValue($numProcessos);
+        }
+//      message
+        $titulos = array('Número','Resultado da ação&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;');
+        $dadosVerificados = new MTableRaw('',$mensagem,$titulos);
+        $dadosVerificados->setWidth('300px');
+        $groupDadosVerificados = new MBaseGroup( 'groupDadosVerificados', 'Mensagens',array($dadosVerificados),'horizontal','css');
+        $groupDadosVerificados->addAttribute('style','padding:10px');
+        $this->addField($groupDadosVerificados);
+    }
+                 
+                
+}
+?>

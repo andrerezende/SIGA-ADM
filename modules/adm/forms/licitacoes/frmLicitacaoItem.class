@@ -1,0 +1,225 @@
+<?
+class frmLicitacaoItem extends form
+{
+	protected $licitacao;
+    protected $idRequisicao;
+    protected $idItemReq;
+	
+	
+    function __construct($arr)
+    {
+	/*
+        $subArray = explode("_",$arr[0]);
+        $this->idRequisicao = $subArray[0];
+        $this->idItemReq = $subArray[1];*/
+        $this->licitacao = $arr[1];
+      // $this->licitacao = 
+		$this->Form('Motivo do Cancelamento');
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+        global $MIOLO, $module,$item, $page, $theme, $action;
+
+        $cf = new MCurrencyFormatter();
+
+        $form = Form::GetFormValue('form');
+
+	
+		
+
+			$yesNo = array("S"=>"SIM","N"=>"NÃO");
+
+			$fields = array
+			(	new MSelection('volta','','Cancelar itens selecionados',$yesNo,'','Os itens de requisição voltarão a estar disponíveis para licitação.'),
+				
+				new MMultiLineField('edtMotivo','','Motivo do Cancelamento','',3,50),
+			
+					);                
+			
+			
+			$this->SetFields($fields);
+		
+		$buttons = array
+		(
+        	  new FormButton("btnSalvar","Salvar")
+        );
+       
+		
+			// Grid de Itens
+			
+			$query = $this->licitacao->GetItensRequisitados();
+			 foreach ($query->result as $key => $rs)
+            {
+			
+			//$query->result[$key][0] = array($query->result[$key][6]||'_'||$query->result[$key][10]);
+			 //$query->result[$key][3] = 
+		//	var_dump('inicio',$query->result[$key][0],'fim');
+			//ID do Material
+			//$query->result[$key][10]
+			
+			//ID da Requisição
+			//$query->result[$key][6]
+		
+			//Numero do item
+			//$query->result[$key][5]
+			
+//            	$query->result[$key][6] = $cf->formatWithSymbol($query->result[$key][6]);
+  //              $query->result[$key][7] = $cf->formatWithSymbol($rs[5]*$cf->toDecimal($rs[6]));
+            }
+			
+			
+			
+		$columns = array(
+		//	new MGridColumn('chave','','center','',''),		
+			new MDataGridColumn('item','Ítem','center','','5%'),
+			new MDataGridColumn('codmaterial','Cód.','center','','5%'),
+			new MDataGridColumn('idelemento','Elemento','center','','5%'),
+			new MDataGridColumn('idsubelemento','SubElemento','center','','5%'),
+			new MDataGridColumn('uo','UO','center','','5%'),
+			new MDataGridColumn('material','Material/Serviço','left','','70%'),
+		);
+		
+	//	var_dump($this->licitacao->GetItensRequisitados()->result[1]);
+		$href_grid = $MIOLO->GetActionURL('adm','main:licitacoes',$this->licitacao->idLicitacao,array('form'=>'itens','idi'=>'#6#_#10#'));
+
+				$grid = new MGrid($query->result, $columns,$href_grid,0);
+		$grid->SetTitle('Itens');
+		//$grid->SetLinkType('linkbutton');
+		$grid->SetWidth('100%');
+		$grid->SetFilter(false);
+		//$grid->SetIndex(1);
+        $grid->AddActionSelect();
+		$this->addField($grid);
+		//
+				
+      
+        $this->SetWidth('100%');
+		 $this->SetButtons($buttons);
+		
+    }
+	
+	public function btnSalvar_click()
+	{
+		global $MIOLO, $module,$item, $page, $theme, $action;
+  
+        $data = $this->GetData();
+		
+		$selected = $this->GetFormValue('select');
+			//$selected = explode('@', $selected);
+		//var_dump($selected);
+		
+		/*	foreach ($selected as $key => $rs)
+            {
+			//var_dump('NumItem',$query->result[$key][1]);
+			//var_dump('Requisicao',$query->result[$key][9]);
+			}
+			
+*/
+			//var_dump($selected,'FIM');
+			$selected = array_reverse($selected,true);
+			//var_dump('INICIO',$selected);
+		$OrcTermo = $this->manager->getBusiness('adm','orcamentotermo');
+        $itemLicitacao = $this->manager->getBusiness('adm','itemlicitacao');		
+
+
+			$IdLicitacao = $this->licitacao->idLicitacao;
+			
+			$motivo = $this->GetFieldValue('edtMotivo');
+			//var_dump($motivo);
+					//Diferente para serviço ou material
+					//Consumo							Permanente
+		if ($this->licitacao->idTipoLicitacao == '1' || $this->licitacao->idTipoLicitacao == '4')
+			{
+			$itemReq = $this->manager->getBusiness('adm','itemreq');
+			}
+				//Serviço
+		elseif ($this->licitacao->idTipoLicitacao == '2')
+			$itemReq = $this->manager->getBusiness('adm','itemservext');
+        else
+		{				//Livro
+			$itemReq = $this->manager->getBusiness('adm','itemreqbib');
+		}
+		
+		
+		
+		  try
+        {
+		
+			   // Se clicou "sim" volta os itens ao estado de "autorizado pelo gestor"
+			  if (($data->volta == "S") and ($selected != null))
+            {   
+		
+		$query = $this->licitacao->GetItensRequisitados();
+		
+			 foreach ($selected as $key => $rs)
+            {
+			$NumItem = $query->result[$key][0];
+			$IdRequisicao = $query->result[$key][8];
+			
+			
+			if ($motivo != null)
+			{
+			$itemReq->setMotivoRejeita($IdRequisicao,$NumItem,$motivo);
+			}
+			
+			$itemReq->removeDaLicitacao($IdLicitacao,$NumItem,$IdRequisicao);// parâmetro $NumItem adicionado
+
+			$OrcTermo->RemoveOrcTermo($IdLicitacao,$NumItem);
+			//var_dump('STATUS',$this->licitacao->status);
+			if ($this->licitacao->status == 1 and $itemReq->getStatusByItem($IdLicitacao,$NumItem) == 0)
+                {
+                    $this->licitacao->reordenaItens($NumItem); //Reordena os itens para eliminar o buraco	 parâmetro $NumItem adicionado
+
+                    $itemLicitacao->removeUltimoItem($IdLicitacao); //Atualiza o item na tabela itemlicitacao
+
+					$OrcTermo->ReordenaOrcTerm($IdLicitacao,$NumItem);
+
+                }
+                else
+                {
+                    $this->licitacao->deleteItemDoMapa($itemReq->item);
+                }
+			
+			
+		//	var_dump('Numero do Processo',$selected[$key],'Numero do item',$key);
+			
+				}
+               
+			 $this->manager->Information("Os itens foram removidos.",$this->manager->getActionUrl('adm','main:licitacoes',$this->licitacao->idLicitacao,array('form'=>'itens')));			
+			
+			}
+			else
+			{ 
+			 $this->manager->Information("Nenhum item alterado.",$this->manager->getActionUrl('adm','main:licitacoes',$this->licitacao->idLicitacao,array('form'=>'itens')));			
+			}
+		 }
+        catch (Exception $e)
+        {
+            $this->addError($e->getMessage());
+        }
+		
+
+	/*	$param = $this->idRequisicao;
+      
+         
+          
+		 
+		
+		
+
+
+        
+                $this->manager->Information("Ítem de licitação cancelado. Itens de Requisição voltaram pra licitação.",$this->manager->getActionUrl('adm','main:licitacoes',$this->licitacao->idLicitacao,array('form'=>'itens')));
+                $this->licitacao->Log(OP_UPD,"Licitacao ".$this->licitacao->idLicitacao." - iditemreq ".$this->idItemReq.": Item cancelado. Itens de requisicao voltaram para licitacao.");
+            }
+            else
+            {
+                $this->manager->Information("Ítem de licitação atualizado com sucesso.",$this->manager->getActionUrl('adm','main:licitacoes',$this->licitacao->idLicitacao,array('form'=>'itens')));
+                $this->licitacao->Log(OP_UPD,"Licitacao ".$this->licitacao->idLicitacao." - idItemReq ".$this->idItemReq.": Item atualizado com sucesso.");
+            }
+       
+	*/}
+ }
+?>

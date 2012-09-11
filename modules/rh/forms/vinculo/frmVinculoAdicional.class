@@ -1,0 +1,168 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmVinculoAdicional extends MForm
+{
+	protected $adicional;
+    protected $vinculo;
+
+    function __construct($values)
+    {
+		$this->adicional = $values[0];
+        $this->vinculo = $values[1];
+        parent::__construct('Dados do Adicional');
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+
+       	$tabelaGeral = $this->manager->getBusiness('common','tabelageral');
+	   	$query = $tabelaGeral->listByTabela('RH_TIPOADICIONAL');
+
+        $selGrau = array("1"=>"MÍNIMO","2"=>"MÉDIO","3"=>"MÁXIMO");
+
+		$fields = array(
+            new MSelection('idAdicional','','Adicional',$query->ChunkResult()),
+            new MCalendarField('dataInicio',date('d/m/Y'),'Data de início','10','DD/MM/YYYY'),
+            new MCalendarField('dataFim','','Data final','10','DD/MM/YYYY'),
+			new MSelection('grau','','Grau',$selGrau),
+			new MultiLineField('obs','','Observação',25,5,40,'Máx. 500'),
+        );
+		
+        $this->setFields($fields);
+        $this->setFieldAttr('dataInicio','visible',FALSE);
+        $this->setFieldAttr('dataFim','visible',FALSE);
+        $this->setFieldAttr('grau','visible',FALSE);
+		$this->setFieldAttr('obs','visible',FALSE);
+		
+		$buttons = array(
+            new MButton('btnPost','Enviar'),
+			new MButton('btnSalvar','Enviar'),
+			new MButton('btnExcluir','Excluir')
+            );
+		$this->setButtons($buttons);
+        $this->setButtonAttr('btnSalvar','visible',FALSE);
+        $this->setButtonAttr('btnExcluir','visible',FALSE);
+
+		$validators = array(
+			new MDateDMYValidator('dataInicio','','required'),
+			new MDateDMYValidator('dataFim')
+			);
+
+		$this->SetValidators($validators);
+
+        if ( $this->adicional->isPersistent() )
+        {
+            $this->setData();
+            $this->btnPost_click();
+        }
+        
+    }
+
+	function SetData()
+	{
+		$this->SetFieldValue('idAdicional',$this->adicional->idAdicional);
+		$this->SetFieldValue('dataInicio',$this->adicional->dataInicio);
+		$this->SetFieldValue('dataFim',$this->adicional->dataFim);
+		$this->SetFieldValue('grau',$this->adicional->grau);
+		$this->SetFieldValue('obs',$this->adicional->obs);
+	}
+
+    function btnPost_click()
+    {
+        if ( $this->vinculo->permiteAdicional() || $this->adicional->isPersistent() )
+        {  
+            $idAdicional = ($this->adicional->idAdicional) ? $this->adicional->idAdicional : $this->getFormValue('idAdicional');
+            $this->setFieldAttr('idAdicional','readonly',TRUE);
+            $this->setFieldAttr('dataInicio','visible',TRUE);
+            $this->setFieldAttr('dataInicio','readonly',$this->adicional->isPersistent());
+            $this->setFieldAttr('dataFim','visible',TRUE);
+            $this->setFieldAttr('grau','visible',$idAdicional == 1);
+			$this->setFieldAttr('obs','visible',TRUE);
+			
+            $this->setButtonAttr('btnPost','visible',FALSE);
+            $this->setButtonAttr('btnSalvar','visible',TRUE);
+            $this->setbuttonattr('btnExcluir','visible',TRUE);
+        
+        }
+        else
+        {
+            $this->addError("Servidor já possui adicional vigente no mesmo período.");
+        }
+    }
+    
+	public function btnSalvar_click()
+	{
+		$update = $this->adicional->isPersistent();
+		$data = $this->getData();
+        $data->grau = ($data->grau) ? $data->grau : 2;
+		$this->adicional->setData($data);
+		try
+		{
+			$this->adicional->save();
+            $this->adicional->log($op,"vinculo: ".$this->adicional->idVinculo." data de inicio: ".$this->adicional->dataInicio." data fim: ".$this->adicional->dataFim." adicional: ".$this->adicional->idAdicional." grau: ".$this->adicional->grau);
+			
+			
+        	$go = $this->manager->getActionURL('rh','main:vinculo',$this->adicional->idVinculo, array('form'=>'adicional'));
+			if ($update)
+			{
+    	   	    $this->manager->information('Adicional atualizado com sucesso.', $go );
+			}
+			else	
+			{
+    	   	    $this->manager->information('Adicional inserido com sucesso.', $go );
+			}
+		}
+		catch ( ESimpleRnException $e )
+		{
+			$this->AddError($e->getMessage());
+        }
+	}
+
+	function btnExcluir_click()
+	{
+		$action_sim = $this->manager->getActionURL('rh','main:vinculo',$this->adicional->idVinculo,array('form'=>'adicional','id'=>$this->adicional->dataInicio,'conf'=>'sim','event'=>'btnExcluir:click'));
+		$action_nao = $this->manager->getActionURL('rh','main:vinculo',$this->adicional->idVinculo,array('form'=>'adicional','id'=>$this->adicional->dataInicio));
+
+		$conf = $this->GetFormValue('conf');
+
+		if ($conf == 'sim')
+		{
+			try
+			{
+				$this->adicional->delete();
+                $this->adicional->log(OP_DEL,"vinculo: ".$this->adicional->idVinculo." data de inicio: ".$this->adicional->dataInicio." data fim: ".$this->adicional->dataFim." adicional: ".$this->adicional->idAdicional." grau: ".$this->adicional->grau);
+				$this->manager->information('Adicional excluído com sucesso',$this->manager->GetActionURL('rh','main:vinculo',$this->adicional->idVinculo,array('form'=>'adicional')));
+			}
+			catch ( Exception $e )
+			{
+				$this->manager->error("Informe o seguinte erro à equipe do CGCO: ".$e->getMessage());
+			}
+					
+	   }
+	   else
+	   {
+		   $this->manager->question("Tem certeza que deseja excluir o adicional ".$this->adicional->adicional.", com data início em:".$this->adicional->dataInicio."?",$action_sim,$action_nao);
+		}
+	}
+
+
+}
+?>

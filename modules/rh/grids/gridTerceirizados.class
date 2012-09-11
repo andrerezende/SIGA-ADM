@@ -1,0 +1,84 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+class gridTerceirizados extends MDataGrid
+{
+
+	function gridTerceirizados()
+    {   
+        global $MIOLO,$self,$action;
+        
+        $this->SetFilter(false);
+        $filterNome = Form::GetFormValue('nome');
+        $nome = Util::NVL($filterNome, 'A Definir');
+        $this->AddFilterText('nome','Nome',$nome);
+        $objTerceirizado = $MIOLO->GetBusiness('rh','terceirizado');
+        $query = $objTerceirizado->ListByNome(strtoupper("'$nome%'"));
+		$hrefAction = $MIOLO->GetActionURL('rh','main:terceirizado','#0#');
+	
+        $columns = array(
+        	new MDataGridColumn('idterceirizado','id','left',false,'10%',false),
+            new MDataGridHyperlink('nome','Nome',$hrefAction,'40%',true,null,true),
+            new MDataGridColumn('contrato','Contrato','center', false,'10%',true),
+        	new MDataGridColumn('nomeinst','Instituição','left',false,'35%',true),
+        	new MDataGridColumn('exclusao','Exclusão','center',false,'10%',true),        	
+    	);
+
+		$href_grid = $MIOLO->GetActionURL('rh',$self);        
+		parent::__construct($query,$columns,$href_grid,50);
+		$action = $MIOLO->GetActionURL('rh','main:terceirizado','#0#',array('form'=>'excluir'));
+		$this->setRowMethod('gridTerceirizados','myRowMethod');
+        $this->SetLinkType('hyperlink');
+        $this->AddActionDelete($action);
+        $this->SetTitle('Resultado');
+		$this->SetIndex(0);
+    }
+
+
+    function generateFooter()
+    {
+        if (!$this->data) 
+		{
+           $footer[] = $this->GenerateEmptyMsg();
+		}
+        return $footer;
+    }
+
+    public function myRowMethod($i,$row,$actions,$columns)
+    {
+        global $MIOLO;
+        $idTerceirizado = $row[0];
+        $terceirizado = $MIOLO->getBusiness('rh','terceirizado',$idTerceirizado);
+        $terceirizado->GetProvimentos();
+        $provimento = $terceirizado->GetProvimentoAtual();
+		
+		if	($provimento->idContrato)
+		{
+		    $provimento->retrieveAssociation('contrato');
+		    $columns['contrato']->control[$i]->SetValue($provimento->contrato->numContrato);
+		}
+		else
+		{
+		    $columns['contrato']->control[$i]->SetValue('INFORMAR');
+		}
+		
+        $columns['nomeinst']->control[$i]->setValue(strtoupper($terceirizado->provimentos[0]->instituicao->nome));
+        $columns['exclusao']->control[$i]->setValue(strtoupper($terceirizado->provimentos[0]->dataFim));
+    }
+}
+?>

@@ -1,0 +1,90 @@
+<?
+class frmDespesasRestaurante extends Form
+{
+	var $objRestaurante;
+   
+   function __construct()
+   {
+ 	  global $MIOLO, $module, $self;
+ 	  $this->Form('Despesas - Restaurante');
+ 	  $this->EventHandler();
+   }
+
+	function CreateFields()
+	{
+		global $MIOLO,$module,$self, $action, $auth;
+
+		$this->objRestaurante = $MIOLO->GetBusiness($module,'restaurante');
+		$contagem = $this->objRestaurante->countAtivos();
+
+		if(!$contagem){
+			$MIOLO->Information('Não existem restaurantes cadastrados no sistema.',$MIOLO->GetActionUrl($module,'main:reports'));
+		}
+		else
+		{
+			$lista = $this->objRestaurante->ListAll();
+
+			for ($i=0; $i<count($lista->result); $i++){
+				$options[$lista->result[$i][0]] = $lista->result[$i][1];
+			}
+
+			$fields = array(
+				new Selection('selRestaurante','','Restaurante',$options,false),
+				new CalendarField('dtInicio','','A partir de'),
+				new CalendarField('dtFim','','Até'),
+			);
+			$this->SetFields($fields);
+
+			$buttons = array(
+				new FormButton('btnPost', 'Gerar Relatório', 'PDF'),
+				new MButton('btnGerarCSV','Gerar Planilha'),
+			);
+			$this->SetButtons($buttons);
+		}
+	}
+
+   function btnPost_click()
+   {
+	 global $MIOLO, $module;
+
+	 $ui = $MIOLO->GetUI();
+     $report = $ui->GetReport($module,'repDespesasRestaurante');
+     $report->Generate();
+   }
+   function btnGerarCSV_click()
+	{
+		global $MIOLO, $module, $self, $action, $perms;	
+		
+		$restaurante = $this->GetFormValue('selRestaurante');
+		$dataInicio = $this->GetFormValue('dtInicio');
+		$dataFim = $this->GetFormValue('dtFim');		
+		
+		$objItemRestaurante = $MIOLO->GetBusiness($module,'itemrestaurante');
+		$objRestaurante = $MIOLO->GetBusiness($module,'restaurante');
+
+		$query = $objItemRestaurante->RepDespesasRestaurante($restaurante, $dataInicio, $dataFim);
+
+		if($query->result[0][0] <> null){
+
+			$query->SetOrder('idrequisicao');
+
+			$nomeRestaurante = $objRestaurante->GetById($restaurante)->nome;
+			
+			foreach($query->result as $row){
+				$total += floatval(str_replace(',','.',$row[6]));
+				$row[6] = number_format(str_replace(',','.',$row[6]),2,',','.');
+				$data[] = $row;
+			}
+    
+			$resultAux[] = array('Nº REQ','UNIDADE','NOME CONVIDADO','ENTRADA','SAÍDA','FATURA','VALOR TOTAL');
+			foreach ($query->result as $result)		  
+	    	{
+	    		$resultAux[] = array($result[0],$result[1],$result[2],$result[3],$result[4],$result[5],$result[6]);		
+	    	}
+	    				    
+		    $query->result = $resultAux;
+			$query->getCSV("DespesasRestaurante.$nomeRestaurante"); 
+		}
+		}
+}
+?>

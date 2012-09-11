@@ -1,0 +1,604 @@
+<?
+class frmRequisicaoSuplementar extends MForm
+{
+	var $objLicitacao;
+
+	function __construct()
+    {
+		global $MIOLO;
+        parent::__construct('Nova Requisição Suplementar');
+		$this->SetClose($this->manager->GetActionURL('adm','main'));
+        $this->EventHandler();
+		$this->defaultButton = false;
+    }
+
+    function CreateFields()
+    {
+		global $MIOLO, $module;
+
+		//verificações com relação ao requisitante
+		$idUsuario = $this->manager->GetLogin()->idkey;
+		$uo = $this->manager->getbusiness('adm','uo');
+		$uoRequisitante = $uo->listByUsuario($idUsuario,true);
+		$uos = count($uoRequisitante->result);
+
+		if($uos == 0)
+		{
+			$this->Error('Usuário não é requisitante!');
+			return;
+		}
+		elseif($uos == 1)
+		{
+            $fields = array(
+				new MTextField('idUoReq',$uoRequisitante->result[0][1],'UO Requisitante',80),
+				new MHiddenField('idUoRequisitante', $uoRequisitante->result[0][0]),
+			);
+		}
+		else
+		{
+            $fields = array(
+				new MSelection('idUoRequisitante','','UO Requisitante',$uoRequisitante->result)
+			);
+		}
+
+		$this->objLicitacao = $MIOLO->GetBusiness($module, 'licitacao');
+
+		$fields[] = new MTextField('licitacao', '', 'Número da Licitação', 20);
+       	$this->SetFields($fields);
+		if($uos == 1)
+		{
+			$this->SetFieldAttr('idUoReq', 'readonly', true);
+		}
+
+		$button = array(
+			new FormButton('btnEnviar','Enviar'),
+			new FormButton('btnConfirmar','Confirmar'),
+		);
+       	$this->SetButtons($button);
+		$this->SetButtonAttr('btnConfirmar','visible',false);
+
+		$this->manager->page->addJsCode("
+			function atualizaTotal(i,total)
+			{
+				x = MIOLO_GetElementById('quant['+i+']'); 
+				y = MIOLO_GetElementById('preco['+i+']'); 
+				w = y.innerHTML;
+				while(w.indexOf('.')>=0)
+				{
+					w = w.replace('.','');
+				}
+				w = w.replace(',','.');
+				z = MIOLO_GetElementById('total['+i+']'); 
+				z.innerHTML = x.value * w; 
+				//vírgula dos centavos
+				ponto = z.innerHTML.length; 
+				z.innerHTML = z.innerHTML+'000'; 
+				for(i=0;i<z.innerHTML.length;i++) 
+				{ 
+					if(z.innerHTML.substring(i,i+1)=='.') 
+					{
+						ponto=i
+					} 
+				}; 
+				z.innerHTML = z.innerHTML.substr(0,ponto)+','+z.innerHTML.substr(ponto+1,2); 
+				//pontos de milhares
+				a = z.innerHTML.substr(z.innerHTML.length-3,3);
+				i = 0;
+				for(j=3;j<z.innerHTML.length;j++)
+				{
+					i = i + 1;
+					k = z.innerHTML.length - j;
+					a = z.innerHTML.substring(k-1,k) + a;
+					if(i == 3)
+					{
+						i = 0;
+						if(j < z.innerHTML.length-1)
+						{
+							a = '.' + a;
+						}
+					}
+				}
+				z.innerHTML = a;
+				//total geral
+				valor = 0;
+				for(i=0;i<total;i++) 
+				{
+					x = MIOLO_GetElementById('quant['+i+']'); 
+					y = MIOLO_GetElementById('preco['+i+']'); 
+					w = y.innerHTML;
+					while(w.indexOf('.')>=0)
+					{
+						w = w.replace('.','');
+					}
+					w = w.replace(',','.');
+					valor = valor + (x.value * w);
+				};
+				z = MIOLO_GetElementById('totalGeral'); 
+				z.innerHTML = valor; 
+				//vírgula dos centavos
+				ponto = z.innerHTML.length; 
+				z.innerHTML = z.innerHTML+'000'; 
+				for(i=0;i<z.innerHTML.length;i++) 
+				{ 
+					if(z.innerHTML.substring(i,i+1)=='.') 
+					{
+						ponto=i
+					} 
+				}; 
+				z.innerHTML = z.innerHTML.substr(0,ponto)+','+z.innerHTML.substr(ponto+1,2);
+				//pontos de milhares
+				a = z.innerHTML.substr(z.innerHTML.length-3,3);
+				i = 0;
+				for(j=3;j<z.innerHTML.length;j++)
+				{
+					i = i + 1;
+					k = z.innerHTML.length - j;
+					a = z.innerHTML.substring(k-1,k) + a;
+					if(i == 3)
+					{
+						i = 0;
+						if(j < z.innerHTML.length-1)
+						{
+							a = '.' + a;
+						}
+					}
+				}
+				z.innerHTML = a;
+			}
+		");
+	}
+
+	function btnEnviar_click()
+    {
+		global $MIOLO, $module, $item;
+
+		$this->page->SetAction($MIOLO->GetActionURL($module, $action));
+
+		$idUoReq = $this->GetFormValue('idUoRequisitante');
+
+		$licitacao = $this->GetFormValue('licitacao');
+		if($licitacao == null)
+		{
+			$idLicitacao = $this->GetFormValue('idLicitacao');
+		}
+		else
+		{
+			$this->objLicitacao = $MIOLO->GetBusiness($module,'licitacao');
+			$idLicitacao = $this->objLicitacao->GetIdBynumero($licitacao);
+		}
+		if($idLicitacao == null)
+		{
+			$MIOLO->Error('Licitação não encontrada', $MIOLO->GetActionURL($module, $action) );
+		}
+
+		$this->objLicitacao = $MIOLO->GetBusiness($module,'licitacao',$idLicitacao);
+		$itensDaLicitacao = $this->objLicitacao->getItens();
+
+		//verifica status da licitacao
+		if( ($this->objLicitacao->status != '4') and ($this->objLicitacao->status != '5') )
+		{
+			$MIOLO->Error('O status da licitacao não permite este tipo de operação.', $MIOLO->GetActionURL($module, $action) );
+		}
+
+        $this->SetTitle('Suplementar Itens da Licitação ' . $this->objLicitacao->numero);
+
+		//verifica se requisita está ativo
+		if($this->objLicitacao->idTipoLicitacao == '1')//COMPRA CONSUMO
+		{
+			$tipo = '7';
+		}
+		elseif($this->objLicitacao->idTipoLicitacao == '2')//SERVIÇO
+		{
+			$tipo = '9';
+		}
+		elseif($this->objLicitacao->idTipoLicitacao == '3')//BIBLIOTECA
+		{
+			$tipo = '10';
+		}
+		elseif($this->objLicitacao->idTipoLicitacao == '4')//COMPRA PERMANENTE
+		{
+			$tipo = '6';
+		}
+		$requisita = $this->manager->getBusiness('adm','requisita');
+		$requisita->GetById($tipo, $idUoReq);
+		
+		//se requisita não estiver ativo, interrompe
+		if($requisita->ativo == 'N')
+		{
+			$MIOLO->Error('A UO não possui permissão para este tipo de requisição.', $MIOLO->GetActionURL($module, $action) );
+		}
+
+        $columns = array(
+           	new MGridColumn('Nº','center', true,'5%'),
+           	new MGridColumn('Descrição','left', false,'30%'),
+           	new MGridColumn('Quantidade','center', true,'10%'),
+           	new MGridColumn('Unidade','center', true,'5%'),
+           	new MGridColumn('R$ Unit','center', true,'10%'),
+           	new MGridColumn('Empresa','left', false,'20%'),
+           	new MGridColumn('R$ Total','center', true,'10%'),
+           	new MGridColumn('Rubrica','center', false,'10%'),
+        );
+
+		$data = $this->objLicitacao->GetDadosItensParaEmpenho($idLicitacao, $itensDaLicitacao, false, true);
+		$grid = new MGrid($data, $columns, $href_datagrid, 0);
+		$grid->AddActionSelect();
+		$grid->SetRowMethod('frmRequisicaoSuplementar', 'MyRowMethod2');
+
+		$fields = array(
+            $grid,
+			new MHiddenField('idUoReq', $idUoReq),
+			new MHiddenField('idLic', $idLicitacao),
+        );
+        $this->SetFields($fields);
+
+		$this->SetButtonAttr('btnEnviar','visible',false);
+		if( count($data) > 0 )
+		{
+			$this->AddButton(new MButton('btnDefinir','Definir Suplementação'));
+		}
+	}
+
+	function btnDefinir_click()
+	{   
+		global $MIOLO, $module, $item, $action, $theme;
+
+		$idUoReq = $this->GetFormValue('idUoReq');
+
+		$selected = $this->GetFormValue('select');
+		if($selected == null)
+		{
+			$selected =  $this->GetFormValue('selected');
+			if($selected)
+			{
+				$selected = explode('@', $selected);
+			}
+		}
+		$idLicitacao =  $this->GetFormValue('idLic');
+		if($idLicitacao == null)
+		{
+			$idLicitacao =  $this->GetFormValue('idLicitacao');
+		}
+		$totalItens = count($selected);
+
+		if($totalItens == 0)
+		{
+			$this->page->SetAction($MIOLO->GetActionURL($module, $action, '', array('event'=>'btnEnviar_click', 'idLicitacao'=>$idLicitacao)));
+			$MIOLO->Error('Por favor, selecione os itens', $MIOLO->GetActionURL($module, $action, '', array('event'=>'btnEnviar_click', 'idLicitacao'=>$idLicitacao, 'idUoRequisitante'=>$idUoReq)) );
+		}
+		else //um ou mais de um item foi selecionado
+		{
+			$this->objLicitacao = $MIOLO->GetBusiness($module,'licitacao',$idLicitacao);
+			$itensDaLicitacao = $this->objLicitacao->getItens();
+
+			$this->SetTitle('Informe as quantidades a serem suplementadas para a licitação ' . $this->objLicitacao->numero);
+
+			$columns = array(
+				new MGridColumn('Nº','center', true,'3%'),
+				new MGridColumn('Descrição','left', false,'40%'),
+				new MGridColumn('Quantidade','center', true,'10%'),
+				new MGridColumn('Unidade','center', true,'5%'),
+				new MGridColumn('R$ Unit','center', true,'8%'),
+				new MGridColumn('Empresa','left', false,'15%'),
+				new MGridColumn('R$ Total','center', true,'8%'),
+	           	new MGridColumn('Rubrica','center', false,'10%'),
+			);
+
+			$data = $this->objLicitacao->GetDadosItensParaEmpenho($idLicitacao, $itensDaLicitacao, false, true);
+			$data2 = array(); //elimina os itens não selecionados
+			$select = '';
+			for($i = 0; $i < count($data); $i++)
+			{
+				if(in_array($data[$i][0], $selected))
+				{
+					$data2[] = $data[$i];
+					$select .= $data[$i][0] . '@';
+				}
+			}
+			$select = substr($select, 0, -1); //concatenação de todos os itens selecionados separados por @
+			$valorTotalGeral = "0,00";
+
+			$n2 = 48; //indice para cada uma das linhas ($row), onde fica o total de itens mostrados na tela
+			$n3 = 49; //indice para cada uma das linhas ($row), onde fica o saldo original (não modificado pelo usuário)
+			for($i = 0; $i < count($data2); $i++)
+			{
+				$data2[$i][$n2] = $totalItens;
+				$data2[$i][$n3] = $data2[$i][2];
+				$data2[$i][6] = "0,00";
+			}
+
+			//verifica se todos os itens escolhidos possuem mesmo início de elemento 
+			//(são do mesmo tiporeq, verificação necessária para materiais de consumo e permanente na mesma licitação)
+			$elemento = $data2[0][8];
+			foreach($data2 as $d)
+			{
+				if($d[8] != $elemento)
+				{
+					$this->page->SetAction($MIOLO->GetActionURL($module, $action, '', array('event'=>'btnEnviar_click', 'idLicitacao'=>$idLicitacao)));
+					$MIOLO->Error('Os itens selecionados não possuem mesmo material.', $MIOLO->GetActionURL($module, $action, '', array('event'=>'btnEnviar_click', 'idLicitacao'=>$idLicitacao, 'idUoRequisitante'=>$idUoReq)) );
+				}
+			}
+			//verifica se o tipo da licitação original é SERVIÇO ou BIBLIOTECA ou COMPRA PERMANENTE e mais de 1 item foi selecionado
+			if( (($this->objLicitacao->idTipoLicitacao == '2') || ($this->objLicitacao->idTipoLicitacao == '3') || ($data2[0][8] == '449052')) && (count($data2) > 1) )
+			{
+				$this->page->SetAction($MIOLO->GetActionURL($module, $action, '', array('event'=>'btnEnviar_click', 'idLicitacao'=>$idLicitacao)));
+				$MIOLO->Error('Para este tipo de requisição só é permitido um item.', $MIOLO->GetActionURL($module, $action, '', array('event'=>'btnEnviar_click', 'idLicitacao'=>$idLicitacao, 'idUoRequisitante'=>$idUoReq)) );
+			}
+
+			//definição dos campos do form
+			$grid = new MGrid($data2, $columns, $href_datagrid, 0);
+			$fields = array(
+				$grid,
+				new HiddenField('idUoReq', $idUoReq),
+				new HiddenField('idLicitacao', $idLicitacao),
+				new HiddenField('selected', $select),
+				new MSpacer(1),
+				new MTextLabel('totalGeral', $valorTotalGeral, 'Valor Total dos Itens'),
+				new MSpacer(1),
+				new MSeparator('DADOS DA ENTREGA'),
+				new MTextField('localEntrega','','Local',40),
+				new MMultiLineField('obs','','Obs',200,3,50)
+			);
+			$this->SetFields($fields);
+			$grid->SetRowMethod('frmRequisicaoSuplementar', 'MyRowMethod');
+
+		}
+		$this->SetButtonAttr('btnConfirmar','visible',true);
+		$this->SetButtonAttr('btnEnviar','visible',false);
+	}
+
+	function btnConfirmar_click()
+	{   
+		global $MIOLO, $module, $item, $action;
+
+		$dataCorrente = date("d/m/Y H:i:s");
+//		$dataCorrente = "31/12/2007 00:00:00";
+
+		$cf = new MCurrencyFormatter();
+		$selected = $this->GetFormValue('selected');
+		$itens = explode('@', $selected);
+		$idLicitacao = $this->GetFormValue('idLicitacao');
+		$quant = $this->GetFormValue('quant');
+		$idUoReq = $this->GetFormValue('idUoReq');
+		$localEntrega = $this->GetFormValue('localEntrega');
+		$obs = $this->GetFormValue('obs');
+
+		$this->objLicitacao = $MIOLO->GetBusiness($module,'licitacao',$idLicitacao);
+		$itensDaLicitacao = $this->objLicitacao->getItens();
+		$data = $this->objLicitacao->GetDadosItensParaEmpenho($idLicitacao, $itensDaLicitacao, false, true);
+
+		$data2 = array(); //elimina os itens não selecionados
+		$i = 0;
+		foreach($data as $itemLic)
+		{
+			if( in_array($itemLic[0], $itens) )
+			{
+				$data2[] = $itemLic;
+				$data2[$i][2] = $quant[$i];
+				$data2[$i][6] = str_replace('.', '', $data2[$i][6]);
+				$data2[$i][6] = floatval(str_replace(',', '.', $data2[$i][6]));
+				$i++;
+			}
+		}
+
+		//atualização das quantidades e valores dos itens; calculo do total geral de todos os itens
+		$valorTotal = 0;
+		for($i = 0; $i < count($data2); $i++)
+		{
+			$data2[$i][4] = str_replace('.','',$data2[$i][4]);
+			$data2[$i][6] = $quant[$i] * floatval(str_replace(',','.',$data2[$i][4]));
+			$valorTotal += $data2[$i][6];
+		}
+
+		$idUsuario = $this->manager->GetLogin()->idkey;
+		$uo = $MIOLO->GetBusiness('adm','uo',$idUoReq);
+		if ($uo->isGestorOf($idUsuario))
+		{
+			$gestor = true;
+		}
+		else
+		{
+			$gestor = false;
+		}
+
+		if($this->objLicitacao->idTipoLicitacao == '1')//COMPRA CONSUMO
+		{
+			$tipo = '7';
+		}
+		elseif($this->objLicitacao->idTipoLicitacao == '2')//SERVIÇO
+		{
+			$tipo = '9';
+		}
+		elseif($this->objLicitacao->idTipoLicitacao == '3')//BIBLIOTECA
+		{
+			$tipo = '10';
+		}
+		elseif($this->objLicitacao->idTipoLicitacao == '4')//COMPRA PERMANENTE
+		{
+			$tipo = '6';
+		}
+
+		//atualizações no banco
+		try
+		{
+			//cria requisicao
+			$requisicao = $MIOLO->GetBusiness('adm','requisicao');
+			$requisicao->BeginTransaction();
+			$requisicao->dataHora = $dataCorrente;
+			$requisicao->idTipoReq = $tipo;
+			$requisicao->localEntrega = $localEntrega;
+			$requisicao->obs = $obs;
+			$requisicao->status = '2';
+			$requisicao->idUoRequisitante = $idUoReq;
+			$requisicao->idUoExecutante = 2;//COSUP
+			$requisicao->idUsuarioRequisitante = $idUsuario;
+			$requisicao->suplementar = 'S';
+			$valorEstimado = $cf->toDecimal($valorTotal);
+			$requisicao->save();
+			if($gestor)
+			{
+				//verifica se a UO tem saldo para este tipo de requisição
+				if ($requisicao->getSaldo() >= $valorEstimado) 
+				{
+					$requisicao->dataHoraAut = $dataCorrente;
+					$requisicao->status = '4';
+					$requisicao->idUsuarioGestor = $idUsuario;
+					$requisicao->save();
+
+					//faz lançamento interno e atualiza orçamento da uo requisitante
+					$requisita = $this->manager->getBusiness('adm','requisita');
+					$requisita->GetById($requisicao->idTipoReq, $requisicao->idUoRequisitante, $requisicao->getAno());
+					
+					$requisicao->getUoRequisitante();
+					$requisicao->retrieveAssociation("uoRequisitante");
+					$requisicao->uoRequisitante->setTransaction($requisicao->getTransaction());
+					$requisicao->uoRequisitante->addPrevisaoDebito($requisita->idRubrica,$valorEstimado,$requisicao->getAno());
+					$requisicao->Log(OP_UPD,"Requisicao ".$requisicao->idRequisicao.": adicao da previsao de ".$valorEstimado." na UO ".$requisicao->uoRequisitante->idUo);
+
+					$lancamentoInt = $this->manager->getBusiness('adm','lancamentoint');
+					$lancamentoInt->setTransaction($requisicao->getTransaction());
+					$lancamentoInt->tipoLancamento = '4';
+					$lancamentoInt->data = date("d/m/Y");
+					$lancamentoInt->valor = $valorEstimado;
+					$lancamentoInt->ano = date("Y");
+					$lancamentoInt->idUoRequisitante = $requisicao->idUoRequisitante;       
+					$lancamentoInt->idUoExecutante = $requisicao->idUoExecutante;
+					$lancamentoInt->idRubrica = $requisita->idRubrica;
+					$lancamentoInt->idRequisicao = $requisicao->idRequisicao;
+					$lancamentoInt->idUsuario = $MIOLO->GetLogin()->idkey;
+					$lancamentoInt->obs = "Requisicao Suplementar " . $requisicao->idRequisicao;
+					$lancamentoInt->save();
+				}
+				else
+				{
+					$gestor = false;
+				}
+			}
+
+			//cria itens da requisicao
+			if($tipo == '7')//COMPRA CONSUMO
+			{
+				$i = 0;
+				foreach($data2 as $d)
+				{
+					$itemReq = $MIOLO->GetBusiness('adm','itemreq');
+					$idMaterial = $itemReq->getIdMaterialByItemLicitacao($idLicitacao, $d[0]);
+					$itemReq->idRequisicao = $requisicao->idRequisicao;
+					$itemReq->idMaterial = $idMaterial;
+					$itemReq->quantPedida = $cf->toDecimal($quant[$i]);
+					$itemReq->precoEstimado = $cf->toDecimal($d[4]);
+					$itemReq->quantAutorizada = 0;
+					$itemReq->quantEmpenhada = 0;
+					$itemReq->quantDevolvida = 0;
+					$itemReq->valorReal = 0;
+					$itemReq->status = '0';
+					$itemReq->idLicitacao = $idLicitacao;
+					$itemReq->item = $d[0];
+					$itemReq->setTransaction($requisicao->getTransaction());
+					$itemReq->save();
+					$i++;
+				}
+			}
+			elseif($tipo == '9')//SERVICO
+			{
+				$d = $data2[0];
+				$itemReqServExt = $MIOLO->GetBusiness('adm','itemservext');
+				$idServico = $itemReqServExt->getIdServicoByItemLicitacao($idLicitacao, $d[0]);
+				$itemReqServExt = $MIOLO->GetBusiness('adm','itemservext');
+				$itemReqServExt->idRequisicao = $requisicao->idRequisicao;
+				$itemReqServExt->idServico = $idServico;
+				$itemReqServExt->quantidade = $cf->toDecimal($quant[0]);
+				$itemReqServExt->valorEst = $cf->toDecimal($d[4]);
+				$itemReqServExt->quantEntregue = 0;
+				$itemReqServExt->quantEmpenhada = 0;
+				$itemReqServExt->quantDevolvida = 0;
+				$itemReqServExt->valorReal = 0;
+				$itemReqServExt->status = '0';
+				$itemReqServExt->idLicitacao = $idLicitacao;
+				$itemReqServExt->item = $d[0];
+				$itemReqServExt->setTransaction($requisicao->getTransaction());
+				$itemReqServExt->save();
+			}
+			elseif($tipo == '10')//LIVRO
+			{
+				$d = $data2[0];
+				$itemReqBib = $MIOLO->GetBusiness('adm','itemreq');
+				$idMaterial = $itemReqBib->getIdMaterialByItemLicitacao($idLicitacao, $d[0]);
+				$itemReqBib->idRequisicao = $requisicao->idRequisicao;
+				$itemReqBib->idMaterial = $idMaterial;
+				$itemReqBib->quantPedida = $cf->toDecimal($quant[0]);
+				$itemReqBib->precoEstimado = $cf->toDecimal($d[4]);
+				$itemReqBib->quantEntregue = 0;
+				$itemReqBib->quantEmpenhada = 0;
+				$itemReqBib->quantDevolvida = 0;
+				$itemReqBib->valorReal = 0;
+				$itemReqBib->status = '0';
+				$itemReqBib->idLicitacao = $idLicitacao;
+				$itemReqBib->item = $d[0];
+				$itemReqBib->setTransaction($requisicao->getTransaction());
+				$itemReqBib->save();
+			}
+			elseif($tipo == '6')//COMPRA PERMANENTE
+			{
+				$d = $data2[0];
+				$itemReq = $MIOLO->GetBusiness('adm','itemreq');
+				$idMaterial = $itemReq->getIdMaterialByItemLicitacao($idLicitacao, $d[0]);
+				$itemReq->idRequisicao = $requisicao->idRequisicao;
+				$itemReq->idMaterial = $idMaterial;
+				$itemReq->quantPedida = $cf->toDecimal($quant[0]);
+				$itemReq->precoEstimado = $cf->toDecimal($d[4]);
+				$itemReq->quantAutorizada = 0;
+				$itemReq->quantEmpenhada = 0;
+				$itemReq->quantDevolvida = 0;
+				$itemReq->valorReal = 0;
+				$itemReq->status = '0';
+				$itemReq->idLicitacao = $idLicitacao;
+				$itemReq->item = $d[0];
+				$itemReq->setTransaction($requisicao->getTransaction());
+				$itemReq->save();
+			}
+			$requisicao->EndTransaction();
+
+			$operacao = 'solicitada';
+			if($gestor)
+			{
+				$operacao .= ' e autorizada';
+			}
+			$requisicao->Log(OP_INS,"Requisicao suplementar $requisicao->idRequisicao $operacao com sucesso.");
+
+			$action_ok = $MIOLO->GetActionURL($module, $action);
+			$MIOLO->Information("Requisição suplementar $requisicao->idRequisicao $operacao com sucesso.", $action_ok);
+		}
+		catch (Exception $e)
+		{
+			$MIOLO->Error($e->getMessage(), $MIOLO->GetActionURL($module, $action, '', array('event'=>'btnDefinir_click', 'idLicitacao'=>$idLicitacao, 'selected'=>$selected, 'idUoReq'=>$idUoReq)) );
+		}
+	}
+
+	// Método a ser executado antes de renderizar cada linha
+	function MyRowMethod($i, $row, $actions, $columns)
+	{
+		global $MIOLO, $module, $item;
+
+		$textField = new MTextField("quant[$i]",'','',6);
+		$columns[2]->control[$i] = $textField;
+		$valormax = $row[49];
+		$textField->addAttribute("onBlur","atualizaTotal({$i},{$row[48]})");
+
+		$text1 = new MText("preco[$i]",$row[4]);
+		$columns[4]->control[$i] = $text1;
+
+		$text2 = new MText("total[$i]",$row[6]);
+		$columns[6]->control[$i] = $text2;
+
+		$columns[1]->control[$i]->SetJsHint($row[11]);
+	}
+
+	// Método a ser executado antes de renderizar cada linha
+	function MyRowMethod2($i, $row, $actions, $columns)
+	{
+		global $MIOLO, $module, $item;
+
+		$columns[1]->control[$i]->SetJsHint($row[11]);
+	}
+}
+?>

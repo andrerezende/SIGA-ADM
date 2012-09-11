@@ -1,0 +1,98 @@
+<?
+class frmRepMapaCotacao extends Form
+{
+	function __construct()
+	{   
+		// nome do formulário
+		parent::__construct('Imprimir Mapa de Cotações');
+		// eventos
+		$this->EventHandler();
+	}
+		
+	Function CreateFields()
+	{
+		global $MIOLO,$module,$item,$self;
+		$objLicitacao = $MIOLO->GetBusiness($module,'licitacao');
+		$list = $objLicitacao->ListAbertas();
+		$buttons = Array(
+	        	new FormButton('btnReport','Exibir Mapa','pdf')
+	 	);
+		$this->SetButtons($buttons);
+	}
+	
+	function btnReport_click()
+	{
+		global $MIOLO,$module,$item;
+		
+		$objLicitacao = $MIOLO->GetBusiness($module,'licitacao');
+		$idLicitacao = $item;	
+		
+		$report = new MEzPDFReport('2','portrait');
+		$h  = $report->pdf->getFontHeight(10);
+		$ui = $this->manager->GetUI();
+		$report->pdf->ezImage($ui->GetImage('','logonet.png'),5,50,'none','left',0);
+		$report->pdf->addText(110,810       ,10,'UNIVERSIDADE FEDERAL DE JUIZ DE FORA');
+		$report->pdf->addText(110,810-$h    ,10,'CENTRO DE GESTÃO DO CONHECIMENTO ORGANIZACIONAL - CGCO');
+		$report->pdf->addText(110,810-(2*$h),10,'SISTEMA INTEGRADO DE GESTÃO ACADÊMICA - SIGA');
+		$report->pdf->ezText('MAPA DE COTAÇÕES ',16,array('justification'=>'center'));
+		$report->pdf->ezText('LICITAÇÃO NÚMERO '.$idLicitacao,10,array('justification'=>'center'));			
+		$report->pdf->ezText('',20);
+		$options['textCol']      = array(0,0,0);
+		$options['shaded']       = 1;
+		$options['showLines']    = 1;		
+		$options['fontSize']     = 10;
+		$options['width']        = 540;
+		$options['xPos']         = 'left';
+		$options['xOrientation'] = 'right';			
+		
+		$totalItens = $objLicitacao->GetTotalDeItensByLicitacao($idLicitacao);	
+		$objLicitacao = $objLicitacao->getById($idLicitacao);
+		$participantes = $objLicitacao->ListParticipantesByLicitacao();
+		
+		if(is_array($participantes))
+		{
+			foreach($participantes as $val)
+			{				
+				$itemPreco = $objLicitacao->GetItemPreco($idLicitacao,$val[0]);
+				$nomeEmp = $val[1];
+				$report->pdf->ezText('<b>EMPRESA: "'.$nomeEmp.'"</b>',10,array('justification'=>'left'));
+				$report->pdf->ezText('',3);
+				
+				foreach($itemPreco as $value)
+				{
+					$item = $value[0]; 	
+					$preco = $value[1]; 
+					if($preco=="")
+						$preco="NÃO COTOU";
+					else 	
+						$preco = "R$ ".number_format(str_replace(',','.',$preco),2,',','');
+						
+					$dataRel[] = array($item,$preco);
+				}
+				$cols = array('<b>ITEM</b>','<b>COTAÇÃO</b>');
+				$report->pdf->ezTable($dataRel,$cols,'',$options);	
+				
+				unset($dataRel);
+				$report->pdf->ezText('',10);	
+			}
+		}
+		
+		//EXIBE A LEGENDA
+		$descricaoItens = $objLicitacao->getDescricaoItens($idLicitacao);		
+		
+		if(is_array($descricaoItens))
+		{
+			$report->pdf->ezText('',10);
+			$report->pdf->ezText('<b>LEGENDA DOS ITENS:</b>',10,array('justification'=>'left'));
+			foreach($descricaoItens as $val)
+			{
+				$item = $val[0];
+				$descricao = $val[1];					
+				$report->pdf->ezText('',5);
+				$report->pdf->ezText($item.' - '.$descricao,9,array('justification'=>'left'));			
+			}		
+		}
+		$report->Execute();
+	}	
+}
+?>

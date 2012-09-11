@@ -1,0 +1,162 @@
+<?
+class frmOrganogramaSetor extends MForm
+{
+    private $objSetor;
+
+	function __construct($objSetor)
+    {   
+        $this->objSetor = $objSetor;
+        $situacao = $this->objSetor->dataFim == NULL ? 'Aberto' : 'Fechado';
+        parent::__construct("Setor: {$this->objSetor->sigla} [{$this->objSetor->idSetor}]");
+	    $this->EventHandler();
+	}
+
+    function CreateFields()
+	{
+       $tabGeral = $this->manager->GetBusiness('common','tabelageral');
+       $qryTipoSetor = $tabGeral->ListByTabela('CM_TIPOSETOR');
+
+       $tipoOrganograma = $this->manager->GetBusiness('common','tipoorganograma');
+       $qryTipoOrganograma = $tipoOrganograma->ListAll();
+
+       $lkpSetorId = new MTextField('lkpSetorId','','Id Setor Pai',5);
+       $lkpSetorId->readonly = true;
+       $lkpSetor = new MLookupTextField('lkpSetor','','Setor Pai',15);
+	   $lkpSetor->module = 'common';
+	   $lkpSetor->item = 'setor';
+	   $lkpSetor->event = 'filler';
+	   $lkpSetor->related = 'lkpSetorId, lkpSetor, none, none';
+
+
+       $hierarquia = array( 
+           new MSelection('selHierarquia','','Tipo',$qryTipoOrganograma->chunkResult()),
+           $lkpSetor, $lkpSetorId
+       );     
+
+
+
+       $fields = array(
+		   new MHiddenField('key',''),
+//           array(
+//    		   new MTextField('idsetor','','IdSetor',4),
+//               new MText('acao','','blue'),
+//           ),
+           array(
+              new MTextField('siglasetor','','Setor',15),
+              new MCalendarField('dataini','','Data Inicio',10),
+              new MCalendarField('datafim','','Data Fim',10),
+              new MTextField('nomesetor','','Nome',50),
+           ),
+           array(
+              new MSelection('tiposetor','','Tipo',$qryTipoSetor->ChunkResult()),
+              new MTextField('fone','','Telefone',15),
+              new MTextField('fax','','Fax',15),
+              new MTextField('centrocusto','','Centro de Custo',20),
+              new MTextField('localizacao','','Localização',15),
+           ),
+           array(    
+             new MMultiLineField('obs','','Observação',70,7,50),
+             new MultiTextField3('mtHierarquia',null,'Organogramas',$hierarquia,150,true,'horizontal'),
+           ), 
+       );
+	   $this->SetFields($fields);
+       $buttons = array(
+           new MButton('btnPost',  'Gravar'),
+           new MButton('btnClone', 'Clonar'),
+           new MButton('btnClose', 'Fechar Setor'),
+//           new MButton('btnEdit', 'Editar'),
+//		   new MButton('btnNew', 'Novo'),
+		   new MButton('btnCancel', 'Cancelar'),
+       );
+	   $this->SetButtons($buttons);
+       $this->setData($this->objSetor);
+	}
+
+	function SetData($data)
+	{
+		$this->SetFieldValue('key',         $data->key         );
+		$this->SetFieldValue('siglasetor',  $data->sigla       );
+ 		$this->SetFieldValue('dataini',     $data->dataInicio  );
+ 		$this->SetFieldValue('datafim',     $data->dataFim     );
+		$this->SetFieldValue('nomesetor',   $data->nome        );
+		$this->SetFieldValue('tiposetor',   $data->tipo        );
+		$this->SetFieldValue('fone',        $data->fone        );
+		$this->SetFieldValue('fax',         $data->fax         );
+       	$this->SetFieldValue('centrocusto', $data->centroCusto );
+       	$this->SetFieldValue('obs',         $data->obs         );       
+        $this->SetFieldValue('localizacao', $data->localizacao );
+        $this->mtHierarquia->setCodeValue($data->getOrganogramas());
+	}
+
+	function GetData()
+	{
+        $data = new FormData();
+		$data->sigla       = $this->getFieldValue('siglasetor');
+ 		$data->dataInicio  = $this->getFieldValue('dataini');
+ 		$data->dataFim     = $this->getFieldValue('datafim');
+		$data->nome        = $this->getFieldValue('nomesetor');
+		$data->tipo        = $this->getFieldValue('tiposetor');
+		$data->fone        = $this->getFieldValue('fone');
+		$data->fax         = $this->getFieldValue('fax');
+       	$data->centroCusto = $this->getFieldValue('centrocusto');
+       	$data->obs         = $this->getFieldValue('obs');       
+        $data->localizacao = $this->getFieldValue('localizacao');
+        $data->organograma = $this->mtHierarquia->getCodeValue();
+        return $data;
+	}
+
+	function btnPost_click($sender, $item=NULL)
+	{
+       $this->objSetor->SetData($this->GetData());
+       try
+       {
+           $this->objSetor->save();
+           $action = $this->manager->GetCurrentURL();
+           $this->manager->Information('Dados cadastrados com sucesso.', $action );
+       }
+       catch (EMioloException $e)
+       {
+           $this->AddError('Erro no cadastramento/alteração das informações do setor');
+       }
+	}
+
+	function btnClone_click($sender, $item=NULL)
+	{
+       $setor = $this->objSetor;
+       $setor->SetData($this->GetData());
+       try
+       {
+           $setor->SetPersistent(false);
+           $setor->save();
+           $action = $this->manager->GetActionURL('common','main:organograma',$setor->idSetor, array('form'=>'setor'));
+           $this->page->redirect($action);
+       }
+       catch (EMioloException $e)
+       {
+           $this->AddError('Erro no cadastramento/alteração das informações do setor');
+       }
+	}
+
+	function btnClose_click($sender, $item=NULL)
+	{
+       $setor = $this->objSetor;
+       $k = new MKrono();
+       $setor->dataFim = $k->KDate('%d/%m/%Y');
+       try
+       {
+           $setor->save();
+           $action = $this->manager->GetActionURL('common','main:organograma',$setor->idSetor, array('form'=>'setor'));
+           $this->page->redirect($action);
+       }
+       catch (EMioloException $e)
+       {
+           $this->AddError('Erro no fechamento do informações do setor');
+       }
+	}
+
+	function btnCancel_click($sender)
+	{   
+        $this->SetData(new FormData()); 
+    }
+}
+?>

@@ -1,0 +1,253 @@
+<?php
+class frmPatrimonio extends MCompoundForm
+{
+	public $oid;
+    public $patrimonio;
+    private $descricao;
+    private $setor;
+    private $setor2;
+    private $bloqueio;
+
+
+    function __construct($objPatrimonio = null)
+    {
+        global $MIOLO, $module;
+
+        $this->patrimonio = $MIOLO->GetBusiness($module, 'itempatrimonio', $objPatrimonio->idItemPatrimonio);
+
+        $this->bloqueio = $this->patrimonio->getBloqueio($this->patrimonio->idNotaFiscal);
+        if ($this->bloqueio == 'S'){
+            $bloq = ' - Bloqueada';
+        }else $bloq = '';
+	if(!$this->patrimonio->idNotaFiscal){
+	    $bloq=" - (SEM NOTA FISCAL)";
+	}
+        parent::__construct();
+        $this->SetClose($MIOLO->GetActionURL('adm','main:itempatrimonio:find'));
+        $this->SetTitle("Item Patrimoniado Número $objPatrimonio->idItemPatrimonio".$bloq);
+        $this->SetIcon($MIOLO->GetUi()->GetImage('adm','default_mini.png'));
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+        global $MIOLO, $page, $module, $context, $history;
+
+        $patrimonio = $this->patrimonio;
+        if ($this->oid == NULL) $this->oid = $patrimonio->idItemPatrimonio;
+
+        //Tiago Macedo 18-05-2012
+        $bussUsuario = $MIOLO->GetBusiness("common",'usuario');
+        $objuser = $bussUsuario->GetById2($this->manager->auth->login->idkey);
+
+        $bussSetorUsuario = $MIOLO->GetBusiness("common", 'setor', $objuser->idSetor);
+        $bussSetorPatrimonio = $MIOLO->GetBusiness("common", 'setor', $this->patrimonio->idSetor);
+// form
+        $ui = $MIOLO->GetUI();
+        $form = MForm::GetFormValue('form');
+        if($this->bloqueio == 'N'){
+            switch ($form) {
+                case 'editar' :
+                        if ($bussSetorUsuario->idinstituicao != $bussSetorPatrimonio->idinstituicao && !$this->manager->perms->isMemberOf($this->manager->login, 'ADM_PATRIMONIO_ADMIN')){
+                            $this->addError("Você não tem permissão para editar itens patrimoniais de outra instituição!");
+                        }else{
+                            $this->_form[0] = $ui->GetForm($module,'frmPatrimonioEditar', $patrimonio, 'patrimonio');
+                        }
+                    break;
+                case 'transferir' :
+                        if ($bussSetorUsuario->idinstituicao != $bussSetorPatrimonio->idinstituicao && !$this->manager->perms->isMemberOf($this->manager->login, 'ADM_PATRIMONIO_ADMIN')){
+                            $this->addError("Você não tem permissão para transferir itens patrimoniais de outra instituição!");
+                        }else{
+                            $this->_form[0] = $ui->GetForm($module,'frmPatrimonioTransferir', $patrimonio, 'patrimonio');
+                        }
+                    break;
+                case 'transferirbloco' :
+                         if ($bussSetorUsuario->idinstituicao != $bussSetorPatrimonio->idinstituicao && !$this->manager->perms->isMemberOf($this->manager->login, 'ADM_PATRIMONIO_ADMIN')){
+                            $this->addError("Você não tem permissão para transferir itens patrimoniais de outra instituição!");
+                        }else{
+                            $this->_form[0] = $ui->GetForm($module,'frmPatrimonioTransferirBloco', $patrimonio, 'patrimonio');
+                        }
+                    break;
+                case 'excluir' :
+                         if ($bussSetorUsuario->idinstituicao != $bussSetorPatrimonio->idinstituicao && !$this->manager->perms->isMemberOf($this->manager->login, 'ADM_PATRIMONIO_ADMIN')){
+                            $this->addError("Você não tem permissão para dar baixa em itens patrimoniais de outra instituição!");
+                        }else{
+                            $this->_form[0] = $ui->GetForm($module,'frmPatrimonioExcluir', $patrimonio, 'patrimonio');
+                        }
+                    break;
+
+                case 'estorno2' :
+                        parent::_construct();
+                        $this->_form[0] = $ui->GetForm($module,'frmNotaFiscalEstorno', $patrimonio, 'patrimonio');
+                    return;
+                case 'copiar' :
+
+                    //--------------------Leitura dos valores e envio para header------------------------------
+
+                    $codigomaterial=$this->patrimonio->idMaterial;
+                    $descricao=$this->patrimonio->descricao;
+                    $numeroserie=$this->patrimonio->numeroSerie;
+                    $marcamodelo=$this->patrimonio->marcaModelo;
+                    $valor=str_replace(".", ",", $this->patrimonio->valor);
+                    $notafiscal=$this->patrimonio->notaFiscal;
+                    $idsetor=$this->patrimonio->idSetor;
+                    $numeroempenho=$this->patrimonio->numeroEmpenho;
+                    $setor = $MIOLO->GetBusiness('common','setor');
+                    $setor->GetById($_GET['item']);
+                    $classificador = $MIOLO->GetBusiness($module,'classificador');
+                    $classificador->GetById($this->patrimonio->idClassificador);
+                    $classificador=$classificador->idClassificador;
+                    $processo = $this->manager->GetBusiness('protocolo','processo');
+                    $processo=$processo->numProcessoFormatado($this->patrimonio->numPro);
+                    if ($this->patrimonio->datainiciouso) $datainicio=date('d/m/Y', strtotime($this->patrimonio->datainiciouso));
+                    $contacontabil=$this->patrimonio->idvidautil;                                      
+                    $numeroempenho=$this->patrimonio->numeroEmpenho;
+                    $notafiscalb = $MIOLO->GetBusiness('adm','notafiscal');
+                    // Tratamento da string de CNPJ
+                    $objNotaFiscal= $notafiscalb->GetById($this->patrimonio->idNotaFiscal);
+                    $notafiscalb = $notafiscalb->listNotas($this->patrimonio->notaFiscal);
+                    if($notafiscalb->result[0][5]){
+                    $cnpj = substr($notafiscalb->result[0][5], 0,2) . "." .
+				substr($notafiscalb->result[0][5], 2,3) . "." .
+				substr($notafiscalb->result[0][5], 5,3) . "/" .
+				substr($notafiscalb->result[0][5], 8,4) . "-" .
+				substr($notafiscalb->result[0][5], 12,2);
+                    }
+                    $tomboanterior=$this->patrimonio->tomboanterior;
+                    $datanotafiscal=$notafiscalb->dataNotaFiscal;                    
+                    if ($objNotaFiscal->dataGarantia) $datagarantia=date('d/m/Y', strtotime($objNotaFiscal->dataGarantia));                   
+                    header("Location: http://".$_SERVER['HTTP_HOST']."//index.php?module=adm&action=main:itempatrimonio:new&tipoIngresso=7&passo=Empenho&descricao=$descricao&numeroserie=$numeroserie&idNotaFiscal=$objNotaFiscal->idNotaFiscal&marcamodelo=$marcamodelo&valor=$valor&valor=$valor&notafiscal=$notafiscal&codigomaterial=$codigomaterial&idsetor=$idsetor&numeroempenho=$numeroempenho&setor=$setor->sigla&classificador=$classificador&processo=$processo&datainicio=$datainicio&contacontabil=$contacontabil&numeroempenho=$numeroempenho&idFornecedor=$objNotaFiscal->idFornecedor&tomboanterior=$tomboanterior&datanotafiscal=$datanotafiscal&datagarantia=$datagarantia");
+                    //$MIOLO->InvokeHandler($module, 'patrimonio/new');
+                    //$this->_form[0] = $ui->GetForm($module,'frmPatrimonioNew', $patrimonio, 'patrimonio');
+                    return;
+                    }
+            }
+        if ($this->_form[0]) {
+            $this->_form[0]->SetClose($MIOLO->GetActionURL('adm','main:patrimonio',$patrimonio->idItemPatrimonio));
+        	$page->SetAction($history->Top('action'));
+        }
+
+//		15/06/2011 - Daniel Bonfim
+//		nota fiscal
+		$notafiscal = $MIOLO->GetBusiness('adm','notafiscal');
+		// Tratamento da string de CNPJ
+		$objNotafiscal=$notafiscal->GetById($this->patrimonio->idNotaFiscal);
+		$notafiscal = $notafiscal->listNotas($this->patrimonio->notaFiscal);
+
+		if($notafiscal->result[0][5]){
+		$cnpj = substr($notafiscal->result[0][5], 0,2) . "." .
+				substr($notafiscal->result[0][5], 2,3) . "." .
+				substr($notafiscal->result[0][5], 5,3) . "/" .
+				substr($notafiscal->result[0][5], 8,4) . "-" .
+				substr($notafiscal->result[0][5], 12,2);
+		}
+//		info
+		$tabelaGeral = $MIOLO->GetBusiness('common','tabelageral');
+		$ingresso = $tabelaGeral->GetByItem('AD_TIPOINGRESSOPAT',$this->patrimonio->tipoIngresso);
+		$this->setor = $MIOLO->GetBusiness('common','setor');
+		$this->setor->GetById($this->patrimonio->idSetor);
+
+		$dependencia = $MIOLO->GetBusiness($module,'dependencia');
+		$objFornecedor =$MIOLO->GetBusiness($module,'fornecedor');
+		$objFornecedor =$objFornecedor->GetById($objNotafiscal->idFornecedor);
+
+                // 01-11-2011 - Daniel Bonfim
+                $bussMovimentoPat = $this->manager->GetBusiness('adm','movimentopat');
+                $objMovimentoPat = $bussMovimentoPat->getByIdItemPatrimonio($patrimonio->idItemPatrimonio);
+                $dataUltimaAcao = $objMovimentoPat[0][10];
+                $idUsuarioUltimaAcao = $objMovimentoPat[0][11];
+                // usuario
+                $bussUsuario = $this->manager->GetBusiness('common','usuario');
+                $loginUsuarioUltimaAcao = $bussUsuario->getById($idUsuarioUltimaAcao)->login;
+
+		if ($this->patrimonio->datainiciouso) $date_inicio=date('d/m/Y', strtotime($this->patrimonio->datainiciouso));
+                if ($objNotafiscal->dataGarantia) $datagarantia=date('d/m/Y', strtotime($objNotafiscal->dataGarantia));
+                
+		if ($this->patrimonio->idDependencia) {
+			$dependencia->GetById($this->patrimonio->idDependencia);
+		}
+                $ccontabil = $MIOLO->GetBusiness('adm', 'vidautil');
+                $descricaoCC = $ccontabil->getDescricao($this->patrimonio->idvidautil);                  
+		$classificador = $MIOLO->GetBusiness($module,'classificador');
+		$classificador->GetById($this->patrimonio->idClassificador);
+		$movimentoPat = $MIOLO->GetBusiness($module, 'movimentopat');
+		$termo = $movimentoPat->GetNumeroTermoMaisRecente($patrimonio->idItemPatrimonio);
+		$this->_info[0]	= new TextLabel('txtDescricao',$this->patrimonio->descricao,'Descrição');
+		$this->_info[1]	= new TextLabel('txtNumeroSerie',$this->patrimonio->numeroSerie,'Número de Série');
+		$this->_info[2]	= new TextLabel('txtTipoIngresso',$ingresso->item2,'Tipo de Ingresso');
+		$this->_info[3]	= new TextLabel('txtDataAquisicao',$this->patrimonio->dataAquisicao,'Data de Aquisição');
+		$this->_info[4]	= new TextLabel('txtMarcaModelo',$this->patrimonio->marcaModelo,'Marca/Modelo');
+		$this->_info[5]	= new TextLabel('txtValor',  str_replace(".", ",", $this->patrimonio->valor),'Valor');
+		$this->_info[6]	= new TextLabel('txtNotaFiscal',$this->patrimonio->notaFiscal,'Nota Fiscal');
+//		$this->_info[7]	= new TextLabel('txtNumeroTermo',$termo, 'Número do Termo');
+//		20/10/2010 - Vitor Pacheco
+		$this->_info[8]	= new TextLabel('txtSubElemento',$this->patrimonio->getSubelementoComZeroEsquerda($this->patrimonio->subelemento),'SubElemento');
+		$this->_info[9]	= new TextLabel('txtSetor',$this->setor->sigla,'Setor');
+		$this->_info[10]= new TextLabel('txtDependencia',$dependencia->dependencia,'Dependência');
+		$this->_info[11]= new TextLabel('txtClassificador',$classificador->descricao,'Classificador');
+		$processo = $this->manager->GetBusiness('protocolo','processo');
+		$this->_info[12]= new TextLabel('txtNumPro',$processo->numProcessoFormatado($this->patrimonio->numPro),'Processo');
+//		18/10/2010 - Vitor Pacheco
+		$this->_info[13] = new TextLabel('txtDataInicioUso', $date_inicio, 'Data de Início de uso');                
+                $this->_info[14] = new TextLabel('txtDataGarantia', $datagarantia, 'Data da Garantia');
+                if ($this->patrimonio->idvidautil)
+                    $this->_info[15] = new TextLabel('txtVidaUtil', $this->patrimonio->idvidautil.' - '.$descricaoCC, 'Conta Contábil');
+                else $this->_info[15] = new TextLabel('txtVidaUtil', '', 'Conta Contábil');
+//		07/06/2011 Daniel Bonfim
+		$this->_info[16] = new TextLabel('txtNumeroEmpenho', $this->patrimonio->numeroEmpenho, 'Nº Empenho');
+		$this->_info[17] = new TextLabel('idFornecedor', $objFornecedor->nome, 'Fornecedor');
+		// 26/08/2011 - Daniel Bonfim
+		$this->_info[18] = new TextLabel('txtTomboAnterior', $this->patrimonio->tomboanterior, 'Tombo Anterior');
+		//$this->_info[12]= new TextLabel('txtNumPro',$this->patrimonio->numPro,'Processo');
+		// 01-11-2011 - Daniel Bonfim
+		$this->_info[19] = new TextLabel('txtUsuarioUltimaAcao', $loginUsuarioUltimaAcao, 'Ultima ação realizada por');
+		$this->_info[20] = new TextLabel('txtDataUltimaAcao', $dataUltimaAcao, 'Data da ultima acão');
+
+		$this->_info[21] = array(
+			new MButton('btnAnterior','Anterior'),
+			new MButton('btnProximo','Próximo'),
+		);
+
+		$this->setor2=$this->setor->sigla;
+
+		//panel
+        $action = $context->action;
+
+        if($this->bloqueio == 'N' && !$this->manager->perms->isMemberOf($this->manager->login, 'ADM_PATRIMONIO_CONSULTA')){
+            $this->_panel[0] = $panel = new ActionPanel('pnlCompound','Opções','',false);
+            $panel->AddUserAction('adm_patrimonio_editar',A_EXECUTE,'Editar',$ui->GetImageTheme('','icons/itens_patrimoniais_editar.png'),'adm',$action, $this->oid, array("form"=>"editar"));
+            $panel->AddUserAction('adm_patrimonio_transferir',A_EXECUTE,'Transferir',$ui->GetImageTheme('','icons/itens_patrimoniais_transferir.png'),'adm',$action, $this->oid, array("form"=>"transferir"));
+            $panel->AddUserAction('adm_patrimonio_transferir',A_EXECUTE,'Transferir em Bloco',$ui->GetImageTheme('','icons/itens_patrimoniais_transferir_em_bloco.png'),'adm',$action, $this->oid, array("form"=>"transferirbloco"));
+            $panel->AddUserAction('adm_patrimonio_excluir',A_EXECUTE,'Baixa',$ui->GetImageTheme('','icons/baixa.png'),'adm',$action, $this->oid, array("form"=>"excluir"));
+            $panel->AddUserAction('adm_patrimonio_copiar',A_EXECUTE,'Copiar Dados para Inclusão',$ui->GetImageTheme('','icons/itens_patrimoniais_transferir.png'),'adm',$action, $this->oid, array("form"=>"copiar"));
+        }
+
+
+	$this->descricao=$this->GetFormValue('txtDescricao');
+
+		$this->patrimonio->retrieveAssociation('empenhado');
+	/*	if (($this->patrimonio->empenhado->status == '2') || (!$this->patrimonio->idEmpenhado)) {
+			$panel->AddUserAction('adm_patrimonio_excluir',A_EXECUTE,'Estorno',$ui->GetImageTheme('', 'icons/estorno.png'),'adm',$action, $this->oid, array("form"=>"estorno"));
+		}  Botão de Estorno Removido Problema #199    21 -03 - 2012   */
+ 	}
+
+	function btnAnterior_click()
+	{
+		global $MIOLO,$module,$action;
+
+		$id = $this->patrimonio->GetIdAproximada($this->patrimonio->idItemPatrimonio,'anterior');
+		if($id) {
+			$this->page->redirect($MIOLO->GetActionURL($module,$action,$id));
+		}
+	}
+	function btnProximo_click()
+	{
+		global $MIOLO,$module,$action;
+
+		$id = $this->patrimonio->GetIdAproximada($this->patrimonio->idItemPatrimonio,'posterior');
+
+		if($id) {
+			$this->page->redirect($MIOLO->GetActionURL($module,$action,$id));
+		}
+	}
+}

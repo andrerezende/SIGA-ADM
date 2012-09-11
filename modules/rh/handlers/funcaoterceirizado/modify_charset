@@ -1,0 +1,59 @@
+#!/bin/bash
+
+#  Procura, a partir do diretório corrente, todos (\*) os arquivos regulares
+# (type f) e ignora os arquivos contidos dentro de diretórios de controle do svn
+# (grep -v .svn).
+# Em seguida, tratamos arquivo por arquivo (for i in ....)
+
+TEMPFILE=$(mktemp /tmp/XXXXXXXXXX)
+TEMPFILE2=$(mktemp /tmp/XXXXXXXXXX)
+LOGFILE=$0.log
+MODIFIEDFILES=$0.modified
+
+find . -name \*.* -type f | grep -v .svn > $TEMPFILE
+iso=0
+utf=0
+ascii=0
+outros=0
+
+echo > $LOGFILE
+echo > $MODIFIEDFILES
+
+while read linha
+do
+
+ arquivo="$linha"
+ charset=$(file -i "$arquivo" | cut -s -d'=' -f2)
+ if [ "$charset" == "iso-8859-1" ]; then
+    iconv -f iso-8859-1 -t utf-8 "$arquivo" > $TEMPFILE2
+    cat $TEMPFILE2 > "$arquivo"
+    file -i "$arquivo" >> $MODIFIEDFILES
+    iso=$((iso+1))
+ else
+ 	if [ "$charset" == "utf-8" ]; then
+	    utf=$((utf+1))
+	else
+ 		if [ "$charset" == "us-ascii" ]; then
+    			iconv -f us-ascii -t utf-8 "$arquivo" > $TEMPFILE2
+			cat $TEMPFILE2 > "$arquivo"
+			file -i "$arquivo" >> $LOGFILE
+	    		ascii=$((ascii+1))
+		else
+			outros=$((outros+1))
+			file -i "$arquivo" >> $LOGFILE
+		fi
+	fi
+ fi
+
+done<$TEMPFILE
+
+
+echo "---------------------------------------"
+echo "  R E L A T O R I O "
+echo " "
+echo "  CHARSET ISO-8859-1 = $iso"
+echo "  CHARSET UTF-8 = $utf"
+echo "  CHARSET US-ASCII = $ascii"
+echo "  CHARSET outros = $outros"
+echo "---------------------------------------"
+

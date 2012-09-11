@@ -1,0 +1,177 @@
+<?php
+class repSolicitacaoEmpenho extends PDFReport
+{
+	var $img;
+	var $timestamp;
+	var $objEmpenho;
+	var $data;
+
+	function __construct()
+	{
+		global $MIOLO, $module, $page, $context, $self, $action, $perms, $item;
+
+		$empenhos = Form::GetFormValue('empenhos');
+
+		$ui = $MIOLO->GetUI();
+		$this->img = $ui->GetImageSrc('logonet.png', $module); 
+
+		$columns = array(
+//			new PDFReportColumn('idempenho','<b><i>Cod. Empenho</i></b>','center',true,20,true,null,true),
+			new PDFReportColumn('referencia','<b><i>Emp. Referência</i></b>','center',true,20,true,null,true),
+			new PDFReportColumn('total','<b><i>Total</i></b>','center',false,20,true,null,true),
+			new PDFReportColumn('processo','<b><i>Proc Pagto</i></b>','center',true,20,true,null,true),
+			new PDFReportColumn('empresa','<b><i>Fornecedor</i></b>','center',true,40,true,null,true),
+		);
+
+		$this->objEmpenho = $MIOLO->GetBusiness($module,'empenho');
+
+		if($empenhos) //report chamado a partir da Definição de Orçamento
+		{
+			$licitacao = Form::GetFormValue('idLicitacao');
+			$idOrcamento = Form::GetFormValue('idOrcamento');
+			$valorTotal = Form::GetFormValue('valorTotal');
+			$empenhos = Form::GetFormValue('empenhos');
+			$orcamento = $MIOLO->GetBusiness($module, 'orcamento');
+			$orcamento->GetById($idOrcamento);
+			$descricao = $orcamento->ptr->descricao;
+
+			$query = array();
+			$empenhos = explode(',', $empenhos);
+			foreach($empenhos as $idEmpenho)
+			{
+				$q = $this->objEmpenho->getTotaisEmpenho($idEmpenho);
+				$query[] = $q[0];
+			}
+		}
+		else //report chamado a partir do panel de Relatórios
+		{
+			$licitacao = Form::GetFormValue('licitacao');
+			$data = Form::GetFormValue('calData');
+			$objLicitacao = $MIOLO->GetBusiness($module, 'licitacao');
+			$idLicitacao = $objLicitacao->GetIdBynumero($licitacao);
+			$query = $this->objEmpenho->getEmpenhosByLicitacaoData($idLicitacao, $data);
+		}
+
+		foreach($query as $row)
+		{
+			$ref = $this->objEmpenho->GetEmpenhoReferencia($row[0]);
+			if($ref[0])
+			{
+				$rowR[0] = $ref[0];
+//				$rowR[2] = $ref[1];
+			}
+			else
+			{
+				$rowR[0] = $ref[2] . ' (s/nº)';
+			}
+			$rowR[1] = 'R$ ' . number_format(str_replace(',','.',$row[1]),2,',','.');
+			$rowR[2] = $this->objEmpenho->GetProcessoLicitacao($row[0]);
+			$rowR[2] = $this->objEmpenho->numProcessoFormatado($rowR[2]);
+			$this->objEmpenho->getById($row[0]);
+			$this->objEmpenho->getFornecedor();
+			if(strlen($this->objEmpenho->fornecedor->instituicao->nome) <= 30)
+			{
+				$rowR[3] = substr($this->objEmpenho->fornecedor->instituicao->nome, 0, 30);
+			}
+			else
+			{
+				$rowR[3] = substr($this->objEmpenho->fornecedor->instituicao->nome, 0, 30) . '...';
+			}
+			$dataR[] = $rowR;
+		}
+
+		parent::__construct($dataR,$columns,20);
+
+		$this->SetTitle('Empenhos');
+		$this->SetOption('showTableTitle',1);
+        $this->SetOption('fontSize',10);
+		$this->SetOption('showLines',1);
+		$this->timestamp = date('d/m/Y'); //G:i
+	}
+
+	function GeneratePageHeader()
+	{   
+		global $MIOLO, $module;
+
+		$empenhos = Form::GetFormValue('empenhos');
+		if($empenhos) // chamado a partir da Definição do Orçamento
+		{
+			$idLicitacao = Form::GetFormValue('idLicitacao');
+			$licitacao = $MIOLO->GetBusiness($module, 'licitacao', $idLicitacao);
+			$idOrcamento = Form::GetFormValue('idOrcamento');
+			$valorTotal = Form::GetFormValue('valorTotal');
+
+			$empenhos = explode(',', $empenhos);
+			$querySubElemento = $this->objEmpenho->getSubElemento($empenhos[0]);
+			$subElemento = $querySubElemento->result[0][0];
+		}
+		else // chamado a partir do panel Relatórios
+		{
+			$licitacao = Form::GetFormValue('licitacao');
+			$data = Form::GetFormValue('calData');
+			$objLicitacao = $MIOLO->GetBusiness($module, 'licitacao');
+			$idLicitacao = $objLicitacao->GetIdBynumero($licitacao);
+
+			$query = $this->objEmpenho->getEmpenhosByLicitacaoData($idLicitacao, $data);
+			$this->objEmpenho = $MIOLO->GetBusiness($module, 'empenho', $query[0][0]);
+			$querySubElemento = $this->objEmpenho->getSubElemento($this->objEmpenho->idEmpenho);
+			$subElemento = $querySubElemento->result[0][0];
+
+			$licitacao = $MIOLO->GetBusiness($module, 'licitacao', $idLicitacao);
+			$idOrcamento = $this->objEmpenho->idOrcamento;
+
+			$valorTotal = $this->objEmpenho->getValorByLicitacaoData($idLicitacao, $data);
+			$valorTotal = number_format(str_replace(',','.',$valorTotal),2,',','.');
+		}
+
+		$orcamento = $MIOLO->GetBusiness($module, 'orcamento');
+		$orcamento->GetById($idOrcamento);
+		$descricao = $orcamento->ptr->descricao;
+
+		$h = $this->pdf->getFontHeight(12);
+		$this->pdf->addText(520,800-$h,10,'Página: ' . $this->pn->pageNumber . '/' . $this->pn->pageCount);
+
+		$this->pdf->ezImage($this->img,5,50,'none','left');
+
+		$x00=$this->pdf->left;
+		$hh = $this->pdf->getFontHeight(12);
+		$this->pdf->addText($x00, 800, 12, $this->manager->getConf('instituicao.sigla')." - ".$this->manager->getConf('instituicao.nome'));
+		$this->pdf->addText($x00, 800 - $hh, 12, $this->manager->getConf('theme.system'));
+
+/*
+		$this->pdf->addText(90,800,12,'UFJF - Universidade Federal de Juiz de Fora');
+
+		$this->pdf->addText(90,800-$h,12,'CGCO - Centro de Gestão do Conhecimento Organizacional');
+		$this->pdf->addText(90,800-$h-$h,12,'SIGA - Sistema Integrado de Gestão Acadêmica');
+*/
+
+		$this->pdf->addText(90,800-$h-$h-$h,12,'Módulo Administrativo');
+		$this->pdf->ezSetY(800-$h-$h-$h-$h);
+
+		$x0 = $this->pdf->left-5;
+        $x1 = $this->pdf->right-5;
+        $y = 800 - $h - $h - 30;
+
+		$this->pdf->line($x0, $y, $x1, $y);
+        $this->pdf->addTextWrap($this->pdf->x,$y-12,600,12, '<b>Solicitação de Empenho</b>', 'center');
+        $this->pdf->line($x0, $y - 15, $x1, $y - 15);
+
+		$this->pdf->addTextWrap($this->pdf->x+50,700,600,12,'Da: Gerência de Orçamento','left');
+		$this->pdf->addTextWrap($this->pdf->x+50,685,600,12,'Para: Gerência de Execução Orçamentária','left');
+		$this->pdf->addTextWrap($this->pdf->x+50,650,550,12,"Licitação: " . $licitacao->numero, 'left');
+		$this->pdf->addTextWrap($this->pdf->x+50,630,550,12,"PTR: " . $orcamento->idPtr . "(". $descricao . ")", 'left');
+		$this->pdf->addTextWrap($this->pdf->x+50,610,550,12,"Fonte: " . $orcamento->idFonte, 'left');
+		$this->pdf->addTextWrap($this->pdf->x+50,590,550,12,"Rubrica: " . substr(trim($orcamento->idRubrica),0,6), 'left');
+		$this->pdf->addTextWrap($this->pdf->x+50,570,550,12,"Valor: R$ " . $valorTotal, 'left');
+		$this->pdf->ezSetY(550);
+	}
+
+	function GeneratePageFooter()
+	{
+		$this->pdf->addTextWrap($this->pdf->x+250,100,300,12,'Em ' . date("d/m/Y"),'center');
+		$this->pdf->addTextWrap($this->pdf->x+250,70,300,12,'_________________________________________','center');
+		$this->pdf->addTextWrap($this->pdf->x+250,50,300,12,'Gerente de Orçamento','center');
+	}
+
+}
+?>

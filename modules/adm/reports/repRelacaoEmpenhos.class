@@ -1,0 +1,190 @@
+<?php
+class repRelacaoEmpenhos extends PDFReport
+{
+	var $img;
+	var $timestamp;
+
+	function __construct()
+	{
+        global $MIOLO, $module, $page, $context, $self, $action, $perms;
+
+        parent::__construct(NULL, NULL, 55);
+        $ui = $MIOLO->GetUI();
+		$this->img = $ui->GetImageSrc('logo_siga.png',$module); 
+        $this->timestamp = date('d/m/Y G:i');
+        $this->pdf->ezStartPageNumbers(520, 800, 12, 'rigth', 'Página: {PAGENUM}');
+        $this->pdf->ezSetMargins(100, 30, 30, 30);
+        $this->GeneratePageHeader();
+        $this->GeneratePageFooter();
+		$this->SetOption('fontSize',6);
+
+		$empenho = Form::GetFormValue('empenho');
+		$licitacao = Form::GetFormValue('licitacao');
+		$dataInicial = Form::GetFormValue('calDataInicial');
+		$dataFinal = Form::GetFormValue('calDataFinal');
+		$idFornecedor = Form::GetFormValue('idFornecedor');
+		$fornecedor = Form::GetFormValue('fornecedor');
+		$rubrica = Form::GetFormValue('rubrica');
+		$saldo = Form::GetFormValue('saldo');
+		$objEmpenho = $MIOLO->GetBusiness($module,'empenho');
+		$objTabelaGeral = $MIOLO->GetBusiness('common', 'tabelageral');
+
+		$query = $objEmpenho->RepRelacaoEmpenhos($empenho, $licitacao, $dataInicial, $dataFinal, $idFornecedor, $rubrica);
+		$data = $query->result;
+		//data = [0-idEmpenho, 1-numero, 2-fornecedor, 3-dataEmpenho, 4-tipoEmpenho, 5-status, 6-valor, 7-licitação, 8-rubrica(6 dig.), 9-processo, 10-status (Descrição), 11-UO (buscado a seguir)]
+		$totalValor = 0.0;
+		$totalNFs = 0.0;
+		$totalLiquidado = 0.0;
+		$totalALiquidar = 0.0;
+		$totalSaldo = 0.0;
+		$cf = new MCurrencyFormatter();
+		$notaFiscal = $MIOLO->GetBusiness('adm','notafiscal');
+		$data2 = array();
+		for($d = 0; $d < count($data); $d++)
+		{
+			$data[$d][11] = $objEmpenho->GetUOReq($data[$d][0]);
+			$data[$d][12] = $notaFiscal->GetTotalNotasByIdEmpenho($data[$d][0]); //total NFs
+			$data[$d][13] = $notaFiscal->GetTotalNotasByIdEmpenho($data[$d][0],true); //total liquidado
+			$data[$d][14] = $cf->toDecimal($data[$d][12]) - $cf->toDecimal($data[$d][13]); //total a liquidar
+			$data[$d][15] = $cf->toDecimal($data[$d][6]) - $cf->toDecimal($data[$d][13]); //saldo (valor empenho - total liquidado)
+			if(($saldo == '1') or ($data[$d][15] > 0))
+			{
+				$totalValor += $cf->toDecimal($data[$d][6]);
+				$totalNFs += $cf->toDecimal($data[$d][12]);
+				$totalLiquidado += $cf->toDecimal($data[$d][13]);
+				$totalALiquidar += $cf->toDecimal($data[$d][14]);
+				$totalSaldo += $cf->toDecimal($data[$d][15]);
+//				$data[$d][9] = $objEmpenho->numProcessoFormatado($data[$d][9]);//processo
+				$data[$d][6] = number_format(str_replace(',','.',$data[$d][6]),2,',','.');//valor
+				$data[$d][12] = number_format(str_replace(',','.',$data[$d][12]),2,',','.');
+				$data[$d][13] = number_format(str_replace(',','.',$data[$d][13]),2,',','.');
+				$data[$d][14] = number_format(str_replace(',','.',$data[$d][14]),2,',','.');
+				$data[$d][15] = number_format(str_replace(',','.',$data[$d][15]),2,',','.');
+				$data2[] = $data[$d];
+			}
+		}
+
+		// define as colunas
+		$columns = array(
+			new PDFReportColumn('det0', '<b><i>idEmpenho</i></b>', 'center', false, 0, false),
+			new PDFReportColumn('det1', '<b><i>Empenho</i></b>', 'center', true, 10, true),
+			new PDFReportColumn('det2', '<b><i>Fornecedor</i></b>', 'left', false, 15, true),
+			new PDFReportColumn('det3', '<b><i>Data</i></b>', 'center', true, 8, true),
+			new PDFReportColumn('det4', '<b><i>Tipo</i></b>', 'center', true, 0, false),
+			new PDFReportColumn('det5', '<b><i>Status (Nº)</i></b>', 'center', false, 0, false),
+			new PDFReportColumn('det6', '<b><i>R$ Valor</i></b>', 'right', true, 8, true),
+			new PDFReportColumn('det7', '<b><i>Licitação</i></b>', 'center', true, 10, true),
+			new PDFReportColumn('det8', '<b><i>Rubrica</i></b>', 'center', true, 10, true),
+			new PDFReportColumn('det9', '<b><i>Processo</i></b>', 'center', true, 0, false),
+			new PDFReportColumn('det10', '<b><i>Status</i></b>', 'center', true, 0, false),
+			new PDFReportColumn('det11', '<b><i>UO Req</i></b>', 'center', true, 8, true),
+			new PDFReportColumn('det12', '<b><i>R$ NFs</i></b>', 'right', true, 8, true),
+			new PDFReportColumn('det13', '<b><i>R$ Liq.</i></b>', 'right', true, 8, true),
+			new PDFReportColumn('det14', '<b><i>R$ A Liq.</i></b>', 'right', true, 8, true),
+			new PDFReportColumn('det15', '<b><i>R$ Saldo</i></b>', 'right', true, 8, true),
+		);
+
+		$sum1 = array(
+			new PDFReportColumn('texto0', 'texto0', 'right', false, 33, true),
+			new PDFReportColumn('texto1', 'texto1', 'right', false, 8, true),
+			new PDFReportColumn('texto2', 'texto2', 'right', false, 28, true),
+			new PDFReportColumn('texto3', 'texto3', 'right', false, 8, true),
+			new PDFReportColumn('texto4', 'texto4', 'right', false, 8, true),
+			new PDFReportColumn('texto5', 'texto5', 'right', false, 8, true),
+			new PDFReportColumn('texto6', 'texto6', 'right', false, 8, true),
+		);
+
+		$summary1 = array(array(
+			"<b>TOTAIS:</b>",
+			"<b>" . number_format(str_replace(',','.',$totalValor),2,',','.') . "</b>",
+			" ",
+			"<b>" . number_format(str_replace(',','.',$totalNFs),2,',','.') . "</b>",
+			"<b>" . number_format(str_replace(',','.',$totalLiquidado),2,',','.') . "</b>",
+			"<b>" . number_format(str_replace(',','.',$totalALiquidar),2,',','.') . "</b>",
+			"<b>" . number_format(str_replace(',','.',$totalSaldo),2,',','.') . "</b>"
+		));
+
+		// Largura do report, em %
+		$this->SetWidth(100);
+
+		// registra as colunas de detalhes e summary
+		$this->SetColumns($columns);
+		$colDetail = $this->columns;
+		$this->SetColumns($sum1);
+		$colSum1 = $this->columns;
+
+		// gera o report
+		$this->SetOption('showHeadings', 1);
+		$this->SetOption('showLines', 0);
+		$this->columns = $colDetail;
+		$this->GenerateData($data2);
+		$this->SetOption('showHeadings', 0);
+		$this->SetOption('showLines', 1);
+		$this->columns = $colSum1;
+		$this->GenerateData($summary1);
+
+/*		//inclui soma no final
+		$soma = number_format(str_replace(',','.',$soma),2,',','.');
+		$this->pdf->ezText('', 7);
+		$this->pdf->ezText('VALOR TOTAL DOS EMPENHOS: ' . $soma . '   ', 7, array('justification'=>'right'));
+*/
+	}
+
+	function GeneratePageHeader()
+	{
+		$x0 = $this->pdf->left-5;
+		$x1 = $this->pdf->right-5;
+		$h = $this->pdf->getFontHeight(12);
+		$header = $this->pdf->openObject();
+		$this->pdf->saveState();
+		
+		$x00=$this->pdf->left;
+		$hh = $this->pdf->getFontHeight(12);
+		$this->pdf->addText($x00, 800, 12, $this->manager->getConf('instituicao.sigla')." - ".$this->manager->getConf('instituicao.nome'));
+		$this->pdf->addText($x00, 800 - $hh, 12, $this->manager->getConf('theme.system'));
+
+		/*$this->pdf->addPngFromFile($this->img, $x0, 780, 50, 25);
+		$this->pdf->addText($x0 + 60, 800, 12, 'UFJF - Universidade Federal de Juiz de Fora');
+		$this->pdf->addText($x0 + 60, 800 - $h, 12, 'CGCO - Centro de Gestão do Conhecimento Organizacional');
+		$this->pdf->addText($x0 + 60, 800 - $h - $h, 12, 'SIGA - Sistema Integrado de Gestão Acadêmica');*/
+		$this->pdf->SetStrokeColor(0, 0, 0);
+		$y = 800 - $h - $h - 5;
+		$this->pdf->line($x0, $y, $x1, $y);
+		$this->pdf->addText($x0, $y - 13, 12, "Relação de Empenhos");
+		$this->pdf->line($x0, $y - 15, $x1, $y - 15);
+		$this->pdf->restoreState();
+		$this->pdf->closeObject();
+		$this->pdf->addObject($header, 'all');
+		$this->pdf->ezSetDy(+15);
+	}
+
+	function GeneratePageFooter()
+	{
+		$x0 = $this->pdf->left;
+		$x1 = $this->pdf->right;
+		$footer = $this->pdf->openObject();
+		$this->pdf->saveState();
+		$this->pdf->SetStrokeColor(0, 0, 0);
+		$this->pdf->line($x0, 28, $x1, 28);
+		$this->pdf->addText($x0, 19, 9, $this->timestamp);
+		$this->pdf->restoreState();
+		$this->pdf->closeObject();
+		$this->pdf->addObject($footer, 'all');
+	}
+
+	function GenerateData($data)
+	{
+		$this->pdf->ezSetDy(-5);
+		$this->SetData($data);
+		$this->rawdata = $this->GenerateTableData();
+		$this->GenerateBody($this->rawdata);
+	}
+
+	function Generate()
+	{
+		$this->SetOutput();
+		$this->Execute();
+	}
+
+}
+?>

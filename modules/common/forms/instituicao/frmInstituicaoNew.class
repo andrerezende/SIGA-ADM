@@ -1,0 +1,161 @@
+<?
+class frmInstituicaoNew extends MForm
+{
+	var $objInstituicao;
+
+	function __construct()
+	{
+		parent::__construct('Inserir Nova Instituição');
+		$this->EventHandler();
+		$this->page->AddJsCode(file_get_contents(dirname(__FILE__) . '/../../ui/js/mask.js'));
+	}
+
+	function CreateFields()
+	{
+		global $MIOLO;
+
+		$objPais = $MIOLO->GetBusiness('common','pais');
+		$this->objInstituicao = $MIOLO->GetBusiness('common','instituicao');
+		$queryPais = $objPais->ListAll();
+
+
+		$fields = Array(
+			new HiddenField('key',''),
+			new TextField  ('instituicao','','Instituição',40),
+			new TextField ('sigla','','Sigla',4,'Digite 3 caracteres para a inclusão da sigla'), 
+			new TextField  ('campus','','Campus',70),   
+			new TextField  ('nome','','Nome',70),
+			new TextField  ('rua','','Rua',70),
+			new TextField  ('numero','','Número',18),
+			new TextField  ('complemento','','Complemento',18),
+			new TextField  ('bairro','','Bairro',50),
+			new TextField  ('cep','','CEP',10),
+			new LookupTextField('lkpMunicipio','','Município',50),
+			new MHiddenField('idmunicipio',''),
+			new MSelection ('idpais','','País',$queryPais->result,$showValues=false),
+			new TextField  ('cgc','','CNPJ',20, 'formato (10.000.000/0001-01)'),
+			new TextField  ('caixapostal','','Caixa Postal',15),
+			new TextField  ('telefone','','Telefone',15),
+			new TextField  ('fax','','Fax',15),	
+			new TextField  ('email','','e-mail',40, 'Máx. 50 caracteres'), 
+			new TextField  ('uasg','','UP',8, 'Máx. 6 números'),
+			new TextField  ('ug','','UG (UASG)',6, 'Máx. 6 caracteres'),
+			new MSelection ('mesmoif','','Mesmo instituto?',array('S'=>'SIM', 'N'=>'NÃO'),$showValues=false,$hint='Selecione SIM se pertence à mesma instituição, caso contrário NÃO.',$size=''),
+		);
+		$this->SetFields($fields);
+
+		$this->instituicao->addAttribute('maxlength',80);
+		$this->sigla->addAttribute('maxlength',3);
+		$this->nome->addAttribute('maxlength',100);
+		$this->rua->addAttribute('maxlength',80);
+		$this->numero->addAttribute('maxlength',15);
+		$this->complemento->addAttribute('maxlength',15);
+		$this->bairro->addAttribute('maxlength',50);
+		$this->cep->addAttribute('maxlength',9);
+		$this->cep->addAttribute('onKeyUp','makeMask(this, \'#####-###\');');
+		$this->cep->addAttribute('onBlur','makeMask(this, \'#####-###\');');
+		$this->cgc->addAttribute('maxlength',18);
+		$this->cgc->addAttribute('onKeyUp','makeMask(this, \'##.###.###/####-##\');');
+		$this->cgc->addAttribute('onBlur','makeMask(this, \'##.###.###/####-##\');');
+
+		$this->caixapostal->addAttribute('maxlength',15);
+
+		$this->telefone->addAttribute('maxlength',15);
+		$this->fax->addAttribute('maxlength',15);
+		$this->email->addAttribute('maxlength',50);
+
+		$this->uasg->addAttribute('maxlength',6);
+		$this->ug->addAttribute('maxlength',6);
+
+		$this->SetFieldAttr('lkpMunicipio','module','common');
+		$this->SetFieldAttr('lkpMunicipio','item','municipio');
+		$this->SetFieldAttr('lkpMunicipio','event', 'filler');
+		$this->SetFieldAttr('lkpMunicipio','related', 'idmunicipio,lkpMunicipio');
+
+		$buttons = Array(
+			new FormButton('btnNew', 'Incluir'),
+		);
+		$this->SetButtons($buttons);
+
+		$validators = array(
+			new MRequiredValidator('instituicao'),
+			new MRequiredValidator('sigla'),
+			new MRequiredValidator('nome'),
+			new MRequiredValidator('rua'),
+			new MRequiredValidator('numero'),
+			new MRequiredValidator('bairro'),
+			new MRequiredValidator('cep'),
+			new MRequiredValidator('lkpMunicipio'),
+			new MCNPJValidator('cgc','','required','Informe um CNPJ Válido'),
+			new MRequiredValidator('ug'),
+		);
+		$this->SetValidators($validators);
+
+	}
+
+	function btnNew_click()
+	{
+
+		if( strlen(trim(Form::GetFormValue('instituicao'))) < 3)
+		{
+			$this->AddError('Informe o campo instituição.');
+		}
+		elseif( strlen(trim(Form::GetFormValue('sigla'))) < 2 )
+		{
+			$this->AddError('Informe a sigla da Instituição, a mesma deve possuir pelo menos duas letras');
+		}
+		elseif( strlen(trim(Form::GetFormValue('nome'))) < 3 )
+		{
+			$this->AddError('O nome da instituição parece estar incorreto.');
+		}
+		elseif( (Form::GetFormValue('lkpMunicipio') == '') or (Form::GetFormValue('idmunicipio') == ''))
+		{
+			$this->AddError('Selecione o município.');
+		}
+		elseif( Form::GetFormValue('idpais') == '' )
+		{
+			$this->AddError('Selecione o país.');
+		}
+		elseif( (Form::GetFormValue('uasg')!='') and preg_match("/\D/", Form::GetFormValue('uasg')) )
+		{
+			$this->AddError('O campo UP deve ser um número.');
+		}
+		elseif( strlen(trim(Form::GetFormValue('ug'))) < 2 )
+		{
+			$this->AddError('Informe a UG da Instituição.');
+		}
+		elseif( Form::GetFormValue('mesmoif') == '' )
+		{
+			$this->AddError('Informe o campo Mesmo instituto.');
+		}
+		else
+		{
+			global $MIOLO, $module, $self, $action;
+
+			$objInstituicao = &$this->objInstituicao;
+
+			if ( $objInstituicao )
+			{
+				$objInstituicao->SetData($this->GetData()); 
+				$objInstituicao->status = 'A';
+				$objInstituicao->cep = str_replace("-", "", $objInstituicao->cep);				
+				$objInstituicao->cgc = str_replace(".","", $objInstituicao->cgc);
+				$objInstituicao->cgc = str_replace("/","", $objInstituicao->cgc);
+				$objInstituicao->cgc = str_replace("-","", $objInstituicao->cgc);
+
+				try
+				{
+					$objInstituicao->Insert();
+					$objInstituicao->Log(OP_INS,"Instituição cadastrada com sucesso.");
+					$MIOLO->Information('Instituição adicionada com sucesso.', $MIOLO->GetActionURL('common', 'main:instituicao:find'));
+				}
+				catch (Exception $e)
+				{
+					$this->addError($e->getMessage());
+				}
+			}
+		}
+
+	}
+}
+?>

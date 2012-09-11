@@ -1,0 +1,83 @@
+<?php
+/**
+ * Formulário para relatório de ficha financeira
+ * 
+ */
+class frmRepFechamentoAlmoxarifado extends Form
+{
+    function __construct()
+    {
+    	global $MIOLO, $item;
+        $this->Form('Relatório Fechamento Almoxarifado');
+        $this->SetClose($this->manager->GetActionURL('adm','main:relatorios'));
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+        global $MIOLO  ;
+        $executa = $this->manager->GetBusiness('adm','executa');
+        $almox = $executa->getAlmoxarifados();
+        $uo = $this->manager->GetBusiness('adm','uo');
+
+        foreach ($almox->result as $almoxarifado)
+        {
+            $uo->getById($almoxarifado[0]);
+            $select[$almoxarifado[0]] = $uo->nome;
+        }
+
+      	$fields = array(
+            new MSelection('almox','','Almoxarifado',$select),
+            new MTextField('elemento','','Elemento'),
+            new MTextField('subelemento','','Subelemento'),
+            new MCalendarField('calDataInicial','','Data Inicial'),
+            new MCalendarField('calDataFinal','','Data Final'),
+        );
+
+       	$this->SetFields($fields);
+
+        $button = array(
+	    new FormButton('btnRelatorioJasper','Gerar Relatório','PDF'),
+        );
+       	$this->SetButtons($button);
+        $this->defaultButton = false;
+    }
+
+    function btnRelatorioJasper_click()
+    {
+        global $MIOLO;
+        $k = new MKrono();
+        switch (true)
+        {
+            case (!Form::getFormValue('calDataInicial')):
+                $this->addInfo('Selecione a data inicial.');
+            return;
+            case (!Form::getFormValue('calDataFinal')):
+                $this->addInfo('Selecione a data final.');
+            return;
+            case (!Form::getFormValue('elemento')):
+                $this->addInfo('Digite um elemento.');
+            return;
+            case (!Form::getFormValue('subelemento')):
+                $this->addInfo('Digite um subelemento.');
+            return;
+            case (!Form::getFormValue('almox')):
+                $this->addInfo('Selecione um almoxarifado.');
+            return;
+        }
+
+	$parameters['int_ID_UO'] = Form::getFormValue('almox');
+        $parameters['ID_ELEMENTO'] = Form::getFormValue('elemento');
+        $parameters['ID_SUBELEMENTO'] = Form::getFormValue('subelemento');
+        $parameters['DATA_INI'] = $k->invertDate(Form::getFormValue('calDataInicial'));
+	$parameters['DATA_FIM'] = $k->invertDate(Form::getFormValue('calDataFinal'));
+        $parameters['int_ID_USUARIO'] = $MIOLO->login->idkey; 
+        $parameters['URL_LOGO'] = $MIOLO->GetConf('home.url');
+        //$parameters['INSTITUICAO'] = $MIOLO->GetConf('instituicao.nome');
+        $parameters['str_HEADER_DIR'] = $MIOLO->GetConf('home.modules') . '/common/reports/';
+        $report = new MJasperReport('sigaept');
+        $report->Execute('adm', 'FechamentoAlmoxarifado', $parameters);
+
+    }
+}
+?>

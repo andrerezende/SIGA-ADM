@@ -1,0 +1,123 @@
+<?php
+class frmUoAlmoxarifadoEntrada extends Form
+{
+    protected $uoalmoxarifado;
+
+    function __construct($objUO)
+    {
+        $this->uoalmoxarifado = $objUO;
+		parent::__construct('Entrada de Material');
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+		$fields = array(
+			//new MTextField('idRequisicao','','Requisição',5,'Ex: 390'),
+			//new MHiddenField('idUoReq'),
+			//new MLookupTextField('lkpUo','','Uo Requisitante',40),
+			new MHiddenField('idMaterial'),
+			new MLookupTextField('lkpMaterial','','Material',40),
+			new MTextField('quantidade','','Quantidade',10,'Ex: 1000'),
+			new MCurrencyField('valorTotal','','Valor',10,'Ex: 45,00'),
+            //new MMultilineField('descricao','','Descrição',10,5,40)
+        );
+		
+        $this->SetFields($fields);
+                
+        $this->SetFieldAttr('lkpMaterial','module','adm');
+        $this->SetFieldAttr('lkpMaterial','item','material');
+        $this->SetFieldAttr('lkpMaterial','event','filler');
+        $this->SetFieldAttr('lkpMaterial','related','idMaterial,lkpMaterial');
+
+        /*
+        $this->SetFieldAttr('lkpUo','module','adm');
+        $this->SetFieldAttr('lkpUo','item','uo');
+        $this->SetFieldAttr('lkpUo','event','filler');
+        $this->SetFieldAttr('lkpUo','related','idUoReq,lkpUo');
+        */
+
+		$validators = array(
+            //new MRequiredValidator('idRequisicao'),
+			new MRequiredValidator('idMaterial'),
+			//new MRequiredValidator('idUoReq'),
+			new MRequiredValidator('estoque'),
+			new MRequiredValidator('valorTotal'),
+			//new MRequiredValidator('descricao'),
+		);
+		$this->SetValidators($validators);
+		
+		$buttons = array(
+        	new FormButton('btnPost', 'Gravar'),
+            );
+		$this->SetButtons($buttons);
+    }
+
+    function btnPost_click()
+    {
+        $data = $this->getData();
+        $cf = new MCurrencyFormatter();
+        $data->valorTotal = $cf->toDecimal($data->valorTotal);
+        
+        $materialEstoque = $this->uoalmoxarifado->getMaterial($data->idMaterial);
+        if ($materialEstoque->idMaterial)
+        {
+            try
+            {
+                $materialEstoque->begintransaction();
+                
+                // entrada no estoque
+                $materialEstoque->valorTotal += $data->valorTotal;
+                $materialEstoque->valorTotal = str_replace('.',',',$materialEstoque->valorTotal);
+                $materialEstoque->estoque += $data->quantidade;
+                $materialEstoque->save();
+                $materialEstoque->Log(OP_INS,"Entrada de material realizada com sucesso.");
+
+                /*
+                // nova requisicao de compra
+                $requisicao = $this->manager->GetBusiness('adm','requisicao');
+                $requisicao->dataHora = date("d/m/Y H:i:s");
+                $requisicao->idTipoReq = 7;
+                $requisicao->status = 'E';
+                $requisicao->idUoRequisitante = $data->idUoReq; 
+                $requisicao->idUoExecutante = 108; // Cosup
+                $requisicao->idUsuarioRequisitante = $login->idkey;
+                // inclui material de compra
+                $material = $this->manager->getBusiness('adm','itemreq');
+                $material->idMaterial = $data->idMaterial;
+                $material->quantPedida = $data->quantPedida;
+                $material->quantAutorizada = $data->quantPedida;
+                $material->precoEstimado = $data->valorTotal;
+                $material->descricao = $data->descricao;
+                $requisicao->addItem($material);
+                $requisicao->save();
+                $requisicao->Log(OP_INS,"Requisição inserida com sucesso.");
+                */
+
+                // movimento de entrada
+                $today = getDate();
+                $movimento = $this->manager->getBusiness('adm','movimento');
+                $movimento->idMaterial = $data->idMaterial;
+                $movimento->tipoMovimento = 1;
+                $movimento->dataMovimento = $today['mday']."/".$today['mon']."/".$today['year'];
+                $movimento->quantidade = $data->quantidade;        
+                $movimento->valorTotal = $data->valorTotal;
+                //$movimento->idRequisicao = 202020;//$requisicao->idRequisicao;
+                $movimento->save();
+                $movimento->Log(OP_INS,"Movimento lançado com sucesso.");
+                
+                $movimento->endtransaction();
+                
+                $url = $this->manager->GetActionURL('adm','main:uoalmoxarifado',$this->uoalmoxarifado->idUo);
+                $this->manager->information("Entrada realizada com sucesso.",$url);
+                //$this->manager->information("Entrada realizada com sucesso. Requisicão de compras número ".$requisicao->idRequisicao.".",$url);
+            }
+            catch (Exception $e)
+            {
+                $this->addError($e->getMessage());
+            }
+        }
+        else $this->addError('Este material não consta no estoque.');
+    }
+ }
+?>

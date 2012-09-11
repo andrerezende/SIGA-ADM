@@ -1,0 +1,74 @@
+<?
+class frmPatrimonioExcluir extends MForm
+{
+
+	protected $objPatrimonio;
+
+    function __construct($objPatrimonio)
+    {
+		$this->objPatrimonio = $objPatrimonio;
+        parent::__construct('Baixa');
+		$this->SetClose(null);
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+		global $MIOLO;
+
+		$tabelaGeral = $MIOLO->GetBusiness('common', 'tabelageral');
+		$options = $tabelaGeral->ListByTabela('AD_MOTIVOBAIXAPAT');
+		$fields = array
+			(
+				new MSelection('motivoBaixa','','Motivo da Baixa',$options->result),
+				new MCalendarField('dataMovimento',date('d/m/Y'),'Data',20),
+				new MTextField('numeroProcesso','','N Processo',20),
+			);
+
+        $this->SetFields($fields);
+		$this->page->addJsCode(file_get_contents(dirname(__FILE__) . '/../../ui/js/mask.js'));
+		$this->dataMovimento->addAttribute('onBlur', 'makeMask(this, \'##/##/####\');');
+		$this->dataMovimento->addAttribute('onKeyUp', 'makeMask(this, \'##/##/####\');');
+		$this->numeroProcesso->addAttribute('onKeyUp', 'makeMask(this, \'######/####-##\');');
+		$this->numeroProcesso->addAttribute('onBlur', 'makeMask(this, \'######/####-##\');');
+		$buttons = array
+			(
+        	   new MButton('btnSalvar', 'Baixa')
+            );
+		$this->SetButtons($buttons);
+    }
+
+	public function btnSalvar_click()
+	{            
+        $data = $this->GetData();
+		$movimentoPat = $this->manager->GetBusiness('adm','movimentopat');
+		$movimentoPat->tipoMovimento = '3';
+		$movimentoPat->motivoBaixa = $data->motivoBaixa;
+		$movimentoPat->idItemPatrimonio = $this->objPatrimonio->idItemPatrimonio;
+		$movimentoPat->idSetorOrigem  =   $this->objPatrimonio->idSetor;
+		$movimentoPat->idSetorDestino =   $this->objPatrimonio->idSetor;
+		$movimentoPat->dataMovimento  =   $data->dataMovimento;
+                $p=explode("/",$data->numeroProcesso);$n=$p[0];$pt=explode("-",$p[1]);$y= $pt[0];$dv = $pt[1];
+                $numpro = $y.$n.$dv;
+		$movimentoPat->numeroProcesso =   $numpro;
+                // 01-11-2011 - Daniel Bonfim
+                        $auth = $this->manager->auth;
+                        $idUsuario = $auth->login->idkey;
+                        $movimentoPat->idUsuario = $idUsuario;
+
+		$this->objPatrimonio->ativo   =   'N';
+
+		try
+		{
+       		$movimentoPat->save();
+			$this->objPatrimonio->save();
+			$this->objPatrimonio->Log(OP_UPD,"Item excluído: " . $this->objPatrimonio->idItemPatrimonio);
+			$this->manager->Information('Item excluído com sucesso',$this->manager->GetActionURL('adm','main:itempatrimonio:find'));
+		}
+		catch (Exception $e)
+		{
+			$this->manager->Error("Informe o seguinte erro à equipe do CGCO: ".$e->getMessage(),$this->manager->GetActionURL('adm','main:itempatrimonio',$this->objPatrimonio->idItemPatrimonio));
+		}
+	}
+ }
+?>

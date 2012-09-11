@@ -1,0 +1,150 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+MIOLO::Import('modules::rh::controls::linkdataslimiteparaferias');
+class frmDataLimitePedidoFerias extends MForm
+{
+
+
+    function frmDataLimitePedidoFerias()
+    {
+        global $MIOLO, $module;
+        parent::__construct('Manutenção de datas limite para pedido de Férias');
+        $this->SetClose($MIOLO->GetActionURL($module,'main:configuracao'));
+        $this->EventHandler();
+    }
+
+
+    function CreateFields()
+    { 
+		global $MIOLO,$item,$module;
+      	$selMeses = array( '01' => 'Janeiro',
+	                       '02' => 'Fevereiro',
+	                       '03' => 'Março',
+	                       '04' => 'Abril',
+	                       '05' => 'Maio',
+	                       '06' => 'Junho',
+	                       '07' => 'Julho',
+	                       '08' => 'Agosto',
+	                       '09' => 'Setembro',
+	                       '10' => 'Outubro',
+	                       '11' => 'Novembro',
+	                       '12' => 'Dezembro',
+                       ); 
+                       
+		$ui = $MIOLO->GetUI();
+        $grid = $ui->GetGrid($module,'gridDatasLimiteParaFerias');
+        $grid->SetTitle(null);	
+
+        if ($item)
+        {
+        	$cancelButton = new MButton('btnCancel','Cancelar');
+        	$saveButton = new MButton('btnExcluir','Excluir');
+			$grid = null;
+        }
+        else 
+        {
+        	$saveButton = new MButton('btnSalvar','Incluir');
+        }
+
+        $fields = array(
+			new MHiddenField('idDtLimiteFerias',''),
+			new MText('txtPara','Para o mês/ano:'),
+			array
+			(
+				new MSelection('mesPrevisto','','Mês',$selMeses),
+				$ano = new MTextField('anoPrevisto',date(Y),'Ano',5,'Digite um ano válido, com quatro caracteres')
+			),
+			new MSeparator(),
+			array
+			(			
+				new MCalendarField('dtLimite','','Data Limite'),
+				$saveButton,
+				$cancelButton,
+			),
+			$grid
+        );
+		$this->SetFields($fields);
+        $ano->AddAttribute('maxlength','4');
+        
+		$validators = array(
+			new MRangeValidator('anoPrevisto','Ano','1970',date(Y)+10,'i','required'),
+			new MRangeValidator('mesPrevisto','Mês','1','12','i','required'),
+        );
+       $this->SetValidators($validators);
+       $this->defaultButton = false;
+        
+        /**
+         * Se existe um item (iddtlimiteferias)
+         *  deve preencher o formulário
+         */
+        if ($item)
+        {
+        	$objCalendarioFerias = $MIOLO->GetBusiness($module,'calendarioferias');
+			$dados = $objCalendarioFerias->GetById($item);
+        	$this->setDataForm($dados);
+        	$this->SetFieldAttr('anoPrevisto','readonly',true);
+        	$this->SetFieldAttr('mesPrevisto','readonly',true);
+        	$this->SetFieldAttr('dtLimite','readonly',true);
+		}
+    }
+    
+
+	public function SetDataForm($dados)  
+	{
+	   $this->SetFieldValue('anoPrevisto',$dados->anoPrevisto);
+	   $this->SetFieldValue('mesPrevisto',$dados->mesPrevisto);
+       $this->SetFieldValue('dtLimite',$dados->dtLimite);
+       $this->SetFieldValue('idDtLimiteFerias',$dados->idDtLimiteFerias);
+    }
+
+
+    public function btnSalvar_Click()
+    {
+		global $MIOLO,$module;
+    	$objCalendarioFerias = $MIOLO->GetBusiness($module,'calendarioferias');
+    	$objCalendarioFerias->setData($this->getData());
+    	if ($objCalendarioFerias->salvar())
+    	{
+			$MIOLO->Information("A data foi incluída com sucesso.");
+    	}
+    	else 
+    	{
+    		$MIOLO->Error("Este período já possui uma data marcada.");
+    	}
+    }
+    
+
+    public function btnExcluir_Click()
+    {
+		global $MIOLO,$module,$item;
+    	$objCalendarioFerias = $MIOLO->GetBusiness($module,'calendarioferias');
+    	$objCalendarioFerias->setData($this->getData());
+    	$objCalendarioFerias->deletar();
+    	$MIOLO->Information("A data foi excluída",$MIOLO->GetActionURL($module,$action));
+    }
+
+    public function btnCancel_Click()
+    {
+		global $MIOLO,$module,$item;
+    	$MIOLO->Information("Operação cancelada",$MIOLO->GetActionURL($module,$action));
+	}
+
+ }
+?>

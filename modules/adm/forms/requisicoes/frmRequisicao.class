@@ -1,0 +1,196 @@
+<?php
+/**
+ * Form Requisicao
+ */
+class frmRequisicao extends CompoundForm {
+
+	public $oid;
+	protected $requisicao;
+	protected $idRubrica;
+	/**
+	 * Construtor
+	 */
+	function __construct($objRequisicao) {
+		$this->requisicao = $objRequisicao;
+		parent::__construct();
+		$this->SetClose($this->manager->GetActionURL('adm','main:requisicoes:find'));
+		$this->SetTitle("Requisição ".$this->requisicao->idRequisicao);
+		$this->SetIcon($this->manager->GetUi()->GetImage('adm','nothing.jpg'));
+	}
+
+	function CreateFields() {
+		global $page, $module, $context, $history;
+
+		$requisicao = $this->requisicao;
+		if ($this->oid == NULL) $this->oid = $requisicao->idRequisicao;
+
+		//Pegando a rubrica com base no tipo de requisição
+		$requisita = $this->manager->getBusiness('adm','requisita');
+		$requisita->GetById($this->requisicao->idTipoReq,$this->requisicao->idUoRequisitante,date('Y'));
+		$this->idRubrica = $requisita->idRubrica;
+
+		// form
+		$ui = $this->manager->GetUI();
+		$form = $this->GetFormValue('form');
+
+		switch ($form) {
+			case 'dados':
+				$this->_form[0] = $ui->GetForm($module,'frmRequisicaoDados', $requisicao, 'requisicao');
+				break;
+			case 'excluir':
+				$this->_form[0] = $ui->GetForm($module,'frmRequisicaoDel', $requisicao, 'requisicoes');
+				break;
+            case 'item':
+				$tipoReq = $this->GetFormValue('tipoReq') ? $this->GetFormValue('tipoReq') : $requisicao->idTipoReq;
+				switch ($tipoReq) {
+					case 1: // Restaurante
+						$this->_form[0] = $ui->GetForm($module,'frmRequisicaoRestaurante', $requisicao, 'requisicoes');
+						break;
+					case 2: // Hotel
+						$this->_form[0] = $ui->GetForm($module,'frmRequisicaoHotel', $requisicao, 'requisicoes');
+						break;
+					case 3: // Passagem
+						$this->_form[0] = $ui->GetForm($module,'frmRequisicaoPassagem', $requisicao, 'requisicoes');
+						break;
+
+					case 4: // Veículo
+						$this->_form[0] = $ui->GetForm($module,'frmRequisicaoVeiculo', $requisicao, 'requisicoes');
+						break;
+					case 14: //Itinerario
+						$this->_form[0] = $ui->GetForm($module,'frmItinerarioNew', $requisicao, 'requisicoes');
+						break;
+					case 15: //Editar Itinerario
+						$this->_form[0] = $ui->GetForm($module,'frmItinerarioEdit', $requisicao, 'requisicoes');
+						break;
+                                        case 5: // Diária
+						if ($requisicao->status == 'I') {
+							$requisicao->getLocalidadeDiarias();
+							if (($id = $this->getFormValue('id')) != NULL) {
+								$requisicao->deleteLocalidadeDiaria($id);
+								$requisicao->getLocalidadeDiarias();
+							}
+							$this->_form[1] = $ui->GetForm('adm','frmLocalidadesDiaria',$requisicao,'requisicoes');
+							array_unshift($this->_form, $ui->GetGrid('adm','gridRequisicaoLocalidadeDiaria',$requisicao));
+						} else if ($requisicao->status != '1') {
+							array_unshift($this->_form, $ui->GetGrid('adm','gridRequisicaoLocalidadeDiaria',$requisicao));
+						}
+						array_unshift($this->_form, $ui->GetForm('adm','frmRequisicaoDiaria',$requisicao,'requisicoes'));
+						break;
+					case 6: // Compra Permanente
+						$this->_form[0] = $ui->GetForm($module,'frmRequisicaoCompraPermanente', $requisicao, 'requisicoes');
+						break;
+					case 7: // Compra Consumo
+						$this->_form[0] = $ui->GetForm($module,'frmRequisicaoCompra', $requisicao, 'requisicoes');
+						break;
+					case 8: // Almoxarifado
+						$requisicao->getItem();
+						$this->_form[] = $ui->GetForm($module,'frmRequisicaoAlmoxarifado',$requisicao,'requisicoes');
+						break;
+					case 9: // Servico Externo
+						$this->_form[0] = $ui->GetForm($module,'frmRequisicaoServicoExterno', $requisicao, 'requisicoes');
+						break;
+					case 10: //Compra Acervo Biblioteca
+					case 13: //Compra Acervo Setorial
+						$this->_form[0] = $ui->GetForm($module,'frmRequisicaoBiblioteca', $requisicao, 'requisicoes');
+						break;
+					case 11: //Serviços Pessoa Fisicaa
+						$this->_form[0] = $ui->GetForm($module,'frmRequisicaoServicosPF', $requisicao, 'requisicoes');
+						break;
+					case 12: //Serviços Internos
+						$this->_form[0] = $ui->GetForm($module,'frmRequisicaoServicoInterno', $requisicao, 'requisicoes');
+						break;
+
+					}
+				break;
+			case 'status':
+				$acao = $this->getFormValue('acao')	;
+				switch ($acao) {
+					case 'autorizar':
+						$status = 4;
+						$this->_form[0] = $ui->GetForm($module,'frmRequisicaoAcao', array($requisicao,$status,$acao,$this->idRubrica),'requisicoes');
+						break;
+					case 'devolver':
+						$status = 5;
+						$this->_form[0] = $ui->GetForm($module,'frmRequisicaoAcao', array($requisicao,$status,$acao),'requisicoes');
+						break;
+					case 'cancelar':
+						$status = 6;
+						$this->_form[0] = $ui->GetForm($module,'frmRequisicaoAcao', array($requisicao,$status,$acao),'requisicoes');
+						break;
+				}
+				break;
+			case 'novo':
+				switch ($requisicao->idTipoReq) {
+					case 6: // Permanente
+						$this->_form[0] = $ui->GetForm($module,'frmRequisicaoCompraPermanenteNew', $requisicao, 'requisicoes');
+						break;
+					case 7: // Compra
+						$this->_form[0] = $ui->GetForm($module,'frmRequisicaoCompraNew', $requisicao, 'requisicoes');
+						break;
+					case 8: // Almoxarifado
+						// -- Linha inserida pela EAFB-Barbacena -- //
+						$this->_form[0] = $ui->GetForm($module,'frmRequisicaoAlmoxarifadoNew', $requisicao, 'requisicoes');
+						break;
+				}
+				break;
+            case 'sugere':
+                switch ($requisicao->idTipoReq) {
+					case 7: // Compra
+						$this->_form[0] = $ui->GetForm($module,'frmRequisicaoCompraSugere', $requisicao, 'requisicoes');
+						break;
+					case 9: // Compra
+						$this->_form[0] = $ui->GetForm($module,'frmRequisicaoServicoExternoSugere', $requisicao, 'requisicoes');
+						break;
+				}
+				break;
+		}
+		if ($this->_form[0]) {
+			$this->_form[0]->SetClose(null);
+			$url = $this->manager->GetActionURL('adm','main:requisicoes',$requisicao->idRequisicao,array('form'=>'item','tipoReq'=>$requisicao->idTipoReq));
+			$page->SetAction($url);
+		}
+
+		// info
+		$idUsuario = $this->manager->GetLogin()->idkey;
+
+		$tipoReq = $this->manager->GetBusiness('adm','tiporeq');
+		$tipoReq->GetById($this->requisicao->idTipoReq);
+
+		$tabelaGeral = $this->manager->GetBusiness('common','tabelageral');
+		$status = $tabelaGeral->GetByItem('AD_ALMOXSTATUSREQ',$this->requisicao->status);
+
+		//$this->_info[0]	= new TextLabel('txtNumero',$this->requisicao->idRequisicao,'Número');
+		$this->_info[1] = new TextLabel('txtStatus',strtoupper($status->item2),'Status');
+
+		$this->requisicao->retrieveAssociation('usuario');
+		$this->requisicao->usuario->retrieveAssociation('pessoa');
+		$this->_info[7] = new TextLabel('txtAutor',$this->requisicao->usuario->pessoa->nome,'Realizada por');
+
+                if ($this->requisicao->idUsuarioGestor){
+                    $gestor = $this->manager->GetBusiness('common','usuario', $this->requisicao->idUsuarioGestor);
+                    $this->_info[8] = new TextLabel('txtGestor',$gestor->nick,'Gestor Resp.:');
+                }
+
+		$this->requisicao->retrieveAssociation('uoRequisitante');
+		$this->requisicao->retrieveAssociation('uoExecutante');
+
+		$this->_info[2] = new TextLabel('txtUoRequisitante',$this->requisicao->uoRequisitante->nome,'UO Req.');
+		$this->_info[3] = new TextLabel('txtUoExecutante',$this->requisicao->uoExecutante->nome,'UO Exec.');
+		if ($this->requisicao->suplementar == 'S') {
+			$this->_info[4] = new TextLabel('txtTipoReq',$tipoReq->descricao.' - SUPLEMENTAR','Tipo');
+		} else {
+			$this->_info[4] = new TextLabel('txtTipoReq',$tipoReq->descricao,'Tipo');
+		}
+		$this->_info[5] = new TextLabel('txtDataHora',$this->requisicao->dataHora,'Data Hora');
+
+		// Se o usuário for gestor da UO req ou se for requisitante e a Uo tiver saldo público mostra saldo da UO.
+		if (($this->requisicao->uoRequisitante->isGestorOf($idUsuario)
+				|| $this->requisicao->uoRequisitante->getUsuario($idUsuario))
+					&& $this->requisicao->uoRequisitante->hasSaldoPublico()) {
+			$cf = new MCurrencyFormatter();
+			$saldo = $this->requisicao->uoRequisitante->getSaldoByTipoReq(trim($this->requisicao->idTipoReq),date('Y'));
+			$saldo = $cf->formatWithSymbol($cf->toDecimal($saldo));
+			$this->_info[6] = new TextLabel('txtSaldo',$saldo,'Saldo');
+		}
+	}
+}

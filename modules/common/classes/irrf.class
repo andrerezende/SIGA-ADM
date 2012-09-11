@@ -1,0 +1,116 @@
+<?php
+/**
+ * Classe utilizada para manipular informações sobre o imposto de renda.
+ * @author UFJF/CGCO
+ * @access public
+ */
+class BusinessCommonIrrf extends MBusiness
+{
+	var $idIrrf;
+	var $dataIni;
+	var $dataFim;
+	var $aliquota;
+	var $ate;
+	var $percentual;
+	var $deducao;
+	
+	/**
+     * Constructor.
+     * BusinessCommonLostPass Class Constructor.
+     * @param $data (tipo) desc
+     */
+	function __construct($data = null)
+	{
+		parent::__construct('sigaept', $data);
+	}
+	
+	
+	/**
+     * Método onde se passa um id como parametro e o irrf correspondente ao
+     * id é retornado para a variável o que chamou.
+	 *
+	 * @name getById
+	 * @param $idIrrf (tipo) id do IRRF. 
+	 * @access public
+	 */
+	function getById($idIrrf)
+	{
+		$this->idIrrf = $idIrrf;
+		$this->retrieve();
+		return $this;
+	}
+	
+	
+	function setData($data)
+	{
+		$this->dataIni = $data->dataIni;
+		$this->dataFim = $data->dataFim;
+		$this->aliquota = $data->aliquota;
+		$this->ate = $data->ate;
+		$this->percentual = $data->percentual;
+		$this->deducao = $data->deducao;
+	}
+    
+	
+	function onCreate($data)
+    {
+        if (empty($data))
+        {
+		//$this->initialize();
+        }
+        else
+        {
+            $this->getById($data);
+        }
+    }
+    
+    
+    /**
+	 * Lista todos os IRRFs registradas no banco de dados
+	 *
+     * @name listAll
+     * @param
+     * @return
+     */	
+	function listAll()
+	{
+        $criteria =  $this->getCriteria();
+		$criteria->addColumnAttribute('idIrrf');
+		$criteria->addColumnAttribute('dataini');
+		$criteria->addColumnAttribute('datafim');
+		$criteria->addColumnAttribute('ate');
+        $criteria->addOrderAttribute('idIrrf');
+        return $criteria->retrieveAsQuery();
+	}
+	
+	function getTaxaByDataValor($data, $valor)
+	{
+		$cf = new MCurrencyFormatter();
+		$criteria = $this->getCriteria();
+		$criteria->addCriteria('dataIni', '<=', "'$data'");
+		$criteria->addCriteria('dataFim', 'IS', 'NULL');
+		$criteria->addOrderAttribute('ate');
+		
+		$result = $criteria->retrieveAsCursor();
+		
+		$irrf = $result->getObject();
+		while($cf->toDecimal($valor) > $cf->toDecimal($irrf->ate))
+		{
+			$irrf = $result->getObject();
+		}
+		$taxa = ($cf->toDecimal($irrf->percentual) * $cf->toDecimal($valor)) / 100 - $cf->toDecimal($irrf->deducao);
+		return $cf->toDecimal($taxa);
+	}
+	
+	function existeAliquotaAberta($aliquota)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addCriteria('dataFim', 'IS', 'NULL');
+		$criteria->addCriteria('aliquota', '=', "'$aliquota'");
+		$cursor = $criteria->retrieveAsCursor();
+		if($obj = $cursor->getObject())
+			return $obj->idIrrf;
+		return false;
+	}
+}
+?>

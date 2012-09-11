@@ -1,0 +1,155 @@
+<?php
+// 15-12-2011 - Daniel Bonfim
+class frmEnderecoEdit extends MFormAJax {
+    private $objEndereco;
+    private $objLocal;
+            
+    function __construct($idEndereco = null) {
+        global $MIOLO, $module;
+                
+        if($idEndereco != null) {            
+            $bussEndereco = $MIOLO->GetBusiness('adm', 'endereco');
+            $this->objEndereco = $bussEndereco->GetById($idEndereco);
+        }
+                
+        parent::__construct();
+        $this->SetClose($MIOLO->GetActionURL('adm','main:endereco:find'));
+        $this->SetTitle("Editar Endereco");
+        $this->SetIcon($MIOLO->GetUi()->GetImage('adm','default_mini.png'));
+        $this->defaultButton = false;
+		$this->page->addJsCode(file_get_contents(dirname(__FILE__) . '/../../ui/js/mask.js'));
+        $this->EventHandler();
+    }
+
+    function CreateFields() {
+        global $MIOLO, $module, $page, $manager;   
+        
+        $estados = array(
+            'AC' => 'ACRE',
+            'AL' => 'ALAGOAS',
+            'AP' => 'AMAPÁ',
+            'AM' => 'AMAZONAS',
+            'BA' => 'BAHIA',
+            'CE' => 'CEARÁ',
+            'DF' => 'DISTRITO FEDERAL',
+            'ES' => 'ESPÍRITO SANTO',
+            'GO' => 'GOIÁS',
+            'MA' => 'MARANHÃO',
+            'MT' => 'MATO GROSSO',
+            'MS' => 'MATO GROSSO DO SUL',
+            'MG' => 'MINAS GERAIS',
+            'PA' => 'PARÁ',
+            'PB' => 'PARAÍBA',
+            'PR' => 'PARANÁ',
+            'PE' => 'PERNAMBUCO',
+            'PI' => 'PIAUÍ',
+            'RJ' => 'RIO DE JANEIRO',
+            'RN' => 'RIO GRANDE DO NORTE',
+            'RS' => 'RIO GRANDE DO SUL',
+            'RO' => 'RORAIMA',
+            'RR' => 'RONDÔNIA',
+            'SC' => 'SANTA CATARINA',
+            'SP' => 'SÃO PAULO',
+            'SE' => 'SERGIPE',
+            'TO' => 'TOCANTINS'
+            );
+                
+        $fields = array(  
+            
+            new MHiddenField('idEndereco', $this->objEndereco->idEndereco),
+            new MTextField('endereco', $this->objEndereco->endereco, 'Endereço', 50),  
+            new MTextField('bairro', $this->objEndereco->bairro, 'Bairro', 30),  
+            new MTextField('numero', $this->objEndereco->numero, 'Número', 20),  
+            new MTextField('complemento', $this->objEndereco->complemento, 'Complemento', 50), 
+            new MTextField('cep', $this->objEndereco->cep, 'Cep', 15),  
+            new MTextField('cidade', $this->objEndereco->cidade, 'Cidade', 30),  
+            new MSelection('estado', $this->objEndereco->estado, 'Estado', $estados), 
+            new MTextField('nomelocal', $this->objEndereco->nomelocal, 'Local',50)
+        );
+        $this->SetFields($fields);
+        
+        //$this->SetFieldAttr('tfNumeroEmpenho', 'readonly', true);
+        
+        // Atributos dos campos
+        $this->cep->addAttribute('maxlength',9);
+        $this->cep->addAttribute('onKeyUp', 'makeMask(this, \'#####-###\');');
+	$this->cep->addAttribute('onBlur', 'makeMask(this, \'#####-###\');');
+        
+        $go = $this->manager->getActionURL('adm','endereco:find');        
+        $buttons = array(
+            new MButton('btnAtualizar', 'Atualizar'),
+            new MButton('btnRetornar', 'Retornar', $go),
+            new MButton('btnExcluir', 'Excluir')
+        );
+        $this->SetButtons($buttons);
+    }
+    
+    
+	function btnAtualizar_click() {
+            global $MIOLO;
+//		Tratamento de Erros
+            
+		if (!trim($this->GetFormValue('cidade'))) {
+                    $this->addError("Insira a cidade");
+		}                
+                if (!trim($this->GetFormValue('estado'))) {
+                    $this->addError("Selecione o estado");
+		}
+                if (!trim($this->GetFormValue('cep'))) {
+                    $this->addError("Insira o cep");
+		}
+                if (!trim($this->GetFormValue('endereco'))) {
+                    $this->addError("Insira o endereco");
+		}
+                if (!trim($this->GetFormValue('bairro'))) {
+                    $this->addError("Insira o bairro");
+		}
+//		Caso haja algum erro, exibe na tela.
+		if ($this->errors != '') {
+			$this->GenerateErrors();
+		} else {
+                    
+                    try {
+			$this->objEndereco->idEndereco = trim($this->GetFormValue('idEndereco'));
+                        $this->objEndereco->endereco = trim($this->GetFormValue('endereco'));
+			$this->objEndereco->bairro = trim($this->GetFormValue('bairro'));
+                        $this->objEndereco->numero = trim($this->GetFormValue('numero'));
+                        $this->objEndereco->complemento = trim($this->GetFormValue('complemento'));
+                        $this->objEndereco->cep = trim($this->GetFormValue('cep'));
+                        $this->objEndereco->cidade = trim($this->GetFormValue('cidade'));
+                        $this->objEndereco->estado = trim($this->GetFormValue('estado'));
+                        $this->objEndereco->nomelocal = trim($this->GetFormValue('nomelocal'));
+                        //print_r($this->objEndereco);exit;
+                        $this->objEndereco->update();
+                        
+                        $go = $this->manager->GetActionURL('adm','main:endereco:find');
+                        $MIOLO->Information("Atualização feita com sucesso.", $go);
+                        
+                    } catch (Exception $e) {
+                        $this->AddInfo("Falha ao atualizar o endereço: {$this->objEndereco->idEndereco}");
+                    }
+
+		}
+	}
+        
+        function btnExcluir_click() {
+            global $MIOLO;
+            
+            try {
+                $this->objEndereco->Delete();
+                
+                $go = $this->manager->GetActionURL('adm','main:endereco:find');
+                $MIOLO->Information("Endereço deletado com sucesso.", $go);
+                
+            } catch (Exception $e) {
+                $this->AddInfo("Não é possível excluir o endereço de id {$this->objEndereco->idEndereco} 
+                porque existem informações dependentes do mesmo.");
+            }
+            
+        }
+        
+        
+
+    
+     
+}

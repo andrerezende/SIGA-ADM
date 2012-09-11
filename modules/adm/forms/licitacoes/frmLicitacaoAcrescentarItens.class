@@ -1,0 +1,604 @@
+<?
+class frmLicitacaoAcrescentarItens extends Form
+{
+	protected $objLicitacao;    
+
+	function __construct($licitacao)
+	{
+ 		global $MIOLO;
+        
+        $this->objLicitacao = $licitacao;
+        $this->Form('Acrescentar Itens');
+        $this->EventHandler();        
+	}
+	
+	Function CreateFields()
+	{
+		global $MIOLO,$module,$item,$self;
+
+	$uo = $this->manager->GetBusiness('adm','uo');
+	$instituicao = $MIOLO->GetBusiness('common','instituicao');
+	$uolic = $uo->listAll(); 
+        $idinst = $this->manager->GetBusiness('common','instituicao');
+        //$inst = $idinst->listAll();
+        $inst = $idinst->listAlInst();  	  	
+	//IFSP
+	$options = $uolic->chunkresult();
+	$opcoes = $inst->chunkresult();
+	
+	
+
+
+// linhas incluidas por Ronaldo para filtrar a listagem
+$fields = Array(
+		new MSeparator('Filtrar por'),
+		new TextField('elemento','','Elemento','6','Ex: 339030'),
+		new TextField('subelemento','','Subelemento','2','Ex: 12'),
+		new Selection('idUoLic',' ','UO',$options,'','Se escolher filtrar por UO não escolha filtro por Instituição'),
+		new Selection ('idinst','','Instituição',$opcoes,'','Se escolher filtrar por Instituição não escolha o filtro por UO')
+			);
+// Preenche os campos
+$objuo = $MIOLO->GetBusiness('adm','uo');
+		$query = $objuo->ListRange(NULL, 'sigla');
+		
+		while ( !$query->eof() )
+  		{
+   		 	$options[$query->fields('idUoLic')] = $query->fields('sigla');
+    			$query->moveNext();  
+   		}
+		$this->SetFieldAttr('idUoLic','options', $options);
+		
+		$objinst = $MIOLO->GetBusiness('common','instituicao');
+		$query = $objinst->ListRangeInst(NULL,'instituicao');
+		//$query = $objinst->ListRange(NULL,'instituicao');
+		while ( !$query->eof() )
+  		{
+   		 	$opcoes[$query->fields('idinstituicao')] = $query->fields('instituicao');
+   		 	//$options[$query->fields('idinstituicao')] = $query->fields('instituicao');
+    			$query->moveNext();  
+   		}
+   		$this->SetFieldAttr('idinst','options',$opcoes);			
+			
+			$this->SetButtons(new FormButton('btnFiltro','Filtrar'));
+			
+			
+			$this->SetFields($fields);
+			
+			
+		
+	}
+// Botão Exibir
+	function btnFiltro_click()	
+	{
+	global $MIOLO,$module,$item,$self,$theme;
+	// Torna o Botão de Filtro invisivel
+	$this->SetButtonAttr('btnFiltro', 'visible', false);
+
+// Captura os dados referentes aos filtros
+	
+$idinstituicao = $this->GetFieldValue('idinst');
+$licitacao = $this->GetFieldValue('idUoLic');
+$elemento = $this->GetFieldValue('elemento');
+$subelemento = $this->GetFieldValue('subelemento');
+
+
+
+	        $theme->InsertContent(new LinkBack('Voltar', $action));	
+
+        if ($this->objLicitacao->idTipoLicitacao == 1) // COMPRA CONSUMO
+        {
+            $uoReq = $this->objLicitacao->getIdUoReqByIdLicitacao();
+
+            $objItem = $MIOLO->GetBusiness('adm','itemreq');
+
+            // Exibe os itens a ser licitados do HU ou do resto da UFJF
+            if ($uoReq == '325')
+                $query = $objItem->ListItensAtendidosByCosup(0,1,2);
+            else
+               // $query = $objItem->ListItensAtendidosByCosup(0,0,2);
+$query = $objItem->ListItensAtendidos(0,'7',$elemento,$subelemento,$licitacao,$idinstituicao,$grp);
+            $columns = array(
+                //new DataGridColumn('prioridade','P','center','','2%'),
+                new DataGridColumn('sigla','UO Req.','center','','15%'),
+                new DataGridColumn('descricao','Material','left','','70%'),
+                new DataGridColumn('idrequisicao','Req.','center','','5%'),
+                new DataGridColumn('quantpedida','Qtde.','center','','5%'),
+                new DataGridColumn('valortotal','Total','center','','10%'),
+                new DataGridColumn('unidade','UN','center','','5%'),        
+                new DataGridColumn('iditemreq','IdItemreq','center',true,'1%',false)
+            );
+        }
+        else if ($this->objLicitacao->idTipoLicitacao == 4) // COMPRA PERMANENTE
+        {
+            $uoReq = $this->objLicitacao->getIdUoReqByIdLicitacao();
+
+            $objItem = $MIOLO->GetBusiness('adm','itemreq');
+
+            // Exibe os itens a ser licitados do HU ou do resto da UFJF
+            if ($uoReq == '325')
+                $query = $objItem->ListItensAtendidosByCosup(0,1,2);
+            else
+                $query = $objItem->ListItensAtendidosByCosup(0,0,2);
+
+            $columns = array(
+                //new DataGridColumn('prioridade','P','center','','2%'),
+                new DataGridColumn('sigla','UO Req.','center','','15%'),
+                new DataGridColumn('descricao','Material','left','','70%'),
+                new DataGridColumn('idrequisicao','Req.','center','','5%'),
+                new DataGridColumn('quantpedida','Qtde.','center','','5%'),
+                new DataGridColumn('valortotal','Total','center','','10%'),
+                new DataGridColumn('unidade','UN','center','','5%'),        
+                new DataGridColumn('iditemreq','IdItemreq','center',true,'1%',false)
+            );
+        }
+        else if ($this->objLicitacao->idTipoLicitacao == 3)
+        {
+ 			$this->SetButtonAttr('btnLicitacaoLivro', 'visible', true);
+
+			$objItem = $MIOLO->GetBusiness('adm','itemreqbib');
+			$query = $objItem->listItens();
+
+			$columns = array(
+                new MDataGridColumn('requisicao.idRequisicao','Req.','center','','0%',false,'',true),
+                new MDataGridColumn('requisicao.uoRequisitante.sigla','UO Req.','center','','10%',true,'',true),
+                new MDataGridColumn('material.codmaterial','Cod. Livro','left','','10%',true,'',true),
+                new MDataGridColumn('titulo','Livro','left','','55%',true,'',true),
+                new MDataGridColumn('idRequisicao','Req.','center','','5%'),
+                new MDataGridColumn('quantPedida','Qtde.','center','','5%'),
+                new MDataGridColumn('precoEstimado','Valor','center','','5%'),
+                new MDataGridColumn('valorTotal','V. Total','right','','10%'),
+			);           
+        }
+        else if ($this->objLicitacao->idTipoLicitacao == 2)
+        {
+			$objItem = $MIOLO->GetBusiness('adm','itemservext');
+			$query = $objItem->listItens();
+			
+			//var_dump($query->result);
+
+			$columns = array(
+				new DataGridColumn('idRequisicao','Req.','center','','5%'),
+				new DataGridColumn('sigla','UO Req.','center','','20%'),
+				new DataGridColumn('servico.complemento','Serviço','left','','60%'),
+				new DataGridColumn('quantidade','Qtde.','center','','5%'),
+				new DataGridColumn('valorEst','Total','right','','10%'),				    				
+			);
+        }
+        
+        $modalidade = $this->manager->getBusiness('adm','modalidadelicitacao');        
+        $modalidade->GetById($this->objLicitacao->idModalidadeLicitacao);
+
+		$datagrid = new DataGrid2($query,$columns,$action,0);
+		$datagrid->AddActionSelect();
+		$datagrid->SetTitle(NULL);
+
+		if ($this->objLicitacao->idTipoLicitacao == 1 OR $this->objLicitacao->idTipoLicitacao == 4)
+		{
+			$datagrid->SetIndex(8);
+			$datagrid->SetRowMethod($this,'MyRowMethod');
+            
+            $fields = Array($datagrid);    
+            $this->SetFields($fields);
+
+            $buttons = Array(new FormButton('btnPostMaterial','Enviar'));                    
+            $this->SetButtons($buttons);
+		}
+		else if ($this->objLicitacao->idTipoLicitacao == 2)
+		{
+			//$datagrid->SetIndex(2);
+			$datagrid->SetRowMethod($this,'MyRowMethodServico');
+
+            $fields = Array($datagrid);    
+            $this->SetFields($fields);
+
+            $buttons = Array(new FormButton('btnPostServico','Enviar'));                    
+            $this->SetButtons($buttons);
+		}
+        else if ($this->objLicitacao->idTipoLicitacao == 3)
+        {
+			//$datagrid->SetIndex(2);
+			$datagrid->SetRowMethod($this,'MyRowMethodLivro');
+
+            $fields = Array($datagrid);    
+            $this->SetFields($fields);
+
+            $buttons = Array(new FormButton('btnPostLivro','Enviar'));                    
+            $this->SetButtons($buttons);
+        }
+
+
+	}
+
+
+    // Método a ser executado antes de renderizar cada linha
+    function MyRowMethod($i, $row, $actions, $columns)
+    {
+        $cf = new MCurrencyFormatter();
+        $row[12] = $cf->formatWithSymbol($cf->toDecimal($row[12]));
+		$columns["valortotal"]->control[$i]->setValue($row[12]);
+    }
+
+    // Método a ser executado antes de renderizar cada linha
+    function MyRowMethodServico($i, $row, $actions, $columns)
+    {
+    	//var_dump($row);
+        $cf = new MCurrencyFormatter();
+        $row[7] = $cf->formatWithSymbol(($row[6]*$cf->toDecimal($row[7])));
+		$columns["valorEst"]->control[$i]->setValue($row[7]);
+    } 
+
+    // Método a ser executado antes de renderizar cada linha
+    function MyRowMethodLivro($i, $row, $actions, $columns)
+    {
+        $cf = new MCurrencyFormatter();
+        $row[6] = $cf->formatWithSymbol($cf->toDecimal($row[6]));
+        $row[7] = $cf->formatWithSymbol(($row[5]*$cf->toDecimal($row[6])));
+		$columns["precoEstimado"]->control[$i]->setValue($row[6]);
+		$columns["valorTotal"]->control[$i]->setValue($row[7]);
+    }   
+
+	/*------------------------------------------------
+
+	btnPostMaterial_click()
+	
+    Acrescenta os itens selecionados à licitação.
+    
+	------------------------------------------------*/
+	function btnPostMaterial_click()	
+	{
+		global $MIOLO, $module,$item, $page, $theme, $action;
+		
+        //Instancia o objeto para a classe de item de requisicao
+        $cf = new MCurrencyFormatter();
+
+		$objItem = $MIOLO->GetBusiness('adm','itemreq');
+        $selString = $this->getFormValue('selString');
+        
+        $queryTotal = $objItem->getTotalByIdLicitacao($this->objLicitacao->idLicitacao);
+        $valorLicitacao = $queryTotal->result[0][0];
+        
+        if ($selString)
+            $sel = explode("|",$selString);
+        else
+            $sel = $page->Request('select');   
+            
+		// Se algum item do datagrid foi selecionado
+		if ($sel)
+   		{
+            $valorLicitacao = $this->objLicitacao->getValorEstimado();
+            
+            // Procura inconsistências no itens selecionados
+			foreach ($sel as $rs)
+            {                
+				$idItemReq = explode("_",$rs);
+				$idMaterialAtual = $idItemReq[0];
+                $idRequisicao = $idItemReq[1];
+                $objItem->GetById($idRequisicao,$idMaterialAtual);
+                
+                $valorLicitacao += ($cf->toDecimal($objItem->quantPedida)*$cf->toDecimal($objItem->precoEstimado));
+                $modalidadeLicitacao = $MIOLO->GetBusiness('adm','modalidadelicitacao',$this->objLicitacao->idModalidadeLicitacao);
+ 
+                $objMaterial = $MIOLO->GetBusiness('adm','material');                
+                $objMaterial->GetById($idMaterialAtual);
+                
+                if ($objItem->getTotalDeLicitacoesDeDispensaPorMaterial($idMaterialAtual) > 0 && $this->objLicitacao->idModalidadeLicitacao == '1')
+                {
+                    //$actionNo = $this->manager->GetActionURL('adm','main:licitacoes',$this->objLicitacao->idLicitacao,array('form'=>'acrescentarItens'));
+                    //$actionYes = $this->manager->GetActionURL('adm','main:licitacoes',$this->objLicitacao->idLicitacao,array('form'=>'acrescentarItens','event'=>'btnPost_click','selString'=>$selString));
+					//$this->manager->question('O material '.$objMaterial->codmaterial.' - '.$objMaterial->descricao.' já foi licitado em uma dispensa neste ano fiscal. Deseja continuar?',$actionYes,$actionNo);
+
+                    $this->addInfo('O material '.$objMaterial->codmaterial.' - '.$objMaterial->descricao.' já foi licitado em uma dispensa neste ano fiscal.',$action);
+				}
+                
+                if ((($valorLicitacao < $modalidadeLicitacao->valorInicial) || ($valorLicitacao > $modalidadeLicitacao->valorFinal)) && (!$selString))
+                {
+                    $selString = implode("|",$sel);
+                    /*
+                    $actionNo = $this->manager->GetActionURL('adm','main:licitacoes',$this->objLicitacao->idLicitacao,array('form'=>'acrescentarItens'));
+                    $actionYes = $this->manager->GetActionURL('adm','main:licitacoes',$this->objLicitacao->idLicitacao,array('form'=>'acrescentarItens','event'=>'btnPost_click','selString'=>$selString));                    
+					$this->manager->question('Valor da licitação fora do permitido para esta modalidade. Deseja continuar?',$actionYes,$actionNo);
+					$erro = true;
+                    */
+                    $this->addInfo('Valor da licitação fora do permitido para esta modalidade.',$action);
+				}
+
+                $objRequisicao = $MIOLO->GetBusiness('adm','requisicao',$idRequisicao);
+                $objRequisicao->retrieveAssociation("uoRequisitante");
+
+                /*
+                if ($objItem->getItemByLicitacaoUo($this->objLicitacao->idLicitacao,$objRequisicao->idUoRequisitante))
+                {
+                    $erro = true;
+                    $action = $this->manager->getActionURL('adm','main:licitacoes',$this->objLicitacao->idLicitacao,'');
+                    $this->manager->Error("Já existe um pedido do Material ".$objMaterial->descricao." feito pela UO ".$objRequisicao->uoRequisitante->sigla." nesta licitação.",$action);
+                }
+                */
+
+                $idElementoAnterior = $objMaterial->idelemento;
+                $idSubElementoAnterior = $objMaterial->idsubelemento;
+            }
+            
+            if (!$erro)
+            {
+                foreach ($sel as $rs)
+                {                    
+                    $z++;
+                    $idItemReq = explode("_",$rs);
+                    $idMaterialAtual = $idItemReq[0];
+                    $idRequisicao = $idItemReq[1];
+                    
+                    $objItem->GetById($idRequisicao,$idMaterialAtual);	
+
+                    if ($idMaterialAnterior != $idMaterialAtual)                    
+                    {
+                        // Cria um novo item de licitação
+                        $objItemLicitacao = $MIOLO->GetBusiness('adm','itemlicitacao');
+                        $itemLicitacao = $objItemLicitacao->GetNewItemLicitacao($this->objLicitacao->idLicitacao);	
+
+                        $objItemLicitacao->idLicitacao = $this->objLicitacao->idLicitacao;
+                        $objItemLicitacao->item = $itemLicitacao;
+                        $objItemLicitacao->excecao = '1';
+                        $objItemLicitacao->save();
+                    }
+                    $ok = true;        
+                   
+                    //Muda o status da requisicao para "Em Licitação"
+                    $objRequisicao = $MIOLO->GetBusiness('adm','requisicao');
+                    $objRequisicao->GetById($idRequisicao);
+                    if ($objRequisicao->status == '4')
+                    {
+                        $objRequisicao->setStatus(7); //Só passa para liberada as reqs que estavam autorizadas
+                    }
+                    $objRequisicao->save();
+				
+                    $objItem->setStatus(1);
+                    $objItem->setLicitacao($this->objLicitacao->idLicitacao);
+                    $objItem->setItem($itemLicitacao);
+                    $this->objLicitacao->Log(OP_UPD,"Licitacao ".$this->objLicitacao->idLicitacao.". Novo item adicionado. Item: ".$itemLicitacao.".");
+                    $objItem->save();
+                    
+                    $idMaterialAnterior = $idMaterialAtual;
+                } 
+            }
+
+            if ($ok)
+            {
+                $action = $this->manager->getActionURL('adm','main:licitacoes',$this->objLicitacao->idLicitacao,'');
+                $this->manager->Information("Itens adicionados com sucesso.",$action);               
+            }       
+	    }
+	    else
+	    {
+			$show[] = new Spacer('10px');
+			$show[] = new Text('',"Nenhuma linha foi selecionada. Você precisa marcar os itens que deseja lançar");
+ 	        $show[] = new Spacer('10px');
+	        $show[] = new LinkBack('Voltar', $action);
+	        $theme->InsertContent($show);	
+	    }
+	}
+
+	/*------------------------------------------------
+
+	btnPostServico_click()
+	
+    adciona os tens selecionados na licitacao
+
+	------------------------------------------------*/
+	function btnPostServico_click()	
+	{
+		global $MIOLO, $module,$item, $page, $theme, $action;
+		
+        $cf = new MCurrencyFormatter();
+
+        //Instancia o objeto para a classe de item de requisicao
+
+		$objItem = $MIOLO->GetBusiness('adm','itemservext');
+        $selString = $this->getFormValue('selString');
+      
+        $queryTotal = $objItem->getTotalByIdLicitacao($this->objLicitacao->idLicitacao);
+        $valorLicitacao = $queryTotal->result[0][0];
+        
+        if ($selString)
+            $sel = explode("|",$selString);
+        else
+            $sel = $page->Request('select');   
+            
+		// Se algum item do datagrid foi selecionado
+		if ($sel)
+   		{
+            // Procura inconsistências no itens selecionados
+			foreach ($sel as $rs)
+            {                
+                $idRequisicao = $rs;
+                $objItem->GetById($idRequisicao);
+
+                $valorLicitacao += ($objItem->quantidade*$cf->toDecimal($objItem->valorEst));
+                $modalidadeLicitacao = $MIOLO->GetBusiness('adm','modalidadelicitacao',$this->objLicitacao->idModalidadeLicitacao);
+ 
+                $objServico = $MIOLO->GetBusiness('adm','servico');                
+                $objServico->GetById($idServicoAtual);            
+    
+                /*    
+                if ((($valorLicitacao < $modalidadeLicitacao->valorInicial) || ($valorLicitacao > $modalidadeLicitacao->valorFinal)) && (!$selString))
+                {
+                    $selString = implode("|",$sel);
+                    $actionNo = $this->manager->GetActionURL('adm','main:licitacoes',$this->objLicitacao->idLicitacao,array('form'=>'acrescentarItens'));
+                    $actionYes = $this->manager->GetActionURL('adm','main:licitacoes',$this->objLicitacao->idLicitacao,array('form'=>'acrescentarItens','event'=>'btnPost_click','selString'=>$selString));
+
+					$this->manager->question('Valor da licitação fora do permitido para esta modalidade. Deseja continuar?',$actionYes,$actionNo);
+					$erro = true;			
+				} 
+                */
+
+                $idElementoAnterior = $objServico->idelemento;
+                $idSubElementoAnterior = $objServico->idsubelemento;
+            }
+            
+            if (!$erro)
+            {
+                foreach ($sel as $rs)
+                {                    
+                    $z++;
+
+                    $idRequisicao = $rs;                    
+                    $objItem->GetById($idRequisicao);					
+                  
+					// Cria um novo item de licitação
+					$objItemLicitacao = $MIOLO->GetBusiness('adm','itemlicitacao');
+					$itemLicitacao = $objItemLicitacao->GetNewItemLicitacao($this->objLicitacao->idLicitacao);	
+
+					$objItemLicitacao->idLicitacao = $this->objLicitacao->idLicitacao;
+					$objItemLicitacao->item = $itemLicitacao;
+					$objItemLicitacao->excecao = '1';
+					$objItemLicitacao->save();
+ 					$ok = true;        
+                   
+                    //Muda o status da requisicao para "Em Licitação"
+                    $objRequisicao = $MIOLO->GetBusiness('adm','requisicao');
+                    $objRequisicao->GetById($idRequisicao);
+
+                    if ($objRequisicao->status == '4')
+                    {
+                        $objRequisicao->setStatus(7); //Só passa para liberada as reqs que estavam autorizadas
+                    }
+                    $objRequisicao->save();                    
+            
+				    $objItem->setStatus(1);
+                    $objItem->setLicitacao($this->objLicitacao->idLicitacao);
+                    $objItem->setItem($itemLicitacao);
+                    $this->objLicitacao->Log(OP_UPD,"Licitacao ".$this->objLicitacao->idLicitacao.". Novo item adicionado. Item: ".$itemLicitacao.".");
+                    $objItem->save();
+                    
+                    $idServicoAnterior = $idServicoAtual;
+                } 
+            }
+       
+            if ($ok)
+            {
+                $action = $this->manager->getActionURL('adm','main:licitacoes',$this->objLicitacao->idLicitacao,'');
+                $this->manager->Information("Itens adicionados com sucesso.",$action);
+			}
+	    }
+	    else
+	    {
+			$show[] = new Spacer('10px');
+			$show[] = new Text('',"Nenhuma linha foi selecionada. Você precisa marcar os itens que deseja lançar");
+ 	        $show[] = new Spacer('10px');
+	        $show[] = new LinkBack('Voltar', $action);
+	        $theme->InsertContent($show);	
+	    }
+	}
+
+	/*------------------------------------------------
+
+	btnPostLivro_click()
+	
+    adciona os tens selecionados na licitacao
+
+	------------------------------------------------*/
+	function btnPostLivro_click()	
+	{
+		global $MIOLO, $module,$item, $page, $theme, $action;
+		
+        $cf = new MCurrencyFormatter();
+
+        //Instancia o objeto para a classe de item de requisicao
+
+		$objItem = $MIOLO->GetBusiness('adm','itemreqbib');
+        $selString = $this->getFormValue('selString');
+      
+        $queryTotal = $objItem->getTotalByIdLicitacao($this->objLicitacao->idLicitacao);
+        $valorLicitacao = $queryTotal->result[0][0];
+        
+        if ($selString)
+            $sel = explode("|",$selString);
+        else
+            $sel = $page->Request('select');   
+            
+		// Se algum item do datagrid foi selecionado
+		if ($sel)
+   		{
+            // Procura inconsistências no itens selecionados
+			foreach ($sel as $rs)
+            {                
+                $idRequisicao = $rs;
+                $objItem->GetById($idRequisicao);
+
+                $valorLicitacao += ($objItem->quantidade*$cf->toDecimal($objItem->valorEst));
+                $modalidadeLicitacao = $MIOLO->GetBusiness('adm','modalidadelicitacao',$this->objLicitacao->idModalidadeLicitacao);
+ 
+                $objMaterial = $MIOLO->GetBusiness('adm','material');                
+                $objMaterial->GetById($idMaterialAtual);            
+    
+                /*    
+                if ((($valorLicitacao < $modalidadeLicitacao->valorInicial) || ($valorLicitacao > $modalidadeLicitacao->valorFinal)) && (!$selString))
+                {
+                    $selString = implode("|",$sel);
+                    $actionNo = $this->manager->GetActionURL('adm','main:licitacoes',$this->objLicitacao->idLicitacao,array('form'=>'acrescentarItens'));
+                    $actionYes = $this->manager->GetActionURL('adm','main:licitacoes',$this->objLicitacao->idLicitacao,array('form'=>'acrescentarItens','event'=>'btnPost_click','selString'=>$selString));
+
+					$this->manager->question('Valor da licitação fora do permitido para esta modalidade. Deseja continuar?',$actionYes,$actionNo);
+					$erro = true;			
+				} 
+                */
+
+                $idElementoAnterior = $objMaterial->idelemento;
+                $idSubElementoAnterior = $objMaterial->idsubelemento;
+            }
+            
+            if (!$erro)
+            {
+                foreach ($sel as $rs)
+                {                    
+                    $z++;
+
+                    $idRequisicao = $rs;                    
+                    $objItem->GetById($idRequisicao);					
+                   
+					// Cria um novo item de licitação
+					$objItemLicitacao = $MIOLO->GetBusiness('adm','itemlicitacao');
+					$itemLicitacao = $objItemLicitacao->GetNewItemLicitacao($this->objLicitacao->idLicitacao);	
+
+					$objItemLicitacao->idLicitacao = $this->objLicitacao->idLicitacao;
+					$objItemLicitacao->item = $itemLicitacao;
+					$objItemLicitacao->excecao = '1';
+					$objItemLicitacao->save();
+ 					$ok = true;        
+                   
+                    //Muda o status da requisicao para "Em Licitação"
+                    $objRequisicao = $MIOLO->GetBusiness('adm','requisicao');
+                    $objRequisicao->GetById($idRequisicao);
+
+                    if ($objRequisicao->status == '4')
+                    {
+                        $objRequisicao->setStatus(7); //Só passa para liberada as reqs que estavam autorizadas
+                    }
+                    $objRequisicao->save();                    
+            
+				    $objItem->setStatus(1);
+                    $objItem->setLicitacao($this->objLicitacao->idLicitacao);
+                    $objItem->setItem($itemLicitacao);
+                    $this->objLicitacao->Log(OP_UPD,"Licitacao ".$this->objLicitacao->idLicitacao.". Novo item adicionado. Item: ".$itemLicitacao.".");
+                    $objItem->save();
+                    
+                    $idMaterialAnterior = $idMaterialAtual;
+                } 
+            }
+       
+            if ($ok)
+            {
+                $action = $this->manager->getActionURL('adm','main:licitacoes',$this->objLicitacao->idLicitacao,'');
+                $this->manager->Information("Itens adicionados com sucesso.",$action);
+			}
+	    }
+	    else
+	    {
+			$show[] = new Spacer('10px');
+			$show[] = new Text('',"Nenhuma linha foi selecionada. Você precisa marcar os itens que deseja lançar");
+ 	        $show[] = new Spacer('10px');
+	        $show[] = new LinkBack('Voltar', $action);
+	        $theme->InsertContent($show);	
+	    }
+	}
+}
+?>

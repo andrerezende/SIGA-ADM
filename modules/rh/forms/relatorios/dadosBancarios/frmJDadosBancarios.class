@@ -1,0 +1,174 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmJDadosBancarios extends MForm
+{
+	var $options;
+    function __construct()
+    {
+        parent::__construct('Obter Relatório de Dados Bancários');
+        $this->SetClose($this->manager->GetActionURL('rh','main:relatorio'));
+        $this->EventHandler();
+    }   
+
+    function CreateFields()
+    {
+        global $MIOLO, $self, $module, $page, $action, $theme;
+        $ui = $this->manager->getUI();
+        $perms = $MIOLO->getPerms();
+        $login = $MIOLO->getLogin();
+        
+        $usuario = $MIOLO->getBusiness('common','usuario');
+        $usuario->getById($login->idkey);
+
+        $todosSetores = $this->manager->getBusiness('common','setor');
+        $query = $todosSetores->listAtivos();
+        $setores = $query->result;
+        $contador = 0;
+        //var_dump($query->result);
+        //$this->options['0'] = 'TODOS';
+        if ( $perms->isMemberOf($login,'RH_SECRETARIA'))
+        {        	
+            
+            $vinculo = $MIOLO->getBusiness('rh','vinculo');
+            $vinculo->getById($usuario->idUsuario);
+
+            $setor = $MIOLO->getBusiness('common','setor');
+            
+            $provs = $vinculo->listProvimentos()->result;
+            
+            if($provs)
+            {
+            	$vinculo->getProvimentos();
+            	$provimento = $vinculo->getProvimentoAtual();
+            	$setor->getById($provimento->idSetor);
+            }
+            else
+            {
+            	$setor->getById($usuario->idSetor);
+            }
+            //var_dump($setor);exit;
+            /*$setorPai = $MIOLO->getBusiness('common','setor');
+            $setorPai->getById($setor->idPaiSetor);
+
+            $idSetorPai = ( $setorPai->idPaiSetor == 0 ) ? $setor->idSetor : $setorPai->idSetor;
+
+            $setoresFilhos = $setor->getSetoresFilhos($idSetorPai);*/
+            
+            foreach($setores as $s) 
+	        {
+	        	
+	        	$mesmoSetor = in_array($s['0'],$setoresFilhos);
+	        	
+	        	if($mesmoSetor)
+	        	{
+	        		$this->options[$contador]['0'] = $s['0'] ;
+	        	
+		        	if($s['0'] != '9999') $this->options[$contador]['1'] = $s['2'] ; //coloca nome do setor
+		        	else $this->options[$contador]['1'] = $s['1'] ; //coloca sigla se for A DEFINIR
+		        	
+		        	$contador++;
+	        	}
+	        	
+	        }
+            
+            
+        }
+        else
+        {
+        	foreach($setores as $s) 
+	        {
+	        	
+	        	$this->options[$contador]['0'] = $s['0'] ;
+	        	
+	        	if($s['0'] != '9999') $this->options[$contador]['1'] = $s['2'] ; //coloca nome do setor
+	        	else $this->options[$contador]['1'] = $s['1'] ; //coloca sigla se for A DEFINIR
+	        	
+	        	$contador++;
+	        }
+        }
+        
+        
+        //$opOcup['0'] = 'OCUPADAS E DESOCUPADAS';
+        //$opOcup['1'] = 'OCUPADAS';
+        //$opOcup['2'] = 'DESOCUPADAS'; 
+        
+        $fields = array(
+            new MSelection('idSetores','','Setor', $this->options), 
+            //new MSelection('idOcupacao','','Ocupação', $opOcup),
+            new MHiddenField('descricaoSetor'),
+        );
+        $this->SetFields($fields);        
+        
+        $buttons = array(
+            new MButton('btnReport','Gerar Relatório','PDF'),
+        );
+        $this->SetButtons($buttons);
+    }    
+    
+    
+    function btnReport_click()
+    {
+    	//iReport
+    	$idSetor = $this->getFormValue('idSetores');
+    	foreach ($this->options as $o)
+    	{
+    		if ($o['0'] == $idSetor)
+    		{
+    			$this->setFormValue('descricaoSetor', $o['1']);
+    			$set = $o['1'];
+    		}
+    	}
+    	
+    	
+    	if ( is_null($idSetor) or ($idSetor == "") )
+            $erro[] = "Selecione o Setor";
+            
+        if ( count($erro) > 0 )
+            foreach ( $erro as $e )
+                $this->addError($e);
+    	else {
+    		
+    		$campos = "b.idvinculo as SIAPE, c.nome as Nome, g.descricao as Cargo, c.cpf as CPF, c.numrg||' '||c.orgaorg||'-'||c.ufrg as RG, d.nome as Banco, c.idagenc as Agencia, c.conta as Conta";
+    		
+    		$tabelas = "RH_FUNCIONARIO a, RH_VINCULO b, CM_PESSOA c, CM_BANCO d, RH_PROVIMENTO e, CM_SETOR f, RH_CARGO g";
+    		
+    		$condicoes = "(a.idfuncionario = b.idfuncionario) and (a.idpessoa = c.idpessoa) and (c.idbanco = d.idbanco) and (b.idvinculo = e.idvinculo) and (e.idcargo = g.idcargo) and (e.idgrupocargo = g.idgrupocargo) and (e.idsetor = f.idsetor) and (e.datafim is NULL) and (e.idsituacao <> 2) and (e.idsetor = $idSetor) or
+    					  (a.idfuncionario = b.idfuncionario) and (a.idpessoa = c.idpessoa) and (c.idbanco = d.idbanco) and (b.idvinculo = e.idvinculo) and (e.idcargo = g.idcargo) and (e.idgrupocargo = g.idgrupocargo) and (e.idsetor = f.idsetor) and (e.datafim is NULL) and (e.idsituacao <> 2) and (f.idpaisetor = $idSetor)";    		
+    		    		
+    		$ordenacao = "c.nome ASC";
+    		
+    		$sql = "SELECT ". $campos ." FROM " . $tabelas . " WHERE " . $condicoes . " ORDER BY " . $ordenacao;
+    		
+    		$report = new MJasperReport('ufjf');
+
+        	$parameters['str_TITULO'] = "Dados Bancários - $set";
+    		$parameters['str_SUBREPORT_DIR'] = $this->manager->getConf('home.modules') . '/common/reports/';
+	        $parameters['str_SQL'] =  $sql;//var_dump($sql);exit;
+	        
+			$report->Execute('rh','RH_DadosBancarios',$parameters);
+    	}
+    	
+    	
+    
+ 	}
+ 	
+}
+ 
+?>

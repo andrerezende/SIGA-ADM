@@ -1,0 +1,337 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class repRecadastramento extends MPDFReport
+{
+    var $img;
+    var $timestamp;
+    var $krono;
+
+    protected $ezStartPageNumbersX, $ezStartPageNumbersY;
+
+
+    function __construct($idPensionista)
+    {
+        global $module;
+
+        parent::__construct(NULL, NULL, 55, NULL, 'portrait', 'a4');
+        $ui = $this->manager->GetUI();
+        $this->img = $ui->GetImageSrc('brasaobrasil.png',$module);
+        $this->timestamp = date('d/m/Y G:i');
+        $this->ezStartPageNumbersX = 520;
+        $this->ezStartPageNumbersY = 800;
+        $this->pdf->ezSetMargins(100, 30, 30, 20);  //$top, $bottom, $left, $right
+
+/* teste de isPersistent
+
+$pensionista = $this->manager->GetBusiness('rh','pensionista');
+$is = '';
+            if ( $pensionista->IsPersistent() )
+                $is .= '<b> ANTES IS </b>';
+            else
+                $is .= '<b> ANTES NNAAOO </b>';
+
+
+            $pensionista->GetById('88991122');
+            if ( $pensionista->IsPersistent() )
+                $is .= '88 is Persistent';
+            else
+                $is .= '88 NOT pERSISTENT';
+
+          $pensionista->GetById('04438426');
+            if ( $pensionista->IsPersistent() )
+                $is .= '<b>  04438426 is Persistent  </b>';
+            else
+                $is .= '<b>  04438426 NOT pERSISTENT  </b>';
+
+          $pensionista->GetById($idPensionista);
+            if ( $pensionista->IsPersistent() )
+                $is .= '<b>  vol is Persistent</b>';
+            else
+                $is .= '<b>  vol NOT pERSISTENT</b>';
+
+          $pensionista->GetById('88991122');
+            if ( $pensionista->IsPersistent() )
+                $is .= ' 88 is Persistent';
+            else
+                $is .= ' 88 NOT pERSISTENT';
+
+teste de isPersistent */
+
+        //Pensionista
+          $pensionista = $this->manager->GetBusiness('rh','pensionista');
+          $pensionista->GetById($idPensionista);
+
+          if ( !$pensionista->IsPersistent() )
+          {
+              $this->pdf->addText(50, $this->pdf->y-50, 22, 'Não foram encontrados registros');
+              return;
+          }
+
+          $pensionista->retrieveAssociation('pessoa');
+
+          $estadocivil = $this->manager->GetBusiness('common','estadocivil');
+          $estadocivil->getById($pensionista->pessoa->idestadocivil);
+
+          $tabelaGeral = $this->manager->getBusiness('common','tabelageral');
+          $tabelaGeral->getByItem('RH_PARENTESCO',$pensionista->parentesco);
+
+          $pensionista->pessoa->retrieveAssociation('municipio');
+
+          if ($pensionista->pessoa->sexo == 'F')
+          {
+              $do = 'da';
+              $sr = 'Sra.';
+          }
+          else
+          {
+              $do = 'do';
+              $sr = 'Sr.';
+          }
+
+        //Representação Legal
+          $representacaoPensao = $this->manager->GetBusiness('rh','representacaopensao');
+          $representacaoPensao->getUltimaRepresentacao($pensionista->idPensionista);
+          $pessoarepresentacao = $this->manager->GetBusiness('common','pessoa');
+          $pessoarepresentacao->getById($representacaoPensao->idPessoa);
+          $pessoarepresentacao->retrieveAssociation('municipio');
+
+        //Instituidor
+          $pensionista->                      retrieveAssociation('vinculo');
+          $pensionista->vinculo->             retrieveAssociation('funcionario');
+          $pensionista->vinculo->funcionario->retrieveAssociation('pessoa');
+
+          $provimento = $this->manager->GetBusiness('rh','provimento');
+          $provimento->getUltimoProvimento($pensionista->idVinculo);
+          $provimento->getCargo();
+
+        $this->GeneratePageHeader();
+        $this->GeneratePageFooter();
+        $this->SetWidth(100);
+        $x0 = $this->pdf->left;
+
+        $y = $this->pdf->y - 20;
+
+        //-----------------------------------------------------------------------------------------------------------------------
+        $this->pdf->addText($x0, $y-5, 11, '<b>1 - DADOS BÁSICOS</b>');
+        $y = $y-15;
+          $this->Rectangle($y, 9, 12,  //$y, $alturatitulo, $alturaretangulo
+                           array(50                                              , 0                                  ), //$m_larguras
+                           array('<b>SIAPE:'                                     , 'Nome '. $do . ' Pensionista:</b>' ), //$m_titulos
+                           array($pensionista->idPensionista                     , $pensionista->pessoa->nome         ) );
+          $this->Rectangle($y, 9, 12,
+                           array(470                                             , 0                                  ),
+                           array('<b>Nome do Instituidor:'                       , 'SIAPE:</b>'                       ),
+                           array($pensionista->vinculo->funcionario->pessoa->nome, $pensionista->idVinculo            ) );
+          $this->Rectangle($y, 9, 12,
+                           array(410                                             , 0                                  ),
+                           array('<b>Cargo/Emprego:'                             , 'Data de Início da Instituição</b>'),
+                           array($provimento->cargo->descricao                   , $pensionista->dataInicioPensao     ) );
+
+        //-----------------------------------------------------------------------------------------------------------------------
+        $this->pdf->addText($x0, $y-5, 11, '<b>2 - DADOS COMPLEMENTARES (' . $do . ' pensionista)</b>');
+        $y = $y-15;
+          $this->Rectangle($y, 9, 12,
+                           array(140                                , 120                             , 120                              , 100                           , 0                         ),
+                           array('<b>Estado Civil:'                 , 'Registro Geral:'               , 'Órgão Expedição:'               , 'Data Expedição:'             , 'UF Expedição:</b>'       ),
+                           array($estadocivil->estadocivil          , $pensionista->pessoa->numrg     , $pensionista->pessoa->orgaorg    , $pensionista->pessoa->datarg  , $pensionista->pessoa->ufrg) );
+          $this->Rectangle($y, 9, 12,
+                           array(300                                , 90                              , 70                               , 0                             ),
+                           array('<b>Parentesco:'                   , 'CPF:'                          , 'Nascimento:'                    , 'Telefone:</b>'               ),
+                           array($tabelaGeral->item2                , $pensionista->pessoa->cpf       , $pensionista->pessoa->datanasc   , $pensionista->pessoa->telefone) );
+          $this->Rectangle($y, 9, 12,
+                           array(120                                , 120                             , 120                              , 110                           ),
+                           array('<b>Título de Eleitor:'            , 'Zona:'                         , 'Seção:'                         , 'UF:</b>'                     ),
+                           array($pensionista->pessoa->tituloeleitor, $pensionista->pessoa->zonatitulo, $pensionista->pessoa->secaotitulo, $pensionista->pessoa->uftitulo) );
+          $this->Rectangle($y, 9, 12,
+                           array(0                                  ),
+                           array('<b>Logradouro:</b>'               ),
+                           array($pensionista->pessoa->endereco     ) );
+          $this->Rectangle($y, 9, 12,
+                           array(240                                , 220                                       , 30                      , 0                        ),
+                           array('<b>Bairro:'                       , 'Município:'                              , 'UF:'                   , 'CEP:</b>'               ),
+                           array($pensionista->pessoa->bairro       , $pensionista->pessoa->municipio->municipio, $pensionista->pessoa->uf, $pensionista->pessoa->cep) );
+          $this->Rectangle($y, 9, 12,
+                           array(250                            , 210                              , 0                              ),
+                           array('<b>Banco:'                    , 'Agência:'                       , 'Conta Corrente:</b>'          ),
+                           array($pensionista->bancoPgto, $pensionista->agenciaPgto, $pensionista->contaPgto) );
+                           //array($pensionista->pessoa->banco, $pensionista->pessoa->agencia, $pensionista->pessoa->conta) );
+
+        //-----------------------------------------------------------------------------------------------------------------------
+        $this->pdf->addText($x0, $y-5, 11, '<b>3 - DADOS DO REPRESENTANTE LEGAL</b>');
+        $y = $y-15;
+        $this->pdf->addText($x0    , $y   , 7, 'Situação do Representante Legal:  (1)Procurador(a)  (2)Tutor(a)  (3)Curador(a)  (4)Mãe/Pai  (5)Outros');
+        $this->pdf->addText($x0    , $y-14, 7, 'Finalidade da Representação:');
+        $this->pdf->addText($x0+115, $y-14, 7, '(1)se a representação legal for exclusiva para esta atualização cadastral'                           );
+        $this->pdf->addText($x0+115, $y-21, 7, '(2)se a representação legal for exclusiva para o recebimento de benefício'                           );
+        $this->pdf->addText($x0+115, $y-28, 7, '(3)se a representação legal for tanto para o recasdastramento quanto para o recebimento de benefício');
+        $y = $y-44;
+          $this->Rectangle($y, 9, 12,
+                           array(400                           , 0                           ),
+                           array('<b>Nome do Representante:'   , 'CPF:</b>'                  ),
+                           array($pessoarepresentacao->nome    , $pessoarepresentacao->cpf   ) );
+          $this->Rectangle($y, 9, 12,
+                           array(260                           , 0                           ),
+                           array('<b>Logradouro:'              , 'Bairro:</b>'               ),
+                           array($pessoarepresentacao->endereco, $pessoarepresentacao->bairro) );
+          $this->Rectangle($y, 9, 12,
+                           array(360                                       , 30                      , 70                       , 0                             ),
+                           array('<b>Município:'                           , 'UF:'                   , 'CEP:'                   , 'Telefone:</b>'               ),
+                           array($pessoarepresentacao->municipio->municipio, $pessoarepresentacao->uf, $pessoarepresentacao->cep, $pessoarepresentacao->telefone) );
+          $this->Rectangle($y, 9, 12,
+                           array(220                        , 240                          , 30                        , 0                           ),
+                           array('<b>Registro Geral:'       , 'Órgão Expedição:'           , 'UF:'                     , 'Expedição:</b>'            ),
+                           array($pessoarepresentacao->numrg, $pessoarepresentacao->orgaorg, $pessoarepresentacao->ufrg, $pessoarepresentacao->datarg) );
+
+        //-----------------------------------------------------------------------------------------------------------------------
+        $this->pdf->addText($x0, $y-5, 11, '<b>4 - DADOS DA PROCURAÇÃO</b>');
+        $y = $y-15;
+          $this->Rectangle($y, 9, 12,
+                           array(0                             ),
+                           array('<b>Nome do Cartório:</b>'    ),
+                           array($representacaoPensao->cartorio) );
+          $this->Rectangle($y, 9, 12,
+                           array(130                        , 130                        , 130                             , 0                            ),
+                           array('<b>Número do Livro:'      , 'Número da Folha:'         , 'Início da Procuração:'         , 'Término da Procuração:</b>' ),
+                           array($representacaoPensao->livro, $representacaoPensao->folha, $representacaoPensao->dataInicio, $representacaoPensao->dataFim) );
+
+        //-----------------------------------------------------------------------------------------------------------------------
+        $this->pdf->addText($x0, $y-5 , 9, '<b>5 - ASSINATURA:');
+        //$y = $y-15;
+        $this->pdf->addText($x0+100, $y-5    ,  7, '<i>Declaro, sob as penas da Lei, que os dados informados neste formulário correspondem à expressão da verdade</i></b>');
+        $y = $y-15;
+        $this->pdf->addText($x0    , $y-14, 9, 'Local e Data:  ______________________________________');
+        $this->pdf->addText($x0+285, $y-14, 9, '________________________________________________');
+        $this->pdf->addText($x0+315, $y-21, 7, '<b>Assinatura ' . $do . ' Pensionista ou Representante Legal</b>');
+
+        //-----------------------------------------------------------------------------------------------------------------------
+        $largura = $this->pdf->right - $this->pdf->left;
+        $y = $y-160;
+        $pe = $y;
+        $this->pdf->Rectangle($x0, $y, $largura, 120); //x, y (embaixo), largura, altura a partir de baixo ($y)
+
+        $y = $y+110;
+        $this->pdf->addText($x0+100, $y   , 9, '<b>Atualização Cadastral dos Beneficiários de Pensão - Decreto nº 2.251/1997</b>');
+        $this->pdf->addText($x0+180, $y-10, 9, '<b>RECIBO DE ENTREGA DO FORMULÁRIO</b>');
+
+        $str = 'Declaro que, nesta data, foi entregue à Pró-Reitoria de Recursos Humanos da Universidade Federal'
+             . ' de Juiz de Fora o formulário de atualização cadastral de beneficiário de pensão ' . $do . ' ' . $sr . ' '
+             . trim($pensionista->pessoa->nome)
+             . ' devidamente preenchido nos termos do Decreto nº 2.251/1997';
+
+        $fonte   = 7;
+        $y = $y-20;
+        while ( strlen($str) > 0 )
+        {
+            $str = $this->pdf->addTextWrap($x0+1, $y, $largura-1, $fonte, $str, 'full');
+            $y = $y -10;
+        }
+
+        $y = $y -10;
+        $this->pdf->addText($x0+50, $y, 7, 'Em _____/_____/__________');
+        $this->pdf->addText($x0+270, $pe+20, 7, '_______________________________________________________');
+        $this->pdf->addText($x0+270, $pe+10, 7, 'Carimbo e Assinatura - Representante PRORH/UFJF');
+    } // __construct
+
+
+    function Rectangle(&$y, $alturatitulo, $alturaretangulo, $m_larguras, $m_titulos=NULL, $m_conteudos=NULL)
+    {
+        $acumulo = $this->pdf->left;  //acúmulo da margem esquerda e das larguras
+        $esqant  = $this->pdf->left;  //posição onde imprimiu o retângulo anterior
+        $largant = 0;                 //largura do retângulo anterior
+
+        foreach ($m_larguras as $ind => $largatual)
+        {
+            $esqant  = $esqant + $largant;
+            $m_x0[]  = $esqant;            //posições onde imprimir os retângulos
+            $largant = $largatual;
+            $acumulo = $acumulo + $largatual;
+        }
+        if ($largatual == 0)
+        {
+            //se última largura definida como 0 significa que se quer defini-la com o que sobra até a margem direita
+            $m_larguras[$ind] = $this->pdf->right - $acumulo; //margem direita menos a margem esquerda e o que já se imprimiu
+        }
+
+        if ($m_titulos)
+        {
+            foreach ($m_titulos as $ind => $txt)
+            {
+                $this->pdf->addText($m_x0[$ind], $y, $alturatitulo, $txt);
+            }
+            $y = $y - $alturatitulo - ($alturatitulo/2) -1;
+        }
+
+        foreach ($m_larguras as $ind => $largatual)
+        {
+            $this->pdf->Rectangle($m_x0[$ind], $y, $largatual, $alturaretangulo);
+        }
+
+        if ($m_conteudos)
+        {
+            foreach ($m_conteudos as $ind => $txt)
+            {
+                $this->pdf->addText($m_x0[$ind] + 1, $y+($alturaretangulo/4), $alturatitulo, $txt);
+            }
+        }
+
+        $y = $y - $alturaretangulo;
+    } // Rectangle
+
+
+    function GeneratePageHeader()
+    {
+        $x0 = $this->pdf->left;
+        $x1 = $this->pdf->right;
+        $h = $this->pdf->getFontHeight(10);
+        $header = $this->pdf->openObject();
+        $this->pdf->saveState();
+
+        $y = $this->ezStartPageNumbersY;
+        $this->pdf->addPngFromFile($this->img, 40, $y-40, 54, 52);   //imagem, X, Y, largura, altura
+        $this->pdf->addText($x0+195, $y      , 12, 'MINISTÉRIO DA EDUCAÇÃO');
+        $this->pdf->addText($x0+175, $y -= $h, 10, 'UFJF - Universidade Federal de Juiz de Fora');
+        $this->pdf->addText($x0+195, $y -= $h, 10, 'Pró-Reitoria de Recursos Humanos');
+        $this->pdf->addText($x0+155, $y -= $h +$h, 10, "<b>Atualização Cadastral dos Beneficiários de Pensão</b>");
+        $this->pdf->addText($x0+225, $y -= $h, 10, "Decreto nº 2.251/1997");
+
+        $this->pdf->restoreState();
+        $this->pdf->closeObject();
+        $this->pdf->addObject($header, 'all');
+    } // GeneratePageHeader
+
+
+    function GenerateData($data)
+    {
+        $this->pdf->ezSetDy(-5);
+        $this->SetData($data);
+        $this->rawdata = $this->GenerateTableData();
+        $this->GenerateBody($this->rawdata);
+    } // GenerateData
+
+
+    function Generate()
+    {
+        $this->SetOutput();
+        $this->Execute();
+    } // Generate
+
+
+}
+?>

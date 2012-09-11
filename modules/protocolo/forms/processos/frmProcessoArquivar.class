@@ -1,0 +1,211 @@
+<?
+// 20-10-2011 - Daniel Bonfim
+MIOLO::Import('extensions::class.phpmailer.php','PHPMailer');
+
+class frmProcessoArquivar extends MForm
+{
+	protected $processo;
+	protected $setor;
+	protected $setoracesso;
+	protected $perms;
+	function __construct($objProcesso)
+	{
+		//      construct
+		global $MIOLO;
+		$this->processo = $objProcesso;
+		$this->setor = $MIOLO->getBusiness('protocolo','setor');
+		$this->setoracesso = $MIOLO->getBusiness('protocolo','setoracesso');
+		$this->perms  = $MIOLO->getPerms();
+		parent::__construct('Arquivar processo');
+		$this->SetClose($MIOLO->GetActionURL('protocolo','main'));
+		$this->eventHandler();
+	}
+
+	function CreateFields()
+	{
+		/* IFRO - Controle de segurança de acesso */
+		$setores = ($this->perms->checkAccess('PROT_ADMIN', A_ACCESS)) ? $this->setor->selAll() : $this->setoracesso->selSetoresAcesso($this->processo->getSetorUsuario());
+		if (
+			$this->processo->retencao->setor
+			&& in_array($this->processo->retencao->setor,$setores) 
+		  )
+		{
+			//      get andamento
+			$andamento = $this->processo->getAndamento($this->processo->retencao->numAndamento);
+			//      decisao do processo	    
+			$decisao = new MMultiLineField('decisao',$andamento->decisao,'Decisão',300,5,88);
+			$autor = new MTextField('autor',$andamento->autor,'Autor',40);
+			$autor->addAttribute('maxlength','40');
+			$groupDecisao = new MBaseGroup('groupDecisao', 'Decisão do processo',array($decisao,$autor),'vertical','css');
+			$groupDecisao->addAttribute('style','padding:10px');
+			//      arquivo
+			$arquivo = new MTextField('arquivo',$this->processo->arquivo,'Caixa Arquivo',15);
+			$arquivo->addAttribute('maxlength','7');
+			$groupArquivo = new MBaseGroup('groupArquivo', 'Arquivo do processo',array($arquivo),'horizontal','css');
+			$groupArquivo->addAttribute('style','padding:10px');
+
+			//      fields
+			$fields = array(
+				array(
+					$groupDecisao,
+					$groupArquivo,
+				),
+			);
+			$this->SetFields($fields);
+
+			//      required fields
+			$validators = array(
+				new MRequiredValidator('decisao'),
+				new MRequiredValidator('autor'),
+				new MRequiredValidator('arquivo'),
+			);
+			$this->setValidators($validators);
+
+			//      buttons
+			$buttons = array(
+				new MButton('btnArquivar','Arquivar'),
+			);
+			$this->SetButtons($buttons);
+		}else{
+			$msg = 'Este usuário não tem permissão para acessar este Processo/Protocolo';
+			$this->manager->Information($msg,$this->manager->GetActionURL('protocolo','main:processos',$this->processo->numProcesso));
+		}
+	}
+
+	public function btnArquivar_click()
+	{
+		//      data
+		$data = $this->getData();       
+		$data->dataSaida = date("YmdHi");
+		$data->decisao = 'ARQUIVADO NO SETOR '.$processo->retencao->setor.' - '.$data->decisao;
+		$data->dataDespacho = $data->dataSaida;
+		$data->status = 'A';
+		//      set and save
+		try
+		{
+			$this->processo->beginTransaction();
+			$this->processo->setData($data);
+			$andamento = $this->processo->getAndamento($this->processo->retencao->numAndamento);
+			$andamento->setData($data);
+			$this->processo->addAndamento($andamento);
+			$this->processo->retencao->setData($andamento);
+			$this->processo->save();
+			$msg = "Processo ".$this->processo->numProcessoFormatado()." arquivado com sucesso.";
+			$this->processo->Log(OP_UPD,$msg);
+			$this->processo->endTransaction();
+                    // 20-10-2011 - Daniel Bonfim
+                    $this->SendMailArquivar();
+			$this->manager->Information($msg,$this->manager->GetActionURL('protocolo','main:processos',$this->processo->numProcesso));
+		}
+		catch(Exception $e) {$this->addError($e->getMessage());}
+	}
+        
+                            // 20-10-2011 - Daniel Bonfim
+        // envia um email informando a cada observador que o processo foi arquivado
+        private function SendMailArquivar() {
+            global $MIOLO;
+                        
+            $bussObservador = $MIOLO->getBusiness('common','observador');
+            $bussProcesso = $MIOLO->getBusiness('protocolo','processo');
+            
+            $numProcesso = $this->processo->numProcesso;
+            
+            // lista os observadores deste processo
+            $arrIds = $bussObservador->listIdUserObservadoresByProcesso($numProcesso);
+                        
+            if($arrIds) {
+                foreach($arrIds as $id) {
+                    $arrIdsUserObservadores[] = $id[0];
+                }
+            }
+             
+        // se houverem observadores
+        if($arrIdsUserObservadores) {
+            
+            // array com os ids dos observadores
+            foreach($arrIdsUserObservadores as $idUserObservador) {
+                
+                $bussUsuario = $MIOLO->getBusiness('common','usuario');
+                // no objPessoa já tem todas as informacoes de que preciso
+                $objUsuario = $bussUsuario->GetById($idUserObservador); 
+                                
+                $email = $objUsuario->pessoa->email;
+                
+                $mail = new PHPMailer();
+		$mail->IsSMTP(); // telling the class to use SMTP
+		$mail->Host = "smtp.ifbaiano.edu.br"; // SMTP server
+		$mail->From = 'sigaadm@ifbaiano.edu.br';
+		$mail->FromName = 'SIGA - Sistema Integrado de Gestão Acadêmica';
+		//$mail->Subject = "[SIGA] Monitoramento do processo ".$bussProcesso->numProcessoFormatado($this->processo->numProcesso);
+                // 04-11-2011 - Daniel Bonfim
+                $mail->Subject = "[SIGA] Processo ".$bussProcesso->numProcessoFormatado($this->processo->numProcesso).": ARQUIVADO";
+		$mail->WordWrap = 150;
+                
+                // 24-10-2011 - Daniel Bonfim
+                // informaçoes do processo para inserir no email
+                $tipo = $this->processo->tipo;
+                if($tipo == 'A')
+                    $tipo = "PROTOCOLADO";
+                else if($tipo == 'P')
+                    $tipo = "PROCESSO";
+                
+                $numFormatado = $this->processo->instituicao.".".$this->processo->numProcessoFormatado($this->processo->numProcesso);
+                $dataAbertura = $this->processo->dataFormatada($this->processo->dataAbertura);
+                $setor = $this->processo->setorOrigem;
+                
+                $status = $this->processo->retencao->status;
+                if($status == "N") {
+                    // 04-20-2011 - Daniel Bonfim
+                    if ($this->processo->retencao->setorDestino)
+                        $status = 'AGUARDANDO ENTRADA - '.$this->processo->retencao->setorDestino;
+                    else 
+                        $status = "NORMAL";
+                }
+                else if($status == "A")
+                    $status = "ARQUIVADO";
+                else if($status == "J")
+                    $status = "ANEXADO";
+                
+                $interessado = $this->processo->solicitante;
+                $titulo = $this->processo->titulo;
+                $assunto = $this->processo->assunto;
+                $arquivo = $this->processo->arquivo;
+                
+                // usuario
+                $auth = $this->manager->auth;
+                $usuario = $auth->login->id;
+                
+		$body =
+<<< HERE
+O sistema SIGA-ADM informa que o processo {$bussProcesso->numProcessoFormatado($this->processo->numProcesso)} foi arquivado com sucesso.
+
+Tipo: {$tipo}
+Número: {$numFormatado}
+Data Abertura: {$dataAbertura}
+Setor: {$setor}
+Status: {$status}
+Interessado: {$interessado}
+Titulo: {$titulo}
+Assunto: {$assunto}
+Caixa: {$arquivo}
+Usuário: {$usuario}
+
+Atenciosamente,
+SIGA - Sistema Integrado de Gestão Acadêmica
+sigaadm@ifbaiano.edu.br
+
+HERE;
+
+		$mail->Body = $body;
+                $mail->AddAddress($email);
+                                
+                $mail->Send();
+            }
+                
+        } else {
+            unset($bussObservador); 
+            unset($bussProcesso);
+        }   
+    }
+}
+?>

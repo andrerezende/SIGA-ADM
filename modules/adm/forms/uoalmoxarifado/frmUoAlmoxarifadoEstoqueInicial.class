@@ -1,0 +1,126 @@
+<?
+class frmUoAlmoxarifadoEstoqueInicial extends Form
+{
+    protected $objEstoque;
+	protected $opcao;
+
+    function __construct($objEstoque)
+    {
+        $this->objEstoque = $objEstoque;
+        $this->Form('Dados do Estoque de Material');
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+        $this->objEstoque->retrieveAssociation('material');
+		$this->opcao = $this->objEstoque->idMaterial;
+
+        $fields = array(
+            new MHiddenField('idMaterial',$this->objEstoque->idMaterial,'Idmaterial'),
+            new MLookupTextField('lkpMaterial',$this->objEstoque->material->descricao,'Material',35),
+            new MHiddenField('estoque',0,'Quantidade',10,'Ex: 1000'),
+            new MHiddenField('valorTotal',0,'Valor',10,'Atenção: para itens não provenientes de compra, informe o valor total. Separação decimal por virgula.'),
+            new MTextField('estoqueMin',$this->objEstoque->estoqueMin,'Estoque Mínimo',10,'Ex: 500'),
+        );
+		
+        $this->SetFields($fields);
+        $this->SetFieldAttr('lkpMaterial','module','adm');
+        $this->SetFieldAttr('lkpMaterial','item','material');
+        $this->SetFieldAttr('lkpMaterial','event','filler');
+        $this->SetFieldAttr('lkpMaterial','related','idMaterial,lkpMaterial');
+        $validators = array(
+          new MRequiredValidator('idMaterial'),
+        );
+        $this->SetValidators($validators);
+        
+        $buttons = array(
+            new FormButton('btnPost', 'Gravar'),
+            new FormButton('btnDel' , 'Excluir')
+        );
+        $this->SetButtons($buttons);
+        $perms = $this->manager->getPerms();
+        $this->setButtonAttr('btnDel','visible',false); //$perms->checkAccess('banco_delete',A_ACCESS,false));
+
+    }
+
+    function btnPost_click()
+    {
+        global $item;
+        $data = $this->getData();
+        $this->objEstoque->getById($item,$data->idMaterial);
+        $update = $this->objEstoque->isPersistent();
+        $cf = new MCurrencyFormatter();
+//TAKA	
+	$anterior = array('R$','.',',');
+	$proximo  = array('','','.');
+	if ($this->opcao)
+	{
+		$this->objEstoque->estoque = $data->estoque;
+		$this->objEstoque->valorTotal = $cf->toDecimal($data->valorTotal);
+		$this->objEstoque->estoqueMin = $data->estoqueMin;
+	}
+	else
+	{
+		if ($this->objEstoque->valorTotal > 0)
+		{
+			$this->objEstoque->valorTotal = (($data->valorTotal * $data->estoque) + ($this->objEstoque->valorTotal * $this->objEstoque->estoque)) / ($data->valorTotal + $this->objEstoque->valorTotal);
+		}
+		else
+		{
+			$this->objEstoque->valorTotal = $cf->toDecimal($data->valorTotal);
+		}
+		$this->objEstoque->estoque = $data->estoque + $this->objEstoque->estoque;
+		$this->objEstoque->estoqueMin = $data->estoqueMin;
+	}
+//	$data->valorTotal = str_replace( $anterior, $proximo ,$data->valorTotal);
+//	$data->valorTotal = $cf->toDecimal($data->valorTotal);
+//	TAKA
+//	$this->objEstoque->estoque = $data->estoque;
+//	$this->objEstoque->valorTotal = $cf->toDecimal($data->valorTotal);
+//	$this->objEstoque->estoqueMin = $data->estoqueMin;
+        try
+        {
+            $this->objEstoque->save();
+            $go = $this->manager->GetActionURL('adm', 'main:uoalmoxarifado', $item);
+            if ($update)
+            {
+                $this->manager->Information('Material atualizado com sucesso.', $go );
+            }
+            else
+            {
+                $this->manager->Information('Material inserido com sucesso.', $go );
+            }
+        }
+        catch ( Exception $e )
+        {
+            $this->AddError('Ocorreu um erro ao inserir os dados.');
+        }
+    }
+
+    function btnDel_click()
+    {
+        $action_sim = $this->manager->GetActionURL('adm','main:uoalmoxarifado',$this->objEstoque->idUo,array('form'=>'estoqueinicial','id'=>$this->objEstoque->idMaterial,'conf'=>'sim','event'=>'btnDel:click'));
+        $action_nao = $this->manager->GetActionURL('adm','main:uoalmoxarifado',$this->objEstoque->idUo,array('form'=>'estoqueinicial','id'=>$this->objEstoque->idMaterial));
+        $conf = $this->GetFormValue('conf');
+        if ($conf == 'sim')
+        {
+            try 
+            {
+                $this->objEstoque->Delete();
+                $this->manager->Information('Material excluído com sucesso!',$this->manager->GetActionURL('adm','main:uoalmoxarifado',$this->objEstoque->idUo,array('form'=>'estoqueinicial')));
+            }
+            catch ( Exception $e )
+            {
+                $this->manager->Error($e->getMessage());
+            }
+              
+        }
+        else
+        {
+            $this->manager->Question("Tem certeza que deseja excluir o material de código ".$this->objEstoque->material->codmaterial."?",$action_sim,$action_nao);
+        }
+    }
+
+}
+?>

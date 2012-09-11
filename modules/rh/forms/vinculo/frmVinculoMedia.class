@@ -1,0 +1,212 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+define('ANOINICIO','1994');
+define('MESINICIO','7');
+class frmVinculoMedia extends MForm
+{
+    var $vinculo;
+    var $result;
+
+    function __construct($objVinculo)
+    {
+        $this->vinculo = $objVinculo;
+        $this->vinculo->getBases();
+        parent::__construct("Cálculo da Média");
+        $this->eventHandler();
+    }
+
+    function createFields()
+    {
+        $base = new MTextField('base[]','%3%','',20);
+        
+        $columns = array(
+            new MGridColumn('Ano','left',true,'15%',true),
+            new MGridColumn('mes','left',true,'15%',false),
+            new MGridColumn('Mês','left',true,'15%',true),
+            new MGridColumn('valor','left',true,'15%',false),
+            new MGridControl($base,'Valor Base','center',false,'35%'),
+            new MGridColumn('Índice Correção','left',true,'15%',true),
+            new MGridColumn('Valor Corrigido','left',true,'15%',true),
+        );
+
+        //montando array para o grid
+
+        $mesAtual = date('m');
+        $anoAtual = date('Y');
+
+        list($diaExercicio,$mesExercicio,$anoExercicio) = explode("/",$this->vinculo->dataExercicio);  
+        $ano = ( $anoExercicio < ANOINICIO ) ? ANOINICIO : $anoExercicio;
+        $mes = ( $mesExercicio < MESINICIO ) ? MESINICIO : $mesExercicio;
+        if ( $anoExercicio < ANOINICIO )
+        {
+            $ano = ANOINICIO;
+            $mes = MESINICIO;
+        }
+        else
+        {
+            if ( $anoExercicio == ANOINICIO )
+            {
+                $ano = ANOINICIO;
+                $mes = ( $mesExercicio < MESINICIO ) ? MESINICIO : $mesExercicio;
+            }
+            else
+            {
+                $ano = $anoExercicio;
+                $mes = $mesExercicio;
+            }
+        }
+        $indice = $this->manager->getBusiness('common','indicemensal');
+        for ( $i = $ano; $i <= $anoAtual; $i++ )
+        {
+            $mesFinal = ( $i == $anoAtual ) ? $mesAtual : 12;
+            {
+                for ( $j = (int)$mes; $j <= $mesFinal; $j++ )
+                {
+                    $valor = $this->vinculo->getValorRemuneracao($j,$i);
+                    if ( $valor )
+                    {
+                        $valorCorrigido = $this->vinculo->getValorCorrigidoRemuneracao($j,$i);
+                    }
+                    $valorIndice = $indice->getValor($i,$j,'BASE');
+
+                    if ( ! $valorIndice )
+                    {   
+                        break;
+                    }
+                    //cria um array contendo os anos e meses que possuem indices, a ser utilizado na verificação dos que não possuem
+                    $indices[$i][$j] = TRUE;
+
+                    //array final para o grid
+                    $result[] = array($i,$j,$this->getMonth($j),$valor,'',$valorIndice,$valorCorrigido);
+
+
+                    if ( $i >= 1999 && $j == 11 )
+                    {
+                        $result[] = array($i,13,'Décimo Terceiro',$this->vinculo->getValorRemuneracao(13,$i) ,'',$valorIndice,$this->vinculo->getValorCorrigidoRemuneracao($j,$i));
+                    }
+                }
+                $mes = 1;
+            }
+        }
+
+        $this->result = $result;
+
+        //verifica se os indices estão desatualizados em relacao ao mes corrente
+        for ( $i = 1; $i <= $mesAtual; $i++ )
+        {
+            if ( ! $indices[$anoAtual][$i] )
+            {
+                $mesPendente[] = $this->getMonth($i);
+            }
+        }
+
+        $grid = new MGrid($result,$columns,$href,0);
+        $grid->setRowMethod('frmVinculoMedia','rowMethod');
+        $fields[] = $grid;
+        $fields[] = new MButton('btnAtualizaGrid','Atualizar Valores');
+        if ( $mesPendente )
+        {
+            $fields[] = new MTextLabel('atencao','ATENÇÃO! Não existe valor para o índice de correção no(s) mês(es): '.implode(" - ",$mesPendente));
+        }
+        $fields[] = new MTextField('pss','','Valor de Constribuição do PSS Restituída');
+         
+        $this->setFields($fields);
+        
+        $buttons = array(
+            new MButton('btnPost','Calcular Média')
+        );
+        $this->setButtons($buttons);
+    }
+
+    function btnAtualizaGrid_click()
+    {
+        $base = $this->page->request('base');
+        foreach ( $base as $ano=>$remuneracao )
+        {
+            foreach ( $remuneracao as $mes=>$valor )
+            {
+                $baseAposentadoria = $this->vinculo->getBaseAposentadoria($mes,$ano);
+                $baseAposentadoria->setValor($valor);
+                $this->vinculo->addBaseAposentadoria($baseAposentadoria);
+            }
+        }
+        $this->vinculo->saveAssociation('bases');
+        $this->vinculo->getBases();
+        $this->page->refresh();
+    }
+    
+    function btnPost_click()
+    {
+
+        $pss = $this->getFormValue('pss');
+if (!$this->result)
+                $this->result = array();
+        foreach ( $this->result as $result )
+        {   
+
+            if ( $result[3] )
+            {
+               $newResult[] = $result;
+            }
+        }
+        $this->result = $newResult;
+
+        $totalContribuicoes = count($this->result);
+        $total80 = round($totalContribuicoes*0.8);
+        $valorTotal = $valorTotalCorrigido = $this->vinculo->getValorTotalCorrigido($totalContribuicoes);
+        $valor80 = $valorTotalCorrigido = $this->vinculo->getValorTotalCorrigido($total80);
+        $total80Restituido = $valor80 - str_replace(',','.',$pss);
+	if ($total80)
+	        $totalProventos = round($total80Restituido/$total80,2);
+
+        $data[] = array('Quantidade de contribuições no período', $totalContribuicoes);
+        $data[] = array('80% da quantidade de Contribuições (Maiores Remunerações)', $total80);
+        $data[] = array('Valor Total Corrigido das Remunerações', $valorTotal);
+        $data[] = array('Valor dos 80% das Contribuições (Maiores Remunerações)', $valor80);
+        $data[] = array('Valor de Constribuição do PSS Restituída', $pss);
+        $data[] = array('Total dos 80% Deduzido o Valor Restituído', $total80Restituido);
+        $data[] = array('Total dos Proventos', $totalProventos);
+        $this->addField(new MTableRaw('',$data));
+    }
+
+    function getMonth($id)
+    {
+        $mes[1] = 'Janeiro';
+        $mes[2] = 'Fevereiro';
+        $mes[3] = 'Março';
+        $mes[4] = 'Abril';
+        $mes[5] = 'Maio';
+        $mes[6] = 'Junho';
+        $mes[7] = 'Julho';
+        $mes[8] = 'Agosto';
+        $mes[9] = 'Setembro';
+        $mes[10] = 'Outubro';
+        $mes[11] = 'Novembro';
+        $mes[12] = 'Dezembro';
+
+        return $mes[$id];
+    }
+
+    function rowMethod($i,$row,$actions,$columns)
+    {
+        $columns[4]->control[$i]->setName('base['.$row[0].']['.$row[1].']'); 
+    }
+}
+?>

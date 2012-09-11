@@ -1,0 +1,118 @@
+<?
+/**
+/**
+ * Formulário para imprimir requisicao
+ * 
+ */
+class frmImprimirReq extends Form
+{
+	var $objRequisicao;
+
+	function __construct()
+    {
+		global $MIOLO;
+		$this->objRequisicao = $MIOLO->GetBusiness('adm','requisicao');
+        $this->Form('Imprimir Requisição');
+		$this->SetClose($this->manager->GetActionURL('adm','main'));
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+		$fields = array(
+			new TextField('numRequisicao','','Número da Requisição',10,''),
+		);
+       	$this->SetFields($fields);
+
+		$button = array(
+			new FormButton('btnProcurar','Procurar')
+		);
+       	$this->SetButtons($button);
+		$this->defaultButton = false;
+	}
+
+
+	function btnProcurar_click()
+	{
+
+		$id = $this->GetFormValue('numRequisicao');
+		if(($id=='') or (($id!='')and(!is_numeric($id))) )
+		{	
+			$this->manager->information("Digite Apenas números.", $this->manager->getActionUrl('adm','main:recursos:imprimirreq'));
+		}
+		else  
+		{ 
+			$requisicao = $this->objRequisicao->getById($id);
+			$idTipo = $requisicao->idTipoReq;
+			$idUsuario = $this->manager->GetLogin()->idkey;
+					    
+			switch ($idTipo) //seleciona o relatorio
+			{
+				case 1:
+					$tipo = 'alimentacao';
+					$action_rep = $this->manager->getActionURL('adm','main:requisicoes:reprequisicaoalimentacao', '', array("req"=>"{$this->objRequisicao->idRequisicao}"));
+					break;
+				case 2:
+					$tipo = 'hospedagem';
+					$action_rep = $this->manager->getActionURL('adm','main:requisicoes:reprequisicaohospedagem', '', array("req"=>"{$this->objRequisicao->idRequisicao}"));
+					break;
+				case 3:
+					$tipo = 'passagem';
+					$action_rep = $this->manager->getActionURL('adm','main:requisicoes:reprequisicaopassagem', '', array("req"=>"{$this->objRequisicao->idRequisicao}"));
+					break;
+				case 4:
+					$tipo = 'veiculo';
+					$action_rep = $this->manager->getActionURL('adm','main:requisicoes:reprequisicaoveiculo', '', array("req"=>"{$this->objRequisicao->idRequisicao}"));
+					break;
+				/*
+				case 5:
+					$tipo = 'diaria';
+					$action_rep = $this->manager->getActionURL('adm','main:requisicoes:reprequisicaodiaria', '', array("req"=>"{$this->objRequisicao->idRequisicao}"));
+					break;
+				*/
+			}
+
+			if ($tipo == null)
+			{ 
+				//nao existe requisicao
+				$this->manager->information("Requisição não encontrada.", $this->manager->getActionUrl('adm','main:recursos:imprimirreq'));
+			}
+			else
+			{
+				if ($idTipo == 3)
+				{ 
+					//requisicao de passagem (onibus ou aviao)
+					$itemReq = $this->objRequisicao->getItem();
+					$tipoPassagem = $itemReq->tipoTransporte;
+				}
+
+				if(($idTipo == 3) and ($tipoPassagem == 1))
+				{ 
+					//onibus ->testa se é gestor
+					$this->objRequisicao->getUoRequisitante();
+					if (! $this->objRequisicao->uoRequisitante->isGestorOf($idUsuario) )
+					{
+						$this->manager->information("Apenas o gestor da unidade pode imprimir esta requisição.", $this->manager->getActionUrl('adm','main:recursos:imprimirreq'));
+					}
+				}
+				else if($idTipo == 5)
+				{ 
+					$this->manager->information("Esta requisição é de diária. Você deve usar a opção Diária no menu de relatórios.", $this->manager->getActionUrl('adm','main:recursos:imprimirreq'));
+				}
+				elseif($idTipo != 5)
+				{										//outras -> testa se é executor
+					$this->objRequisicao->getUoExecutante();
+					if (! $this->objRequisicao->uoExecutante->isExecutorOf($idUsuario) )
+					{
+						$this->manager->information("Apenas o executor da unidade pode imprimir esta requisição.", $this->manager->getActionUrl('adm','main:recursos:imprimirreq'));
+					}
+				}
+				
+				//pergunta se deseja imprimir
+				$action_voltar = $this->manager->getActionURL('adm','main:recursos:imprimirreq');
+				$this->manager->Confirmation("Requisição de ".$tipo." encontrada com sucesso. Clique OK para imprimir a requisicão e CANCELAR para voltar.",$action_rep, $action_voltar);
+			}
+		}	
+	}
+}
+?>

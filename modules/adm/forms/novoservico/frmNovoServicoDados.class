@@ -1,0 +1,184 @@
+<?
+class frmNovoServicoDados extends MForm
+{
+    protected $objServico;
+    function __construct($objServico)
+    {
+        $this->objServico = $objServico;
+        parent::__construct('Dados do Servico');
+        $this->EventHandler();
+    }
+    function CreateFields()
+    {    
+        $usuario = $this->manager->getBusiness('common','usuario');
+        $usuario->getById($this->objServico->idUsuario);
+        $fields = array(
+            new MMultiLineField('descricaoSug',$this->objServico->descricao,'Descrição',500,6,50,'Máximo 500'),
+            new MSeparator('Dados para contato'),
+            new MTextField('nome',$usuario->pessoa->nome,'Nome',52),
+            new MTextField('telefone',$this->objServico->telefone,'Telefone',12),
+            new MTextField('email',$usuario->pessoa->email,'Email',52),
+        );
+        $this->SetFields($fields);
+        $this->descricaoSug->setReadOnly(true);
+        $this->telefone->setReadOnly(true);
+        $this->email->setReadOnly(true);
+        $this->nome->setReadOnly(true);
+        $validators = array(
+			new MRequiredValidator('descricao'),
+            new MRegExpValidator('codservico','','(^-?[0-9][0-9]*$)'),
+		);
+        $this->defaultButton = false;
+        if ($this->manager->getPerms()->checkAccess("adm_cadastroservico",A_EXECUTE))
+        {
+            $this->addField(new MSeparator('Dados do novo servico'));
+            $this->addField(new MHiddenField('idServico',''));
+            $this->addField(new MLookupTextField('codservico',$this->objServico->codservico,'Código',12));
+            $this->addField(new MMultiLineField('descricao',$this->objServico->descricao,'Descrição',500,6,50,'Máximo 500'));
+            $this->SetFieldAttr('codservico','module','adm');
+            $this->SetFieldAttr('codservico','item','servicoExterno');
+            $this->SetFieldAttr('codservico','event','filler');
+            $this->SetFieldAttr('codservico','related','idServico,descricao,codservico');
+            $this->addValidator(new MRequiredValidator('codservico'));
+            $this->addValidator(new MRequiredValidator('descricao'));
+            $this->addButton(new MButton('btnAdicionar','Adicionar Servico'));
+            switch ($this->objServico->status)
+            {
+                case 1:
+                    try
+                    {
+                        $this->objServico->setStatus(2);
+                        $this->objServico->save();
+                        $this->objServico->Log(OP_UPD,'Novo servico analisado ['.$this->objServico->idNovoServico.']');
+                        $this->page->redirect($this->manager->getActionUrl('adm','main:novoservico:main',$this->objServico->idNovoServico,array('form'=>'dados')));
+                    }
+                    catch (Exception $e)
+                    {
+                        $this->AddError($e->GetMessage());
+                    }
+                break;
+                case 3:
+                    $servico = $this->manager->getBusiness('adm','servico');
+                    $servico->getByCod($this->objServico->codservico);
+                    $this->setFieldValue('idServico',$servico->idServico);
+                    $this->setFieldValue('codservico',$servico->codservico);
+                    $this->setFieldValue('descricao',$servico->descricao);
+                break;
+            }
+        }
+        else
+        {
+            switch ($this->objServico->status)
+            {
+                case 1:
+                    if ($this->objServico->idUsuario == $this->manager->getLogin()->idkey)
+                    {
+                        $this->descricaoSug->setReadOnly(false);
+                        $this->telefone->setReadOnly(false);
+                        $this->email->setReadOnly(false);
+                        $this->nome->setReadOnly(false);
+                    }
+                    $this->setFieldAttr('codservico','visible',false);
+                    $this->setFieldAttr('descricao','visible',false);
+                    $this->addButton(new MButton('btnSalvar','Alterar'));
+                    $this->addButton(new MButton('btnVoltar','Voltar',$this->manager->getActionUrl('adm','main:novoservico:find',$this->objServico->idNovoServico)));
+                break;
+                case 2:
+                case 3:
+                case 4:
+                    if ($this->objServico->codservico)
+                    {
+                        $this->addField(new MSeparator('Dados do novo servico'));
+                        $this->addField(new MTextField('codservico',$this->objServico->codservico,'Código',12));
+                        $this->codservico->setReadOnly(true);
+                        $this->setFieldAttr('btnSalvar','visible',false);
+                        $this->addButton(new MButton('btnVoltar','Voltar',$this->manager->getActionUrl('adm','main:novoservico:find',$this->objServico->idNovoServico)));
+                    }
+                break;
+            }
+        }
+    }
+    public function btnSalvar_click()
+    {
+        $data = $this->GetData();
+        $usuario = $this->manager->getBusiness('common','usuario');
+        $usuario->getById($this->manager->GetLogin()->idkey);
+        try
+        {
+            $this->objServico->beginTransaction();
+            $this->objServico->SetData($data);
+            $this->objServico->descricao = $data->descricaoSug;
+            $this->objServico->dataPedido = date('d/m/Y');
+            $this->objServico->save();
+            if ($data->email != $usuario->pessoa->email)
+            {
+                $usuario->pessoa->setTransaction($this->objServico->getTransaction());
+                $usuario->pessoa->email = $data->email;
+                $usuario->pessoa->save();
+            }
+            $this->objServico->endTransaction();
+            $this->objServico->Log(OP_UPD,'Novo servico alterado ['.$this->objServico->idNovoServico.']');
+            $this->manager->information("Novo servico alterado com sucesso [".$this->objServico->idNovoServico."].",$this->manager->getActionUrl('adm','main:novoservico:main',$this->objServico->idNovoServico,array("form"=>"dados")));
+        }
+        catch (Exception $e)
+        {
+             $this->AddError($e->GetMessage());
+        }
+    }
+    public function btnAdicionar_click()
+    {
+        $data = $this->GetData();
+        $usuario = $this->manager->getBusiness('common','usuario');
+        $usuario->getById($this->manager->GetLogin()->idkey);
+        if ($data->codservico && $data->descricao)
+        {
+            $servico = $this->manager->getBusiness('adm','servico');
+            $servico->getByCod($data->codservico);
+            if ($servico->isPersistent() && $servico->descricao == $data->descricao)
+            {
+                $this->objServico->setStatus(3);
+                $this->objServico->save();
+                $this->objServico->Log(OP_UPD,'Sugestão de servico finalizada ['.$this->objServico->idNovoServico.']');
+            $this->manager->information("Sugestão de servico finalizada com sucesso [".$this->objServico->idNovoServico."].",$this->manager->getActionUrl('adm','main:novoservico:find',$this->objServico->idNovoServico));
+            }
+            else
+            {
+                $this->addInfo('Adição de novo servico.');
+                $this->addField(new MTextField('idelemento','','Elemento','6','Máximo 6 caracteres'));
+                $this->addField(new MTextField('idsubelemento','','Subelemento','2','Máximo 2 caracteres'));
+                $this->idelemento->addAttribute('maxlength','6');
+                $this->idsubelemento->addAttribute('maxlength','2');
+                $this->setButtonAttr('btnAdicionar','visible',false);
+                $this->addButton(new MButton('btnConfirmarAdicionar','Confimar'));
+            }
+        }
+    }
+    public function btnConfirmarAdicionar_click()
+    {
+        $data = $this->GetData();
+        $usuario = $this->manager->getBusiness('common','usuario');
+        $usuario->getById($this->manager->GetLogin()->idkey);
+        try
+        {
+            $servico = $this->manager->getBusiness('adm','servico');
+            $servico->setData($data);
+            $servico->idelemento = Form::getFormValue('idelemento');
+            $servico->idsubelemento = Form::getFormValue('idsubelemento');
+            $servico->beginTransaction();
+            $servico->save();
+            $this->objServico->setStatus(3);
+            $this->objServico->codservico = $servico->codservico;
+            $this->objServico->setTransaction($servico->getTransaction());
+            $this->objServico->save();
+            $this->objServico->Log(OP_UPD,'Sugestão de servico finalizada ['.$this->objServico->idNovoServico.']');
+            $servico->Log(OP_INS,'Novo servico adicionado ['.$servico->codservico.']');
+            $servico->endTransaction();
+            $this->manager->information("Sugestão de servico finalizada com sucesso [".$this->objServico->idNovoServico."].",$this->manager->getActionUrl('adm','main:novoservico:find',$this->objServico->idNovoServico));
+        }
+        catch (Exception $e)
+        {
+            $this->AddError($e->GetMessage());
+        }
+    }
+}
+?>

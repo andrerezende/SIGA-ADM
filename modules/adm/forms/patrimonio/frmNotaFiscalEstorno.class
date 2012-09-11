@@ -1,0 +1,202 @@
+<?php
+class frmNotaFiscalEstorno extends MForm
+{
+
+
+   public $iditem;
+   private $objNotaFiscal;
+   private $itemPatrimonio;
+   private $objItemPatrimonio;
+   
+   
+   private $quantidadeItensNota;
+   
+
+    function __construct()
+    {
+        global $MIOLO,$module,$action,$item;
+
+	$idNotaFiscal=$_GET['item'];
+	$this->iditem=$idNotaFiscal;
+	$this->objNotaFiscal=$MIOLO->GetBusiness($module, 'notafiscal', $idNotaFiscal);
+
+
+	$this->itemPatrimonio = $MIOLO->GetBusiness($module, 'itempatrimonio');
+	$this->quantidadeItensNota = $this->itemPatrimonio->ContaItemPatrimonioNotaFiscal($idNotaFiscal)->result[0][0];
+	
+	parent::__construct('Estornar Nota Fiscal');
+        $this->SetClose(null);
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+        global $MIOLO,$module;
+
+      $fields = array(
+			
+			new MTextField('tfNotaFiscal', $this->objNotaFiscal->notaFiscal, 'Nota Fiscal', 20),
+			new MMultiLineField('motivoestorno', $this->objNotaFiscal->motivoestorno, 'Motivo do Estorno', 60,2,60,'Max. 255 caracteres'),
+		);
+
+			$this->SetFields($fields);
+			$this->page->addJsCode(file_get_contents(dirname(__FILE__) . '/../../ui/js/mask.js'));
+		
+			$this->SetFieldAttr('tfNotaFiscal', 'readonly', true);
+			$this->motivoestorno->addAttribute('maxlength',255);
+		
+        // 18/10/2010 - Vitor Pacheco
+
+
+        //dependencia só é editável se estiver vazio
+//        if($this->objPatrimonio->idDependencia)
+//        {
+//            $this->SetFieldAttr('dependencia','visible',false);
+//        }
+        $go = $this->manager->getActionURL('adm','notafiscal:',$this->iditem);
+
+		$buttons = array(
+            new MButton('btnConfirmar', 'Confirmar Estorno'),
+	   new MButton('btnCancelar','Cancelar', $go),
+
+
+        );
+        $this->SetButtons($buttons);
+
+      //  $this->SetData();
+    }
+function btnConfirmar_click(){
+	GLOBAL $MIOLO;
+
+	$MIOLO = MIOLO::getInstance();
+        $module = MIOLO::getCurrentModule();
+        $action = MIOLO::getCurrentAction();
+
+					if($this->GetFieldValue('motivoestorno')==''){
+
+						$this->AddError("É necessário informar o motivo do estorno!");
+						echo "<SCRIPT language=javascript>alert('É necessário informar o motivo do estorno!');</SCRIPT>";
+					}
+			if ($this->errors != '') {
+			$this->GenerateErrors();}else{
+					$this->objNotaFiscal->situacao='E';
+			//echo $this->objNotaFiscal->situacao;
+					$this->objNotaFiscal->motivoestorno=$this->GetFormValue('motivoestorno');
+//			Alteraçao dos valores dos itempatrimonio
+			
+			$replicacaoOK = false;
+			$array_id=$this->itemPatrimonio->getValorByIDNotaFiscal($this->iditem);
+
+		
+
+
+
+		//---------------Declaração dos Businesses-------------------------------------
+
+		$tabelaGeral = $MIOLO->GetBusiness('common','tabelageral');
+		$setor = $MIOLO->GetBusiness('common','setor');
+		$dependencia = $MIOLO->GetBusiness($module,'dependencia');
+		
+         	$bussUsuario = $this->manager->GetBusiness('common','usuario');
+		
+
+		//-----------------------------------------------------------------------------------------
+
+			echo date("Y/m/d");
+		//------------Início da atualização dos itens patrimoniais------------------------
+		for ($i=0; $i < $this->quantidadeItensNota; $i++) {
+
+		$bussMovimentoPat = $this->manager->GetBusiness('adm','movimentopat');
+		$movimentoPat = $this->manager->GetBusiness('adm','movimentopat');
+		$idItemPatrimonio = $array_id[$i][0];
+		
+		$objMovimentoPat = $bussMovimentoPat->getByIdItemPatrimonio($idItemPatrimonio);
+
+		$dataUltimaAcao = $objMovimentoPat[0][10];
+		$idUsuarioUltimaAcao = $objMovimentoPat[0][11];
+		$loginUsuarioUltimaAcao = $bussUsuario->getById($idUsuarioUltimaAcao)->login;
+
+		$this->objItemPatrimonio = $this->itemPatrimonio->GetById($idItemPatrimonio);
+		$this->objItemPatrimonio->SetData($this->GetData());
+		$data = $this->GetData();
+		$this->objItemPatrimonio->idDependencia = ($data->idDependencia) ? ($data->idDependencia) : null;
+		$setor->GetById($this->objItemPatrimonio->idSetor);
+			 
+		$novoIdNumeroTermo = $movimentoPat->GetTermoFormatado($movimentoPat->GetNextIdTermo());
+
+		$setorOrigem = $this->objItemPatrimonio->idSetor;
+		$movimentoPat->numeroTermo = $novoIdNumeroTermo . '/' . date('Y');
+		$movimentoPat->tipoMovimento = '4';
+		$movimentoPat->idItemPatrimonio = $idItemPatrimonio;
+		$movimentoPat->idSetorOrigem = $setorOrigem;
+		$movimentoPat->idSetorDestino = $setorOrigem;
+
+		
+		//$movimentoPat->idDependenciaOrigem = $dependenciaOrigem;
+		//$movimentoPat->idDependenciaDestino = ($data->idDependencia) ? ($data->idDependencia) : null;
+
+		$movimentoPat->dataMovimento = date("d/m/Y");
+		
+		
+		$auth = $this->manager->auth;
+		$idUsuario = $auth->login->idkey;
+
+		$movimentoPat->idUsuario = $idUsuario;
+
+		$setorOrigem = $this->objItemPatrimonio->idSetor;
+		//$dependenciaOrigem = $this->objPatrimonio->idDependencia;
+
+		$this->objItemPatrimonio->ativo = 'N';
+			
+		try {
+			$this->objItemPatrimonio->update();
+			
+			$movimentoPat->save();
+			
+			//$this->objItemPatrimonio->Log(OP_UPD,"Item transferido: " . $this->objPatrimonio->idItemPatrimonio);
+
+
+
+			$replicacaoOK = true;
+			$flag2 = true;
+			} catch (Exception $e) {
+				echo "<SCRIPT language=javascript>alert('Houve um erro ao atualizar os dados de Itens Patrimoniados!');</SCRIPT>";
+				$this->AddError("ad_itempatrimonio: Falha ao atualizar o registro $idItemPatrimonio");
+				
+				}
+			}
+
+//			update na nota fiscal
+			try {
+				$this->objNotaFiscal->update();
+				$ok=true;
+				$this->AddInfo("Nota Fiscal Estornada com sucesso!");
+
+				
+				if ( $ok == true)
+				{
+
+					$go = $this->manager->GetActionURL('adm','main:notafiscal:find',$this->iditem);
+					//$this->page->Redirect($go);
+
+					
+					$MIOLO->information( _M( 'Nota Fiscal Estornada com Sucesso', $module ), $go);
+				}
+
+				
+				
+				
+			} catch (Exception $e) {
+				$this->AddInfo("ad_notafiscal: Falha ao atualizar o registro.");
+			}
+
+//			Atualiza os labels na tela se obtiver sucesso na acao
+			
+			
+			}
+}
+
+
+
+}
+?>

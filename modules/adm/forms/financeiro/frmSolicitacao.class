@@ -1,0 +1,725 @@
+<?
+class frmSolicitacao extends Form
+{
+	var $objLicitacao;
+	var $objSolicitacao;
+
+	function __construct()
+    {
+		global $MIOLO;
+        $this->Form('Atender Solicitação para Itens da Licitação');
+		$this->SetClose($this->manager->GetActionURL('adm','main:financeiro:solicitacao'));
+        $this->EventHandler();
+		$this->defaultButton = false;
+    }
+
+    function CreateFields()
+    {
+		global $MIOLO, $module;
+
+		$this->objLicitacao = $MIOLO->GetBusiness($module, 'licitacao');
+
+		$fields = array(
+			array(
+				new MLookupTextField('licitacao', '', 'Número da Licitação', 20),
+				new MTextField('solicitacao', '', 'Solicitação', 15),
+				new MTextField('numItem', '', 'Item', 5),
+				new MHiddenField('status',"1"),//SOLICITAÇÃO PEDIDA
+			),
+		);
+       	$this->SetFields($fields);
+		$this->SetFieldAttr('licitacao','module',$module);
+		$this->SetFieldAttr('licitacao','item','licitacaocomsolicitacao');
+		$this->SetFieldAttr('licitacao','event','filler');
+		$this->SetFieldAttr('licitacao','related', '"",licitacao,"","","","","","",solicitacao');
+		$this->SetFieldAttr('licitacao','filter', 'licitacao,status');
+
+		$button = array(
+			new FormButton('btnEnviar','Enviar'),
+			new FormButton('btnVoltarStatus','Voltar Status para "PROPOSTAS CADASTRADAS"'),
+			new FormButton('btnConfirmar','Confirmar'),
+		);
+       	$this->SetButtons($button);
+		$this->SetButtonAttr('btnVoltarStatus','visible',false);
+		$this->SetButtonAttr('btnConfirmar','visible',false);
+
+		$this->manager->page->addJsCode("
+			function atualizaTotal(i,total,valormax)
+			{
+				x = MIOLO_GetElementById('quant['+i+']'); 
+				if(x.value > valormax)
+				{
+					x.value = valormax;
+				}
+				y = MIOLO_GetElementById('preco['+i+']'); 
+				w = y.innerHTML;
+				while(w.indexOf('.')>=0)
+				{
+					w = w.replace('.','');
+				}
+				w = w.replace(',','.');
+				z = MIOLO_GetElementById('total['+i+']'); 
+				z.innerHTML = x.value * w; 
+				//vírgula dos centavos
+				ponto = z.innerHTML.length; 
+				z.innerHTML = z.innerHTML+'000'; 
+				for(i=0;i<z.innerHTML.length;i++) 
+				{ 
+					if(z.innerHTML.substring(i,i+1)=='.') 
+					{
+						ponto=i
+					} 
+				}; 
+				z.innerHTML = z.innerHTML.substr(0,ponto)+','+z.innerHTML.substr(ponto+1,2); 
+				//pontos de milhares
+				a = z.innerHTML.substr(z.innerHTML.length-3,3);
+				i = 0;
+				for(j=3;j<z.innerHTML.length;j++)
+				{
+					i = i + 1;
+					k = z.innerHTML.length - j;
+					a = z.innerHTML.substring(k-1,k) + a;
+					if(i == 3)
+					{
+						i = 0;
+						if(j < z.innerHTML.length-1)
+						{
+							a = '.' + a;
+						}
+					}
+				}
+				z.innerHTML = a;
+				//total geral
+				valor = 0;
+				for(i=0;i<total;i++) 
+				{
+					x = MIOLO_GetElementById('quant['+i+']'); 
+					y = MIOLO_GetElementById('preco['+i+']'); 
+					w = y.innerHTML;
+					while(w.indexOf('.')>=0)
+					{
+						w = w.replace('.','');
+					}
+					w = w.replace(',','.');
+					valor = valor + (x.value * w);
+				};
+				z = MIOLO_GetElementById('totalGeral'); 
+				z.innerHTML = valor; 
+				//vírgula dos centavos
+				ponto = z.innerHTML.length; 
+				z.innerHTML = z.innerHTML+'000'; 
+				for(i=0;i<z.innerHTML.length;i++) 
+				{ 
+					if(z.innerHTML.substring(i,i+1)=='.') 
+					{
+						ponto=i
+					} 
+				}; 
+				z.innerHTML = z.innerHTML.substr(0,ponto)+','+z.innerHTML.substr(ponto+1,2);
+				//pontos de milhares
+				a = z.innerHTML.substr(z.innerHTML.length-3,3);
+				i = 0;
+				for(j=3;j<z.innerHTML.length;j++)
+				{
+					i = i + 1;
+					k = z.innerHTML.length - j;
+					a = z.innerHTML.substring(k-1,k) + a;
+					if(i == 3)
+					{
+						i = 0;
+						if(j < z.innerHTML.length-1)
+						{
+							a = '.' + a;
+						}
+					}
+				}
+				z.innerHTML = a;
+			}
+		");
+	}
+
+	function btnEnviar_click()
+    {
+		global $MIOLO, $module, $item;
+
+		$cf = new MCurrencyFormatter();
+		$this->page->SetAction($MIOLO->GetActionURL($module, $action));
+		$licitacao = $this->GetFormValue('licitacao');
+		$solicitacao = $this->GetFormValue('solicitacao');
+		$numItem = $this->GetFormValue('numItem');
+		if($licitacao == null)
+		{
+			$idLicitacao = $this->GetFormValue('idLicitacao');
+		}
+		else
+		{
+			$this->objLicitacao = $MIOLO->GetBusiness($module,'licitacao');
+			$idLicitacao = $this->objLicitacao->GetIdBynumero($licitacao);
+		}
+		if($idLicitacao == null)
+		{
+			$MIOLO->Error('Licitação não encontrada', $MIOLO->GetActionURL($module, $action) );
+		}
+
+		//se for informado um item, já vai para a próxima tela
+		if($numItem)
+		{
+			$go = $MIOLO->GetActionURL($module, $action, '', array('event'=>'btnDefinir_click', 'idLic'=>$idLicitacao, 'numItem'=>$numItem));
+			$this->page->redirect($go);
+		}
+
+		$this->objLicitacao = $MIOLO->GetBusiness($module,'licitacao',$idLicitacao);
+		$itensDaLicitacao = $this->objLicitacao->getItens();
+
+		//verifica status da licitacao
+		if( ($this->objLicitacao->status != '4') and ($this->objLicitacao->status != '5') )
+		{
+			$MIOLO->Error('O status da licitacao não permite este tipo de operação.', $MIOLO->GetActionURL($module, $action) );
+		}
+
+        $this->SetTitle('Definir Orçamentos para Itens da Licitação ' . $this->objLicitacao->numero);
+
+        $columns = array(
+           	new MGridColumn('Nº','center', true,'5%'),
+           	new MGridColumn('Descrição','left', false,'30%'),
+           	new MGridColumn('Saldo','center', true,'6%'),
+           	new MGridColumn('Unidade','center', true,'5%'),
+           	new MGridColumn('R$ Unit','center', true,'0%', false),
+           	new MGridColumn('Pedido','center', true,'8%'),
+           	new MGridColumn('R$ Pedido','center', true,'10%'),
+           	new MGridColumn('Empresa','left', false,'20%'),
+           	new MGridColumn('R$ Total','center', true,'8%'),
+           	new MGridColumn('Rubrica','center', false,'8%'),
+        );
+
+		$data0 = $this->objLicitacao->GetDadosItensParaEmpenho($idLicitacao, $itensDaLicitacao);
+
+		//inclui quantidade e valor das solicitações e exclui itens que não foram solicitados pelo HU
+		$data = array();
+		$this->objSolicitacao = $MIOLO->GetBusiness($module, 'solicitacao');
+		foreach($data0 as $d)
+		{
+			$solicit = $this->objSolicitacao->GetQuantidadeValorByItemSolicitacao($idLicitacao, $solicitacao, $d[0], '1');
+			if($solicit)
+			{
+				$valorSolicitacao = $solicit[0] * $cf->toDecimal($solicit[1]);
+				$valorSolicitacao = number_format(str_replace(',','.',$valorSolicitacao),2,',','.');
+				$valorUnitario = number_format(str_replace(',','.',$solicit[1]),2,',','.');
+				$status = $this->objSolicitacao->GetStatusByItemSolicitacao($solicitacao, $d[0]);
+				$data[] = array($d[0], $d[1], $d[2], $d[3], $valorUnitario, $solicit[0], $valorSolicitacao, $d[5], $d[6], $d[7], $status);
+			}
+		}
+
+		$grid = new MGrid($data, $columns, $href_datagrid, 0);
+		$grid->AddActionSelect();
+		$grid->SetRowMethod('frmSolicitacao', 'MyRowMethod2');
+
+		//calcula valor total (saldo da licitacao)
+		$valorTotalGeral = 0;
+		for($i = 0; $i < count($data); $i++)
+		{
+			$valorTotalGeral += ($data[$i][2] * str_replace(',','.',str_replace('.','',$data[$i][4])));
+		}
+		$valorTotalGeral = number_format(str_replace(',','.',$valorTotalGeral),2,',','.');
+
+		$fields = array(
+            $grid,
+			new MHiddenField('idLic', $idLicitacao),
+			new MHiddenField('solicitacao', $solicitacao),
+			new MHiddenField('numItem', $numItem),
+			new MSpacer(1),
+			new MTextLabel('totalGeral', $valorTotalGeral, 'Valor Total dos Itens'),
+			new MSpacer(1),
+        );
+        $this->SetFields($fields);
+
+		$this->SetButtonAttr('btnEnviar','visible',false);
+		if( count($data) > 0 )
+		{
+			$this->AddButton(new MButton('btnDefinir','Definir Orçamentos'));
+		}
+
+		//verifica se licitação já possui algum empenho. se não, libera botão Voltar Status
+		$empenho = $MIOLO->GetBusiness($module, 'empenho');
+		$query = $empenho->ListByIdLicitacao($idLicitacao, "('1','2','3','4','6','9','A')");
+		if(count($query->result) == 0)
+		{
+			$this->SetButtonAttr('btnVoltarStatus','visible',true);
+		}
+	}
+
+	function btnVoltarStatus_click()
+	{
+		global $MIOLO, $module, $item, $action;
+
+		$idLicitacao = $this->GetFormValue('idLic');
+
+		$conf = $this->GetFormValue('conf');
+		$href = $MIOLO->GetActionURL($module,$action,'', array('event'=>'btnEnviar_click', 'idLicitacao'=>$idLicitacao, 'solicitacao'=>$solicitacao));
+		if ( $conf == 'sim')
+		{
+			try
+			{
+				$this->objLicitacao->getById($idLicitacao);
+				$this->objLicitacao->status = '3';
+				$this->objLicitacao->save();
+				$MIOLO->Information('Status alterado sucesso.',$MIOLO->GetActionURL($module,$action));
+			}
+			catch (Exception $e)
+			{
+				$this->addError($e->getMessage());
+			}
+		}
+		elseif ( $conf == 'nao')
+		{
+			$MIOLO->Information('Alteração cancelada.',$href);
+		}
+		else
+		{
+			$action_sim = $MIOLO->GetActionURL($module,$action,'', array('event'=>'btnVoltarStatus_click','conf'=>'sim','idLic'=>$idLicitacao));
+			$action_nao = $MIOLO->GetActionURL($module,$action,'', array('event'=>'btnVoltarStatus_click','conf'=>'nao','idLic'=>$idLicitacao));
+			$MIOLO->Question("Confirma a mudança de status da licitação?",$action_sim, $action_nao);
+		}
+	}
+
+	function btnDefinir_click()
+	{   
+		global $MIOLO, $module, $item, $action, $theme;
+
+		$cf = new MCurrencyFormatter();
+		$selected = $this->GetFormValue('select');
+		$numItem = $this->GetFormValue('numItem');
+		if($numItem)
+		{
+			$selected = array($numItem);
+		}
+		if($selected == null)
+		{
+			$selected =  $this->GetFormValue('selected');
+			if($selected)
+			{
+				$selected = explode('@', $selected);
+			}
+		}
+		$idLicitacao =  $this->GetFormValue('idLic');
+		$solicitacao =  $this->GetFormValue('solicitacao');
+		if($idLicitacao == null)
+		{
+			$idLicitacao =  $this->GetFormValue('idLicitacao');
+		}
+		$totalItens = count($selected);
+
+		if($totalItens == 0)
+		{
+			$this->page->SetAction($MIOLO->GetActionURL($module, $action, '', array('event'=>'btnEnviar_click', 'idLicitacao'=>$idLicitacao, 'solicitacao'=>$solicitacao)));
+			$MIOLO->Error('Por favor, selecione os itens', $MIOLO->GetActionURL($module, $action, '', array('event'=>'btnEnviar_click', 'idLicitacao'=>$idLicitacao, 'solicitacao'=>$solicitacao)) );
+		}
+		else //um ou mais de um item foi selecionado
+		{
+			$this->objLicitacao = $MIOLO->GetBusiness($module,'licitacao',$idLicitacao);
+			$itensDaLicitacao = $this->objLicitacao->getItens();
+
+			$this->SetTitle('Definir Orçamentos para Itens da Licitação ' . $this->objLicitacao->numero);
+
+			$columns = array(
+				new MGridColumn('Nº','center', true,'3%'),
+				new MGridColumn('Descrição','left', false,'27%'),
+				new MGridColumn('Saldo','center', true,'6%'),
+				new MGridColumn('Unidade','center', true,'5%'),
+				new MGridColumn('R$ Unit','center', true,'0%', true),
+				new MGridColumn('Pedido','center', true,'7%'),
+				new MGridColumn('R$ Pedido','center', true,'10%'),
+				new MGridColumn('Empresa','left', false,'19%'),
+				new MGridColumn('R$ Total','center', true,'8%'),
+				new MGridColumn('Rubrica','center', false,'7%'),
+	           	new MGridColumn('Referência','center', false,'8%'),
+			);
+
+			$data = $this->objLicitacao->GetDadosItensParaEmpenho($idLicitacao, $itensDaLicitacao);
+
+			$data2 = array(); //elimina os itens não selecionados
+			$select = '';
+			for($i = 0; $i < count($data); $i++)
+			{
+				if(in_array($data[$i][0], $selected))
+				{
+					$data2[] = $data[$i];
+					$select .= $data[$i][0] . '@';
+				}
+			}
+			$select = substr($select, 0, -1); //concatenação de todos os itens selecionados separados por @
+
+			//verifica se todos os itens selecionados possuem mesmo elemento
+			$rubrica = substr($data2[0][7],0,6);
+			foreach($data2 as $d)
+			{
+				if(substr($d[7],0,6) != $rubrica)
+				{
+					$MIOLO->Error('Itens selecionados não possuem mesmo elemento', $MIOLO->GetActionURL($module, $action, '', array('event'=>'btnEnviar_click', 'idLicitacao'=>$idLicitacao, 'solicitacao'=>$solicitacao)) );
+				}
+			}
+
+			//grid com empenhos anteriores, que podem servir como referência para os que estão sendo criados
+			$columns2 = array(
+				new MGridColumn('Referência','center', true,'15%'),
+				new MGridColumn('IdEmpenho','center', true,'15%',false),
+				new MGridColumn('Empenho','center', true,'15%'),
+				new MGridColumn('Itens','left', false,'55%'),
+				new MGridColumn('Tipo','center', false,'105%'),
+			);
+			$empenho = $MIOLO->GetBusiness($module, 'empenho');
+			$query = $empenho->GetEmpenhosReferencia($idLicitacao, $selected, 'idEmpenho');
+			$r = $query->result;
+
+			$referencias = array();
+			$j = 1;
+			for($i = 0; $i < count($r); $i++)
+			{
+				$referencias[$j] = array();
+				$referencias[$j][0] = $j;
+				$referencias[$j][1] = $r[$i][0];
+				$referencias[$j][2] = $r[$i][1];
+				$referencias[$j][3] = $r[$i][2];
+				$referencias[$j][4] = $r[$i][3];
+				$referencias[$j][5] = $r[$i][4];
+				$referencias[$j][6] = $r[$i][5];
+				$referencias[$j][7] = $r[$i][6];
+				while($r[$i][0] == $r[$i+1][0])
+				{
+					$i++;
+					$referencias[$j][3] .= ', ' . $r[$i][2];
+				}
+				$j++;
+			}
+			$referencias2[0][0] = 0;
+			$referencias2[0][1] = '';
+			$referencias2[0][2] = '';
+			$referencias2[0][3] = 'Empenho OR. O próprio empenho será usado como referência.';
+			foreach($referencias as $r)
+			{
+				$arrayItens = explode(', ', $r[3]);
+				foreach($selected as $s)
+				{
+					if( in_array($s, $arrayItens) )//verifica se o empenho possui ao menos 1 dos itens selecionados
+					{
+						$referencias2[] = $r;
+						break;
+					}
+				}
+			}
+			$i = 0;
+			foreach($referencias2 as $r) //atualiza os indices (0 a n)
+			{
+				$referencias2[$i][0] = $i;
+				$i++;
+			}
+
+			$grid2 = new MGrid($referencias2, $columns2, '', 0);
+			$grid2->SetTitle('Empenhos já existentes para esta licitação');
+			$theme->BreakContent();
+			$theme->AppendContent($grid2);
+
+			//definição dos empenhos de referência
+			$empenho = $MIOLO->GetBusiness($module, 'empenho');
+			$ref = $empenho->DefineReferencia($idLicitacao, $selected, $referencias2);
+			$n = 47; //indice para cada uma das linhas ($row), onde fica o idempenho de referencia
+			foreach($ref as $i=>$r)
+			{
+				for($j = 0; $j < count($data2); $j++)
+				{
+					//para cada ref percorre os itens data2 e verifica se item=indice de ref. 
+					//se for, faz aquele item receber o valor de ref
+					if($data2[$j][0] == $i)
+					{
+						$data2[$j][$n] = $r;
+						break;
+					}
+				}
+			}
+
+			$n2 = 48; //indice para cada uma das linhas ($row), onde fica o total de itens mostrados na tela
+			for($i = 0; $i < count($data2); $i++)
+			{
+				$data2[$i][$n2] = $totalItens;
+			}
+
+			//inclui quantidade e valor das solicitações e exclui itens que não foram solicitados pelo HU
+			$data = array();
+			$this->objSolicitacao = $MIOLO->GetBusiness($module, 'solicitacao');
+			foreach($data2 as $d)
+			{
+				$solicit = $this->objSolicitacao->GetQuantidadeByItemSolicitacao($idLicitacao, $solicitacao, $d[0], '1');
+				if($solicit)
+				{
+					$valorSolicitacao = $solicit * $cf->toDecimal($d[4]);
+					$valorSolicitacao = number_format(str_replace(',','.',$valorSolicitacao),2,',','.');
+					$data[] = array($d[0], $d[1], $d[2], $d[3], $d[4], $solicit, $valorSolicitacao, $d[5], $d[6], $d[7], $d[8], $d[11], 47=>$d[47], 48=>$d[48]);
+				}
+			}
+
+			//valor total
+			$valorTotalGeral = 0;
+			for($i = 0; $i < count($data); $i++)
+			{
+				$valorTotalGeral += ($data[$i][5] * str_replace(',','.',str_replace('.','',$data[$i][4])));
+			}
+			$valorTotalGeral = number_format(str_replace(',','.',$valorTotalGeral),2,',','.');
+
+			//definição dos campos do form, feito no final do codigo, pois é preciso definir referencias antes
+		
+			/* Removida a referencia
+		$sql = new MSql('anoref','ad_controle');
+		$anoReferencia = $empenhado->Query($sql)->result[0][0];
+		*/
+		$anoReferencia = Date('Y');
+		
+			$grid = new MGrid($data, $columns, $href_datagrid, 0);
+			$fields = array(
+				$grid,
+				new HiddenField('idLicitacao', $idLicitacao),
+				new HiddenField('solicitacao', $solicitacao),
+				new HiddenField('selected', $select),
+				new MSpacer(1),
+				new MTextLabel('totalGeral', $valorTotalGeral, 'Valor Total dos Itens'),
+				new MSpacer(1),
+				array(
+					new MText('orc','<br>Dados do Orçamento: &nbsp;&nbsp;'),
+					new MTextField('ano', $anoReferencia, 'Ano', 5),
+					new MTextField('esfera', '', 'Esfera', 5),
+					new MTextField('idptr', '', 'PTR', 10),
+					new MTextField('idfonte', '', 'Fonte', 13),
+					new MTextField('idrubrica', trim($data2[0][8]. ' _ _'), 'Rubrica', 10),
+				),
+			);
+			$this->SetFields($fields);
+			$this->SetFieldAttr('ano','readonly',true);
+			$this->SetFieldAttr('idrubrica','readonly',true);
+			$grid->SetRowMethod('frmSolicitacao', 'MyRowMethod');
+
+		}
+		$this->SetButtonAttr('btnConfirmar','visible',true);
+		$this->SetButtonAttr('btnEnviar','visible',false);
+	}
+
+	function btnConfirmar_click()
+	{   
+		global $MIOLO, $module, $item, $action;
+
+		$selected = $this->GetFormValue('selected');
+		$itens = explode('@', $selected);
+		$idLicitacao = $this->GetFormValue('idLicitacao');
+		$solicitacao = $this->GetFormValue('solicitacao');
+		$quant = $this->GetFormValue('quant');
+		$ref = $this->GetFormValue('ref');
+
+		$ano = $this->GetFormValue('ano');
+		$ptr = $this->GetFormValue('idptr');
+		$fonte = $this->GetFormValue('idfonte');
+		$rubrica = substr($this->GetFormValue('idrubrica'),0,6);
+		$esfera = $this->GetFormValue('esfera');
+
+		$this->objLicitacao = $MIOLO->GetBusiness($module,'licitacao',$idLicitacao);
+		$itensDaLicitacao = $this->objLicitacao->getItens();
+		$data = $this->objLicitacao->GetDadosItensParaEmpenho($idLicitacao, $itensDaLicitacao);
+
+		$data2 = array(); //elimina os itens não selecionados
+		$i = 0;
+		$subElementos = array();
+		foreach($data as $itemLic)
+		{
+			if( in_array($itemLic[0], $itens) )
+			{
+				$data2[] = $itemLic;
+				$data2[$i][2] = $quant[$i];
+				$data2[$i][6] = str_replace('.', '', $data2[$i][6]);
+				$data2[$i][6] = floatval(str_replace(',', '.', $data2[$i][6]));
+				$subElementos[] = $data2[$i][9];
+				$i++;
+			}
+		}
+
+		//atualização das quantidades e valores dos itens; calculo do total geral de todos os itens
+		$valorTotal = 0;
+		$valoresPorSubElemento;//array com subElementos como chave e valor igual ao somatorio do subElemento
+		for($i = 0; $i < count($data2); $i++)
+		{
+			$data2[$i][4] = str_replace('.','',$data2[$i][4]);
+			$data2[$i][6] = $quant[$i] * floatval(str_replace(',','.',$data2[$i][4]));
+			$valorTotal += $data2[$i][6];
+			$data2[$i][11] = $ref[$i];
+			$valoresPorSubElemento[$data2[$i][9]] += $data2[$i][6];
+		}
+
+		//percorre todos os itens, verificando se existe orcamento e se há saldo
+		$orcamento = $MIOLO->GetBusiness($module, 'orcamento');
+		$erros = '';
+		$dadosPorSubElemento = array();
+		foreach($valoresPorSubElemento as $sub=>$valorSub)
+		{
+			$orc = $orcamento->GetByClassOrcamentaria($ano,$ptr,$fonte,$rubrica.$sub,$esfera);
+			$idOrcamento = $orc->result[0][0];
+			if($idOrcamento == null)//não existe este orçamento
+			{
+				$erros .= "<BR>- Não existe orçamento cadastrado para rubrica " . $rubrica.$sub;
+			}
+			else
+			{
+				$saldo = $orcamento->GetSaldo($idOrcamento);
+				$saldo = floatval(str_replace(',','.',$saldo));
+				if($saldo < $valorSub)
+				{
+					$erros .= "<BR>- Não há saldo suficiente para rubrica " . $rubrica.$sub;
+				}
+			}
+			$dadosPorSubElemento[$sub] = array($idOrcamento, $saldo, $valorSub);
+		}
+		if($erros != '')
+		{
+			$MIOLO->Error('Erros:' . $erros, $MIOLO->GetActionURL($module, $action, '', array('event'=>'btnDefinir_click', 'idLicitacao'=>$idLicitacao, 'selected'=>$selected)) );
+			return;
+		}
+
+		//referencias: primeiro, busca os dados dos empenhos já cadastrados
+		$empenho = $MIOLO->GetBusiness($module, 'empenho');
+		$query = $empenho->GetEmpenhosReferencia($idLicitacao, $itens, 'idEmpenho');
+		$r = $query->result;
+		$referencias = array();
+		$j = 1;
+		for($i = 0; $i < count($r); $i++)
+		{
+			$referencias[$j] = array();
+			$referencias[$j][0] = $j;
+			$referencias[$j][1] = $r[$i][0];
+			$referencias[$j][2] = $r[$i][1];
+			$referencias[$j][3] = $r[$i][2];
+			$referencias[$j][4] = $r[$i][3];
+			$referencias[$j][5] = $r[$i][4];
+			$referencias[$j][6] = $r[$i][5];
+			$referencias[$j][7] = $r[$i][6];
+			while($r[$i][0] == $r[$i+1][0])
+			{
+				$i++;
+				$referencias[$j][3] .= ', ' . $r[$i][2];
+			}
+			$j++;
+		}
+		$referencias2[0][0] = 0;
+		$referencias2[0][1] = '';
+		$referencias2[0][2] = '';
+		$referencias2[0][3] = 'Empenho OR. O próprio empenho será usado como referência.';
+		foreach($referencias as $r)
+		{
+			$arrayItens = explode(', ', $r[3]);
+			foreach($itens as $s)
+			{
+				if( in_array($s, $arrayItens) )//verifica se o empenho possui ao menos 1 dos itens selecionados
+				{
+					$referencias2[] = $r;
+					break;
+				}
+			}
+		}
+		$i = 0;
+		foreach($referencias2 as $r) //atualiza os indices (0 a n)
+		{
+			$referencias2[$i][0] = $i;
+			$i++;
+		}
+		$referencias = $referencias2;
+
+		//agora, busca o idempenho de acordo com o codigo de referencia
+		for($i = 0; $i < count($data2); $i++)
+		{
+			foreach($referencias as $r)
+			{
+				if($r[0] == $data2[$i][11])
+				{
+					$data2[$i][11] = $r[1];
+				}
+			}
+			if($data2[$i][11] == '')
+			{
+				$data2[$i][11] = '0';
+			}
+		}
+
+		try
+		{
+			$empenhos = $this->objLicitacao->DefineOrcamentosParaItensLicitacao($idLicitacao, $data2, $ano, $esfera, $ptr, $fonte, $rubrica, $dadosPorSubElemento, $solicitacao);
+
+			//se não existe mais itens a empenhar, troca status da licitação
+			$quantidadeAEmpenhar = $this->objLicitacao->GetQuantidadeAEmpenhar($idLicitacao);
+			if($quantidadeAEmpenhar == 0)
+			{
+				$this->objLicitacao->SetStatus(5);
+			}
+
+			$this->AddField(new HiddenField('empenhos',$empenhos));
+
+			$mensagem = '';
+			$valorTotal = 0.0;
+			foreach($dadosPorSubElemento as $s=>$d)
+			{
+				$rubrica8 = $rubrica.$s;
+				$saldo = $d[1];
+				$valorOrcamento = $d[2];
+				$valorTotal += $valorOrcamento;
+				$novoSaldo = $saldo - $valorOrcamento;
+				$valorOrcamento = number_format(str_replace(',','.',$valorOrcamento),2,',','.');
+				$novoSaldo = number_format(str_replace(',','.',$novoSaldo),2,',','.');
+				$mensagem .= "<BR>- Rubrica: $rubrica8. Debitado: R$ $valorOrcamento. Saldo: R$ $novoSaldo";
+			}
+			$valorTotal = number_format(str_replace(',','.',$valorTotal),2,',','.');
+
+			$action_ok = $MIOLO->GetActionURL($module, $action);
+			$action_report = $MIOLO->GetActionURL($module, $action,'',array('event'=>'report', 'idLicitacao'=>$idLicitacao, 'idOrcamento'=>$idOrcamento, 'valorTotal'=>$valorTotal, 'empenhos'=>$empenhos));
+
+			$bot_report = new MButtonWindow('', '&nbsp;&nbsp;Imprimir&nbsp;&nbsp;', $action_report);
+			$bot_voltar = new MButton('', '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;OK&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;', $action_ok);
+
+			$MIOLO->Information("Orçamento(s) atribuído(s) com sucesso.$mensagem<BR><BR><BR>&nbsp;" . $bot_report->generate() . "&nbsp;&nbsp;" . $bot_voltar->generate(), 'NONE');
+		}
+		catch (Exception $e)
+		{
+			$MIOLO->Error($e->getMessage(), $MIOLO->GetActionURL($module, $action, '', array('event'=>'btnDefinir_click', 'idLicitacao'=>$idLicitacao, 'selected'=>$selected)) );
+		}
+	}
+
+	function report()
+	{
+		global $MIOLO,$module;
+		$ui = $MIOLO->GetUI();
+		$report = $ui->GetReport($module,'repSolicitacaoEmpenho');
+		$report->Generate();
+	}
+
+	// Método a ser executado antes de renderizar cada linha
+	function MyRowMethod($i, $row, $actions, $columns)
+	{
+		global $MIOLO, $module, $item;
+
+		$textField = new MTextField("quant[$i]",$row[5],'',6);
+		$columns[5]->control[$i] = $textField;
+		$textField->addAttribute("onBlur","atualizaTotal({$i},{$row[48]},{$row[2]})");
+
+		$text1 = new MText("preco[$i]",$row[4]);
+		$columns[4]->control[$i] = $text1;
+
+		$text2 = new MText("total[$i]",$row[6]);
+		$columns[6]->control[$i] = $text2;
+
+		$referencia = new MTextField("ref[$i]", ($row[47] == null ? '0' : $row[47]), '', 8);
+		$columns[10]->control[$i] = $referencia;
+
+		$columns[1]->control[$i]->SetJsHint($row[11]);
+	}
+
+	// Método a ser executado antes de renderizar cada linha
+	function MyRowMethod2($i, $row, $actions, $columns)
+	{
+		global $MIOLO, $module, $item;
+
+		$columns[1]->control[$i]->SetJsHint($row[11]);
+	}
+}
+?>

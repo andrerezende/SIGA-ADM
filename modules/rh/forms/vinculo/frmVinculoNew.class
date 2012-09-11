@@ -1,0 +1,88 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+MIOLO::Import('modules::rh::controls::selectionref');
+class frmVinculoNew extends Form
+{
+
+    function __construct()
+    {
+        $this->Form('Incluir Novo Vínculo');
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+       global $MIOLO;
+       $grupoCargo = $this->manager->getBusiness('rh','grupocargo');
+       $cargos = $grupoCargo->listAll(); 
+
+       $jornada = $MIOLO->GetBusiness('rh','jornada');
+       $criteriaJornada = $jornada->getCriteria('descricao');
+       $criteriaJornada->addColumnAttribute('descricao');
+       $sqlJornada = $criteriaJornada->retrieveAsQuery();
+       $grupoOcorrencia = $MIOLO->GetBusiness('rh','grupoocorrencia','01');
+       $fields = array(
+			new TextField('idVinculo','','Id Vínculo','7'),
+			new TextField('dvidvinculo','','DV Id Vínculo','1'),
+			new CalendarField('dataPosse','','Data posse','15'),
+			new TextField('classificacaoConcurso','','Classificação concurso','3'),
+			new CalendarField('dataConcurso','','Data concurso','15'),
+			new CalendarField('dataFimContrato','','Data fim contrato','15'),
+			new SelectionRef('refClass','','Referência'),
+			new Selection('idJornada','','Jornada',$sqlJornada->chunkResult(0,0)),
+			new MSelection('idGrupoCargo','','Grupo Cargo',$cargos->result),
+			new MTextField('cargo','','Cargo',30),
+			new MLookupField('lkpCargo','&nbsp;','&nbsp;'),
+			new MHiddenField('idCargo'),
+			new LookupTextField('lkpSetor','','Setor'),
+			new Selection('idOcorrencia','','Ocorrência',$grupoOcorrencia->ListOcorrencias()->result),
+			new MultiLineField('obs','','Observação',25,5,40,'Max. 500')    
+		);
+        $this->SetFields($fields);
+
+        $this->SetFieldAttr('lkpSetor','module','common');
+        $this->SetFieldAttr('lkpSetor','item','setor');
+        $this->SetFieldAttr('lkpSetor','event', 'filler');
+        $this->SetFieldAttr('lkpSetor','related', 'idsetor,lkpSetor');
+
+        $this->SetFieldAttr('lkpCargo','module','rh');
+        $this->SetFieldAttr('lkpCargo','item','cargo');
+        $this->SetFieldAttr('lkpCargo','event','filler');
+        $this->SetFieldAttr('lkpCargo','related','idCargo,cargo');
+        $this->SetFieldAttr('lkpCargo','filter','idGrupoCargo,cargo');
+
+        $buttons = array(new FormButton('btnNew', 'Incluir Vínculo'));
+        $this->SetButtons($buttons);
+    }
+
+    function btnNew_click() {
+        global $MIOLO, $page, $module;
+        $data = $this->GetData();
+        $vinculo = $MIOLO->GetBusiness($module,'vinculo');
+        $vinculo->SetData($data);
+        $funcionario = $this->manager->GetBusiness('rh','funcionario');
+        $vinculo->idFuncionario = $funcionario->getIdFuncionario($MIOLO->getAuth()->login->idkey);
+        $vinculo->save();
+ 
+        $go = $MIOLO->GetActionURL('rh','main:vinculo',$vinculo->idVinculo);
+        $page->Redirect($go);
+    }
+}
+?>

@@ -1,0 +1,122 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmProadesImprimePrimeiraFase extends MForm
+{
+    private $proades;
+	function __construct($proades)
+	{
+		$this->proades = $proades;
+		parent::__construct('Imprimir Dados da Primeira Fase');
+		$this->EventHandler();
+	}
+    
+	function CreateFields()
+	{
+        $fields = array(
+            new MText("","Para imprimir os dados referentes a primeira fase do PROADES clique em Imprimir.")
+        ); 
+        
+        $this->SetFields($fields);		
+
+        $buttons = array(
+                new MButton('btnImprimir','Imprimir','pdf')
+            );
+        $this->setButtons($buttons);
+
+		$this->SetShowPostButton(FALSE);
+	}
+
+    function btnImprimir_click()
+    {
+        $proades = $this->proades;
+
+        $setor = $this->manager->getBusiness('common','setor');
+        $setor->getById($this->proades->idSetor);
+
+        $report = new MEzPDFReport('2','portrait');
+        $report->pdf->ezText('UNIVERSIDADE FEDERAL DE JUIZ DE FORA',12);
+        $report->pdf->ezText("Unidade: $setor->nome",12);
+        $report->pdf->ezText("PROADES - Primeira Fase",12);
+
+//      table report
+        $options['textCol'] = array(0,0,0);
+        $options['shaded'] = 0;
+        $options['showLines'] = 0;
+        $options['fontSize'] = 12;
+        $options['maxWidth'] = 480;
+        $options['xPos'] = 'left';
+        $options['xOrientation'] = 'right';
+        $cols = array('','');
+
+
+        //Objetivos
+        if ( $proades->objetivos )
+        {
+            $report->pdf->ezText("");
+            $report->pdf->ezText("Objetivos da Unidade:",12);
+            $report->pdf->ezText("");
+            $report->pdf->ezText($proades->objetivos,12);
+            $report->pdf->ezText("");
+        }
+
+        //Metas
+        $proades->retrieveAssociation('metas');
+        if ( is_array($proades->metas) )
+        {
+            $report->pdf->ezText("");
+            $report->pdf->ezText("Metas:",12);
+            $report->pdf->ezText("");
+            $cols = array('Previsao','Meta');
+            foreach ( $proades->metas as $meta )
+            {
+                $dataRel[] = array($meta->previsao,$meta->meta);
+            }
+            $report->pdf->ezTable($dataRel,$cols,'',$options);
+        }
+
+        //Equipes de Trabalho
+        $queryEquipe = $proades->listEquipesDeTrabalho();
+        if ( ! $queryEquipe->eof() )
+        {
+            $report->pdf->ezText("");
+            $report->pdf->ezText("Equipe de Trabalho:",12);
+            $report->pdf->ezText("");
+            foreach ( $queryEquipe->result as $result )
+            {
+                $report->pdf->ezText($result[1],12);
+
+                $queryMembros = $proades->listMembrosPorEquipe($result[0]);
+                if ( ! $queryMembros->eof() )
+                {
+                    $cols = array('Membro','Atividade');
+                    foreach ( $queryMembros->result as $result2 )
+                    {
+                        $dataMembros[] = array($result2[2],$result2[3]);
+                    }
+                    $report->pdf->ezTable($dataMembros,$cols,'',$options);
+                    $report->pdf->ezText("");
+                }
+                unset($dataMembros);
+            }
+        }
+        $report->Execute();
+    }
+}
+?>

@@ -1,0 +1,501 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+MIOLO::Import('modules::rh::controls::linkferias');
+
+class frmVinculoLancarFerias extends MForm
+{
+    /**
+     * Objeto ferias
+     * @access protected
+     * @var BusinessRhFerias
+     */
+    protected $ferias;
+
+    function __construct($objFerias)
+    {
+        global $MIOLO;
+
+        $this->ferias = $objFerias;
+        parent::__construct('Lançamento de Férias '.'-> Periodo Aquisitivo -> '.$this->ferias->getDataInicioPerAq());
+        $this->SetClose($MIOLO->GetActionURL('rh','main:vinculo',$this->ferias->idVinculoPerAq, array('form'=>'ferias','dtInicioPerAq'=>$this->ferias->dataInicioPerAq,'exec'=>'formularioferias')));
+
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+
+        global $MIOLO;
+        $perms = $MIOLO->getPerms();
+        $login = $MIOLO->getLogin();
+        $perms->checkAccess('rh_ferias',A_ACCESS,true);
+
+        // testes para os casos de funcionário que trabalha com raio X
+        if (!$this->ferias->isPersistent())  // não persistente - novo registro
+        {
+            if ($this->ferias->IsRaioXWorker())
+            $nDias = $this->ferias->SetRaioXParcelas();
+            else
+            $nDias = $this->ferias->Parcelas();
+        }
+        else // é persistente - registro já está no banco de dados
+        {
+            $n = $this->ferias->totalDias;
+            $nDias = array('$n'=>$this->ferias->totalDias);
+        }
+
+        $fldDataInicio  = new MCalendarField('dataInicio','','Início',15);
+
+        $fldDataFim     = new MCalendarField('dataFim','','Fim',15);
+
+        if (!$this->ferias->isPersistent())
+        $fldTotalDias = new MSelection('totalDias','','Dias',$nDias);
+        else
+        $fldTotalDias   = new MTextField('totalDias', '', 'Dias', '4');
+
+        $fldObs         = new MultiLineField('obs','','Observação',25,5,40,'Máx. 500');
+
+        $fldDataFimPrev = new MCalendarField('dataFimPrevista','','Término',15);
+
+        //$fldNumFolha  = new MTextField('numFolha', '', 'Nº Folha', '4');
+
+        $optAbono        = new MCheckBox('abono','1',' ',false,'Abono Pecuniário (converte 1/3 das férias em abono)');
+        $optAbonoConst  = new MCheckBox('abonoConst','1','',false,'Abono Constitucional');
+
+        $firstParcela = $this->ferias->IsFirstParcela();
+
+        // visibilidade de campo Abono Pecuniário para Celetista
+        if (!$this->ferias->isPersistent())
+        {
+            if ($this->ferias->GetIsCeletista())
+            {
+                $arrAbonos  = array($optAbono, $optAbonoConst);
+            }
+            else
+            {
+                if ($firstParcela)
+                {
+                    $arrAbonos  = array($optAbonoConst);
+                }
+                else
+                {
+                    $arrAbonos = array();
+                }
+            }
+        }
+        else
+        {
+            $arrAbonos  = array($optAbonoConst);
+        }
+
+        //var_dump($fldTotalDias);
+
+        $chkGroupAbonos = new CheckBoxGroup('chkGroupAbonos','Abonos',$arrAbonos,'','vertical','css');
+
+        $optAdiant13 = new CheckBox('adiantamento13','1','',false,'Adiantamento da gratificação <b>Natalina</b> (<i>13º salário</i>)');
+        $optAdiantSal = new CheckBox('adiantamentoSalario','1','',false,'Adiantamento da remuneração');
+
+        // visibilidade do campo Gratificação Natalina para as primeiras parcelas de férias
+        if (!$this->ferias->isPersistent())
+        {
+            if ($firstParcela)
+            {
+                $arrAdiantamentos = array($optAdiant13, $optAdiantSal);
+            }
+            else
+            {
+                if ( $this->ferias->adiantou13() )
+                {
+                    $arrAdiantamentos = array($optAdiantSal);
+                }
+                else
+                {
+                    $arrAdiantamentos = array($optAdiant13, $optAdiantSal);
+                }
+            }
+        }
+        else
+        {
+            $arrAdiantamentos = array($optAdiant13, $optAdiantSal);
+        }
+
+        $chkGroupAdiants = new CheckBoxGroup('chkGroupAdiants','Adiantamentos',$arrAdiantamentos,'','vertical','css');
+
+        if (!$this->ferias->isPersistent())
+        {
+            if ( (!$this->ferias->periodoAquisitivo->isCeletista()) and !($firstParcela) )
+            $fields = array(
+            //new Spacer('10px'),
+            //  $lblObs1,
+            new Spacer('10px'),
+            $fldDataInicio,
+            $fldDataFim,
+            new Spacer('10px'),
+            $fldTotalDias,
+            //$fldNumFolha,
+            new Spacer('10px'),
+            $fldDataFimPrev,
+            new Spacer('10px'),
+            $chkGroupAdiants,
+            $fldObs
+            );
+            else
+
+            $fields = array(
+            //  new Spacer('10px'),
+            //  $lblObs1,
+            new Spacer('10px'),
+            $fldDataInicio,
+            $fldDataFim,
+            new Spacer('10px'),
+            $fldTotalDias,
+            //$fldNumFolha,
+            new Spacer('10px'),
+            $fldDataFimPrev,
+            $chkGroupAbonos,
+            new Spacer('10px'),
+            $chkGroupAdiants,
+            $fldObs
+            );
+
+        }
+        else {
+            $fields = array(
+            //  new Spacer('10px'),
+            //  $lblObs1,
+            new Spacer('10px'),
+            $fldDataInicio,
+            $fldDataFim,
+            new Spacer('10px'),
+            $fldTotalDias,
+            //$fldNumFolha,
+            new Spacer('10px'),
+            $fldDataFimPrev,
+            $chkGroupAbonos,
+            new Spacer('10px'),
+            $chkGroupAdiants,
+            $fldObs
+            );
+        }
+        $fields = array(
+        //  new Spacer('10px'),
+        //  $lbl,
+        new Spacer('10px'),
+        $fldDataInicio,
+        $fldDataFim,
+        new Spacer('10px'),
+        $fldTotalDias,
+        //$fldNumFolha,
+        new Spacer('10px'),
+        $fldDataFimPrev,
+        $chkGroupAbonos,
+        new Spacer('10px'),
+        $chkGroupAdiants,
+        $fldObs
+        );
+
+        $this->SetFields($fields);
+        if(!$this->ferias->isPersistent())
+        {
+            $this->SetFieldAttr('abonoConst','visible',$firstParcela);
+            $this->SetFieldAttr('abonoConst','checked',$firstParcela);
+            $this->SetFieldAttr('optAbono','visible',$firstParcela);
+        }
+
+        $fldTotalDias->AddAttribute('maxlength','4');
+        $fldObs->AddAttribute('maxlength','500');
+        $this->SetData();
+
+        // ************************************************************************************************************
+        // se for lançamento de uma interrupção de férias permitir a alteração apenas dos campos data fim e obs
+        // percorrer as ferias do perído (somente daquele que pode-se marcar férias
+
+        $buttons = array(
+            new FormButton('btnSalvar','Enviar'),
+            new FormButton('btnExcluir','Excluir'),
+            new FormButton('btnInterromper','Interromper Férias')
+        );
+        $this->SetButtons($buttons);
+
+        if($this->ferias->isPersistent())
+        {
+            // desabilitando os campos desnecessários
+            $this->SetFieldAttr('dataInicio','readonly',TRUE);
+            $this->SetFieldAttr('dataFimPrevista','readonly',TRUE);
+            $this->SetFieldAttr('totalDias','readonly',TRUE);
+
+            // abilitando os campos adequados
+            $this->SetFieldAttr('dataFim','visible',TRUE);
+
+            // se essas ferias já NÃO foram interrompidas - NÃO bloqueia!!
+            if (  ($this->ferias->BreakUp()) || (!$this->ferias->PermiteInterrupcao()))
+            {
+                $this->SetFieldAttr('dataFim','readonly',TRUE);
+                $this->SetFieldAttr('obs','readonly',TRUE);
+            }
+            else
+            {
+                $this->SetFieldAttr('dataFim','readonly',FALSE);
+                $this->SetFieldAttr('obs','readonly',FALSE);
+            }
+        }
+        else
+        {
+            $this->SetFieldAttr('dataFim','visible',FALSE);
+            $this->SetFieldAttr('dataFimPrevista','visible',FALSE);
+        }
+        $vinculo = $this->manager->getBusiness('rh','vinculo',$this->ferias->idVinculoPerAq);
+
+
+        // btnSalvar
+        $this->SetButtonAttr('btnSalvar','visible',!$this->ferias->isPersistent());
+
+
+
+        // btnInterromper
+        $mostrar = false;
+        if  ( $this->ferias->isPersistent() )
+        {
+            //if ( $this->ferias->calendarioFeriasLiberado(true) )
+            {
+                if ( $this->ferias->PermiteInterrupcao() )
+                {
+                    $mostrar = true;
+                }
+            }
+        }
+        //$this->SetButtonAttr('btnInterromper','visible',(($this->ferias->isPersistent())&&($this->ferias->PermiteInterrupcao())));
+        $this->SetButtonAttr('btnInterromper','visible',$mostrar);
+
+
+
+        // btnExcluir
+        //var_dump($this->ferias->isPersistent());
+        $mostrar = false;
+        if  ( $this->ferias->isPersistent() )
+        {
+
+            if ( $this->ferias->calendarioFeriasLiberado(true) )
+            {
+                if ( (!$this->ferias->BreakUp()) && ($vinculo->isAtivo()) )
+                {
+                    $mostrar = true;
+                }
+            }
+
+            if ( ($perms->isMemberOf($login,'RH_CADASTRO')) or ($perms->isAdmin()) )
+            {
+                    $mostrar = true;
+            }
+        }
+        $this->SetButtonAttr('btnExcluir','visible',$mostrar);
+
+
+        //verificacao de acesso para usuarios da secretaria. Regra: só é permitido a marcação de férias e visualização dos dados se o usuario estiver lotado no mesmo setor do servidor.
+
+        $provimento = $vinculo->getProvimentoAtual();
+        if ( $provimento )
+        {
+            if ( $perms->isMemberOf($login,'RH_SECRETARIA') )
+            {
+                $usuario = $MIOLO->getBusiness('common','usuario');
+                $usuario->getById($login->idkey);
+
+                $setor = $MIOLO->getBusiness('common','setor');
+                $setor->getById($usuario->idSetor);
+
+                $setorPai = $MIOLO->getBusiness('common','setor');
+                $setorPai->getById($setor->idPaiSetor);
+
+                $idSetorPai = ( $setorPai->idPaiSetor == 0 ) ? $setor->idSetor : $setorPai->idSetor;
+
+                $setoresFilhos = $setor->getSetoresFilhos($idSetorPai);
+
+                $mesmoSetor = in_array($provimento->idSetor,$setoresFilhos);
+
+                if ( $mesmoSetor || $perms->isAdmin() )
+                {
+                    $this->setFieldAttr('btnExcluir','visible',TRUE);
+                }
+                else
+                {
+                    $this->setFieldAttr('btnExcluir','visible',$mostrar);
+                }
+            }
+        }
+        else
+        {
+            $this->setFieldAttr('btnExcluir','visible',$mostrar);
+        }
+
+		if ( $perms->isMemberOf($login,'RH_SECRETARIA') )
+        {		
+			$this->setFieldAttr('btnExcluir','visible',TRUE);
+		}
+
+        $validators = array(
+        new RequiredValidator('dataInicio')
+        );
+        $this->SetValidators($validators);
+
+    }
+
+    //função para conversão de valores TRUE ou FALSE de um checkbox para SIM ou NÃO, ou vice-versa
+    function ExecutaConversao($field,$op)
+    {
+        //$field = joga para dentro da função o valor do checkbox, podendo ser, TRUE ou FALSE se é do formulario e  'S' ou 'N' vindo da classe
+        //$op = FALSE -> recebe os dados da classe para jogar no formulário,logo converte (SIM ou NAO) para (checked=TRUE) ou (checked=FALSE)
+        //$op = TRUE -> envia os dados do formulário para classe, logo converte checkbox->checked=TRUE para SIM , ou checkbox->checked=FALSE para NAO
+
+        if ($op==TRUE)
+        {
+            if ($field==TRUE)
+            return 'S';
+            else
+            return 'N';
+        }
+        else
+        {
+            if ($field=="S")
+            return TRUE;
+            else
+            return FALSE;
+        }
+    }
+
+    function SetData()
+    {
+        $this->SetFieldValue('dataInicio',     $this->ferias->dataInicio);
+        $this->SetFieldValue('dataFim',        $this->ferias->dataFim);
+
+        if ($this->ferias->isPersistent())
+        {
+            // abono pec
+            $this->SetFieldAttr('abono','checked',$this->ExecutaConversao($this->ferias->abono,false));
+            $this->SetFieldAttr('adiantamento13','checked',$this->ExecutaConversao($this->ferias->adiantamento13,false));       $this->SetFieldAttr('adiantamentoSalario','checked',$this->ExecutaConversao($this->ferias->adiantamentoSalario,false));
+            $this->SetFieldAttr('abonoConst','checked',$this->ExecutaConversao($this->ferias->abonoConst,false));
+            $this->SetFieldValue('totalDias', $this->ferias->totalDias);
+        } else
+        $this->SetFieldValue('totalDias', array('$this->ferias->totalDias'=>$this->ferias->totalDias));
+        $this->SetFieldValue('obs',            $this->ferias->obs);
+        $this->SetFieldValue('dataFimPrevista',$this->ferias->dataFimPrevista);
+
+    }
+
+    function GetData()
+    {
+        $data = new FormData();
+        $data->dataInicio       = $this->GetFormValue('dataInicio');
+        $data->dataFim          = $this->GetFormValue('dataFim');
+        $data->totalDias        = $this->GetFormValue('totalDias');
+        $data->obs              = $this->GetFormValue('obs');
+        $data->dataFimPrevista  = $this->GetFormValue('dataFimPrevista');
+
+        //abono pec
+        $data->abono = $this->ExecutaConversao($this->abono->checked,true);
+        $data->abonoConst = $this->ExecutaConversao($this->abonoConst->checked,true);
+        $data->adiantamento13 = $this->ExecutaConversao($this->adiantamento13->checked,true);
+        $data->adiantamentoSalario = $this->ExecutaConversao($this->adiantamentoSalario->checked,true);
+
+        return $data;
+    }
+
+    public function btnSalvar_click()
+    {
+        global $MIOLO;
+
+        $update = $this->ferias->isPersistent();
+        $this->ferias->SetData($this->GetData());
+        $perms = $MIOLO->getPerms();
+
+        // o usuarios é admin ou membro do rh_cadastro
+        $privilegios = ( $perms->isMemberOf('','RH_CADASTRO') || $perms->isAdmin() );
+
+        try
+        {
+            $antecedencia = $perms->isMemberOf('','RH_CADASTRO') || $perms->isAdmin() || $perms->isMemberOf('','RH_SECRETARIA');
+            //$antecedencia = $perms->isMemberOf('','RH_CADASTRO') || $perms->isAdmin();
+            $this->ferias->save($antecedencia,$privilegios);
+            $go = $MIOLO->GetActionURL('rh','main:vinculo',$this->ferias->idVinculoPerAq, array('form'=>'periodoaquisitivo','id'=>$this->ferias->dataInicioPerAq,'exec'=>'editarperiodo'));
+
+            if ($update)
+            $this->manager->information('Registro de férias atualizado com sucesso.', $go );
+            else
+            $this->manager->information('Férias marcadas com sucesso.', $go );
+        }
+        catch ( ESimpleRnException $e )
+        {
+            $this->AddError($e->getMessage());
+        }
+    }
+
+    function btnInterromper_click()
+    {
+        global $MIOLO;
+
+        $update = $this->ferias->isPersistent();
+        $this->ferias->SetData($this->GetData());
+        try
+        {
+            $this->ferias->saveInterromper();
+
+            $go = $MIOLO->GetActionURL('rh','main:vinculo',$this->ferias->idVinculoPerAq, array('form'=>'periodoaquisitivo','id'=>$this->ferias->dataInicioPerAq,'exec'=>'editarperiodo'));
+
+            if ($update)
+            $this->manager->information('Registro de férias atualizado com sucesso.', $go );
+            else
+            $this->manager->information('Férias interrompida com sucesso.', $go );
+        }
+        catch ( ESimpleRnException $e )
+        {
+            $this->AddError($e->getMessage());
+        }
+
+    }
+
+
+    function btnExcluir_click()
+    {
+        global $MIOLO;
+
+        $action_sim = $MIOLO->GetActionURL('rh','main:vinculo',$this->ferias->idVinculoPerAq,array('form'=>'ferias','dtInicioPerAq'=>$this->ferias->dataInicioPerAq,'exec'=>'formularioferias','dtInicioFerias'=>$this->ferias->dataInicio,'conf'=>'sim','event'=>'btnExcluir:click'));
+        $action_nao = $MIOLO->GetActionURL('rh','main:vinculo',$this->ferias->idVinculoPerAq,array('form'=>'ferias','dtInicioPerAq'=>$this->ferias->dataInicioPerAq,'exec'=>'formularioferias','dtInicioFerias'=>$this->ferias->dataInicio,'conf'=>'nao'));
+        $conf = $this->GetFormValue('conf');
+
+        if ($conf == 'sim')
+        {
+            try
+            {
+                $this->ferias->delete();
+                $MIOLO->Information('Férias excluídas com sucesso',$MIOLO->GetActionURL('rh','main:vinculo',$this->ferias->idVinculoPerAq,array('form'=>'periodoaquisitivo','id'=>$this->ferias->dataInicioPerAq,'exec'=>'editarperiodo')));
+            }
+            catch ( Exception $e )
+            {
+                $MIOLO->Error("Informe o seguinte erro à equipe do CGCO: ".$e->GetMessage());
+            }
+
+        }
+        else
+        {
+            $MIOLO->Question("Tem certeza que deseja excluir as ferias marcadas para :  ".$this->ferias->dataInicio." ?",$action_sim,$action_nao);
+        }
+    }
+}
+?>

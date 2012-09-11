@@ -1,0 +1,367 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?
+class frmNadaConsta extends Form
+{
+	var $objMulta;
+	var $objEmprestimo;
+	var $objReserva;
+	var $objUsuario;
+	var $objUsuarioInfracoes;
+	var $objUsuarioObservacoes;
+
+    function frmNadaConsta()  // construtor da Classe
+    {
+		global $MIOLO,$module;
+
+		// Título do Formulário
+		$this->Form('Verificação de Nada Consta');
+	
+		//Chama o CreateFileds, etc.
+		$this->EventHandler();
+
+		// Botão "enviar" não aparece
+		$this->defaultButton = false;
+		
+		// Botão 'fechar', direcionando para o handler biblioteca/main/circulacao
+		$this->SetClose($this->manager->GetActionURL($module, 'main:circulacao'));
+		
+		
+	}
+
+    function CreateFields()
+    {
+		global $MIOLO,$module,$self;
+
+		// Campos que aparecem no formulário
+		$fields = Array (
+			new Text('txtAviso','<b>Informe:</b>'),
+                                 new Text('txtCartao', '<b>> o cartão de acesso ou login para usuário pertencente à Instituição (aluno, professor ou funcionário)</b>'),
+                                          new Text('txtRG', '<b>> o número do RG para usuário pertencente à comunidade, sem vínculo com a Instituição</b>'),
+			new Spacer(1),
+			array(
+				new MTextField('edtCartaoAcesso','','Cartão de Acesso',16),
+                new MTextLabel('txtOu','&nbsp;&nbsp;&nbsp;-OU-&nbsp;&nbsp;&nbsp;','&nbsp;'),
+                new MTextField('edtMatricula','','Login do Usuário',16),
+                new MTextLabel('txtOu2','&nbsp;&nbsp;&nbsp;-OU-&nbsp;&nbsp;&nbsp;','&nbsp;'),
+				new LookupTextField('edtRG','','Número do RG',16),
+			),
+			array(
+				new TextField('edtNome','','Nome',60),
+			),
+		);
+
+		// Insere os campos
+		$this->SetFields($fields);
+
+		//As 4 propriedades de um lookup
+		// module = módulo usado
+		// item = A funcao que chama no arquivo classes/lookup.class
+		// event = O evento relacionado quando o usuário clica em "acao"
+		// related = Os campos retornados após a ação
+		$this->SetFieldAttr('edtRG','module','biblioteca');
+		$this->SetFieldAttr('edtRG','item','rg');
+		$this->SetFieldAttr('edtRG','event','filler');
+		$this->SetFieldAttr('edtRG','related', 'edtRG,""');
+
+		// Botões que aparecem no formulário
+		$buttons = Array(
+			new FormButton('btnVerificar', 'Verificar'),
+			new FormButton('btnVoltar', 'Voltar', $MIOLO->GetActionURL($module,$self)),
+		);
+
+		//Insere os Botões
+		$this->SetButtons($buttons);
+
+		//Esconde os campos 
+		$this->SetFieldAttr('edtNome','visible', false);
+
+		// Atributo dos botões
+		$this->SetButtonAttr('btnVerificar','visible',true);
+		$this->SetButtonAttr('btnVoltar','visible',false);
+
+		if (!($this->GetFieldValue('edtCartaoAcesso')))
+		{
+			//Definindo o foco
+			$this->page->onLoad("MIOLO_GetElementById('edtCartaoAcesso').focus();");
+		}
+	}
+
+	function btnVerificar_click()
+	{ 
+		global $MIOLO,$module,$item,$self,$page,$theme,$action;
+		
+		$this->SetFieldAttr('txtAviso','visible',false);
+		$this->SetFieldAttr('txtCartao','visible',false);
+		$this->SetFieldAttr('txtRG','visible',false);
+		$this->SetFieldAttr('txtOu','visible',false);
+		$this->SetFieldAttr('txtOu2','visible',false);
+		
+
+		if ($item)
+		{
+			$cartao = $item;
+			
+			// Verifica se existe um @ no item, dizendo que é usuário externo (RG)
+			if (strpos($cartao,"@"))
+			{
+				$cartao = str_replace("@","",$cartao);
+				$this->SetFieldValue('edtRG',$cartao);	
+			}
+			else 
+			{
+				$this->SetFieldValue('edtCartaoAcesso',$cartao);	
+			}
+			
+			
+		}
+		
+		
+		
+		$cartao = $this->GetFieldValue('edtCartaoAcesso');
+		$matricula = $this->GetFieldValue('edtMatricula');
+		$rg = $this->GetFieldValue('edtRG');
+
+		if ($cartao != null)
+		{
+			$tipoUsuario = 'sigaept';
+			$this->SetFieldAttr('edtRG','visible',false);
+			$this->SetFieldAttr('edtMatricula','visible',false);
+//			$this->SetFieldAttr('edtNome','visible',true);
+			$this->objUsuario = $MIOLO->GetBusiness($module,'usuario');
+			$idusuario = $this->objUsuario->GetByCartao($cartao);
+			if ($idusuario != null)
+			{
+				$query = $this->objUsuario->GetById($idusuario);
+				$nome = $query[0][1];
+			}
+		}
+		elseif ($rg != null)
+		{
+			$tipoUsuario = 'comunidade';
+			$this->SetFieldAttr('edtCartaoAcesso','visible',false);
+			$this->SetFieldAttr('edtMatricula','visible',false);
+			$this->objUsuario = $MIOLO->GetBusiness($module,'usuarioexterno');
+			$idusuario = $this->objUsuario->GetByRG($rg);
+			if ($idusuario != null)
+			{
+				$query = $this->objUsuario->GetById($idusuario);
+				$nome = $query->nome;
+			}
+		}
+		elseif ($matricula != null)
+		{
+			$tipoUsuario = 'sigaept';
+			$this->SetFieldAttr('edtRG','visible',false);
+			$this->SetFieldAttr('edtCartaoAcesso','visible',false);
+//			$this->SetFieldAttr('edtNome','visible',true);
+			$this->objUsuario = $MIOLO->GetBusiness($module,'usuario');
+			$idusuario = $this->objUsuario->GetByLogin($matricula);
+			$idusuario = $idusuario[0][0];
+			if ($idusuario != null)
+			{
+				$query = $this->objUsuario->GetById($idusuario);
+				$nome = $query[0][1];
+			}
+		}
+		else
+		{
+			$MIOLO->Prompt(Prompt::Error("Por favor, informe o cartão de acesso ou o número do RG.", $MIOLO->GetActionURL($module,$action)));
+		}
+
+		if ($idusuario != null)
+		{
+			// Atributo dos botões
+			$this->SetButtonAttr('btnVerificar','visible',false);
+			$this->SetButtonAttr('btnVoltar','visible',true);
+
+			//Propriedades dos campos
+			$this->SetFieldAttr('edtCartaoAcesso','readonly',true);
+			$this->SetFieldAttr('edtRG','readonly',true);
+			$this->SetFieldAttr('edtMatricula','readonly',true);
+			$this->SetFieldAttr('edtNome','visible',true);
+			$this->SetFieldAttr('edtNome','readonly',true);
+			$this->SetFieldValue('edtNome',$nome);
+			$this->SetFieldValue('edtCartaoAcesso',$cartao);
+			$this->SetFieldValue('edtRG',$rg);
+
+			//Empréstimos
+			//Datagrid de emprestimos regulares
+			$columnsEmpReg = array(
+				new DataGridColumn('numerodotombo','Exemplar','center',true, '15%',true, null, false, false),
+				new DataGridColumn('titulo','Título','left',false, '45%',true, null, false, false),
+				new DataGridColumn('autor','Autor','left',false, '25%',true, null, false, false),
+				new DataGridColumn('datahoraprevisaodevolucao','Data para Devolução','center',true, '15%',true, null, false, false),
+			);
+
+			//Instancia o objeto emprestimo
+		    $this->objEmprestimo = $MIOLO->GetBusiness($module,'emprestimo');
+
+			$queryEmpReg = $this->objEmprestimo->ListEmprestimosRegularesPorUsuario($idusuario);
+		
+			$datagridEmpReg = new DataGrid2($queryEmpReg, $columnsEmpReg, '',0);
+			$datagridEmpReg->SetTitle('Livros em Situação Regular - ' . $nome);
+			$datagridEmpReg->SetWidth('99.5%');
+
+			//Datagrid de emprestimos irregulares
+			$columnsEmpIrr = array(
+				new DataGridColumn('numerodotombo','Exemplar','center',true, '15%',true, null, false, false),
+				new DataGridColumn('titulo','Título','left',false, '40%',true, null, false, false),
+				new DataGridColumn('autor','Autor','left',false, '30%',true, null, false, false),
+				new DataGridColumn('datahoraprevisaodevolucao','Data para Devolução','center',true, '15%',true, null, false, false)
+			);
+
+			$queryEmpIrr = $this->objEmprestimo->ListEmprestimosIrregularesPorUsuario($idusuario);
+		
+			$datagridEmpIrr = new DataGrid2($queryEmpIrr, $columnsEmpIrr, '',0);
+			$datagridEmpIrr->SetTitle('Livros com Atraso na Devolução - ' . $nome);
+			$datagridEmpIrr->SetWidth('99.5%');
+
+			$this->AddField(new Spacer(1));
+			$this->AddField($datagridEmpReg);
+			$this->AddField(new Spacer(1));
+			$this->AddField($datagridEmpIrr);
+
+
+			//Reservas
+			if ($tipoUsuario != 'comunidade')
+			{
+				//Datagrid de reservas atendidas
+				$columnsResAten = array(
+					new DataGridColumn('idreserva','Nº Reserva','center',true, '10%',true, null, false, false),
+					new DataGridColumn('numerodotombo','Exemplar','center',true, '10%',true, null, false, false),
+					new DataGridColumn('titulo','Título','left',false, '20%',true, null, false, false),
+					new DataGridColumn('autor','Autor','left',false, '15%',true, null, false, false),
+					new DataGridColumn('datahoradareserva','Data da Reserva','center',false, '15%',true, null, false, false),
+					new DataGridColumn('datahoraentrada','Data da Entrada','center',false, '15%',true, null, false, false),
+					new DataGridColumn('datahoralimite','Data Limite','center',false, '15%',true, null, false, false),
+				);
+
+				//Instancia o objeto emprestimo
+				$this->objReserva = $MIOLO->GetBusiness($module,'reserva');
+
+				$queryResAten = $this->objReserva->ListReservasAtendidas($idusuario);
+			
+				$datagridResAten = new DataGrid2($queryResAten, $columnsResAten, '',0);
+				$datagridResAten->SetTitle('Reservas Atendidas - ' . $nome);
+				$datagridResAten->SetWidth('99.5%');
+
+				//Datagrid de reservas solicitadas
+				$columnsResSol = array(
+					new DataGridColumn('idreserva','Nº Reserva','center',true, '10%',true, null, false, false),
+					new DataGridColumn('numerodotombo','Exemplar','center',true, '10%',true, null, false, false),
+					new DataGridColumn('titulo','Título','left',false, '30%',true, null, false, false),
+					new DataGridColumn('autor','Autor','left',false, '20%',true, null, false, false),
+					new DataGridColumn('datahoradareserva','Data da Reserva','center',false, '15%',true, null, false, false),
+					new DataGridColumn('descricao','Posição','center',true, '15%',true, null, false, false),
+				);
+
+				$queryResSol = $this->objReserva->ListReservasSolicitadas($idusuario);
+
+				$datagridResSol = new DataGrid2($queryResSol, $columnsResSol, '',0);
+				$datagridResSol->SetTitle('Reservas Solicitadas - ' . $nome);
+				$datagridResSol->SetWidth('99.5%');
+
+				$this->AddField(new Spacer(1));
+				$this->AddField($datagridResAten);
+				$this->AddField(new Spacer(1));
+				$this->AddField($datagridResSol);
+			}
+
+
+			//Multas
+			//Montagem do grid com as multas
+			$columnsMulta = array(
+				new DataGridColumn('idmulta','Multa','center',true, '7%',true, null, false, false),
+				new DataGridColumn('idemprestimo','Empréstimo','center',true, '10%',true, null, false, false),
+				new DataGridColumn('numerodotombo','Exemplar','center',true, '10%',true, null, false, false),
+				new DataGridColumn('titulo','Título','left',false, '25%',true, null, false, false),
+				new DataGridColumn('datahoraprevisaodevolucao','Prev. Dev.','center',true, '10%',true, null, false, false),
+				new DataGridColumn('datahora','Data','center',true, '8%',true, null, false, false),
+				new DataGridColumn('valor','Valor','center',true, '8%',true, null, false, false),
+				new DataGridColumn('observacao','Observação','left',false, '22%',true, null, false, false),
+			);
+
+			//Instancia o objeto multa
+			$this->objMulta = $MIOLO->GetBusiness($module,'multa');
+
+			$queryMulta = $this->objMulta->ListMultasNaoPagas($idusuario);
+			$total = $this->objMulta->GetTotalMultasNaoPagas($idusuario);
+
+			$datagridMulta = new DataGrid2($queryMulta, $columnsMulta, '',0);
+			$datagridMulta->SetTitle('Multas Não Pagas pelo Usuário ' . $nome . ' - Total: R$ ' . number_format(str_replace(',','.',$total),2,',','.'));
+			$datagridMulta->SetWidth('99.5%');
+
+			$this->AddField(new Spacer(1));
+			$this->AddField($datagridMulta);
+
+		
+			//Infrações
+			if ($tipoUsuario != 'comunidade')
+			{
+				//Montagem do grid com as infrações
+				$columnsInfracao = array(
+					new DataGridColumn('descricao','Infração','left', true, '40%',true, null, true,true),
+					new DataGridColumn('notainfracao','Nota','left', true, '60%',true, null, true,true)
+				);
+
+				//Instancia o objeto usuarioinfracoes
+				$this->objUsuarioInfracoes = $MIOLO->GetBusiness($module,'usuarioinfracoes');
+
+				$queryInfracao = $this->objUsuarioInfracoes->ListUsuarioInfracoes($idusuario);
+
+				$datagridInfracao = new DataGrid2($queryInfracao, $columnsInfracao, '',0);
+				$datagridInfracao->SetTitle('Infrações Cadastradas para o Usuário ' . $nome);
+				$datagridInfracao->SetWidth('99.5%');
+
+				$this->AddField(new Spacer(1));
+				$this->AddField($datagridInfracao);
+			}
+
+
+			//Observações
+			if ($tipoUsuario != 'comunidade')
+			{
+				//Montagem do grid com as observações
+				$columnsObs = array(
+					new DataGridColumn('descricao','Observações','left', true, '100%',true, null, true,true)
+				);
+
+				//Instancia o objeto usuarioobservacoes
+				$this->objUsuarioObservacoes = $MIOLO->GetBusiness($module,'usuarioobservacoes');
+
+				$queryObs = $this->objUsuarioObservacoes->ListUsuarioObservacoes($idusuario);
+
+				$datagridObs = new DataGrid2($queryObs, $columnsObs, '',0);
+				$datagridObs->SetTitle('Observações Cadastradas para o Usuário ' . $nome);
+				$datagridObs->SetWidth('99.5%');
+
+				$this->AddField(new Spacer(1));
+				$this->AddField($datagridObs);
+			}
+
+		}
+		else{
+			$MIOLO->Prompt(Prompt::Error("Usuário não foi encontrado.", $MIOLO->GetActionURL($module,$action)));
+		}
+
+	}
+}
+?>

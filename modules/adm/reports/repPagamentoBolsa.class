@@ -1,0 +1,126 @@
+<?php
+class repPagamentoBolsa extends PDFReport
+{
+	var $img;
+	var $timestamp;
+	var $objPagbolsa;
+
+	var $idbolsa;
+	var $mesano;
+	var $folha; //novo atributo
+	private $n;
+
+	function __construct($info)
+	{
+		global $MIOLO, $module, $page, $context, $self, $action, $perms;
+
+		$this->idbolsa = $info['idbolsa'];
+		$this->mesano = $info['mesano'];
+		
+		//modificacoes
+		$this->folha = $info['folha'];
+
+	    $ui = $MIOLO->GetUI();
+		//$this->img = $ui->GetImage('','logonet.png');
+		$this->img = $ui->GetImageSrc('logonet.png');
+		
+	    $columns = array(
+	    	new PDFReportColumn('num','N.','left',true,5,true,null,true),
+	       	new PDFReportColumn('nome','Nome','left',true,40,true,null,true),
+			new PDFReportColumn('cpf','CPF','left',true,14,true,null,true),
+			new PDFReportColumn('idbanco','Banco','right',true,9,true,null,true),
+			new PDFReportColumn('idagenc','Agência','right',true,10,true,null,true),
+			new PDFReportColumn('conta','Conta','right',true,13,true,null,true),
+			new PDFReportColumn('valor','Valor','right',true,11,true,null,true)
+    	);
+        
+		$this->objPagbolsa = $MIOLO->GetBusiness($module,'pagbolsa');
+		
+		//modificacoes
+	    $query = $this->objPagbolsa->ListPagamento($info['idbolsa'],$info['mesano'],$info['folha']);
+		
+	    $query->SetOrder('nome,cpf');
+        $this->n = 1;
+		foreach($query->result as $row)
+		{
+			$nrow[0] = $this->n++;
+			$nrow[1] = $row[0];
+			$nrow[2] = $row[1];
+			$nrow[3] = $row[2];
+			$nrow[4] = $row[3];
+			if( substr($row[4],0,3) == '000')
+			{
+				$nrow[5] = substr($row[4],3);
+			}
+			else
+			{
+				$nrow[5] = $row[4];
+			}
+			$row[5] = number_format(str_replace(',','.',$row[5]),2,',','.');
+			$nrow[6] = $row[5];
+			$data[] = $nrow;
+		}
+		$this->n--;
+
+		parent::__construct($data,$columns,40);
+		$this->SetColumnAttr('num','index',0);
+		$this->SetColumnAttr('nome','index',1);
+	    $this->SetColumnAttr('cpf','index',2);
+		$this->SetColumnAttr('idbanco','index',3);
+	    $this->SetColumnAttr('idagenc','index',4);
+		$this->SetColumnAttr('conta','index',5);
+		$this->SetColumnAttr('valor','index',6);
+		
+		//modificacoes
+		if($this->folha==1)
+		$texto='Normal';
+		elseif ($this->folha==2)
+		$texto='Suplementar';
+		
+		$this->SetTitle('Pagamento de bolsa: '.$info['bolsa'].' - Tipo de Bolsa: '.$texto.' - mes '.$info['mesano']);
+	    $this->SetOption('showTableTitle',1);
+		$this->SetOption('showLines',0);
+	    $this->timestamp = date('d/m/Y'); //G:i
+	}
+		
+	function GeneratePageHeader()
+	{   
+  		$h = $this->pdf->getFontHeight(12);
+
+		$this->pdf->addText(520,800,9,$this->timestamp);
+		$this->pdf->addText(520,800-$h,10,'Página: ' . $this->pn->pageNumber . '/' . $this->pn->pageCount);
+
+		$x00=$this->pdf->left;
+		$hh = $this->pdf->getFontHeight(12);
+		$this->pdf->addText($x00, 800, 12, $this->manager->getConf('instituicao.sigla')." - ".$this->manager->getConf('instituicao.nome'));
+		$this->pdf->addText($x00, 800 - $hh, 12, $this->manager->getConf('theme.system'));
+
+
+/*
+	    $this->pdf->ezImage($this->img,5,50,'none','left');
+    	$this->pdf->addText(90,800,12,'UFJF - Universidade Federal de Juiz de Fora');
+	    $this->pdf->addText(90,800-$h,12,'CGCO - Centro de Gestão do Conhecimento Organizacional');
+	    $this->pdf->addText(90,800-$h-$h,12,'SIGA - Sistema Integrado de Gestão Acadêmica');
+*/
+
+		$this->pdf->addText(90,800-$h-$h-$h,12,'Módulo Administrativo');
+    	$this->pdf->ezSetY(800-$h-$h-$h-$h);
+	}
+
+	function GeneratePageFooter()
+	{
+		if( $this->pn->pageNumber == $this->pn->pageCount )
+		{
+      		$this->pdf->SetStrokeColor(0,0,0); 
+			$this->pdf->ezSetDy(-10);
+      
+			$this->pdf->line(370,$this->pdf->y,570,$this->pdf->y);
+			$this->pdf->line(10,$this->pdf->y,369,$this->pdf->y);
+			$this->pdf->ezSetDy(-15);
+			$this->pdf->addTextWrap(370,$this->pdf->y,200,10,'TOTAL: '. number_format(str_replace(',','.',$this->objPagbolsa->GetValorTotal($this->idbolsa,$this->mesano,$this->folha)),2,',','.'),'right');
+			
+			$this->pdf->addTextWrap(10,$this->pdf->y,200,10,'TOTAL DE BOLSISTAS: '.$this->n,'left');
+		}	
+	}
+}
+?>

@@ -1,0 +1,174 @@
+<?php
+class frmRequisicaoNew extends Form
+{
+    function __construct()
+    {
+        global $history, $page, $MIOLO;
+        $page->setAction($MIOLO->getActionUrl('adm','main:requisicoes:new'));
+        $this->Form('Incluir Nova Requisição');
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+        global $item;
+
+	$uo = $this->manager->getbusiness('adm','uo');
+        $login = $this->manager->getlogin();
+        $idusuario = $login->idkey;
+	$uoRequisitante = $uo->listByUsuario($idusuario);
+        $jaRedirecionou = $this->getFormValue('jaRedirecionou');
+
+        if (count($uoRequisitante->result) == 0)
+        {
+	    $go = $this->manager->GetActionURL('adm','main:requisicoes:find','','');
+            $this->manager->Error("Você não está alocado em nehuma Unidade Orçamentária habilitada a fazer requisições.",$go);
+        }
+        else if ((count($uoRequisitante->result) == 1) && ($jaRedirecionou != "sim"))
+	{
+	    $idUoRequisitante = $uoRequisitante->result[0][0];
+
+	    $go = $this->manager->GetActionURL('adm','main:requisicoes:new','',array("idUoRequisitante"=>trim($idUoRequisitante),"event"=>"btnTipoRequisicao_click","jaRedirecionou"=>"sim"));
+    	    $this->page->Redirect($go);            
+	}
+        else
+        {
+            $fields = array(new Selection('idUoRequisitante','','UO Req.',$uoRequisitante->result));            
+            $this->SetFields($fields);
+
+            $buttons = array(new FormButton('btnTipoRequisicao', 'Enviar'));
+            $this->SetButtons($buttons);
+        }  
+    }
+    
+    function btnTipoRequisicao_click()
+    {
+	$idUoRequisitante = $this->GetFormValue('idUoRequisitante');
+      
+	$requisita = $this->manager->getbusiness('adm','requisita');
+	$tiposDeRequisicao = $requisita->listByUo($idUoRequisitante);
+	$this->setButtonAttr('btnTipoRequisicao','visible',FALSE);
+
+	if (is_array($tiposDeRequisicao->result))
+	{
+	    $this->addField(new Selection('idTipoReq','','Tipo',$tiposDeRequisicao->result));
+	    $this->addField(new HiddenField('jaRedirecionou','sim'));
+	    $this->setFieldAttr('idUoRequisitante','readonly',true);
+	    $this->addButton(new FormButton('btnUoExecutante', 'Enviar'));
+	}
+	else
+	{
+
+	    $this->setFieldAttr('idUoRequisitante','visible',false);
+	    $go = $this->manager->GetActionURL('adm','main:requisicoes:find','','');
+	    $this->manager->Error("Orçamento ainda não definido para esta UO.", $go);
+	}
+    }
+
+    function btnUoRequisitante_click()
+    {
+	$idTipoReq = $this->GetFormValue('idTipoReq');
+         
+	$uo = $this->manager->getbusiness('adm','uo');
+        $login = $this->manager->getlogin();
+        $idusuario = $login->idkey;
+	$uorequisitante = $uo->listbyusuario($idusuario);
+		
+        if (count($uoRequisitante->result) == 1)
+	{
+	    $idUoRequisitante = $uoRequisitante->result[0][0];
+	    $go = $this->manager->GetActionURL('adm','main:requisicoes:new','',array("idTipoReq"=>$idTipoReq,"idUoRequisitante"=>$idUoRequisitante,"event"=>"btnUoExecutante_click","jaRedirecionou"=>"sim"));
+	    $this->page->Redirect($go);            
+	}
+        else
+        {
+	    $this->addField(new Selection('idUoRequisitante','','UO',$uoRequisitante->result));
+	    $this->setFieldAttr('idTipoReq','readonly',true);
+	    $this->setButtonAttr('btnUoRequisitante','visible',FALSE);
+            $this->addButton(new FormButton('btnUoExecutante', 'Enviar'));
+       }
+    }
+
+
+    function btnUoExecutante_click()
+    {
+	$idTipoReq = $this->GetFormValue('idTipoReq');
+	$idUoRequisitante = $this->GetFormValue('idUoRequisitante');
+
+	$requisita = $this->manager->getbusiness('adm','requisita');
+	$tiposDeRequisicao = $requisita->listByUo($idUoRequisitante);
+	if ($idTipoReq == '')
+	{
+	    $this->manager->Error("Você precisa selecionar um tipo de requisição válido!",'');
+	}
+      
+	$uo = $this->manager->GetBusiness('adm','uo');
+	$login = $this->manager->GetLogin();
+
+	$idUsuario = $login->idkey;
+	$uoRequisitante = $uo->listByUsuario($idUsuario);		
+
+	switch ($idTipoReq)
+	{
+	    case 8:
+		$uoExecutante = $uo->listAlmoxExecutores($idUoRequisitante);
+		break;
+	    
+	    default:
+		$uoExecutante = $uo->listByTipoReq($idTipoReq);
+		break;
+	}
+
+	if (count($uoExecutante->result) == 1)
+	{			
+	    $idUoExecutante = $uoExecutante->result[0][0];
+	
+	    $go = $this->manager->GetActionURL('adm','main:requisicoes:new','',array("idTipoReq"=>$idTipoReq,"idUoRequisitante"=>$idUoRequisitante,"idUoExecutante"=>$idUoExecutante,"event"=>"btnNew_click","jaRedirecionou"=>"sim"));
+
+	    $this->page->Redirect($go);            
+	}elseif(($idTipoReq!=8) and (count($uoExecutante->result) == 0)){
+		$action=$this->manager->GetActionURL('adm','main:requisicoes:find');
+		$this->manager->Information('Entre em contato com o adminitrador da UO, pois falta informar os tipos de execuções para esta UO.', $action);	
+	}
+	else
+	{
+
+	    $this->addField(new Selection('idTipoReq',$idTipoReq,'Tipo',$tiposDeRequisicao->result));
+
+	    $this->addField(new Selection('idUoExecutante','','Executor',$uoExecutante->result));
+
+	    $this->setFieldAttr('idTipoReq','readonly',true);
+	    $this->setFieldAttr('idUoRequisitante','readonly',TRUE);
+	    
+	    $this->setButtonAttr('btnUoRequisitante','visible',FALSE);
+	    $this->setButtonAttr('btnTipoRequisicao','visible',FALSE);
+	    $this->addButton(new FormButton('btnNew', 'Enviar'));
+	}
+    }
+
+    function btnNew_click()
+    {
+        $data = $this->GetData();
+        $data->idUoRequisitante = $this->getFormValue('idUoRequisitante');
+        $data->idUoExecutante = $this->getFormValue('idUoExecutante');
+        $data->idTipoReq = $this->getFormValue('idTipoReq');
+
+        $requisicao = $this->manager->GetBusiness('adm','requisicao');
+		$requisicao->SetData($data);
+        $login = $this->manager->GetLogin();
+		$usuario = $this->manager->GetBusiness('common','usuario');
+		$usuario->GetById($login->idkey);
+ 
+        $uo = $this->manager->GetBusiness('adm','uo');      
+        $uo->getById($data->idUoRequisitante);
+
+	        $requisicao->status = 1;
+            $requisicao->idUsuarioRequisitante = $login->idkey;
+            $requisicao->dataHora = date("d/m/Y H:i:s");
+            $requisicao->save();
+            
+            $go = $this->manager->GetActionURL('adm','main:requisicoes',$requisicao->idRequisicao,array("form"=>"item","tipoReq"=>$requisicao->idTipoReq));
+            $this->page->Redirect($go);      
+    }
+}
+?>

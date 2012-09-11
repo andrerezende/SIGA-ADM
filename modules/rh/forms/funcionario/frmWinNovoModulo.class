@@ -1,0 +1,163 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmWinNovoModulo extends MFormAjax
+{
+    var $ids;
+    var $capacitacao;
+	function __construct($idd)
+    {
+       global $MIOLO, $module, $page, $context, $self;
+       $this->ids = explode('_',$idd);
+       $idHist = array_pop($this->ids);
+        $MIOLO->page->AddJsCode(file_get_contents(dirname(__FILE__) . '/js/frmFuncionarioCapacitacao.js'));
+       $histCapacitacao = $MIOLO->getBusiness('rh','histcapacitacao');
+	   $objHist = $histCapacitacao->getById($idHist);
+       $this->capacitacao = $objHist;
+       parent::__construct('Incluir Novo Módulo');
+       //  var_dump($this->id);
+      // $this->SetClose($MIOLO->GetActionURL('rh','main:funcionario','11486813', array('form'=>'capacitacoes')));
+       $this->eventHandler();
+	}
+
+    function createFields()
+	{
+        global $MIOLO , $module, $self, $action, $context;
+        // include the client (javascript) code for AJAX in the page
+        $url = $this->manager->getActionURL('rh','modules:forms:funcionario:js:frmFuncionarioCapacitacao.js');
+        $this->page->addScriptURL($url);
+        
+        $idCurso = array_shift($this->ids);
+
+
+        $cursocapacitacao = $MIOLO->getBusiness('rh','capacitacaocurso');
+		$curso = $cursocapacitacao->getById($idCurso);
+        $modulos = $curso->getModulos();
+
+
+       // var_dump("--------------");
+        $modulosPersistidos = $this->ids;
+        $cont = 0;
+        foreach($modulos as $mod){
+               if(!in_array($mod->idmodulo,$modulosPersistidos)){
+                 $t = 'escolha'.$cont;
+                 $aa[] = array(new MCheckBox($t,$mod->cargahoraria.'&'.$mod->idmodulo,'','',''),$mod->nome,$mod->dataInicio,$mod->datafim,$mod->cargahoraria);
+                 $cont++;
+               }
+        }
+
+        $array[] = array('<b>Escolha</b>','<b>Módulo</b>','<b>Data Início</b>','<b>Data Fim</b>','<b>Carga Horária</b>');
+        if($cont == 0){
+            $this->addJSCode("javascript:alert('Não há mais módulos a inserir para esse curso!');miolo.getWindow('winWindow').close();");
+        }
+        for($i=0;$i<$cont;$i++){
+            $array[] = $aa[$i];
+        }
+        
+        $btnOk = new MButton('botaoEscolha','Confirmar',"ajaxEscolha.call();");
+        $array[] = $btnOk;
+
+
+
+         $fields = array(
+           //$fldDescricao =  new TextField('edtDescricao','','Nome do curso:',40),
+     	   new MTextField('nome',$curso->nome,'Nome do Curso:'),
+           $tblZebra = new MTableRaw('',$array),
+
+           $fldCargaHoraria = new TextField('edtCargaHoraria','','Carga Horária',4,''),
+           new MHiddenField('idsModulos'),
+            $hd = new MHiddenField('esc',$cont),
+         );
+         
+        $tblZebra->setAlternate(true);
+	    $this->addFields($fields);
+        $btnPost = new MButton('btnPost', 'Inserir Módulo');
+        $buttons = array( $btnPost );
+        $this->setButtons( $buttons );
+        $this->setFieldAttr('edtCargaHoraria','readonly',true);
+        $validator = array(
+            new MCompareValidator('idsModulos','Escolhas','!=','','s','required'),
+		);
+        $this->SetValidators($validator);
+	}
+
+   function GetData($modulo)
+	{
+        $data = new FormData();
+        $data->idcurso = $this->capacitacao->idcurso;
+        $data->idmodulo = $modulo;
+		return $data;
+	}
+
+    function btnPost_click()
+    {
+        global $MIOLO, $module, $self, $action;
+
+         $idsAPersistir = explode("*",$this->getFieldValue('idsModulos'));
+        // var_dump($idsAPersistir);
+         $this->capacitacao->beginTransaction();
+         if(count($idsAPersistir)>1){
+
+           $check = false;
+           for($i=0;$i<count($idsAPersistir);$i++){
+              if($idsAPersistir[$i]!=''){
+                $this->capacitacao->SetData($this->GetData($idsAPersistir[$i]));
+
+                try
+	            {
+                    $this->capacitacao->setpersistent(false);
+	                $this->capacitacao->save();
+
+                    $check = true;
+                 }
+                 catch (Exception $e)
+                 {
+     	    	     $this->manager->error($e->getMessage());
+                     break;
+		        }
+              }
+		   }
+		 } else {
+            $this->capacitacao->SetData($this->GetData($this->getFieldValue('idsModulos')));
+            try
+	            {
+	                $this->capacitacao->save();
+                    $check = true;
+
+                 }
+                 catch (Exception $e)
+                 {
+     	    	       $this->manager->error($e->getMessage());
+    	         }
+
+		 }
+		 $this->capacitacao->endTransaction();
+//
+		if ($check){
+		    // $go = $MIOLO->GetActionURL('rh','main:funcionario',$this->capacitacao->idFuncionario, array('form'=>'capacitacoes'));
+             $MIOLO->Information('Dados de Capacitação atualizados com sucesso.','NONE');
+//            $this->addJsCode("javascript:miolo.getWindow(winWindow)");
+
+         }
+
+    }
+
+
+}
+?>

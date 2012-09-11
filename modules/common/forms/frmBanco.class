@@ -1,0 +1,178 @@
+<?
+class frmBanco extends Form
+{
+	var $objBanco;
+
+	function __construct()
+	{
+		global $MIOLO, $module, $self;
+
+		$this->objBanco = $MIOLO->GetBusiness($module,'banco');
+
+		parent::Form("Banco");
+		$this->EventHandler();
+	}
+
+	function CreateFields()
+	{
+		global $MIOLO, $module, $self, $action;
+
+		$fields = Array(
+			new LookupTextField('lkpBanco','','Nome',30),
+			new TextField('txtCodigo','','Código',10),
+			new HiddenField('key',''),
+		);
+
+		$this->SetFields($fields);
+		
+		$validators = array(
+        	new RegExpValidator('lkpBanco','','[A-Za-z0-9_]+','required'),
+			new MaskValidator('txtCodigo','', '999','required')
+		);
+
+		$this->SetValidators($validators);
+	
+		$this->SetFieldAttr('lkpBanco','module','common');
+		$this->SetFieldAttr('lkpBanco','item','banco');
+		$this->SetFieldAttr('lkpBanco','event', 'btnEdit:click');
+
+		$buttons = Array
+		(
+			new FormButton('btnPost', 'Enviar'),
+			new FormButton('btnNew', 'Novo', $action),
+			new FormButton('btnDelete', 'Excluir'),
+		);
+
+		$this->SetButtons($buttons);
+
+		$this->SetButtonAttr('btnDelete','visible',false);
+		$this->SetButtonAttr('btnNew','visible',false);
+
+		$this->SetClose($MIOLO->GetActionURL($module,$self));
+	}
+
+	function GetData()
+	{
+	    $data = new FormData();
+		$data->idbanco = $this->GetFieldValue('txtCodigo');
+		$data->nome = strtoupper($this->GetFieldValue('lkpBanco'));
+    	return $data;
+	}
+
+	function SetData($data)
+	{
+		$this->SetFieldValue('lkpBanco', $data->nome);
+		$this->SetFieldValue('txtCodigo', $data->idbanco);
+	}
+
+	function btnEdit_click($key='')
+	{
+		global $MIOLO, $module, $item, $self, $action;
+
+		$item = ($key != '') ? $key : $item;
+			
+		$objBanco = $this->objBanco;
+		if ($objBanco)
+		{
+			if($item!='')
+			{
+				$this->SetFieldValue('key',$item);
+
+				$this->SetData($objBanco->GetById($item));
+			}
+			
+			$this->SetButtonAttr('btnNew','label','Cancelar');
+			$this->SetButtonAttr('btnNew','visible',true);
+			
+			$this->SetFieldAttr('txtCodigo','readonly',true);
+
+			$this->SetButtonAttr('btnDelete','visible',true);
+			
+			$this->AddError( $objBanco->GetErrors() );
+		}
+	}
+	
+	function btnPost_click()
+	{
+		global $MIOLO, $module, $self, $action;
+
+		$objBanco = $this->objBanco;
+
+		if ( $objBanco )
+		{
+			$data = $this->GetData();
+			$objBanco->SetData($data);
+		 
+			if( ($this->GetFieldValue('lkpBanco')!= '') && ($this->GetFieldValue('txtCodigo')!= '') )
+			{
+				$is_update = ($this->GetFieldValue('key') != '');
+				if ( $is_update )
+				{
+					$ok = $objBanco->Update();
+				}
+				else
+				{
+					$ok = $objBanco->Insert();
+				}
+				if ( $ok )
+				{
+					$MIOLO->Information('Operação realizada com sucesso.', $action );
+					return true;
+				}
+				else
+				{
+					$MIOLO->Error("Não foi possivel inserir Banco.<br>Banco já cadastrado.",$action);
+					return;
+				}
+			}
+			else
+			{
+				$MIOLO->Error("Campo não imformado!",$action);
+				return;
+			}
+
+			$this->AddError($objBanco->GetErrors());
+		}
+	}
+
+	function btnNew_click()
+	{
+		$this->SetData();
+	}
+
+	function btnDelete_click()
+	{
+		global $MIOLO, $module, $item, $self, $action;
+
+		$item = ($item!='') ? $item : $this->GetFieldValue('key');
+		
+		$MIOLO->Assert( isset($item), 'Código do Banco não foi informado!', $action);
+		$objBanco = $this->objBanco;
+		
+		$objBanco->GetById($item);
+		
+		$conf = $this->GetFormValue('conf');
+		if ( $conf == 'sim')
+		{
+			if ( $objBanco->Delete() )
+			{
+				$MIOLO->Prompt(Prompt::Information("Banco excluído com sucesso.",$action));
+			}
+			else
+			{
+				$MIOLO->Prompt(Prompt::Information( $objBanco->GetErrors(),$action));
+			}
+		}
+		elseif ( $conf == 'nao')
+		{
+			$MIOLO->Prompt(Prompt::Information('Exclusão cancelada.',$action));
+		}
+		else
+		{
+			$action_sim = $MIOLO->GetActionURL($module,$self,$item, array('event'=>'btnDelete:click','conf'=>'sim'));
+			$action_nao = $MIOLO->GetActionURL($module,$self,$item, array('event'=>'btnDelete:click','conf'=>'nao'));
+			$MIOLO->Prompt(Prompt::Question("Confirma a exclusão da agência {$objBanco->nome} ?",$action_sim, $action_nao));
+		}
+	}
+}
+?>

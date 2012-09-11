@@ -1,0 +1,126 @@
+<?
+MIOLO::Import('modules::protocolo::controls::linkprocessovago');
+class frmProcessosVagos extends MForm
+{
+    var $oid;
+    var $Busca;
+    var $Controle;
+   
+
+    function __construct($objBusca)
+    {
+        global $MIOLO, $page, $module, $self;
+        $this->Busca = $objBusca;
+        $this->Controle = $objControle;
+        parent::__construct();
+        $this->SetClose($this->manager->GetActionURL('protocolo','main'));
+        $this->SetTitle('Processos Vagos');
+        $this->SetIcon($this->manager->GetUI()->GetImage('','lupa.gif'));
+    }
+
+    public function CreateFields()
+    {
+        
+    	global $MIOLO, $page, $module, $self;
+    	$Busca = $this->Busca;
+      Util::SetIfNull($this->oid, $Busca->numBusca);
+      $ui = $this->manager->GetUI();
+	   
+    	$fields = Array (
+			new CheckBox('chkBoxAno','1','Ano corrente: ',true,' '.date(Y)),
+			new TextField('edtAno','','Outro Ano: ',4,'Formato ####'),
+			);
+
+		
+      $this->SetFields($fields);
+				            
+      $this->edtAno->addAttribute('maxlength','20');
+        	
+						
+      // BotÃµes que aparecem no formulário
+      $buttons = Array(
+        new FormButton('btnConsulta', 'Consulta'),
+        new MButton('btnVoltar', 'Voltar',$MIOLO->GetActionURL($module,$self)),
+        new FormButton('btnGerarPDF', 'Imprimir Resultado','PDF'),
+      );
+
+      //Insere os Botões
+      $this->SetButtons($buttons);
+		
+      $this->SetButtonAttr('btnVoltar','visible',false);
+      $this->SetButtonAttr('btnGerarPDF','visible',false);
+		
+										
+      $this->EventHandler();		
+   }
+    
+    
+   public function btnConsulta_click()
+   {	
+   		
+   		global $MIOLO, $page, $module, $self, $item, $context, $action;  
+   		$ui = $this->manager->GetUI();
+      $this->Busca = $MIOLO->GetBusiness($module,'busca');
+      $this->Controle = $MIOLO->GetBusiness($module,'controleprotocolo');
+   		$Busca = $this->Busca;
+   		$Controle = $this->Controle;
+      $data = $this->getData();       
+      $this->SetButtonAttr('btnVoltar','visible',true);
+      if ( $data->chkBoxAno )
+      {
+      	$anox = date(Y).'000000';
+      	$anoy = date(Y).'050000';     	        	
+      }
+      else 
+      {
+      	$anox = $data->edtAno.'000000';
+      	$anoy = $data->edtAno.'050000';        	 	
+      }
+      $processos = $Busca->GetProcessos($anox,$anoy);
+      $processos_vagos = array();   
+      
+      $dataprocesso = $Busca->dataFormatada($processos->result[0][1]);
+      $data = $processos->result[0][1];
+       
+      if ($processos->result)
+      {       
+        if ($processos->result[0][0] != substr($anox,0,9).'1');
+        {
+       		 $msg_tst = $MIOLO->login->idkey;
+        	$objints = $this->manager->GetBusiness('protocolo','processo');
+        	$uasg = $objints->getUASG($msg_tst);
+        	$instituicao = $uasg->fields('uasg');
+       		$processo = $processos->result[0][0];
+       		settype($processo,"integer");
+       		$inicio = substr($anox,0,9).'1';
+       		settype($inicio,"integer");
+            
+       		for ($j=$inicio;$j<$processo;$j++)
+       		{
+            	array_push($processos_vagos, array($j.$Controle->getCodigo("$j","$instituicao").'@'.$data,$dataprocesso));
+            //array_push($processos_vagos, array($j.$Controle->getCodigo("$j","23059").'@'.$data,$dataprocesso)); 		
+       		}
+       	}
+                                
+           
+         foreach ($processos->result as $n=>$processo)
+         {
+        	        	       	  	        	
+        		$dataprocesso = $Busca->dataFormatada($processos->result[$n][1]);
+        		$data = $processos->result[$n][1];
+        	        	    	        				
+        		for ($i=$processos->result[$n][0]+1;$i<$processos->result[$n+1][0];$i++) 
+        		{        			  	
+        			array_push($processos_vagos, array($i.$Controle->getCodigo("$i","$instituicao").'@'.$data,$dataprocesso));   			   			    		        		    
+        			//array_push($processos_vagos, array($i.$Controle->getCodigo("$i","23059").'@'.$data,$dataprocesso));   			   			    		        		    
+        		}  
+        		
+         }
+      } 
+
+     //Grid
+	   $this->AddField($ui->GetGrid("protocolo",'gridProcessosVagos', $processos_vagos));    
+        	    
+   }   	           
+}
+?>

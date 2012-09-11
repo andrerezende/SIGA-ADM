@@ -1,0 +1,8 @@
+<?
+
+	//$theme->ClearContent();
+	$ui = $MIOLO->GetUI();
+	$form = $ui->GetForm($module,'frmListarVencedoresDefinidos',null,'licitacoes');
+	$theme->InsertContent($form);
+
+?>

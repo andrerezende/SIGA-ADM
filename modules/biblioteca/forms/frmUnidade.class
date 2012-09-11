@@ -1,0 +1,237 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?
+class frmUnidade extends Form
+{
+
+	var $objUnidade;
+
+    function frmUnidade()  // construtor da Classe
+    {
+		global $MIOLO,$module;
+
+		// Título do Formulário
+		$this->Form('Unidades da Biblioteca');
+
+		//Chama o CreateFileds, etc.
+		$this->EventHandler();
+
+		// Botão "enviar" (incluir) não aparece
+		$this->defaultButton = false;
+		
+		// Botão 'fechar', direcionando para o handler biblioteca/main/admin
+		$this->SetClose($this->manager->GetActionURL($module, 'main:admin'));
+			 
+	}
+   
+    function CreateFields()
+    {
+        // Campos que aparecem no formulário
+        $fields = Array (
+                //new Text('','Use o formulário abaixo para cadastrar uma nova unidade da biblioteca'),
+                new LookupTextField('lkpDescricao','','Descrição',60),
+                new TextField('edtMnemonico','','Mnemônico',20),
+                new HiddenField('hidKey') // controla Incluir/Editar
+                );
+
+        // Insere os campos
+        $this->SetFields($fields);
+        
+        // Botões que aparecem no formulário
+        $buttons = Array(
+                new FormButton('btnEnviar', 'Incluir'),
+                new FormButton('btnExcluir', 'Excluir'),
+                //new FormButton('btnList', 'Relação'),
+                new MLink('btnLinkRelacao','Relação de Unidades',$this->manager->getActionURL($module,$self,'',array('event'=>'btnList:click'))),
+        );
+
+        //Insere os Botões
+        $this->SetButtons($buttons);
+
+        //As 4 propriedades de um lookup
+        // module = módulo usado
+        // item = A funcao que chama no arquivo classes/lookup.class
+        // event = O evento relacionado quando o usuário clica em "acao"
+        // related = Os campos retornados após a ação
+        $this->SetFieldAttr('lkpDescricao','module','biblioteca');
+        $this->SetFieldAttr('lkpDescricao','item','unidade');
+        $this->SetFieldAttr('lkpDescricao','event','btnConsulta:click');
+        $this->SetFieldAttr('lkpDescricao','related', 'idunidade');
+
+        // Botão excluir nao aparece, pois o formulário está em branco
+        $this->SetButtonAttr('btnExcluir','visible',false);
+
+        // validators
+        $this->AddValidator(new RequiredValidator('lkpDescricao'));
+        $this->AddValidator(new RequiredValidator('edtMnemonico'));
+        
+        
+                
+   }
+
+	// pega os dados que estão no formulário   
+    function GetData()
+    {
+	    $data = new FormData();
+        $data->descricao = $this->GetFieldValue('lkpDescricao');
+        $data->mnemonico = $this->GetFieldValue('edtMnemonico');
+        $data->idunidade = $this->GetFieldValue('hidKey');
+		return $data;
+    }
+
+	
+	// usada para inserir valores no formulário
+	function SetData($data)
+	{
+		$this->SetFieldValue('lkpDescricao',$data->descricao);
+		$this->SetFieldValue('edtMnemonico',$data->mnemonico);
+		$this->SetFieldValue('hidKey',$data->idunidade);
+	}
+
+	// Consulta: função chamada após o usuário usar o lookup
+	function btnConsulta_click($sender,$idunidade)
+	{ 
+		global $MIOLO,$module,$item;
+
+		//A linha abaixo verifica se existe um idunidade
+		//Se nao existir, ela tenta pegar $item que é passada
+		//pelo botao editar do "relação"
+		$idunidade = ($idunidade != '') ? $idunidade : $item;
+	
+		// Já considera que o usuário quer excluir,editar uma unidade
+		$this->SetButtonAttr('btnExcluir','visible',true);	
+ 		$this->SetButtonAttr('btnEnviar','label','Salvar');	
+
+		//Instancia o objeto unidade
+	    $this->objUnidade = $MIOLO->GetBusiness($module,'unidade');
+
+		// ok retorna os dados de idunidade
+		$ok = $this->objUnidade->GetByCodigo($idunidade);	
+
+		// este é o setdata deste arquivo. não é o setdata da classe de negócios
+		// veja que é $this->SetData e nao $this->objUnidade->SetData
+		$this->SetData($ok);	
+				
+	}
+
+	// Enviar pode ser inserir ou editar
+	function btnEnviar_click()
+	{ global $MIOLO,$module,$action;
+	
+		$data = $this->GetData();
+
+		 //Instancia o objeto unidade
+	    $this->objUnidade = $MIOLO->GetBusiness($module,'unidade');
+
+		if ( $data->idunidade )
+		{ // Usuário quer editar um item
+
+			$what = " atualizado ";
+
+			$ok = $this->objUnidade->Update($data);
+            $this->objUnidade->Log(OP_UPD,'Alterada a unidade '.$data->descricao.' com o id = '.$data->idunidade);
+				
+		}
+		else
+		{ // Usuário quer inserir novo item
+
+			$what = " inserido ";
+
+			// verificar se já existe idunidade
+			$ok = $this->objUnidade->Insert($data);
+            $this->objUnidade->Log(OP_UPD,'Inserida a unidade '.$data->descricao.' com o id '.$ok);
+
+		}
+
+		if ( $ok )
+		{
+			$MIOLO->Prompt(Prompt::Information($data->mnemonico . " $what com sucesso.", $MIOLO->GetActionURL($module,$action) ));
+		}
+		else
+			$MIOLO->Error("'" . $data->mnemonico  . "' não foi $what. ", $MIOLO->GetActionURL($module,$action) );
+
+	}
+
+
+	function btnExcluir_click()
+	{ 
+		global $MIOLO, $module, $item, $action;
+		
+	    $data = $this->GetData();
+
+		 //Instancia o objeto unidade
+	    $this->objUnidade = $MIOLO->GetBusiness($module,'unidade');
+
+	   //A linha abaixo verifica se existe um data->idunidade
+       //Se nao existir, ela tenta pegar $item que é passada
+       //pelo botao editar do "relação"
+	   if (!($data->idunidade))
+	   {
+		 $this->objUnidade->GetByCodigo($item);
+		 $data = $this->objUnidade->GetData();
+	   }
+
+       $ok = $this->objUnidade->Delete($data);
+       $this->objUnidade->Log(OP_DEL,'Deletada a unidade '.$data->descricao.' com o id = '.$data->idunidade);
+	   if ( $ok )
+			$MIOLO->Information($data->mnemonico . " deletado da base de dados", $MIOLO->GetActionURL($module,$action,'',array('event'=>'btnList_click')) );
+	   else
+			$MIOLO->Error("As informações não foram deletadas", $MIOLO->GetActionURL($module,$action,'',array('event'=>'btnList_click')) );
+
+	}
+
+	function btnList_click()
+	{
+		global $MIOLO, $module, $self, $theme, $action, $page;
+
+		$columns = array(
+			new DataGridColumn(null),
+			new DataGridColumn('descricao','Descrição','left',true, '50%',true, null, true,true),
+			new DataGridColumn('mnemonico','Mnemonico','center', true, '50%',true, null, true,true)
+			);
+
+		$href_datagrid = $MIOLO->GetActionURL($module,$self,'', Array('event'=>'btnList_click'));
+		$page->SetAction($href_datagrid);
+
+		 //Instancia o objeto unidade
+	    $this->objUnidade = $MIOLO->GetBusiness($module,'unidade');
+
+		$query = $this->objUnidade->ListUnidade();
+		
+		$datagrid = new DataGrid2($query, $columns, $href_datagrid,20);
+		$datagrid->SetTitle('Relação de Unidades');
+		$datagrid->SetLinkType('linkbutton');
+		$datagrid->SetWidth('100%');
+		$href_edit = $MIOLO->GetActionURL($module,$self,'%0%',Array('event'=>'btnConsulta:click'));
+		$href_dele = $MIOLO->GetActionURL($module,$self,'%0%',Array('event'=>'btnExcluir:click'));
+		
+		$datagrid->AddActionIcon('Editar', 'edit', $href_edit);
+		$datagrid->AddActionIcon('Excluir', 'delete.gif', $href_dele);
+		$datagrid->HeaderLink('new', 'Novo Registro',
+		
+		$MIOLO->GetActionURL($module,$self,'',Array('event'=>'')));
+
+		$theme->InsertContent($datagrid);
+	
+	}
+
+}
+
+?>

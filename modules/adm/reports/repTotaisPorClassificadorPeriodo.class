@@ -1,0 +1,143 @@
+<?php
+class repTotaisPorClassificadorPeriodo extends PDFReport
+{
+	var $img;
+	var $timestamp;
+	var $objItemPatrimonio;
+
+	function __construct()
+	{
+        global $MIOLO, $module, $page, $context, $self, $action, $perms;
+
+        parent::__construct(NULL, NULL, 55);
+        $ui = $MIOLO->GetUI();
+		$this->img = $ui->GetImageSrc('logo_siga.png',$module); 
+        //        $this->SetPDF(new ezPDFReport('2'));
+        $this->timestamp = date('d/m/Y G:i');
+        //        $this->SetTrigger('AfterNewPage','repMultiLevel2','AfterNewPage', $this);
+        $this->pdf->ezStartPageNumbers(520, 800, 12, 'rigth', 'Página: {PAGENUM}');
+        $this->pdf->ezSetMargins(100, 30, 30, 30);
+        $this->GeneratePageHeader();
+        $this->GeneratePageFooter();
+		$this->SetOption('fontSize',9);
+
+		$dataInicial = Form::GetFormValue('dataInicial');
+		$dataFinal = Form::GetFormValue('dataFinal');
+		$this->objItemPatrimonio = $MIOLO->GetBusiness($module,'itempatrimonio');
+
+		//montagem do array de dados
+		//$data0 = [0-subelemento, 1-idclassificador, 2-descricao, 3-quant, 4-total]
+		$data = $this->objItemPatrimonio->RepTotaisPorClassificadorPeriodo($dataInicial, $dataFinal);
+		$soma11 = 0;
+		$soma12 = 0;
+		for($d = 0; $d < count($data); $d++)
+		{
+			$soma11 += $data[$d][3];//quantidade
+			$soma12 += floatval(str_replace(',','.',$data[$d][4]));//valor
+			$data[$d][4] = number_format(str_replace(',','.',$data[$d][4]),2,',','.');
+		}
+		$summary1 = array(array(
+			"<b>Total Geral:</b>",
+			"<b>$soma11</b>",
+			"<b>" . number_format(str_replace(',','.',$soma12),2,',','.') . "</b>"
+		));
+
+		// define as colunas
+		$columns = array(
+			new PDFReportColumn('det0', '<b><i>SE</i></b>', 'center', false, 6, true),
+			new PDFReportColumn('det1', '<b><i>Código</i></b>', 'center', false, 8, true),
+			new PDFReportColumn('det5', '<b><i>Descrição</i></b>', 'left', false, 64, true),
+			new PDFReportColumn('det8', '<b><i>Qte</i></b>', 'center', false, 7, true),
+			new PDFReportColumn('det9', '<b><i>Valor Total</i></b>', 'right', false, 15, true),
+		);
+
+		$sum1 = array(
+			new PDFReportColumn('texto0', 'texto0', 'right', false, 78, true),
+			new PDFReportColumn('texto1', 'texto1', 'center', false, 7, true),
+			new PDFReportColumn('texto2', 'texto2', 'right', false, 15, true),
+		);
+
+		// Largura do report, em %
+		$this->SetWidth(100);
+
+		// registra as colunas de detalhes e summary
+		$this->SetColumns($columns);
+		$colDetail = $this->columns;
+		$this->SetColumns($sum1);
+		$colSum1 = $this->columns;
+
+		// gera o report
+		$this->SetOption('showHeadings', 1);
+		$this->SetOption('showLines', 0);
+		$this->columns = $colDetail;
+		$this->GenerateData($data);
+		$this->SetOption('showHeadings', 0);
+		$this->SetOption('showLines', 1);
+
+		$this->columns = $colSum1;
+		$this->GenerateData($summary1);
+	}
+
+	function GeneratePageHeader()
+	{
+		$dataInicial = Form::GetFormValue('dataInicial');
+		$dataFinal = Form::GetFormValue('dataFinal');
+		$x0 = $this->pdf->left-5;
+		$x1 = $this->pdf->right-5;
+		$h = $this->pdf->getFontHeight(12);
+		$header = $this->pdf->openObject();
+		$this->pdf->saveState();
+
+		$x00=$this->pdf->left;
+		$hh = $this->pdf->getFontHeight(12);
+		$this->pdf->addText($x00, 800, 12, $this->manager->getConf('instituicao.sigla')." - ".$this->manager->getConf('instituicao.nome'));
+		$this->pdf->addText($x00, 800 - $hh, 12, $this->manager->getConf('theme.system'));
+
+/*
+		$this->pdf->addPngFromFile($this->img, $x0, 780, 50, 25);
+		$this->pdf->addText($x0 + 60, 800, 12, 'UFJF - Universidade Federal de Juiz de Fora');
+		$this->pdf->addText($x0 + 60, 800 - $h, 12, 'Patrimônio da Universidade Federal de Juiz de Fora');
+		$this->pdf->addText($x0 + 60, 800 - $h - $h, 12, 'SIGA - Sistema Integrado de Gestão Acadêmica');
+*/
+
+		$this->pdf->SetStrokeColor(0, 0, 0);
+		$y = 800 - $h - $h - 5;
+		$this->pdf->line($x0, $y, $x1, $y);
+		$this->pdf->addText($x0, $y - 13, 12, "Relatório com Totais por Classificadores no Período de $dataInicial a $dataFinal");
+		$this->pdf->line($x0, $y - 15, $x1, $y - 15);
+		$this->pdf->restoreState();
+		$this->pdf->closeObject();
+		$this->pdf->addObject($header, 'all');
+		$this->pdf->ezSetDy(+15);
+	}
+
+	function GeneratePageFooter()
+	{
+		$x0 = $this->pdf->left;
+		$x1 = $this->pdf->right;
+		$footer = $this->pdf->openObject();
+		$this->pdf->saveState();
+		$this->pdf->SetStrokeColor(0, 0, 0);
+		$this->pdf->line($x0, 28, $x1, 28);
+		$this->pdf->addText($x0, 19, 9, $this->timestamp . ' - CGCO/DSI');
+		$this->pdf->restoreState();
+		$this->pdf->closeObject();
+		$this->pdf->addObject($footer, 'all');
+	}
+
+	function GenerateData($data)
+	{
+		$this->pdf->ezSetDy(-5);
+		$this->SetData($data);
+		$this->rawdata = $this->GenerateTableData();
+		$this->GenerateBody($this->rawdata);
+	}
+
+	function Generate()
+	{
+		$this->SetOutput();
+		$this->Execute();
+	}
+
+}
+?>

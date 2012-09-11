@@ -1,0 +1,82 @@
+<?
+class frmRepOrdemEntrega extends Form
+{
+	var $objBolsa;
+
+	function frmRepOrdemEntrega()
+	{
+		global $MIOLO, $module, $self, $page;
+
+		$this->Form('Relatório de Ordem de Entrega');
+		$this->EventHandler();
+	}
+
+	function CreateFields()
+	{
+		global $MIOLO, $action,$auth, $module;
+
+		// identifica o idsetor (almoxarifado) do operador
+		$login = $MIOLO->GetLogin();
+		$usuario = $MIOLO->GetBusiness('common','usuario');
+		$usuario->GetById($login->idkey);
+		$idsetoralmox = $usuario->GetSetorProvimento();
+		
+		$fields = Array(
+			new LookupTextField('numeroordem','','Número da Ordem',10,'Digite o número da Ordem de Entrega.'),
+			new HiddenField('idsetoralmox',$idsetoralmox)
+		);
+		$this->SetFields($fields);
+		$this->SetFieldAttr('numeroordem','module',$module);
+		$this->SetFieldAttr('numeroordem','item','OrdemEntrega');
+		$this->SetFieldAttr('numeroordem','event','btnGerarRelatorio:click');
+		$this->SetFieldAttr('numeroordem','filter','idsetoralmox,numeroordem');
+		
+		$login = $auth->GetLogin();
+
+		$buttons = Array
+		(
+			new FormButton('btnGerarRelatorio', 'Gerar Relatório','PDF')
+		);
+		$this->SetButtons($buttons);
+		$this->SetButtonAttr('btnGerarRelatorio','visible',false);
+		
+	}
+
+	function btnGerarRelatorio_click($key='')
+	{
+		global $MIOLO,$module,$item;
+	
+		// identifica o idsetor (almoxarifado) do operador
+		$login = $MIOLO->GetLogin();
+		$usuario = $MIOLO->GetBusiness('common','usuario');
+		$usuario->GetById($login->idkey);
+		$idsetoralmox = $usuario->GetSetorProvimento();
+
+		$item = ($key != '') ? $key : $item;		
+		$numero = $this->GetFormValue('lkpLicitacao');
+
+		$numeroOrdem = $this->GetFieldValue('numeroOrdem');
+
+		//O valor de item vem do formulário de consolidação de requisições
+		if (!$numeroOrdem)
+			$numeroOrdem = $item;
+		
+		$objRequisicao = $MIOLO->GetBusiness($module,'requisicao');
+		
+		$idordement = $objRequisicao->GetIdOrdemByNumeroESetor($numeroOrdem,$idsetoralmox);
+		
+
+		// VER COM O LUIS !!!
+		//
+		//Muda i status da requisição para impressa.
+		//$status = "8";		
+		//$objRequisicao->SetStatus($status)
+		
+		$ui = $MIOLO->GetUI();
+
+	  	$report = $ui->GetReport($module,'repOrdemEntrega',array('idsetoralmox'=>$idsetoralmox,'idordement'=>$idordement));
+
+  		$report->Generate();	
+	}	
+}
+?>

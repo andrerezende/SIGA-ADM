@@ -1,0 +1,115 @@
+<?php
+MIOLO::Import('modules::protocolo::controls::linkprocesso');
+class gridProcessos extends MDataGrid2 {
+
+	protected $processo;
+	protected $perms;
+	//10-04-2012 - Tiago Macedo
+	public $query;
+	//function __construct() {
+        // 21-10-2011 - Daniel Bonfim
+        function __construct($data = null) {
+		global $MIOLO, $module, $page, $context, $self, $action, $perms, $state;
+
+		$href_grid = $MIOLO->GetActionURL($module,$self,'', Array('event'=>'btnList_click'));
+		$linkprocesso = new LinkProcesso('linkprocesso','%0%');
+		$this->processo = $MIOLO->GetBusiness('protocolo','processo');
+		$this->perms  = $MIOLO->getPerms();
+
+		$descricao = Form::GetFormValue('busca');
+//		$setor = Form::GetFormValue('listaPor');
+//		$acompanhar  = Form::GetFormValue('acompanhar');
+
+		//Se nenhuma situação do processo foi escolhida,
+		//a mesma passará a ser "entrada".
+//		if(!$situacao = Form::GetFormValue('lista')){
+//			$situacao = 'entrada';
+//		}
+
+		if (!$situacao = Form::GetFormValue('lista')) {			
+			$situacao = '%';
+		}
+		$setor = Form::GetFormValue('listaPor');
+//		if (!$setor = Form::GetFormValue('listaPor')) {
+//			$setor = '%';
+//		}
+		//Caso o usuário não selecione o setor,
+		//será utilizado o setor no qual o mesmo está lotado,para
+		//evitar acesso indevido aos processos de outro setor.
+//		if((!$setor) and (!$this->perms->checkAccess('PROT_ADMIN', A_ACCESS))){
+//			$setor = $this->processo->getSetorUsuario();
+//		}else{
+//			//Se o usuário tiver a permissão PROT_ADMIN
+//			//e não selecionar um setor específico,
+//			//o mesmo poderá ver todos os processos.
+//			if( $this->perms->checkAccess('PROT_ADMIN', A_ACCESS) && (!$setor) ){
+//				$setor = '%';
+//			}
+//		}
+
+		//Converte a data recebida para o formato utilizado
+		//na consulta do banco de dados,
+		if (strlen(trim(Form::GetFormValue('dataIni'))) == 10) {
+			$comp = explode('/', Form::GetFormValue('dataIni'));
+			$dataIni = $comp[2].$comp[1].$comp[0].'0000';
+		} else {
+			//caso a mesma não for uma data válida,
+			//ela não será utilizada.
+			$dataIni = '';
+		}
+
+                // 21-10-2011 - Daniel Bonfim
+                if($data) {					
+                    if(isset($data["formClass"])) {
+                        
+                        switch($data["formClass"]) {
+                            case "frmProcessosSetorUser":
+                                $this->query = $this->processo->listProcessosMaxNumAndaBySetor1($data["setor"]);
+                                
+                                break;
+                            case "frmProcessosSetorUser2":                                
+                                $this->query = $this->processo->listProcessosMaxNumAndaBySetor2($data["setor"]);
+                                
+                                break;
+							case "frmProcessosSetorUser3":
+                                $this->query = $this->processo->listProcessosMaxNumAndaBySetor3($data["setor"]);
+
+                                break;
+                        }
+                        
+                    }
+                    
+                    // frmProcessosFind
+					//10-04-2012 Tiago Macedo
+					} elseif ($descricao || $setor || $situação || $dataIni)  {
+    //              $this->query = $this->processo->listProcessos($descricao, $situacao, $setor, $acompanhar, $dataIni);
+                    $this->query = $this->processo->listProcessos($descricao, $situacao, $setor, null, $dataIni);
+                }else $this->query = $this->processo->listProcessos7dias($descricao, $situacao, $setor, null, $dataIni);
+                
+                
+		//$this->SetFilter(false);
+
+		$this->SetIndex(1);
+		$columns = array(
+			new MDataGridControl($linkprocesso,'numpro','Numero','center','','24%'),
+			new MDataGridColumn('titulo','Título','',false,'20%'),
+			new MDataGridColumn('assunto','Assunto','',false,'20%'),
+			new MDataGridColumn('interes','Solicitante','',false,'22%'),
+			new MDataGridColumn('stampaber','Abertura','',false,'6%'),
+			new MDataGridColumn('setororig','Origem','',false,'8%'),
+		);
+
+		parent::__construct($this->query, $columns, $href_grid,25);
+		$this->SetLinkType('hyperlink');
+		$this->SetTitle('Relação de Processos');
+		$this->width = '100%';
+		$this->eventHandler();
+	}
+
+	function GenerateFooter() {
+		if (!$this->data) {
+			$footer[] = $this->GenerateEmptyMsg();
+		}
+		return $footer;
+	}
+}

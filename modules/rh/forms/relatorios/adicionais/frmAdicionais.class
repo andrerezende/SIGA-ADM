@@ -1,0 +1,194 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmAdicionais extends MForm
+{
+    function __construct()
+    {
+        parent::__construct('Obter Relatório de Adicionais');
+        $this->SetClose($this->manager->GetActionURL('rh','main:relatorio'));
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+        global $MIOLO, $self, $module, $page, $action, $theme;
+        $ui = $this->manager->getUI();
+
+        $tabelaGeral = $this->manager->getBusiness('common','tabelageral');
+        $query = $tabelaGeral->listByTabela('RH_TIPOADICIONAL');
+        $adicionais = $query->chunkResult();
+        $options['4'] = 'TODOS';
+        foreach($adicionais as $key => $val) $options[$key] = $val;
+        $opAtivos['1'] = 'SOMENTE ATIVOS';
+        $opAtivos['2'] = 'ATIVOS E EXCLUÍDOS';
+        $opOrdem['1'] = 'ALFABÉTICA';
+        $opOrdem['2'] = 'POR SETOR';        
+        //$grid = $ui->getGrid('rh','gridAdicionais', NULL,'relatorios');
+        $fields = array(
+            new MSelection('idAdicional','','Adicional', $options),
+            new MSelection('idAtivos','','Servidores', $opAtivos),
+            new MSelection('idOrdem','','Ordem', $opOrdem),
+            new MCalendarField('dataAdicional','','Data'),
+            //$grid,
+        ); 
+        $this->SetFields($fields);
+        $buttons = array(
+            //new MButton('btnTest','Test'),
+            //new MButton('btnPost','Exibir'),
+            new MButton('btnReport','Gerar Relatório','PDF'),
+            new MButton('btnGerarCSV','Gerar Planilha')
+        );
+        $this->SetButtons($buttons);
+    }
+
+/*
+    function btnTest_click()
+    {
+        $ui = $this->manager->getUI();
+        $objOrganograma = $this->manager->GetBusiness('common','organograma');
+        $objOrganograma->ListByOrg(545);
+    }
+    
+    function btnPost_click()
+    {   global $MIOLO, $theme;
+        $selData = $this->getFormValue('dataAdicional');
+        $idAdicional = $this->getFormValue('idAdicional');
+        $idAtivos = $this->getFormValue('idAtivos');
+        $idOrdem = $this->getFormValue('idOrdem');
+        if ( is_null($selData) or ($selData == "") )
+            $erro[] = "Selecione a data";
+        if ( is_null($idAdicional) or ($idAdicional == "") )
+            $erro[] = "Selecione o tipo de adicional";
+        if ( is_null($idAtivos) or ($idAtivos == "") )
+            $erro[] = "Selecione o tipo de servidor";
+        if ( is_null($idOrdem) or ($idOrdem == "") )
+            $erro[] = "Selecione o tipo de ordenação";
+        if ( count($erro) > 0 )
+            foreach ( $erro as $e )
+                $this->addError($e);
+    }
+*/    
+    function btnGerarCSV_click()
+	{
+		global $MIOLO;
+        $adicional = $MIOLO->GetBusiness('rh','adicional');		
+        $selData = $this->getFormValue('dataAdicional');
+        $idAdicional = $this->getFormValue('idAdicional');
+        $idAtivos = $this->getFormValue('idAtivos');
+        $idOrdem = $this->getFormValue('idOrdem');  
+                
+        if ( is_null($selData) or ($selData == "") )
+            $erro[] = "Selecione a data";
+        if ( is_null($idAdicional) or ($idAdicional == "") )
+            $erro[] = "Selecione o tipo de adicional";
+        if ( is_null($idAtivos) or ($idAtivos == "") )
+            $erro[] = "Selecione o tipo de servidor";
+        if ( is_null($idOrdem) or ($idOrdem == "") )
+            $erro[] = "Selecione o tipo de ordenação";
+        if ( count($erro) > 0 )
+            foreach ( $erro as $e )
+                $this->addError($e);
+        else        
+        {	
+        	$consulta = $adicional->RelatorioAdicional($selData,$idAdicional,$idAtivos,$idOrdem);
+        	
+        	if($idAdicional==4 && $idAtivos==1 || ($idAdicional==1 && $idAtivos==1)) //todos && somente ativo || insalubridade && somente ativo
+        	{
+        		$resultAux[] = array('MATRÍCULA','NOME','CARGO','LOTAÇÃO','TIPO','CONCESSÃO','GRAU');
+
+ if (!$consulta->result)
+                $consulta->result = array();
+        		foreach ($consulta->result as $result)		  
+		    	{
+		    		$resultAux[] = array($result[0],$result[1],$result[2],$result[3],$result[4],$result[5],$result[7]);		    	
+		    	}
+        	}
+        	
+        	else if($idAdicional==4 && $idAtivos==2 || ($idAdicional==1 && $idAtivos==2)) //todos && ativo e excluídos || insalubridade && ativo e excluídos
+        	{
+        		$resultAux[] = array('MATRÍCULA','NOME','CARGO','LOTAÇÃO','TIPO','CONCESSÃO','EXCLUSAO','GRAU');
+        		foreach ($consulta->result as $result)		  
+		    	{
+		    		$resultAux[] = array($result[0],$result[1],$result[2],$result[3],$result[4],$result[5],$result[6],$result[7]);		    	
+		    	}
+        	}        	
+        	
+        	
+        	else if(($idAdicional==2 && $idAtivos==1) || ($idAdicional==3 && $idAtivos==1)) //periculosidade && somente ativo || raiox && somente ativo
+        	{
+        		$resultAux[] = array('MATRÍCULA','NOME','CARGO','LOTAÇÃO','TIPO','CONCESSÃO');
+        		foreach ($consulta->result as $result)		  
+		    	{
+		    		$resultAux[] = array($result[0],$result[1],$result[2],$result[3],$result[4],$result[5]);		    	
+		    	}
+        	}
+        	
+        	else if(($idAdicional==2 && $idAtivos==2) || ($idAdicional==3 && $idAtivos==2)) //periculosidade && ativo e excluídos || raiox && ativo e excluido
+        	{
+        		$resultAux[] = array('MATRÍCULA','NOME','CARGO','LOTAÇÃO','TIPO','CONCESSÃO','EXCLUSAO');
+        		foreach ($consulta->result as $result)		  
+		    	{
+		    		$resultAux[] = array($result[0],$result[1],$result[2],$result[3],$result[4],$result[5],$result[6]);		    	
+		    	}
+        	}
+        	
+        	$consulta->result = $resultAux;
+			$consulta->getCSV("adicional");
+        }
+	}
+
+
+	function btnReport_click()
+    {
+        $selData = $this->getFormValue('dataAdicional');
+        $idAdicional = $this->getFormValue('idAdicional');
+        $idAtivos = $this->getFormValue('idAtivos');
+        $idOrdem = $this->getFormValue('idOrdem');
+        if ( is_null($selData) or ($selData == "") )
+            $erro[] = "Selecione a data";
+        if ( is_null($idAdicional) or ($idAdicional == "") )
+            $erro[] = "Selecione o tipo de adicional";
+        if ( is_null($idAtivos) or ($idAtivos == "") )
+            $erro[] = "Selecione o tipo de servidor";
+        if ( is_null($idOrdem) or ($idOrdem == "") )
+            $erro[] = "Selecione o tipo de ordenação";
+        if ( count($erro) > 0 )
+            foreach ( $erro as $e )
+                $this->addError($e);
+        else
+        {
+            $data = $this->getData();
+            $ui = $this->manager->getUi();
+            $report = $ui->getReport('rh','repAdicionais',$data);
+            $report->generate();
+        }
+    }
+    
+    function IntervaloAnos() 
+    {
+        $anoAtual = date('Y');
+        $anoInicio = ($anoAtual-5);
+        $anoMaximo = ($anoAtual+5);
+        for ($i = $anoInicio ; $i <= $anoMaximo ; $i++)
+            $anos[$i] = $i;
+        return $anos;
+    }
+ }
+?>

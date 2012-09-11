@@ -1,0 +1,223 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+class frmBalcaoemprestimo extends Form
+{
+
+
+	var $objBalcaoemprestimo;
+	var $objusuario;
+    
+
+    function frmBalcaoemprestimo()  // construtor da Classe
+    {
+		global $MIOLO,$module;
+
+		// Título do Formulário
+		$this->Form('Balcão de Empréstimos');
+	
+		//Chama o CreateFileds, etc.
+		$this->EventHandler();
+		
+
+		// Botão "enviar" não aparece
+		$this->defaultButton = false;
+			 
+	}
+   
+    function CreateFields()
+    {
+		// Campos que aparecem no formulário
+		$fields = Array (
+			//new Text('','Use o formulário abaixo para cadastrar uma nova usuarioobservacoes da biblioteca'),
+			new TextField('edtCartaoAcesso','','Cartão de Acesso',12),
+			new TextField('edtNome','','Nome',60),
+			new PasswordField('edtSenha','','Senha de Acesso',6),
+			new HiddenField('hidID'),
+			new HiddenField('hidKey') // controla Incluir/Editar
+
+			);
+
+		// Insere os campos
+		$this->SetFields($fields);
+
+		// Botões que aparecem no formulário
+		$buttons = Array(
+			new FormButton('btnEnviar', 'Incluir'),
+			new FormButton('btnConsulta', 'Consulta'),
+			new FormButton('btnVerificar', 'Varificar'),
+			new FormButton('btnList', 'Relação'),
+    		);
+
+    	   		
+		//Insere os Botões
+		$this->SetButtons($buttons);
+				
+		//Esconde o campo nome e observações
+		$this->SetFieldAttr('edtNome','visible', false);
+		$this->SetFieldAttr('edtSenha','visible', false);
+
+		// Botão excluir nao aparece, pois o formulário está em branco
+		$this->SetButtonAttr('btnConsulta','visible',true);
+		$this->SetButtonAttr('btnVerificar','visible',false);
+		$this->SetButtonAttr('btnList','visible',false);
+		$this->SetButtonAttr('btnEnviar','visible',false);
+		
+				   
+   }
+
+	// pega os dados que estão no formulário   
+    function GetData()
+    {
+	   $data = new FormData();
+      $data->cartaoacesso = $this->GetFieldValue('edtCartaoAcesso');
+	   $data->nome = $this->GetFieldValue('edtNome');
+      $data->senha = $this->GetFieldValue('edtSenha');
+		
+    	return $data;
+    }
+
+	
+	// usada para inserir valores no formulário
+	function SetData($data)
+	{
+		$this->SetFieldValue('edtCartaoAcesso',$data->cartaoacesso);
+		$this->SetFieldValue('edtNome',$data->nome);
+		$this->SetFieldValue('edtSenha',$data->senha);
+		
+	}
+
+	// Consulta: função chamada após o usuário usar o lookup
+	function btnConsulta_click()
+	{ 
+		global $MIOLO,$module,$item;
+		
+		//Script para teclado numérico
+		 $script = "
+ 			function rs(n,u,w,h,x)
+  				{
+   			args=\"width=\"+w+\",height=\"+h+\",resizable=yes,scrollbars=yes,status=0,statusbar=true,menubar=1\";
+   			remote=document.open(u,n,args);
+   			if(remote != null && remote.opener == null) remote.opener = self;
+   			if(x == 1) return remote;
+  				}
+ 		 		rs('edtSenha','http://localhost/teclado/teclado.php?id=" . $cartao. "',250,150,0);
+				";
+ 			$this->AddJsCode($script);	
+	
+		// Já considera que o usuário quer excluir,editar uma usuarioobservacoes
+		$this->SetButtonAttr('btnEnviar','visible',true);	
+ 		
+ 		$cartao = $this->GetData()->cartaoacesso;
+		
+		//Instancia o objeto emprestimo
+		$this->objBalcaoemprestimo = $MIOLO->GetBusiness($module,'emprestimo');
+		// ok retorna os dados de login
+		$login = $this->objBalcaoemprestimo->GetByCartao($cartao);	
+		//Instancia o objeto usuario
+		$this->objusuario = $MIOLO->GetBusiness($module,'usuario');
+		// ok retorna os dados de nome
+		$nome = $this->objusuario->GetByCodigo($login);	
+		$this->SetFieldValue('edtNome',$nome);
+		
+		//Propriedades dos campos
+		$this->SetFieldAttr('edtNome','visible',true);
+		$this->SetFieldAttr('edtSenha','visible',true);
+		$this->SetFieldAttr('edtNome','readonly',true);
+		$this->SetFieldAttr('edtCartaoAcesso','readonly',true);
+		$this->SetFieldAttr('edtSenha','readonly',true);
+				
+		}
+	
+
+	// Enviar pode ser inserir ou editar
+	function btnEnviar_click()
+	{ global $MIOLO,$theme,$module,$item;
+	
+		$data = $this->GetData();
+				
+		 //Instancia o objeto usuarioobservacoes
+	    $this->objUsuarioObservacoes = $MIOLO->GetBusiness($module,'usuarioobservacoes');
+		//var_dump($data);
+		if ( $data->idobservacao )
+		{ // Usuário quer editar um item
+
+			$what = " atualizada ";
+
+			$ok = $this->objUsuarioObservacoes->Update($data);
+				
+		}
+		else
+		{ // Usuário quer inserir novo item
+
+			$what = " inserida ";
+
+			// verificar se já existe idusuarioobservacoes
+			$ok = $this->objUsuarioObservacoes->Insert($data);
+
+		}
+
+        $action = $MIOLO->GetActionURL($module,'main:circulacao:observacoes','',array('event'=>"btnConsulta_click;{$data->usuario}"));
+		if ( $ok )
+		{	
+			$theme->ClearContent();
+			$MIOLO->Prompt(Prompt::Information("A observação para '" . $data->nome . "' foi  $what com sucesso.",$action));
+		}
+		else
+			$theme->ClearContent();
+			$MIOLO->Error("A observação para '" . $data->nome  . "' não foi $what. ", $action );
+
+	}
+
+
+	function btnExcluir_click()
+	{ 
+		global $MIOLO, $module, $item;
+		
+	     //Instancia o objeto usuarioobservacoes
+	    $this->objUsuarioObservacoes = $MIOLO->GetBusiness($module,'usuarioobservacoes');
+		
+		$data = $this->GetData();
+
+		//list($idusuario,$idobservacao) = explode("@",$item);
+		$campos = explode("@",$item);
+		
+		//A linha abaixo verifica se existe um data->idusuarioobservacoes
+       //Se nao existir, ela tenta pegar $item que é passada
+       //pelo botao editar do "relação"
+	   
+
+       $ok = $this->objUsuarioObservacoes->Delete($campos);
+
+	   if ( $ok )
+			$MIOLO->Information("Observação deletada da base de dados", $action );
+	   else
+			$MIOLO->Error("As informações não foram deletadas", $action );
+
+	}
+
+} 
+?>

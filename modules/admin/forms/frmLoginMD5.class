@@ -1,0 +1,122 @@
+<?
+class frmLoginMD5 extends MForm
+{
+    function __construct()
+    {   
+        parent::__construct('Login MD5');
+        $this->page->AddScript('md5.js');
+        $this->AddJsCode($this->doChallengeResponse());
+        $this->OnSubmit('doChallengeResponse()');
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+        $login = $this->manager->GetLogin();
+        $challenge = uniqid(rand());
+        $fields = array(
+            new MTextField('uid',$login->iduser,'Login',20),
+            new MPasswordField('pwd','','Password',20),
+            new MTextLabel('username',$login->user,'Nome',40),
+            new MLink('mail','Email para contato','mailto:siga@ufjf.edu.br','siga@ufjf.edu.br'),
+            new MHiddenField('challenge', $challenge),
+            new MHiddenField('response', ''),
+            new MHiddenField('tries', ''),
+            new MHiddenField('return_to', '')
+        );
+        $this->SetFields($fields);
+        $buttons = array(
+            new MButton('btnLogin', 'Login'),
+            new MButton('btnLogout', 'Logout')
+        ); 
+        $this->SetButtons($buttons);
+        $this->btnLogin->visible = !$this->isAuthenticated();
+        $this->btnLogout->visible = $this->isAuthenticated();
+        $this->uid->readonly = $this->isAuthenticated();
+        $this->pwd->visible = !$this->isAuthenticated();
+        $this->username->visible = $this->isAuthenticated();
+    }
+
+    function btnLogin_click()
+    {   
+        $this->manager->LogMessage('[LOGIN] Validating login information');
+        
+        // Max login tryes
+        $max_tries = 3;
+        
+        // autenticar usuário e obter dados do login
+        $uid = $this->GetFormValue('uid');
+        $pwd = $this->GetFormValue('pwd');
+        $challenge = $this->GetFieldValue('challenge');
+        $response = $this->GetFieldValue('response');
+
+        if ( $this->LoginPermitted($uid) )
+        {
+           if ( $this->manager->GetAuth()->Authenticate($uid, $challenge, $response) )
+           {
+               $return_to = $this->GetFormValue('return_to');
+               // ToDo: voltar para onde estava...
+               if ( $return_to )
+               {
+                  $url = $return_to;
+               }
+               else
+               {
+                  $url = $MIOLO->GetActionURL('admin','login');
+               }
+               $this->page->Redirect($url);
+            }
+            else
+            {      
+               $tries = $this->GetFormValue('tries');
+               if ( $tries < $max_tries )
+               {
+                  $err = 'Erro na identificação do usuário!' . ' - Restam ' . ( $max_tries - $tries) . 
+                         ' ' . 'tentativa(s).';
+                  $this->SetFormValue('tries',$tries++);
+                  $pwd = null;
+                  $this->AddError($err);
+               }
+               else
+               {
+                   throw new ELoginException('Erro na identificação do usuário!');
+               } 
+            }
+        }
+        else
+        {
+            throw new ELoginException('Login denied');
+        }
+    }
+
+    function btnLogout_click()
+    {
+        $this->page->Redirect($this->manager->GetActionURL('main','logout'));
+    }
+
+    function LoginPermitted($uid)
+    {  
+       return true;
+    }
+
+    function isAuthenticated()
+    {
+        return $this->manager->GetAuth()->isLogged();
+    }
+
+    function doChallengeResponse()
+    {
+       $code = "function doChallengeResponse() { \n".
+               "  form = document.$this->name;\n". 
+               "  str = form.uid.value + \":\" + \n" .
+               "        MD5(form.pwd.value) + \":\" + \n" .
+               "        form.challenge.value; \n".
+               "  form.pwd.value = \"\";\n".
+               "  form.response.value = MD5(str);\n".
+               "  return true;\n".
+               "}\n";
+       return $code;
+    }
+}
+
+?>

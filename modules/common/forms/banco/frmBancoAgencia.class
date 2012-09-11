@@ -1,0 +1,114 @@
+<?
+class frmBancoAgencia extends Form
+{
+    protected $objAgencia;
+ 
+    function __construct($objAgencia)
+    {
+        $this->objAgencia = $objAgencia;
+        $this->Form('Dados da Agência');
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+        $fields = array(
+            new MTextField('idAgencia','','Número','7','Máx. 7 caracteres'),
+            new MTextField('nome','','Nome','50','Máx. 50 caracteres'),
+        );
+		
+        $this->SetFields($fields);
+		
+        $buttons = array(
+            new FormButton('btnPost', 'Gravar'),
+            new FormButton('btnDel' , 'Excluir'),
+            new FormButton('btnExcluir' , 'Excluir')
+        );
+        $this->SetButtons($buttons);
+
+        $perms = $this->manager->getPerms();
+        $this->setButtonAttr('btnExcluir','visible',false);
+        $validators = array(
+            new RequiredValidator('idAgencia'),
+            new RequiredValidator('nome')
+        );
+        $this->SetValidators($validators);
+        $this->setData();
+
+    }
+
+    function setData()
+    {
+        $data = $this->objAgencia;
+        $this->setFieldValue('idAgencia',$data->idAgencia);
+        $this->setFieldValue('nome',$data->nome);
+    }
+    
+	function btnPost_click()
+	{
+		$update = $this->objAgencia->isPersistent();
+		$data = $this->getData();
+		$this->objAgencia->idAgencia = $data->idAgencia;
+		$this->objAgencia->nome = $data->nome;
+		
+		if( trim($data->idAgencia) == '' )
+		{
+			$this->AddError('Informe o código da agência.');
+		}
+		elseif( preg_match("/\W/", $data->idAgencia) )
+		{
+			$this->AddError('Informe o número da agência corretamente.');
+		}
+		elseif( strlen(trim($data->nome)) < 4)
+		{
+			$this->AddError('Especifique melhor o nome da agência.');
+		}
+		else
+		{
+			try
+			{
+				$this->objAgencia->save();
+				$go = $this->manager->GetActionURL('common','main:banco',$this->objAgencia->idBanco, array('form'=>'agencias'));
+				if ($update)
+				{
+					$this->manager->Information('Agência atualizada com sucesso.', $go );
+				}
+				else
+				{
+					$this->manager->Information('Agência inserida com sucesso.', $go );
+				}
+			}
+			catch ( Exception $e )
+			{
+				$this->AddError($e->getMessage());
+			}
+		}
+	}
+
+    function btnDel_click()
+    {
+        $action_sim = $this->manager->GetActionURL('common','main:banco',$this->objAgencia->idBanco,array('form'=>'agencias','id'=>$this->objAgencia->idAgencia,'conf'=>'sim','event'=>'btnExcluir:click'));
+        $action_nao = $this->manager->GetActionURL('common','main:banco',$this->objAgencia->idBanco,array('form'=>'agencias','id'=>$this->objAgencia->idAgencia));
+        $this->manager->Question("Tem certeza que deseja excluir a agência ".$this->objAgencia->nome."?",$action_sim,$action_nao);
+    }
+	
+    function btnExcluir_click()
+    {
+        $conf = $this->GetFormValue('conf');
+        if ($conf == 'sim')
+        {
+            try 
+            {
+                $this->objAgencia->delete();
+                $this->manager->Information('Agência excluída com sucesso!',$this->manager->GetActionURL('common','main:banco',$this->objAgencia->idBanco,array('form'=>'agencias')));
+            }
+            catch ( Exception $e )
+            {
+                $this->manager->Error($e->getMessage());
+            }
+        }
+		
+    }
+
+}
+?>

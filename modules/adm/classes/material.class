@@ -1,0 +1,323 @@
+<?php
+class BusinessAdmMaterial extends Business
+{
+	var $idMaterial;
+	var $descricao;
+	var $unidade;
+        var $precoestimado; 
+	var $permcons;
+	var $estocavel;
+	var $codmaterial;
+	var $idelemento;
+	var $idsubelemento;
+	var $descresum;
+	var $ativo;
+	
+	var $elemento;
+	var $subelemento;
+
+	function BusinessAdmMaterial($data=null)
+	{
+		$this->Business('sigaept',$data);
+	}
+    
+    function OnCreate($data)
+    {
+        $this->GetById($data);
+    }
+
+	function GetById($id)
+	{
+		$this->idMaterial = $id;
+		$this->retrieve();
+	}
+    
+    function GetItemReqAnterior($idUoRequisitante)
+    {
+        $itemreq = $this->_miolo->getBusiness('adm','itemreq');
+		$criteria = $itemreq->getCriteria();
+		$criteria->addColumnAttribute('max(idRequisicao)');
+		$criteria->addCriteria('idMaterial','=',$this->idMaterial);
+        $cc = new CriteriaCondition();
+        $cc->addCriteria($criteria->getCriteria('requisicao.status','<>', "'1'"));
+        $cc->addCriteria($criteria->getCriteria('requisicao.status','<>', "'2'"));
+        $criteria->addCriteria($cc);
+		$criteria->addCriteria('requisicao.idUoRequisitante','=', $idUoRequisitante);
+		$criteria->addCriteria('requisicao.idTipoReq','=',"'7'");
+        $query = $criteria->retrieveAsQuery();
+        $itemreq->getById($query->result[0][0],$this->idMaterial);
+        return $itemreq;
+    }
+
+    function getHistorico($idUoRequisitante)
+    {
+        $itemreq = $this->_miolo->getBusiness('adm','itemreq');
+		$criteria = $itemreq->getCriteria();
+		$criteria->addColumnAttribute('requisicao.dataHora');
+		$criteria->addColumnAttribute('idRequisicao');
+		$criteria->addColumnAttribute('status');
+		$criteria->addColumnAttribute('quantPedida');
+		$criteria->addColumnAttribute('quantEntregue');
+        $cc = new CriteriaCondition();
+        $cc->addCriteria($criteria->getCriteria('status','=', "'0'"));
+        $cc->addOrCriteria($criteria->getCriteria('status','=', "'1'"));
+        $cc->addOrCriteria($criteria->getCriteria('status','=', "'2'"));
+        $cc->addOrCriteria($criteria->getCriteria('status','=', "'5'"));
+        $cc->addOrCriteria($criteria->getCriteria('status','=', "'6'"));
+        $cc->addOrCriteria($criteria->getCriteria('status','=', "'8'"));
+        $cc->addOrCriteria($criteria->getCriteria('status','=', "'A'"));
+        $criteria->addCriteria($cc);
+		$criteria->addCriteria('idMaterial','=',"{$this->idMaterial}");
+		$criteria->addCriteria('requisicao.idUoRequisitante','=', $idUoRequisitante);
+		$criteria->addOrderAttribute('requisicao.dataHora');
+        $criteria->retrieveAsQuery();
+        return $criteria->retrieveAsQuery()->result;
+    }
+    
+    function GetItemLicitacaoAnterior($idUoRequisitante)
+    {
+        $licitacao = $this->_miolo->getBusiness('adm','licitacao');
+        $criteria = $licitacao->getCriteria();
+        $criteria->addColumnAttribute('max(idLicitacao)');
+        $criteria->addCriteria('itens.itemreq.idMaterial','=',$this->idMaterial);
+        $criteria->addCriteria('itens.itemreq.requisicao.idUoRequisitante','=', $idUoRequisitante);
+        $query = $criteria->retrieveAsQuery();
+        $licitacao->getById($query->result[0][0]);
+        $licitacao->retrieveAssociation('itens');
+
+        if ($licitacao->itens){
+            foreach ($licitacao->itens as $item)
+            {
+                $item->retrieveAssociation('itemreq');
+                foreach ($item->itemreq as $itemreq)
+                {
+                    if ($itemreq->idMaterial == $this->idMaterial)
+                    {
+                        return $item;
+                    }
+                }
+            }
+
+	}
+        $item = $this->_miolo->getBusiness('adm','itemlicitacao');
+        return $item;
+    }
+    
+	function GetByCod($id)
+	{
+        $this->codmaterial = $id;
+		$criteria = $this->GetCriteria();
+		$criteria->AddCriteria('codmaterial','=',"'$this->codmaterial'");
+		return $this->retrieveFromCriteria($criteria);
+	}
+	
+	function GetDescByCod($cod)
+	{
+    	$criteria = $this->GetCriteria();
+		$criteria->AddCriteria('codmaterial',' = ',"'$cod'");
+	    $criteria->AddColumnAttribute('descricao');
+	    $criteria->AddColumnAttribute('unidade');
+	    return $criteria->retrieveAsQuery();
+	}
+
+	function GetByDescricao($descricao)
+	{   
+		global $MIOLO;
+        $sql = new sql('t.idmaterial, t.descricao, t.unidade, t.permcons, t.estocavel, t.idelemento, t.idsubelemento,t.codmaterial','ad_material t', '(t.descricao = ?)');
+	
+	$query = $this->Query($sql,$descricao);
+        if ( !$query->eof() )
+        {
+            $this->SetData($query->GetRowObject());
+	}
+            return $this;
+        }
+
+	function ListByIdElemento($idelemento)
+	{
+		$criteria = $this->GetCriteria();
+		$criteria->AddCriteria('idelemento',' = ','?');
+		$query = $criteria->retrieveAsQuery($idelemento);
+		return $query;
+	}
+
+    function ListByIdSubElemento($idElemento,$idSubelemento,$estocavel = 'N')
+    {
+        $criteria = $this->GetCriteria();
+        $criteria->AddCriteria('idElemento','=',$idElemento);        
+        $criteria->AddCriteria('idSubElemento',' = ', $idSubelemento);
+        if ($estocavel == 'S')
+            $criteria->AddCriteria("estocavel"," = ","'S'");                
+        $criteria->AddOrderAttribute('descricao');
+        $query = $criteria->retrieveAsQuery();
+        return $query;
+    }
+    function ListSubElementoByIdElemento($idElemento)
+    {
+        $criteria = $this->Getcriteria();
+        $criteria->AddColumnAttribute('distinct(subelemento.idSubElemento)');
+        $criteria->AddColumnAttribute('subelemento.descricao');
+        $criteria->AddCriteria('idelemento',' = ',$idElemento);
+        $criteria->AddOrderAttribute('subelemento.descricao');		
+        return $criteria->retrieveAsQuery();
+    }
+    
+    function ListSubElementos()
+    {
+        $criteria = $this->GetCriteria();
+        $criteria->AddColumnAttribute('subelemento.idSubElemento');
+        $criteria->AddColumnAttribute('subelemento.idElemento');
+        $criteria->AddColumnAttribute('subelemento.descricao');
+        $criteria->AddGroupAttribute('subelemento.idElemento');
+        $criteria->AddGroupAttribute('subelemento.idSubElemento');
+        $criteria->AddGroupAttribute('subelemento.descricao');
+        $query = $criteria->retrieveAsQuery();
+        return $query;
+    }
+
+	function ListAllEstocavel()
+	{
+		$criteria = $this->GetCriteria();
+		$criteria->AddCriteria('estocavel',' = ','1');
+		$query = $criteria->retrieveAsQuery();
+		return $query;
+	}
+    
+	function ListAll()
+	{
+		$criteria = $this->GetCriteria();
+		$criteria->AddOrderAttribute('idelemento');
+		$criteria->AddOrderAttribute('idsubelemento');
+		$criteria->AddOrderAttribute('codmaterial');    
+		$query = $criteria->retrieveAsQuery();
+		return $query;
+	}
+
+	function SetIdElemento($idelemento)
+	{
+		$this->idelemento = $idelemento;
+	}
+	
+	function SetIdSubElemento($idsubelemento)
+	{
+		$this->idsubelemento = $idsubelemento;
+	}
+
+	function Update()
+	{
+		$this->save();
+		return !$this->CheckError();
+	}
+	
+	function GetDescricaoElemento()
+	{
+		$sql = new sql();
+		$sql->SetColumns('descricao');
+		$sql->SetTables('ad_elemento');
+		$sql->SetWhere('idelemento = ?');
+		$query = $this->ObjQuery($sql->Select($this->idelemento));
+		return $query->result[0][0];
+	}
+
+	function GetDescricaoSubelemento()
+	{
+		$sql = new sql();
+		$sql->SetColumns('descricao');
+		$sql->SetTables('ad_subelemento');
+		$sql->SetWhere('idelemento = ?');
+		$sql->SetWhereAnd('idsubelemento = ?');
+		$args = array($this->idelemento,$this->idsubelemento);
+		$query = $this->ObjQuery($sql->Select($args));
+		return $query->result[0][0];
+	}
+	function ListByDescricao($descricao)
+	{
+		$criteria = $this->GetCriteria();
+		// Alterado para o funcionamento da pesquisa com letras min�sculas e acentua��o 9/2/2010
+		$criteria->AddCriteria('descricao',' like ',"upper($descricao)");
+		//$criteria->AddOrCriteria('codmaterial',' like ',$descricao);
+		$criteria->AddOrderAttribute('descricao'); 
+		$query = $criteria->retrieveAsQuery();
+		return $query;
+	}
+	function ListByCod($codMaterial)
+	{
+        $this->codmaterial = $codMaterial;
+		$criteria = $this->getCriteria();
+		$criteria->AddCriteria('codmaterial','=',$this->codmaterial);
+		return $criteria->retrieveAsQuery();
+	}
+	function ListByidMat($idMaterial)
+	{
+        $this->idMaterial = $idMaterial;
+		$criteria = $this->getCriteria();
+		$criteria->addCriteria('idMaterial','=',$this->idMaterial);
+
+		return $criteria->retrieveAsQuery();
+	}	
+	function jaFoiEmpenhado()
+	{
+        $itemreq = $this->_miolo->getBusiness('adm','itemreq');
+        $criteria = $itemreq->GetCriteria();
+        $criteria->addColumnAttribute('idMaterial');
+        $criteria->addColumnAttribute('empenhado.idLicitacao');
+        $criteria->addColumnAttribute('empenhado.item');
+        $criteria->addCriteria('idMaterial','=',"'$this->idMaterial'");
+        $query = $criteria->retrieveAsQuery();
+        return $query;
+	}
+
+
+	function SearchMaterial($descricao, $elemento, $subelemento, $codigo, $inativo = 'S', $estocavel = 'N')
+	{
+
+		$descricao = strtoupper($descricao);
+
+		if($descricao){
+			$descricao = "%" . str_replace(" ", "%", $descricao) . "%" ;
+		}
+
+		$sql = new sql("*", "ad_material","");
+
+		if(!$codigo){
+
+			if((!$descricao) && ($elemento || $subelemento)){	//condição para não exibir
+				$descricao = "%";				//a listagem sem que nenhum
+			}							//campo seja preenchido.
+
+			//Descricao
+			$sql->SetWhere("descricao  like  '$descricao'");
+
+			//Elemento
+			if($elemento){
+				$sql->SetWhereAnd("idelemento  =  $elemento");
+			}
+
+			//Subelemento
+			if($subelemento){
+				$sql->SetWhereAnd("idsubelemento  =  $subelemento");
+			}
+
+		}else{
+			//lista os materiais somente pelo código
+			$sql->SetWhere("codmaterial  =  $codigo");
+		}
+
+		//listar materiais inativos, por padrão mostra somente os ativos
+		if($inativo == 'S'){
+			$sql->SetWhereAnd("ativo  =  'N'");
+		}else{
+			$sql->SetWhereAnd("ativo  =  'S'");
+		}
+
+		//mostra só materiais estocáveis
+		if($estocavel == 'S'){
+			$sql->SetWhereAnd("estocavel  =  'S'");
+		}
+				
+		$sql->SetOrderBy("descricao");
+		$query = $this->Query($sql);
+		return $query;
+	}
+}
+?>

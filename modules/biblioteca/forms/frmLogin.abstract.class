@@ -1,0 +1,628 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?
+/*
+
+
+
+   Uma imagem vale por mil palavras...
+
+   hierarquia de classes:
+
+                                  FORM
+                                    |
+                                    |
+                                 PESQUISA  (frmPesquisa.class)
+                                    |
+                                    |
+   -----------------------------------------------------------------------------
+           |                    |                    |                  |
+           |                    |                    |                  |
+    Pesquisa Simples    Pesquisa Multicampo  Percorrer indices  Pesquisa Numérica
+
+
+
+ Para configurar os campos da Pesquisa Simples, acesse etc/pesquisa.xml
+
+*/
+
+MIOLO::IMPORT('modules::biblioteca::forms::frmPesquisa');
+
+class frmPesquisaSimples extends frmPesquisa 
+{
+	var $objSimples;
+	var $objObra;
+	var $objUnidade;
+	var $objGenero;
+
+    function frmPesquisaSimples()  // construtor da Classe
+    {
+		global $MIOLO,$module;
+
+		// Título do Formulário
+		$this->Form('Pesquisa Simples');
+
+		$this->objSimples = $MIOLO->GetBusiness($module,'pesquisasimples');
+
+		$this->EventHandler();
+		
+		// Botão 'fechar', direcionando para o handler biblioteca/main/
+		$this->SetClose($this->manager->GetActionURL($module, 'main'));
+    }
+
+   
+    function CreateFields()
+    {
+		global $MIOLO, $module, $action;
+
+		$camposPesquisa = $this->GetCamposPesquisa();
+
+		$this->objUnidade = $MIOLO->GetBusiness($module,'unidade');
+		$this->objGenero = $MIOLO->GetBusiness($module,'genero');
+
+		$opU = $this->objUnidade->ListUnidade();
+		$opG = $this->objGenero->ListGenero();
+//		$opG = $this->objGenero->ListGenerosExistentes();
+		$optionsU['0'] = 'Todas';
+		$optionsG['0'] = 'Todos';
+		foreach($opU->result as $o)
+		{
+			$optionsU[$o[0]] = $o[1];
+		}
+		foreach($opG->result as $o)
+		{
+			$optionsG[$o[0]] = $o[1];
+		}
+
+		// Campos que aparecem no formulário
+		$fields = array (
+			new TextLabel('Atenção:','As palavras não são acentuadas.', 'Atenção'),
+			new TextField('edtBusca','','Busca',30,'<a href=index.php?module=biblioteca&action=main:pesquisamulticampo>Busca Avançada</a>'),
+			new CheckBox('chkboxTermo','1','Termo Exato',true,'','Permite pesquisa na sequência digitada. Exemplo de BUSCA: Calculo integral'),
+			new TextLabel('Dica','Em caso de pesquisa por autor, desmarque a opção de Termo Exato.','Dica'),
+			new MSeparator,
+			new TextLabel('filtros','','<b>Filtros</b>'),
+			new Selection('selConsultarPor_1','','Consultar por'),
+			new Selection('selUnidade','','Unidades'),
+			new Selection('selGenero','','Tipos de Material')
+			
+		);
+
+		// Insere os campos
+		$this->SetFields($fields);
+
+		$sel = $this->MontaSelection($camposPesquisa);
+		$selcont = count($sel);
+		$sel[$selcont] = array('Todos','Todos');
+		$this->SetFieldAttr('selConsultarPor_1','options', $sel);
+		$this->SetFieldAttr('selUnidade','options', $optionsU);
+  	    $this->SetFieldAttr('selGenero','options', $optionsG);
+
+//		$this->SetFieldAttr('chkboxTermo','checked',true);
+
+	    // Botões que aparecem no formulário
+		$buttons = Array(
+			new FormButton('btnConsultar', 'Consultar'),
+			new FormButton('btnVoltar', 'Nova Pesquisa', $MIOLO->GetActionURL($module = $module, $action = $action)),
+   		);
+
+		//Insere os Botões
+		$this->SetButtons($buttons);
+		$this->SetButtonAttr('btnVoltar','visible',false);
+
+   		//Definindo o foco
+		if ( (!$this->GetFieldValue('edtBusca')) and ($this->GetFormValue('event') == null) )
+		{
+			$this->page->onLoad("MIOLO_GetElementById('edtBusca').focus();");
+		}
+	}
+
+
+    // pega os dados que estão no formulário   
+    function GetData()
+    {
+        $data = new FormData();
+        $data->busca = trim($this->GetFormValue('edtBusca'));
+        $data->termo = $this->GetFormValue('chkboxTermo');
+		$data->ConsultarPor_1 = $this->GetFormValue('selConsultarPor_1');
+		$data->Unidade = $this->GetFormValue('selUnidade');
+		$data->Genero = $this->GetFormValue('selGenero');
+		return $data;
+    }
+
+	
+	// usada para inserir valores no formulário
+	function SetData($data)
+	{
+		$this->SetFieldValue('edtBusca',$data->busca);
+		$this->SetFieldValue('chkboxTermo',$data->termo);
+		$this->SetFieldValue('selConsultarPor_1',$data->ConsultarPor_1);
+		$this->SetFieldValue('selUnidade',$data->Unidade);
+		$this->SetFieldValue('selGenero',$data->Genero);
+	}
+
+
+	function btnConsultar_click($sender,$filtro=null,$campo=null)
+	// parametros filtro e campo preenchidos quando retornam de uma busca detalhada
+	// parametros \/ abaixo \/ preenchidos quando retornam de detalhes da obra pelo botão Voltar
+	{
+		global $MIOLO, $module, $self, $theme, $action, $page, $item;
+
+		//parametros
+		$tipo = $this->GetFormValue('tipo');
+
+		if($tipo == 'simples')
+		{
+			$termo = $this->GetFormValue('termo');
+			$busca = $this->GetFormValue('busca');
+			$consultarpor1 = $this->GetFormValue('ConsultarPor_1');
+			$unidade = $this->GetFormValue('Unidade');
+			$genero = $this->GetFormValue('Genero');
+		}
+		
+		elseif($tipo == 'detalhe')
+		{
+			if($filtro)
+			{
+				$busca = $filtro;
+			}
+			else
+			{
+				$termo = $this->GetFormValue('termo');
+				$busca = $this->GetFormValue('busca');
+				$consultarpor1 = $this->GetFormValue('ConsultarPor_1');
+				$unidade = $this->GetFormValue('Unidade');
+				$genero = $this->GetFormValue('Genero');
+			}
+		}
+		
+		elseif($tipo == 'indice')
+		{
+	        $unidade = $this->GetFormValue('unidade');
+			$consultarpor1 = $this->GetFormValue('consultarpor1');
+			$consulta1 = $this->GetFormValue('consulta1');
+			$termo = $this->GetFormValue('termo');		
+		}
+		
+		elseif($tipo == 'multi')
+		{
+	        $unidade = $this->GetFormValue('unidade');
+			$genero = $this->GetFormValue('genero');
+			$consultarpor1 = $this->GetFormValue('consultarpor1');
+			$consulta1 = $this->GetFormValue('consulta1');
+			$operador = $this->GetFormValue('operador');
+			$consultarpor2 = $this->GetFormValue('consultarpor2');
+			$consulta2 = $this->GetFormValue('consulta2');
+		}
+		
+		else
+		{
+		}
+
+		//esconde botoes e campos
+		$this->SetFieldAttr('edtBusca','readonly',true);
+		$this->SetFieldAttr('selConsultarPor_1','readonly',true);
+		$this->SetFieldAttr('selUnidade','readonly',true);
+		$this->SetFieldAttr('selGenero','readonly',true);
+		$this->SetFieldAttr('chkboxTermo','visible',false);
+		$this->SetFieldAttr('Dica','visible',false);
+		$this->SetButtonAttr('btnConsultar','visible',false);
+
+		// mostra botao voltar
+		$this->SetButtonAttr('btnVoltar','visible',true);
+
+		$voltou = false;
+		if( ($busca == null) and ($consulta1 == null) )
+		{
+			$data = $this->GetData();
+		}
+		else
+		{
+			if($tipo == 'simples')
+			{
+				$data = new FormData();
+				$data->busca = $busca;
+				$data->termo = $termo;
+				$data->ConsultarPor_1 = $consultarpor1;
+				$data->Unidade = $unidade;
+				$data->Genero = $genero;
+
+			}
+			
+			
+			elseif($tipo == 'detalhe')
+			{
+				$data = new FormData();
+				if($filtro)
+				{
+					$data->busca = $busca;
+					$data->termo = '1';
+					$data->ConsultarPor_1 = $campo;
+					$data->Unidade = '0';
+					$data->Genero = '0';
+				}
+				else
+				{
+					$data->busca = $busca;
+					$data->termo = $termo;
+					$data->ConsultarPor_1 = $consultarpor1;
+					$data->Unidade = $unidade;
+					$data->Genero = $genero;
+				}
+			}
+			
+			elseif($tipo == 'indice')
+			{
+				$data = new FormData();
+				$data->Unidade = $unidade;
+				$data->ConsultarPor_1 = $consultarpor1;
+				$data->Consulta_1 = $consulta1;
+				$data->Termo = $termo;				
+			}
+			
+			elseif($tipo == 'multi')
+			{
+				$data = new FormData();
+				$data->Unidade = $unidade;
+				$data->Genero = $genero;
+				$data->ConsultarPor_1 = $consultarpor1;
+				$data->Consulta_1 = $consulta1;
+				$data->Operador = $operador;
+				$data->ConsultarPor_2 = $consultarpor2;
+				$data->Consulta_2 = $consulta2;
+			}
+			$voltou = true;
+		}
+
+		if ( (trim($data->busca)<>'') OR (trim($filtro)<>'') OR ($voltou) ) // nao usei validators
+		{
+            $this->objGenero->GetByDescricao("PERIODICO");//pega idgenero para periodico   
+            if($data->Genero==$this->objGenero->idgenero){ //verifica se genero eh periodico
+                $camposPesquisa = $this->GetCamposPesquisaPeriodico();//pega xml de campos buscaveis de periodicos
+            }else{
+                $camposPesquisa = $this->GetCamposPesquisa();
+            }
+//			$this->objSimples = $MIOLO->GetBusiness($module,'pesquisasimples');
+
+			//setdata para configurar o valor do campo edtBusca
+			if ( (trim($data->busca) == '') AND (trim($filtro) <> ''))
+			{
+				$data->busca = $this->objSimples->SubstituirAspas($filtro);
+				$data->termo = true;
+				$this->SetData($data);
+			}
+
+			if ( $voltou )
+			{
+				if($tipo == 'simples')
+				{
+					$this->SetData($data);
+				}
+				elseif($tipo == 'detalhe')
+				{
+					$this->SetData($data);
+				}
+			}
+//			$data->busca = $this->objSimples->RetirarCaracteresEspeciais($data->busca);
+
+			$query = $this->objSimples->Listar($data,$camposPesquisa,$filtro,$campo);
+//AQUI É A SQL FORMADA EM pesquisaSimples.class
+			if ($query)
+			{
+				if($data->termo)
+				{
+					$this->AddField(new HiddenField('chkboxTermo'));
+					$this->SetFieldValue('chkboxTermo','1');
+				}
+                /*
+                var_dump("camposPesquisa </br>");
+                var_dump($camposPesquisa);
+                var_dump("</br>");
+                var_dump("Data</br>");
+                var_dump($data);
+                var_dump("</br>");
+                */
+				if($tipo == null)
+				{
+					$this->MontaDataGrid($camposPesquisa,$query,'simples',$data);
+				}
+				else
+				{
+					$this->MontaDataGrid($camposPesquisa,$query,$tipo,$data);
+				}
+			}
+			else
+			{
+				$MIOLO->Prompt(Prompt::Error('Sua pesquisa por "' . $data->busca . '" não retornou nenhum resultado.<br><br>
+				Sugestões:<br><br> 
+					- Certifique-se de que todas as palavras estejam escritas corretamente.<br><br>
+					- Tente palavras-chave diferentes.<br><br>
+					- Tente palavras-chave mais genéricas.<br><br>
+					- Em caso de dúvida, consulte a pessoa responsável pelo atendimento na sua biblioteca.<br>',$MIOLO->GetActionURL($module,$action)));
+			}
+		}
+		else
+		{
+			$MIOLO->Prompt(Prompt::Error("Por favor, preencha o campo Busca.",$MIOLO->GetActionURL($module,$action)));
+		}
+	}
+
+
+	function btnDetalhesObra_click($sender)
+	{
+		global $MIOLO, $module, $self, $theme, $action, $page, $item;
+
+        $GeneroPeriodico = $MIOLO->GetBusiness($module,'genero');
+        
+        $GeneroPeriodico->GetByDescricao("PERIODICO");
+        $ehPeriodico = false;
+
+        if($this->GetFormValue('Genero') == $GeneroPeriodico->idgenero){
+            $ehPeriodico = true;
+        }
+        
+		//tenta buscar endereco para botao voltar (para tela de resultados) caso tenha havido erro na reserva
+		$endereco = $this->GetFormValue('endereco');
+        /*
+        var_dump("</br></br>");
+        var_dump();
+        var_dump("</br></br>");
+        */
+        if($endereco != null) // adiciona botao com endereco previamente estabelecido, antes do erro
+		{
+			//endereco nao pode conter "&", para nao confundir com novos parametros
+			$endereco = str_replace('@@@', '&', $this->GetFormValue('endereco'));
+			$this->AddButton(new FormButton('btnVoltar', 'Voltar', $endereco ));
+		}
+		else //adiciona botao voltar com endereco baseado nos parametros correspondentes
+		{
+			$tipo = $this->GetFormValue('tipo');
+			$page = $this->getFormValue('page');
+
+			if(($tipo == 'simples') OR ($tipo == 'detalhe'))
+			{
+				$busca = $this->GetFormValue('busca');
+				$termo = $this->GetFormValue('termo');
+				$consultarpor1 = $this->GetFormValue('ConsultarPor_1');
+				$unidade = $this->GetFormValue('Unidade');
+				$genero = $this->GetFormValue('Genero');
+
+				$endereco = $MIOLO->GetActionURL($module, $action, '', array('event'=>'btnConsultar_click', 'busca'=>$busca, 'termo'=>$termo, 'ConsultarPor_1'=>$consultarpor1, 'Unidade'=>$unidade, 'Genero'=>$genero, 'tipo'=>$tipo, 'pn_page'=>$page));
+				
+				$this->AddButton(new FormButton('btnVoltar', 'Voltar', $endereco ));
+			}
+/*
+			elseif($tipo == 'detalhe')
+			{
+				$campob = $this->GetFormValue('campo');
+				$busca = $this->GetFormValue('busca');
+				$endereco = $MIOLO->GetActionURL($module, $action, '', array('event'=>'btnConsultar_click', 'busca'=>$busca, 'campo'=>$campob, 'tipo'=>$tipo, 'pn_page'=>$page));
+				$this->AddButton(new FormButton('btnVoltar', 'Voltar', $endereco ));
+			}
+			
+*/
+
+			elseif($tipo == 'indice')
+			{
+				$this->AddButton(new FormButton('btnVoltar', 'Voltar', 'RETURN'));
+				/*	
+				$endereco = $MIOLO->GetActionURL($module, 'main:pesquisaindice', $busca, Array('event'=>'PesquisaDetalhada','unidade'=>$unidade, 'termo' =>$termo, 'consultarpor1'=>$consultarpor1,'consulta'=>$consulta,'tipo'=>$tipo,'pn_page'=>$page));
+				$this->AddButton(new FormButton('btnVoltar', 'Voltar', $endereco ));
+				*/				
+			}	
+			
+			
+			elseif($tipo == 'multi')
+			{
+/*				$pesquisaUnidade = $this->GetFormValue('pesquisaUnidade');
+				if($pesquisaUnidade)
+				{
+					$actionVoltar = 'main:pesquisaunidade';
+				}
+				else
+				{
+*/
+				$actionVoltar = 'main:pesquisamulticampo';
+//				}
+				$unidade = $this->GetFormValue('unidade');
+				$genero = $this->GetFormValue('genero');
+				$consultarpor1 = $this->GetFormValue('consultarpor1');
+				$consulta1 = $this->GetFormValue('consulta1');
+				$operador = $this->GetFormValue('operador');
+				$consultarpor2 = $this->GetFormValue('consultarpor2');
+				$consulta2 = $this->GetFormValue('consulta2');
+				$endereco = $MIOLO->GetActionURL($module, $actionVoltar, '', Array('event'=>'btnConsultar_click','unidade'=>$unidade,'genero'=>$genero,'consultarpor1'=>$consultarpor1,'consulta1'=>$consulta1,'operador'=>$operador,'consultarpor2'=>$consultarpor2,'consulta2'=>$consulta2,'tipo'=>$tipo,'pn_page'=>$page));
+				$this->AddButton(new FormButton('btnVoltar', 'Voltar', $endereco ));
+			}
+			elseif($tipo == 'unid')
+			{
+				$pesquisaUnidade = $this->GetFormValue('pesquisaUnidade');
+				if($pesquisaUnidade)
+				{
+					$actionVoltar = 'main:pesquisaunidade';
+				}
+				$unidade = $this->GetFormValue('unidade');
+				$endereco = $MIOLO->GetActionURL($module, $actionVoltar, '', Array('event'=>'btnConsultar_click','unidade'=>$unidade,'tipo'=>$tipo,'pn_page'=>$page));
+				$this->AddButton(new FormButton('btnVoltar', 'Voltar', $endereco ));
+			}
+			elseif($tipo == 'outros')
+			{
+				$busca = $this->GetFormValue('busca');
+				$tiponum = $this->GetFormValue('tiponum');
+				$actionVoltar = 'main:pesquisanumerica';
+				$endereco = $MIOLO->GetActionURL($module, $actionVoltar, '', Array('event'=>'btnConsultar_click','busca'=>$busca,'tiponum'=>$tiponum,'tipo'=>$tipo,'pn_page'=>$page));
+				$this->AddButton(new FormButton('btnVoltar', 'Voltar', $endereco ));
+			}
+		}
+
+		//busca pagina atual do grid de exemplares, para o caso de ocorrer um erro posterior na reserva
+                $pgdet = $this->GetFormValue('pn_page'); 
+
+		// Primeiro, montar um grid com os exemplares
+		$columns = array(
+			new DataGridColumn('obra','Obra','center',true, '10%',true, null, true,true),
+			new DataGridColumn('exemplar','Exemplar','center',true, '16%',true, null, true,true),
+			new DataGridColumn('tipo','Tipo','center',true, '20%',true, null, true,true),
+			new DataGridColumn('estado','Estado','center',true, '14%',true, null, true,true),
+			new DataGridColumn('prevdev','Previsão Devolução','center',true, '17%',true, null, true,true),
+			new DataGridColumn('unidade','Unidade','center',true, '15%',true, null, true,true),
+			new DataGridColumn('volume','Volume','center',true, '8%',true, null, true,true)
+			);
+
+		//endereco (para pag de resultados) nao pode conter "&", para nao confundir com novos parametros
+		$href_datagrid = $MIOLO->GetActionURL($module,$self,$item, Array('event'=>'btnDetalhesObra_click', "endereco"=>str_replace('&', '@@@', $endereco)));
+
+		//Instancia o objeto pesquisa simples
+	    $this->objSimples = $MIOLO->GetBusiness($module,'pesquisasimples');
+
+        if(!$ehPeriodico){
+            $query = $this->objSimples->ListExemplaresByIdObra($item);
+        }else{
+            $query = $this->objSimples->ListExemplaresByIdArtigo($item);
+        }
+        /*
+        var_dump("Item: </br>");
+        var_dump($item);
+        var_dump("Genero: </br>");
+        var_dump($genero);
+        var_dump("Genero form: </br>");
+        var_dump($this->GetFormValue('Genero'));
+        */
+		
+		$href_reserva= $MIOLO->GetActionURL($module,'main:reservar','%0%',Array('event'=>'btnVerificar:click', "endereco"=>str_replace('&', '@@@', $endereco), "pgdet"=>$pgdet));	
+		$datagrid = new DataGrid2($query, $columns, $href_datagrid,20);
+		
+        if(!$ehPeriodico){
+            $tituloObra = $this->objSimples->GetTitulo($item);
+            $datagrid->SetTitle('Exemplares de: ' . $tituloObra->result[0][0]);
+            $datagrid->AddActionText('alt','Reservar',$href_reserva);
+        }else{
+            $tituloPeriodico = $this->objSimples->GetTituloPeriodicoByIdArtigo($item);
+            $datagrid->SetTitle('Exemplares do Periódico: ' . $tituloPeriodico->result[0][0]);
+        }
+		
+		$datagrid->SetWidth('99%');
+		$datagrid->setClose(null);
+
+		$theme->ClearContent();
+		$theme->InsertContent($datagrid);
+
+		// Agora vamos inserir informações da Obra
+		$this->SetTitle('Ficha Detalhada');
+		$this->defaultButton = false;
+
+		$this->objObra = $MIOLO->GetBusiness($module, 'obra');          
+		$data = $this->objObra->getFichaDetalhada($item);
+
+		$linhas = array();
+      
+      if($data[0])
+			$linhas[] = array('Número da Obra', $data[0]);
+		if($data[1])
+			$linhas[] = array('Título', $data[1]);
+		if($data[2])
+			$linhas[] = array('Subtítulo', $data[2]);
+		if($data[3])
+			$linhas[] = array('Autor', $data[3]);
+		if($data[4])
+			$linhas[] = array('Edição', $data[4]);
+		if($data[5])
+			$linhas[] = array('Classificação', $data[5]);
+		if($data[6])
+			$linhas[] = array('Notação de Autor', $data[6]);
+		if($data[7])
+			$linhas[] = array('Notação de Título', $data[7]);
+		if($data[8])
+			$linhas[] = array('Local de Publicação', $data[8]);
+		if($data[9])
+			$linhas[] = array('Editora', $data[9]);
+		if($data[10])
+			$linhas[] = array('Data de Publicação', $data[10]);
+		if($data[11])
+			$linhas[] = array('Descrição Física', $data[11]);
+		if($data[12])
+			$linhas[] = array('Material Complementar', $data[12]);
+		if($data[13])
+			$linhas[] = array('Série', $data[13]);
+		if($data[14])
+			$linhas[] = array('Número de Volume', $data[14]);
+		if($data[15])
+			$linhas[] = array('Assunto', $data[15]);
+		if($data[16])
+			$linhas[] = array('Entrada Secundária', $data[16]);
+		if($data[17])
+			$linhas[] = array('Acesso Eletrônico', $data[17]);
+
+		$tabela = new MTableRaw('', $linhas);
+
+		//define atributos do tableraw, como fundo cinza (mesmo do form)
+		$this->page->addStyleCode(".m-tableraw-row{ background-color: threedface; font: message-box; color: #000; font-weight: normal; font-size: 11px; text-decoration: none}");
+      
+      //Insere referência bibliográfica no padrão ABNT
+      
+      $autor = $MIOLO->GetBusiness($module,'autor');
+      $autoresSecundarios = $autor->GetAutorSecundarioByObra($item);
+      $linhas = array();
+      $referencia = $this->objObra->formatarABNT($data,$item,$autoresSecundarios);
+      
+      if($referencia != null){
+         $linhas[] = array('Referência: ',$referencia);
+      }else{
+         //To do Formatar ABNT para periodico
+         $periodico = $MIOLO->GetBusiness($module,'periodico');
+         $referencia = $periodico->formatarABNT($data,$item);
+         if($referencia != null){
+            $linhas[] = array('Referência: ',$referencia);
+         }
+      }      
+      $tabela2 = new MTableRaw('', $linhas);
+
+      $fields = Array(
+			$tabela,
+         $tabela2
+		);
+
+		// Insere os campos
+		$this->SetFields($fields);
+
+                
+		$this->SetButtonAttr('btnConsultar','visible',false);
+		$this->AddButton( new MButtonWindow('btnMarc', 'MARC', $MIOLO->GetActionURL($module = $module, $action = 'marc', $item)) );
+	}
+
+
+	function PesquisaDetalhada()
+	{
+		global $MIOLO, $module, $self, $theme, $action, $page;
+
+//		$filtro = $_GET["item"];
+//		$campo = $_GET["campo"];
+
+		$filtro = $this->GetFormValue('item');
+		$campo = $this->GetFormValue('campo');
+
+		$filtro = $this->objSimples->SubstituirAspas($filtro);
+		$filtro = $this->objSimples->RetirarCaracteresEspeciais($filtro);
+		$filtro = trim($filtro);
+
+		$this->btnConsultar_click($sender,$filtro,$campo);
+	}
+}
+?>

@@ -1,0 +1,110 @@
+<?
+class frmRepKilometrosPercorridos extends Form
+{	
+	protected $veiculo;
+    
+    function __construct()
+    {
+        global $MIOLO;
+        $this->veiculo = $MIOLO->getBusiness('adm','veiculo');
+        $this->Form('Relatório de Quilômetros Percorridos');
+        $this->EventHandler();       
+    }
+
+	function CreateFields()
+	{		
+		$fields = Array(
+			new MCalendarField('dataInicio','','Data Inicial',10,'informe a data inicial do relatório.'),
+			new MCalendarField('dataFim','','Data Final',10,'informe a data final do relatório.'),
+		);
+		
+		$this->SetFields($fields);
+		$buttons = Array
+		(
+			new FormButton('btnGerarRelatorio', 'Gerar Relatório','pdf'),
+			new FormButton('btnGerarCSV', 'Gerar Planilha')
+		);
+		$this->SetButtons($buttons);
+	}
+
+
+
+	function btnGerarRelatorio_click()
+	{	global $MIOLO, $module, $item;
+
+		$data = $this->getData();		
+		$veiculo = $this->veiculo;	
+		$placas  = $veiculo->listAllByData($data->dataInicio,$data->dataFim)->result;
+		
+		if(is_array($placas))
+		{
+                 
+		   foreach($placas as $aux)
+		    {
+		    	$placa[]           = $aux[0];
+		    	$odometroSaida[]   = $aux[1];
+		    	$odometroChegada[] = $aux[2];
+		    }
+		   
+	
+			$report = new MJasperReport('sigaept');
+			$parameters['dataInicio'] 	= Form::GetFormValue('dataInicio');
+			$parameters['dataFim'] 		= Form::GetFormValue('dataFim'); 
+			$parameters['SUBREPORT_DIR']	= $MIOLO->GetConf('home.modules');
+			$parameters['int_pIdUsuario']	= $MIOLO->login->idkey;
+			$parameters['pURL']		= $MIOLO->GetConf('home.url');
+
+			$report->Execute('adm', 'KMpercorridos', $parameters);
+
+		}
+		else 
+		{
+			$this->addError('Nenhum veículo foi utilizado no período de '.$data->dataInicio.' a '.$data->dataFim.'. <br>Portanto, nenhum relatório será gerado!');	
+		}
+
+    }
+
+	function btnGerarCSV_click()
+	{
+		$data = $this->getData();		
+
+	    $veiculo = $this->veiculo;	
+		$placas  = $veiculo->listAllByData($data->dataInicio,$data->dataFim);//->result;
+		
+		if(is_array($placas->result))
+		{
+			foreach($placas->result as $aux)
+		    {
+		    	$placa[]           = $aux[0];
+		    	$odometroSaida[]   = $aux[1];
+		    	$odometroChegada[] = $aux[2];
+		    }
+		    
+		    $dataRel[] = array('PLACA','MARCA','MODELO','QUILÔMETROS PERCORRIDOS');
+		    foreach ($placa as $id => $p)
+		    {
+		    	$marca[]  = $veiculo->listMarcaByPlaca($p)->result; 	    		    	
+		    	$modelo[] = $veiculo->listModeloByPlaca($p)->result; 
+
+		    	$dataRel[] = array($p,
+		    					   $marca[$id][0][0],
+		    					   $modelo[$id][0][0],
+		    					   $odometroChegada[$id]-$odometroSaida[$id].' Km',
+		    					   );	
+		    					   
+		    	$totalKilometros += $odometroChegada[$id]-$odometroSaida[$id];	    	
+		    }
+		  	          
+		  $dataRel[] = array('TOTAL','','',$totalKilometros.' Km');			          
+	        
+	          $placas->result = $dataRel;
+			$placas->getCSV("Relatório de  Quilômetros percorridos- de ".$data->dataInicio." até ".$data->dataFim);
+		}
+		else 
+		{
+		$this->addError('Nenhum veículo foi utilizado no período de '.$data->dataInicio.' a '.$data->dataFim.'. <br>Portanto, nenhum relatório será gerado!');	
+		}				    	    
+		
+	}
+}
+?>

@@ -1,0 +1,168 @@
+<?php
+class repOrdemEntregaUnica extends PDFReport
+{
+	var $img;
+	var $timestamp;
+	var $objMovimento;
+	var $objUO;
+
+	function __construct()
+	{
+		global $MIOLO, $module, $page, $context, $self, $action, $perms;
+
+		
+		$ordem = Form::GetFormValue('numOrdem');
+		$quant_ordem = 1;
+
+
+		parent::__construct(NULL, NULL, 55);
+	    $ui = $MIOLO->GetUI();
+		$this->img = $ui->GetImageSrc('logonet.png'); 
+
+		$this->SetOption('showLines',0);
+		$this->timestamp = date('d/m/Y G:i');
+
+		$this->pdf->ezStartPageNumbers(500, 800, 11, 'right', 'Página: {PAGENUM}');
+		$this->pdf->ezSetMargins(50, 30, 30, 30);
+		$this->SetOption('fontSize',8);
+	
+		$objUO = $MIOLO->GetBusiness($module,'uo');
+		$objMovimento = $MIOLO->GetBusiness($module,'movimento');
+
+
+		$k = 0;
+
+		for($i=0; $i<$quant_ordem; $i++){
+
+
+			$query = $objMovimento->ListMovimentosByOrdemEntrega($ordem);
+
+
+			if($query->result[0][0] <> null){
+
+				$k++;
+				$query->SetOrder('numeroordem,idmaterial,idrequisicao');
+
+				unset($dataini);
+
+				$uo[] = $objUO->GetById($query->result[0][8])->sigla;
+				$numeroordem[] = $query->result[0][7];
+				$soma = 0;
+
+				foreach($query->result as $row){
+					$soma += $row[6];
+					$row[5] = 'R$ ' . number_format(str_replace(',','.',$row[5]),2,',','.');
+					$row[6] = 'R$ ' . number_format(str_replace(',','.',$row[6]),2,',','.');
+					$dataini[] = $row;
+				}
+
+				$total[] = $soma;
+				$data[$i] = $dataini;
+
+				$columns = array(
+					new PDFReportColumn('idmaterial','Código','center',true,7,true,null,true),
+					new PDFReportColumn('descricao','Descrição','left',true,53,true,null,true),
+					new PDFReportColumn('unidade','UN','center',true,5,true,null,true),
+//					new PDFReportColumn('numeroordem','Ord. Ent.','center',true,8,true,null,true),
+					new PDFReportColumn('idrequisicao','Nº Req.','center',true,8,true,null,true),
+					new PDFReportColumn('quantidade','Qtde.','center',true,6,true,null,true),
+					new PDFReportColumn('valorunitario','Valor Unit.','center',true,10,true,null,true),
+					new PDFReportColumn('valortotal','Valor Total','center',true,11,true,null,true)
+				);
+
+				$this->SetColumns($columns);
+				$colDetail[$i] = $this->columns;
+
+			
+			}
+
+		}
+
+		// gera o report
+		for($i=0; $i<$k; $i++){
+			$this->GeneratePageHeader($uo[$i], $numeroordem[$i]);
+			$this->columns = $colDetail[$i];
+			$this->GenerateData($data[$i]);
+			$this->GeneratePageFooter($total[$i]);
+			if($i<>$k-1){
+				$this->pdf->ezNewPage();
+			}
+		}
+
+	}
+
+	function GeneratePageHeader($nomeSetor, $numeroOrdem)
+	{
+		global $MIOLO;
+
+		$h = $this->pdf->getFontHeight(12);
+		$this->pdf->ezImage($this->img,5,50,'none','left');
+
+		$x00=$this->pdf->left;
+		$hh = $this->pdf->getFontHeight(12);
+		$this->pdf->addText($x00, 800, 12, $this->manager->getConf('instituicao.sigla')." - ".$this->manager->getConf('instituicao.nome'));
+		$this->pdf->addText($x00, 800 - $hh, 12, $this->manager->getConf('theme.system'));
+
+/*
+		$this->pdf->addText(90,800,12,'UFJF - Universidade Federal de Juiz de Fora');
+		$this->pdf->addText(90,800-$h,12,'CGCO - Centro de Gestão do Conhecimento Organizacional');
+		$this->pdf->addText(90,800-$h-$h,12,'SIGA - Sistema Integrado de Gestão Acadêmica');
+*/
+
+		$this->pdf->addTextWrap(450, 800-$h-$h, 100, 10, $this->timestamp,'right');
+		$this->pdf->addText(90,800-$h-$h-$h,10,'Coordenadoria de Suprimentos - Setor de Estoque');	
+		$this->pdf->addText(90,800-4*$h,10,'Ordem de Entrega Número: '.$numeroOrdem.' para o setor: '.$nomeSetor);	
+		$this->pdf->ezSetY(800-$h-$h-$h-$h-$h);
+	}
+
+	function GeneratePageFooter($valorTotal)
+	{
+		global $MIOLO, $module, $page, $context, $self, $action, $perms;
+
+		if( $this->pn->pageNumber == $this->pn->pageCount )
+		{
+//			$objNomeCargo = $this->objRequisicao->GetNomeCargoByAlmoxarifado($this->idsetoralmox);
+//			$nomeCargo = $objNomeCargo->result;
+//			foreach ($nomeCargo as $rs)
+//			{
+//				$nome = $nomeCargo[0][0];
+//				$cargo = $nomeCargo[0][1];
+//			}
+			$cargo = 'Diretor';
+
+			$this->pdf->SetStrokeColor(0,0,0); 
+			$this->pdf->ezSetDy(-10);
+    
+			$this->pdf->line(370,$this->pdf->y,560,$this->pdf->y);
+			$this->pdf->ezSetDy(-15);
+			$this->pdf->addTextWrap(360,$this->pdf->y,200,10,'Valor Total: R$'. number_format(str_replace(',','.',$valorTotal),2,',',''),'right');
+
+			$this->pdf->ezSetDy(-50);
+			$this->pdf->line(75,$this->pdf->y,225,$this->pdf->y);
+			$this->pdf->line(325,$this->pdf->y,475,$this->pdf->y);
+
+			$this->pdf->ezSetDy(-15);
+			$this->pdf->addTextWrap(75,$this->pdf->y,150,8,'RESPONSÁVEL PELA REQUISIÇÃO','center');
+			$this->pdf->addTextWrap(325,$this->pdf->y,150,8,$cargo,'center');
+
+			$this->pdf->ezSetDy(-15);
+			//$this->pdf->addTextWrap(75,$this->pdf->y,150,8,'WANDERLEY RODRIGUES','center');
+			$this->pdf->addTextWrap(325,$this->pdf->y,150,8,$MIOLO->GetLogin()->user,'center');
+		}
+	}
+
+	function GenerateData($data)
+	{
+		$this->pdf->ezSetDy(-12);
+		$this->SetData($data);
+		$this->rawdata = $this->GenerateTableData();
+		$this->GenerateBody($this->rawdata);
+	}
+
+	function Generate()
+	{
+		$this->SetOutput();
+		$this->Execute();
+	}
+}
+?>

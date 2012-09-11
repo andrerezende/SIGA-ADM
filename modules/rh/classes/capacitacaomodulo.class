@@ -1,0 +1,279 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class BusinessRhCapacitacaoModulo extends MBusiness
+{
+    public $idmodulo; 
+    public $idcurso;
+    public $modulo; 
+    public $nome;		
+    public $datainicio;	
+    public $datafim;	
+    public $horainicio;	
+    public $horafim;	
+    public $cargahoraria;
+    public $local;	
+    public $status;	// "A"=>"Aberto","F"=>"Fechado"
+    public $turno; // "M"=>"Manhã","T"=>"Tarde","N"=>"Noite"
+    public $vagas;
+    public $diasemana;
+    public $anosemestre;
+    public $observacoes;
+    public $inscritos;
+    public $curso; // object
+
+
+	function __construct($data=null)
+	{   	
+		parent::__construct('sigaept',$data);
+	}
+
+	function GetById($id)
+	{
+    	$this->idmodulo = $id;    
+		$this->retrieve();
+		return $this;
+	}
+
+    function setData($data)
+    {
+        $this->idcurso = $data->idcurso;		
+        $this->nome = $data->nome;		
+        $this->modulo = $data->modulo;	
+        $this->datainicio = $data->datainicio;	
+        $this->datafim = $data->datafim;	
+        $this->horainicio = $data->horainicio;	
+        $this->horafim = $data->horafim;	
+        $this->cargahoraria = $data->cargahoraria;
+        $this->turno = $data->turno;	
+        $this->local = $data->local;	
+        $this->status = $data->status;	
+        $this->vagas = $data->vagas;
+        $this->diasemana = $data->diasemana;
+        $this->anosemestre = $data->anosemestre;
+        $this->observacoes = substr($data->observacoes,0,200);
+    }
+
+	function listCursoModulo()
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('idmodulo');
+		$criteria->addColumnAttribute('curso.nome');
+		$criteria->addColumnAttribute('nome');
+		$criteria->addColumnAttribute('turno');
+		$criteria->addOrderAttribute('curso.nome');
+		$criteria->addOrderAttribute('nome');
+		$query = $criteria->retrieveAsQuery();
+        $result = $query->treeResult("1","2,3,0"); 
+//        $a = $query->chunkResultMany(0,array(1,2),'A',''); 
+//        foreach($a as $id=>$v)
+//        {
+//            $result[$id] = $v[0] . ($v[1] ? '&nbsp;-&nbsp;Módulo:&nbsp;' . $v[1] : '');
+//        }
+        return $result;
+	}
+
+	function listCursoModuloAberto()
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('idmodulo');
+		$criteria->addColumnAttribute('curso.nome');
+		$criteria->addColumnAttribute('nome');
+		$criteria->addColumnAttribute('turno');
+		$criteria->addOrderAttribute('curso.nome');
+		$criteria->addOrderAttribute('nome');
+        $criteria->addCriteria('status','=',"'A'");
+		$query = $criteria->retrieveAsQuery();
+        $result = $query->treeResult("1","2,3,0"); 
+        return $result;
+	}
+
+	function getListOfAnoSemestre()
+	{
+		$criteria = $this->getCriteria();
+        $criteria->setDistinct(true);
+		$criteria->addColumnAttribute('anosemestre');
+		$criteria->addOrderAttribute('anosemestre',false);
+		$result = $criteria->retrieveAsQuery()->result;
+		if (!$result)
+		{
+			$a = array();
+			$a[0] = "VAZIO";
+			return $a; 
+		} 
+		else
+		{
+		   	foreach($result as $r)
+        	{
+	            $anosemestre[$r[0]] = $r[0];
+        	}
+        	return $anosemestre;
+		}
+	}
+
+	function getInscritos()
+	{
+		$this->retrieveAssociation('inscritos');
+        return $this->inscritos;
+	}
+
+	function getInscritosConfirmados()
+	{
+		$this->retrieveAssociation('inscritos');
+        if (count($this->inscritos))
+        {
+            foreach($this->inscritos as $insc)
+            {
+               if (($insc->status=='C') || ($insc->status=='F'))
+               {
+                  $inscritos[] = $insc;
+               }  
+            }
+        }
+        else
+        {
+            $inscritos = array();
+        }
+        return $inscritos;
+	}
+
+    function podeConfirmar($n)
+    {
+        $conf = count($this->getInscritosConfirmados());
+        return (($n + $conf  <= (int)$this->vagas));
+    }
+
+
+	function listAll($filter='', $status='', $anosemestre = '')
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('idmodulo');
+		$criteria->addColumnAttribute('curso.nome','cursonome');
+		$criteria->addColumnAttribute('modulo');
+		$criteria->addColumnAttribute('nome');
+		$criteria->addColumnAttribute('datainicio','datainicio');
+		$criteria->addColumnAttribute('turno');
+		$criteria->addColumnAttribute('status');
+		$criteria->addColumnAttribute('diasemana');
+		$criteria->addColumnAttribute('observacoes');
+		$criteria->addColumnAttribute('anosemestre');
+        if ($filter != '')
+        {
+            $criteria->addCriteria('nome','LIKE',"'{$filter}%'");
+        }
+        if ($status != '')
+        {
+            $criteria->addCriteria('status','=',"'{$status}'");
+        }
+        if ($anosemestre != '')
+        {
+            $criteria->addCriteria('anosemestre','=',"'{$anosemestre}'");
+        }
+		$criteria->addOrderAttribute('curso.nome');
+		$criteria->addOrderAttribute('modulo');
+		$criteria->addOrderAttribute('nome');
+		$query = $criteria->retrieveAsQuery();
+        return $query;
+	}
+
+	function listEstatistica($anosemestre = '')
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('idmodulo');
+		$criteria->addColumnAttribute('curso.idcurso');
+		$criteria->addColumnAttribute('curso.nome');
+		$criteria->addColumnAttribute('modulo');
+		$criteria->addColumnAttribute('nome');
+		$criteria->addColumnAttribute('datainicio','datainicio');
+		$criteria->addColumnAttribute('turno');
+		$criteria->addColumnAttribute('vagas');
+		$criteria->addColumnAttribute('diasemana');
+		$criteria->addColumnAttribute('observacoes');
+		$criteria->addColumnAttribute('anosemestre');
+		$criteria->addOrderAttribute('curso.idcurso');
+		$criteria->addOrderAttribute('modulo');
+//        $criteria->addCriteria('status','=',"'A'");
+        if ($anosemestre != '')
+        {
+            $criteria->addCriteria('anosemestre','=',"'{$anosemestre}'");
+        }
+		$query = $criteria->retrieveAsQuery();
+        foreach($query->result as $row)
+        {
+            $criteria1 = $this->getCriteria();
+    		$criteria1->addColumnAttribute('count(inscritos.inscricao)');
+            $criteria1->addCriteria('idmodulo','=',"'{$row[0]}'");
+            $criteria1->addCriteria('inscritos.status','=',"'P'");
+            $query1 = $criteria1->retrieveAsQuery();
+            $row[8] = $query1->result[0][0];
+            $criteria2 = $this->getCriteria();
+    		$criteria2->addColumnAttribute('count(inscritos.inscricao)');
+            $criteria2->addCriteria('idmodulo','=',"'{$row[0]}'");
+            $criteria2->addCriteria('inscritos.status','=',"'E'");
+            $query2 = $criteria2->retrieveAsQuery();
+            $row[9] = $query2->result[0][0];
+            $criteria3 = $this->getCriteria();
+    		$criteria3->addColumnAttribute('count(inscritos.inscricao)');
+            $criteria3->addCriteria('idmodulo','=',"'{$row[0]}'");
+            $criteria3->addCriteria('inscritos.status','=',"'A'");
+            $query3 = $criteria3->retrieveAsQuery();
+            $row[10] = $query3->result[0][0];
+            $criteria4 = $this->getCriteria();
+    		$criteria4->addColumnAttribute('count(inscritos.inscricao)');
+            $criteria4->addCriteria('idmodulo','=',"'{$row[0]}'");
+            $criteria4->addCriteria('inscritos.status','=',"'X'");
+            $query4 = $criteria4->retrieveAsQuery();
+            $row[11] = $query4->result[0][0];
+            $criteria5 = $this->getCriteria();
+    		$criteria5->addColumnAttribute('count(inscritos.inscricao)');
+            $criteria5->addCriteria('idmodulo','=',"'{$row[0]}'");
+            $criteria5->addCriteria('inscritos.status','=',"'C'");
+            $query5 = $criteria5->retrieveAsQuery();
+            $row[12] = $query5->result[0][0];
+            $criteria6 = $this->getCriteria();
+    		$criteria6->addColumnAttribute('count(inscritos.inscricao)');
+            $criteria6->addCriteria('idmodulo','=',"'{$row[0]}'");
+            $criteria6->addCriteria('inscritos.status','=',"'F'");
+            $query6 = $criteria6->retrieveAsQuery();
+            $row[13] = $query6->result[0][0];
+            $result[] = $row;
+        }
+        return $result;
+	}
+
+    function getCountInscritos()
+    {
+        $inscritos = $this->getInscritos();
+        return count($inscritos);
+    }
+
+    function isFull()
+    {
+        return ($this->getCountInscritos() >= $this->vagas);
+    }
+
+	function getTurno($id)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('turno');
+		$criteria->addCriteria('idmodulo','=',"'$id'");
+		$query = $criteria->retrieveAsQuery();
+        return $query->result[0][0];
+	}
+}

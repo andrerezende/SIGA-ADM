@@ -1,0 +1,369 @@
+<?php
+class repExecucaoFinanceiraPorFatura extends PDFReport
+{
+	var $img;
+	var $timestamp;
+    var $level = array();
+	var $total;
+	var $subtotalUO;
+	var $subtotalRubrica;
+	var $UO;
+	var $dataInicial;
+	var $dataFinal;
+	var $objOrcamentoInterno;
+	var $objUO;
+	var $objTipoReq;
+	var $objRequisicao;
+	var $resultado;
+	
+	function __construct()
+	{
+        global $MIOLO, $module, $page, $context, $self, $action, $perms;
+
+        parent::__construct(NULL, NULL, 55);
+        $ui = $MIOLO->GetUI();
+        $this->img = $ui->GetImageSrc('logonet.png');
+        //        $this->SetPDF(new ezPDFReport('2'));
+        $this->timestamp = date('d/m/Y G:i');
+        //        $this->SetTrigger('AfterNewPage','repMultiLevel2','AfterNewPage', $this);
+        $this->pdf->ezStartPageNumbers(520, 800, 12, 'rigth', 'Página: {PAGENUM}');
+        $this->pdf->ezSetMargins(100, 30, 30, 30);
+        $this->GeneratePageHeader();
+        $this->GeneratePageFooter();
+		$this->SetOption('fontSize',9);
+
+		$this->getExecFinanceira();
+		
+		$this->makePages();		
+		
+	}
+	
+	function makePages()
+	{
+		
+		$i=0;
+		$pagina = 0;
+		
+				
+		
+		foreach ($this->resultado as $resultado)
+		{
+		
+			if ($pagina++>0)
+				$this->pdf->ezNewPage();
+				
+				
+			/*
+			 * Primeira tabela
+			 */
+		
+			$this->pdf->ezText('FATURA/NF...: <b>' . $resultado[0][0] . " </b> - Item: <b>" . $resultado[0][7] . "</b>\n\n");
+			
+			$total = 0;
+			foreach ($resultado as $linha)
+			{
+				$total += $linha[5];
+				
+				 $dataRel[] = array(
+                        $linha[1], // data
+                        $linha[2], // Req
+                        $linha[3], // Beneficiario
+                        $linha[4], // UO
+                        $linha[6], //Empresa
+                        number_format(str_replace(',','.',$linha[5]),2,',','.'),  // valor
+                        
+                    );  	
+			}
+			
+			$dataRel[] = array(
+                    '<b>TOTAL</b>',
+                    null,
+                    null,
+                    null,
+                    null,
+                     number_format(str_replace(',','.',$total),2,',','.')
+                );   
+			
+			//$cols = array('Data','Req.','Benficiário','UO','R$');
+			$cols = array('Data','Req.','Benficiário','UO','Empresa','R$');
+			
+			$options['textCol'] = array(0,0,0);
+            $options['shaded'] = 1;
+            $options['showLines'] = 1;
+            $options['fontSize'] = 11;
+            $options['maxWidth'] = 780;
+            $options['maxWidth'] = 600;
+            $options['xPos'] = 'left';
+            $options['xOrientation'] = 'right';
+            			
+			$this->pdf->ezTable($dataRel,$cols,'',$options);
+			
+			unset($dataRel);		
+			
+			
+			/*
+			 * Segunda tabela 
+			 */
+			 
+			 $total = 0;
+			 $uoResultado = array("0");
+			 $dataRel = array();
+			 
+			 foreach ($resultado as $linha)
+			 {
+			 	
+			 	$total += $linha[5];
+			 	
+			 	// cria uma nova matriz de acordo 
+			 	// com as UOS
+			 	$indice = array_search($linha[4],$uoResultado);
+			 	if ( $indice > 0)
+			 	{
+			 		$dataRel[$indice-1][1] += $linha[5];
+		 		}
+			 	else
+			 	{
+			 		$dataRel[] = array (
+			 				$linha[4],
+			 				number_format(str_replace(',','.',$linha[5]),2,',','.')  // valor
+			 			);		 
+			 		array_push($uoResultado,number_format(str_replace(',','.',$linha[4]),2,',','.'));
+			 	}
+			 				 	
+			 }
+			 
+			 $dataRel[] = array(
+                    '<b>TOTAL</b>',
+					number_format(str_replace(',','.',$total),2,',','.')
+                );   
+                
+         	$options['textCol'] = array(0,0,0);
+            $options['shaded'] = 1;
+            $options['showLines'] = 1;
+            $options['fontSize'] = 11;
+            $options['maxWidth'] = 780;
+            $options['maxWidth'] = 600;
+            $options['xPos'] = 'left';
+            $options['xOrientation'] = 'right';
+            
+           
+            	
+            	//var_dump($dataRel);
+            	//echo "<br><br>";
+            	
+            $cols = array('UO','R$');	
+            
+			$this->pdf->ezText("\n\n");
+            			
+			$this->pdf->ezTable($dataRel,$cols,'Resumo por UO',$options);
+                
+            unset($dataRel);
+			
+			
+		} 	
+		
+		
+		
+	}
+	
+	
+	
+	function getExecFinanceira()
+	{
+		global $MIOLO, $module, $page, $context, $self, $action, $perms;
+		
+		$this->objRequisicao = $MIOLO->GetBusiness($module,'requisicao');
+		
+		$passagem = $this->objRequisicao->GetFaturasPassagem($this->dataInicial,$this->dataFinal);
+		//var_dump($passagem->result);
+		$hospedagem = $this->objRequisicao->GetFaturasHospedagem($this->dataInicial,$this->dataFinal);
+		//var_dump($hospedagem->result);
+		$restaurante = $this->objRequisicao->GetFaturasAlimentacao($this->dataInicial,$this->dataFinal);
+		//var_dump($restaurante->result);
+		
+		
+		
+		foreach ($passagem->result as $key=>$itemPassagem)
+		{
+			array_push($passagem->result[$key],"Passagem");
+			$newDate = split(" ",$passagem->result[$key][1]);
+			$passagem->result[$key][1] = $newDate[0];
+			
+			$cf = new MCurrencyFormatter();
+			$passagem->result[$key][5] = $cf->toDecimal($passagem->result[$key][5]);
+		}
+		
+		foreach ($hospedagem->result as $key=>$itemHospedagem)
+		{
+			array_push($hospedagem->result[$key],"Hospedagem");
+			$newDate = split(" ",$hospedagem->result[$key][1]);
+			$hospedagem->result[$key][1] = $newDate[0];	
+		}
+		
+		foreach ($restaurante->result as $key=>$itemRestaurante)
+		{
+			array_push($restaurante->result[$key],"Restaurante");
+			$newDate = split(" ",$passagem->result[$key][1]);
+			$passagem->result[$key][1] = $newDate[0];	
+		}
+		
+		/*
+		echo "<pre>";
+		echo "PASSAGEM: <BR>";
+		var_dump($passagem->result);
+		echo "<br>";
+		echo "____________________________";
+		echo "<br>";
+		echo "<br>HOSPEDAGEM:<BR>";
+		var_dump($hospedagem->result);
+		echo "<br>";
+		echo "____________________________";
+		echo "<br>";
+		echo "<br>RESTAURANTE<BR>";
+		var_dump($restaurante->result);
+		echo "<br>";
+		echo "<br>";
+		echo "<br>";
+		echo "____________________________";
+		echo "<br>";
+		echo "<br>RESULTADO<BR>";
+		$resultado = array_merge($passagem->result,$hospedagem->result,$restaurante->result);
+		var_dump($resultado);
+		echo "<br>";
+		echo "<br>";
+		echo "____________________________";
+		echo "<br>";
+		echo "<br>";
+		*/
+
+		//adiciona um item a mais 
+
+		
+
+
+		
+		/*
+		 * Irá criar um novo array mais organizado 
+		 */
+		 
+		$resultado = array_merge(
+				$array1 = $passagem->result ? $passagem->result : array(),
+				$array2 = $hospedagem->result ? $hospedagem->result : array(),
+				$array3 = $restaurante->result ? $restaurante->result : array()
+				);
+				
+		$novoResultado = array();
+		
+			foreach($resultado as $result)
+			{
+				$indice = $result[0];
+				$novoResultado[$indice] = array();
+			}
+			
+			foreach($resultado as $result)
+			{
+				$indice = $result[0];
+				array_push($novoResultado[$indice],$result);
+			}
+		
+		$this->resultado = $novoResultado;
+		
+		//echo "<pre>";
+		//var_dump($novoResultado);	
+		
+	}
+	
+
+	function GenerateGroupHeader($level, $array)
+	{
+		$this->pdf->SetStrokeColor(0, 0, 0);
+		$x0 = $this->pdf->left;
+
+		if ($level == 1)
+		{
+		}
+		elseif ($level == 2)
+		{
+			$this->pdf->ezSetDy(-45, 'makeSpace');
+			$y = $this->pdf->y;
+			$this->pdf->addText($x0, $y + 19, 12, 'UO: ' . $array[1]);
+			$this->pdf->line($x0, $y + 15, 300, $y + 15);
+			$this->pdf->addText($x0, $y + 2, 12, '    Rubrica: ' . $array[2]);
+			$this->pdf->line($x0+15, $y, 315, $y);
+		}
+		elseif ($level == 3)
+		{
+			$this->pdf->ezSetDy(-50, 'makeSpace');
+			$y = $this->pdf->y;
+			$this->pdf->addText($x0, $y + 34, 12, '         Tipo de Requisição: ' . $array[3]);
+			$this->pdf->line($x0+30, $y + 31, 330, $y + 31);
+			$this->pdf->ezSetY($y + 30);
+		}
+	}
+
+	function GeneratePageHeader()
+	{
+		$this->dataInicial = Form::GetFormValue('calDataInicial');
+		$this->dataFinal = Form::GetFormValue('calDataFinal');
+		
+		
+		
+		$x0 = $this->pdf->left;
+		$x1 = $this->pdf->right;
+		$h = $this->pdf->getFontHeight(12);
+		//echo $this->img . '<br>';
+		$header = $this->pdf->openObject();
+		$this->pdf->saveState();
+	
+
+		$x00=$this->pdf->left;
+		$hh = $this->pdf->getFontHeight(12);
+		$this->pdf->addText($x00, 800, 12, $this->manager->getConf('instituicao.sigla')." - ".$this->manager->getConf('instituicao.nome'));
+		$this->pdf->addText($x00, 800 - $hh, 12, $this->manager->getConf('theme.system'));
+
+	/*$this->pdf->addPngFromFile($this->img, $x0, 770, 50, 50);
+		$this->pdf->addText($x0 + 60, 800, 12, 'UFJF - Universidade Federal de Juiz de Fora');
+		$this->pdf->addText($x0 + 60, 800 - $h, 12, 'CGCO - Centro de Gestão do Conhecimento Organizacional');
+		$this->pdf->addText($x0 + 60, 800 - $h - $h, 12, 'SIGA - Sistema Integrado de Gestão Acadêmica');
+*/
+
+		$this->pdf->SetStrokeColor(0, 0, 0);
+		$y = 800 - $h - $h - 5;
+		$this->pdf->line($x0, $y, $x1, $y);
+		$this->pdf->addText($x0, $y - 13, 14, "Relatório de Execução Financeira por Fatura - Período: de $this->dataInicial a $this->dataFinal");
+		$this->pdf->line($x0, $y - 15, $x1, $y - 15);
+		$this->pdf->restoreState();
+		$this->pdf->closeObject();
+		$this->pdf->addObject($header, 'all');
+	}
+
+	function GeneratePageFooter()
+	{
+		$x0 = $this->pdf->left;
+		$x1 = $this->pdf->right;
+		$footer = $this->pdf->openObject();
+		$this->pdf->saveState();
+		$this->pdf->SetStrokeColor(0, 0, 0);
+		$this->pdf->line($x0, 28, $x1, 28);
+		$this->pdf->addText($x0, 19, 9, $this->timestamp . ' - CGCO/DSI');
+		$this->pdf->restoreState();
+		$this->pdf->closeObject();
+		$this->pdf->addObject($footer, 'all');
+	}
+
+	function GenerateData($data)
+	{
+		$this->pdf->ezSetDy(-5);
+		$this->SetData($data);
+		$this->rawdata = $this->GenerateTableData();
+		$this->GenerateBody($this->rawdata);
+	}
+
+	function Generate()
+	{
+		$this->SetOutput();
+		$this->Execute();
+	}
+
+}
+?>

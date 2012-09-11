@@ -1,0 +1,154 @@
+<?
+//Grid criada para licitação de compra permanente ficar igual a licitação de compra consumo
+/**
+ * Grid Licitacao
+ * Grid de uso geral para selecionar licitacao
+ * @package br.org.miolo.ufjf.rh.grids
+ */
+/**
+ * Use Module Control
+ */
+global $MIOLO;
+
+class gridItensALicitarAjaxPermanente extends MGridAJAX
+{     
+
+	public function __construct($radioOpcoes)
+    {global $MIOLO,$module,$self;
+        
+        // get an MIOLO instance
+        //$MIOLO = MIOLO::getInstance();
+		//$MIOLO->Trace(implode($_REQUEST,','));
+
+        // register the methods callable by CPAINT
+        // methods with prefix 'ajax' really not need to be registered - it is registered automagically
+        $this->registerMethod('ajax_detail');
+
+        // testing if we have a AJAX call - if yes, return; cpaint already did the job...
+        if ($this->start()) 
+           return;
+
+        // well, it's not a AJAX call, let's build the grid
+        
+        // create the query to obtain the data
+        $curso = $MIOLO->GetBusiness($module,'requisicao');
+        
+        
+        /**
+         * Verifica se é HU ou UFJF
+         */
+        /*if ($radioOpcoes=="HU")
+        {
+        	$query = $curso->listRequisicoesAtendidosByCosup1(0,1);
+        }
+        elseif  ($radioOpcoes=="UFJF")
+        {
+        	$query = $curso->listRequisicoesAtendidosByCosup1(0,2);
+        }
+        else
+        {*/
+            // TODOS
+            //Taka
+            $query = $curso->listRequisicoesAtendidosByCosupPermanente();
+            //Taka 
+           //}
+        
+        // define the grid's columns
+        $columns = array( new MGridColumn( 'Número','center', true, '10%',true),
+                          new MGridColumn( 'Data/Hora','center', true, '10%',true),
+                          new MGridColumn( 'UO Requisitante','center', true, '10%',true),
+                          new MGridColumn( 'Observação','left', false, '70%',true),
+                         );
+
+        // define the grid url
+        $href_grid = $MIOLO->getActionURL( $module, $self );
+
+        // call the parent's constructor
+        parent::__construct( $query->result, $columns, $href_grid, 50, 0, 'fullGrid');
+        $this->setClose(NULL);
+
+        // add javascript functions used by this grid
+        $url = $this->manager->getActionURL($module,'modules:grids:gridListItensALicitarAjax.js'); 
+        $this->page->addScriptURL($url);
+
+        // box title
+        $this->setTitle( 'Itens a Licitar' );
+
+        // create grid action - icons to Show/Hide Details 
+        // ajaxDetail.call is javascript function used by CPAINT
+        // %r% - replaced by rowNumber
+        // %0% - replaced by the value of column 0 at each row
+        // %s% - replaced by 0 or 1 to show/hide the details
+        $href_detail = "ajaxDetail.call(%r%,%0%,%s%)";
+        $this->addActionDetail( $href_detail );
+        
+       	//REFAZER
+        $href_dele = $MIOLO->getActionURL( $module, "main:anularRequisicaoPermanente", '%0%' );
+        $this->addActionDelete( $href_dele );
+        
+        // Adicina uma informação extra como hint
+        //$this->AddActionIcon('%0%','select.gif',$action);
+
+        // put this grid in the theme
+       // $this->manager->getTheme()->InsertContent($this);
+    }
+
+    function ajax_detail($numeroRequisicao)
+    {
+        global $MIOLO,$module;    	
+    	 
+    	$objItemReq = $MIOLO->GetBusiness($module,'itemreq');
+  //Taka    
+    	$query = $objItemReq->ListItensAtendidosByCosupPorRequisicaoPermanente($numeroRequisicao);
+  //Taka  	
+    	$totalGeral = 0;
+    	
+    	$cf = new MCurrencyFormatter();
+    	
+    	if (is_array($query->result))
+        {
+            foreach ($query->result as $key => $rs)
+            {
+                //$list[] = array($rs[0],$rs[1],$rs[2],$rs[3],$cf->formatWithSymbol($rs[3]*$cf->toDecimal($rs[4])));
+                $query->result[$key][5] = $cf->formatWithSymbol($cf->toDecimal($query->result[$key][5]));
+                $totalGeral += $query->result[$key][6];
+                $query->result[$key][6] = $cf->formatWithSymbol($cf->toDecimal($query->result[$key][6]));
+                 
+            }
+        }
+    	
+              
+        // define columns for the grid
+        $columns2 = array(
+        			new MGridColumn('itemreq','left','','0%',false,'',true),
+					new MGridColumn('Material','left','','40%',true,'',true),
+					new MGridColumn('Elem/SubElem','left','','20%',true,'',true),
+					new MGridColumn('Qtde.','center','','10%'),
+					new MGridColumn('UN','center','','10%'),
+					new MGridColumn('Preco','center','','10%'),
+		            new MGridColumn('Total','center','','10%'),
+		        );
+ 
+		$myGrid = new MGrid($query->result,$columns2,'',0);
+		
+		$href_dele = $MIOLO->getActionURL( $module, "main:anularRequisicaoPermanente", '%0%' );
+        $myGrid->addActionDelete( $href_dele );
+		      
+        $myGrid->SetWidth("100%");
+        		
+        $content = Array(
+        			new MSpacer(2),
+        			new MText('info','Itens a licitar:'),
+        			$myGrid,
+        			new MSpacer(1),
+        			new MText('lblTotalGeral',"Total Geral: {$cf->formatWithSymbol($totalGeral)}",'',true),
+        			new MSpacer(2)
+        			);
+        
+        
+        // response_type = TEXT : set the content area of theme with the control
+        $MIOLO->getTheme()->setAjaxContent($content);        
+        
+    }   	
+}
+

@@ -1,0 +1,154 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmVinculoProgressaoMerito extends MForm
+{
+	
+	protected $objVinculo;
+    
+	
+	function __construct($objVinculo)
+    {
+		$this->objVinculo = $objVinculo;
+        parent::__construct('Progressão por Mérito Profissional');
+        $this->EventHandler();
+    }
+
+    
+	function createFields()
+    {
+    	global $MIOLO;
+    
+        try
+        {
+            $this->objVinculo->validaProgressaoMerito(date('d/m/Y'));
+            /*
+            try
+            {
+            }
+            catch ( Exception $e )
+            {
+            	//com mais de um tipo de erro, nao se pode generalizar a mensagem...
+            	//$this->addInfo("Considerando a data de hoje o servidor ainda não cumpriu os 2 anos necessários para uma nova progressão.");
+            }
+            */
+            
+            $data = $this->objVinculo->progressaoAutomatica();
+            $classe = $this->manager->getBusiness('rh','classe',$data->idClasse);
+            if ( $classe->isAssociado() && (!$this->objVinculo->possuiDoutorado()) )
+            {
+                $this->addInfo("O professor se encontra em condições de progredir para a classe ASSOCIADO. Porém, não há registro de doutorado para o mesmo. Para lançar a titulação do docente clique no botão abaixo.");
+                $buttons = array(
+                    new MButton('btnTitulacao','Lançar titulação',$this->manager->getActionUrl('rh','main:vinculo',$this->objVinculo->idVinculo,array('form'=>'titulacoes','id'=>'new','idvinculo'=>$this->objVinculo->idVinculo)))
+                );
+
+                $this->setButtons($buttons);
+            }
+            else
+            {
+                $classe->getReferencias();
+                $referencia = $classe->getReferencia($data->idReferencia);
+                
+                $provimento = $this->objVinculo->getProvimentoAtual();
+                $provimento->getClasse();
+                $provimento->getReferencia();
+
+                $infoClasse = new MHContainer('',
+                    array(
+                        new MLabel('Classe:'),
+                        new MTextLabel('txtIdClasse',$provimento->classe->nome,'Classe'),
+                    )
+                );
+                $infoRef = new MHContainer('',
+                    array(
+                        new MLabel('Nível Padrão:'),
+                        new MTextLabel('txtIdReferencia',$provimento->referencia->nivelPadrao,'Nível Padrão'),
+                    )
+                );
+
+                $infoClasseProgressao = new MHContainer('',
+                    array(
+                        new MLabel('Classe:'),
+                        new MTextLabel('txtIdClasseProgressao',$classe->nome,'Classe'),
+                    )
+                );
+                $infoRefProgressao = new MHContainer('',
+                    array(
+                        new MLabel('Nível Padrão:'),
+                        new MTextLabel('txtIdReferenciaProgressao',$referencia->nivelPadrao,'Nível Padrão'),
+                    )
+                );
+                
+                $fields = array(
+                        new MBaseGroup('info','Dados Atuais',array($infoClasse,$infoRef),'vertical','css'),
+                        new MBaseGroup('info','Progressão',array($infoClasseProgressao,$infoRefProgressao),'vertical','css'),
+                        new MCalendarField('dataProgressao',date('d/m/Y'),'Data da Progressão',15),
+                        new MLookupFieldValue('publicacao','','Publicação'),
+                        new MHiddenField('idPublicacao'),
+                        new MHiddenField('idClasse',$data->idClasse),
+                        new MHiddenField('idReferencia',$data->idReferencia),
+                        new MMultiLineField('obs','','Observação',25,5,40,'Máx. 500'),
+                );
+                $this->SetFields($fields);
+                
+                $this->SetFieldAttr('publicacao','module','rh');
+                $this->SetFieldAttr('publicacao','item','publicacao');
+                $this->SetFieldAttr('publicacao','event','filler');
+                $this->SetFieldAttr('publicacao','related','idPublicacao,null,publicacao');
+                $validators = array(
+                    //new RequiredValidator('dataRemocao'),
+                    //new RequiredValidator('publicacao')
+                );
+                //$this->SetValidators($validators);
+                $buttons = array( new MButton('btnPost','Enviar') );
+                $this->SetButtons($buttons);
+            }
+        }
+        catch ( Exception $e )
+        {
+        	$this->addError($e->getMessage());
+            $this->defaultButton = FALSE;
+        }
+    }
+
+
+	public function btnPost_click()
+	{
+		global $MIOLO;
+		$dataProgressao = $this->GetFormValue('dataProgressao');
+        $idClasse       = $this->getFormValue('idClasse');
+        $idReferencia   = $this->getFormValue('idReferencia');
+		$idPublicacao 	= $this->GetFormValue('idPublicacao');
+		$obs			= $this->GetFormValue('obs');
+		$k 				= new MKrono();
+		try
+		{
+			$this->objVinculo->validaProgressaoMerito($dataProgressao);
+			
+			$this->objVinculo->progrideMerito($dataProgressao,$idPublicacao,$idClasse,$idReferencia,$obs);
+		    $go = $this->manager->getActionURL('rh','main:vinculo:progressao',$this->objVinculo->idVinculo);
+  	    	$this->manager->information('Progressão efetuada com sucesso!', $go);
+		}
+		catch ( ESimpleRnException $e )
+		{
+			$this->AddError($e->getMessage());
+		}
+	}
+}	
+?>

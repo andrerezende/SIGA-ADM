@@ -1,0 +1,97 @@
+<?
+
+MIOLO::Import('extensions::class.phpmailer.php','PHPMailer'); 
+
+class frmEmail extends MForm
+{
+    var $objUsuario;
+
+	function __construct()
+    {   global $MIOLO, $module, $page, $context, $self, $action;
+
+        $id = $MIOLO->getLogin()->idkey;
+        $this->objUsuario = $MIOLO->GetBusiness($module,'usuario', $id);
+		parent::__construct('Alteração de email');
+	    $this->eventHandler();
+	}
+
+    function createFields()
+	{  global $auth, $perms, $action;
+       $fields = array(
+           new MTextLabel('txtLogin','','Login'),
+           new MTextLabel('txtNome','','Nome'),
+           new MTextField('txtEmail','','email',50)
+       );
+	   $this->SetFields($fields);
+       $this->SetFieldValue('txtLogin',$this->objUsuario->login);
+       $this->SetFieldValue('txtNome',$this->objUsuario->nome);
+       $this->SetFieldValue('txtEmail',$this->objUsuario->pessoa->email);
+       $buttons = array(
+           new MButton('btnPost', 'Enviar')
+       );
+	   $this->SetButtons($buttons);
+
+       $validators = array(
+           new MEmailValidator('txtEmail','','required'),
+        );
+
+        $this->SetValidators($validators);
+
+	}
+
+	function btnPost_click()
+	{
+		global $MIOLO, $module, $self, $action;
+        $data = $this->GetData();
+
+        $pessoa = $this->objUsuario->pessoa;
+        $pessoa->email = $this->getFieldValue('txtEmail'); 
+        try
+        {
+            $pessoa->save();         
+//            $this->sendMail($this->objUsuario);     
+            $go = $this->manager->getActionUrl('common','main');
+            $this->manager->Information('email atualizado com sucesso.', $go);
+        }
+        catch ( EMioloException $e )
+        {
+            $this->AddError('Erro no cadastro/alteração do email!');
+        }
+	}
+
+    function sendMail($user)
+    {  
+       $email = $user->pessoa->email;
+       $time = $this->manager->getSysTime(); 
+       $ipaddress = $_SERVER['REMOTE_ADDR'];
+       $mail = new PHPMailer();
+       $mail->IsSMTP(); // telling the class to use SMTP
+       $mail->Host = "smtp.ufjf.br"; // SMTP server
+       $mail->From = 'siga@ufjf.edu.br';
+       $mail->FromName = 'SIGA - Sistema Integrado de Gestão Acadêmica';
+       $mail->Subject = "[SIGA] Alteração de email";
+       $mail->WordWrap = 150;
+       $body =
+<<< HERE
+O sistema SIGA realizou a alteração do seu email:
+
+email atual: {$email}
+login: {$user->login}
+nome:  {$user->nome}
+
+A alteração foi feita em [{$time}] a partir da máquina [{$ipaddress}].
+
+Atenciosamente,
+SIGA - Sistema Integrado de Gestão Acadêmica
+siga@ufjf.edu.br
+
+HERE;
+       $mail->Body = $body;
+       $mail->AddAddress($email);
+       $mail->Send();
+    }
+
+
+}
+
+?>

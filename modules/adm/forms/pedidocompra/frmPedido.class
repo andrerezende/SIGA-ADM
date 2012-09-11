@@ -1,0 +1,149 @@
+<?php
+class frmPedido extends MCompoundForm {
+
+	/**
+	 * Business utilizado
+	 * @var BusinessAdmPedidoCompra
+	 */
+	public $objPedido;
+	public $oid;
+	public $perms;
+
+	public function __construct($objPedido) {
+		global $MIOLO;
+		$this->objPedido = $objPedido;
+		$this->perms = $MIOLO->getPerms();
+		parent::__construct();
+		$this->SetClose($MIOLO->GetActionURL('adm', 'main:pedidocompra:find'));
+		$this->SetTitle('Solicitação de Compra');
+		$this->SetIcon($MIOLO->GetUi()->GetImage('adm', 'default_mini.png'));
+		$this->EventHandler();
+	}
+
+	public function CreateFields() {
+		global $MIOLO, $page, $module, $context, $history, $perms, $action;
+
+		$pedido = $this->objPedido;
+		if ($this->oid == NULL) {
+			$this->oid = $pedido->idPedidoCompra;
+		}
+
+		$ui = $MIOLO->GetUI();
+		$form = MForm::GetFormValue('form');
+		if ($form == 'anexar' && !$this->objPedido->numPro) {
+			$this->_form[0] = $ui->GetForm($module, 'frmPedidoAnexar', $pedido, 'pedidocompra');
+		} else if ($form == 'indeferir') {
+			$this->_form[0] = $ui->GetForm($module, 'frmPedidoIndeferir', $pedido, 'pedidocompra');
+		} else if ($form == 'editar') {
+			$this->_form[0] = $ui->GetForm($module, 'frmPedidoEdit', $pedido, 'pedidocompra');
+		}
+		if ($this->_form[0]) {
+			$this->_form[0]->SetClose($MIOLO->GetActionURL('adm', 'main:patrimonio', $pedido->idItemPatrimonio));
+			$page->SetAction($history->Top('action'));
+		}
+
+		$this->_info[0] = new TextLabel('txtData', $this->objPedido->data, 'Data do pedido');
+		$objUsuario = $this->manager->getbusiness('common', 'usuario');
+		$objUsuario->GetById($this->objPedido->idUsuario);
+		$this->_info[1] = new TextLabel('txtSolicitante', $objUsuario->GetName(), 'Solicitante');
+		$objSetor = $this->manager->getbusiness('common', 'setor');
+		$objSetor = $objSetor->getById($this->objPedido->idSetor);
+		$this->_info[2] = new TextLabel('txtSetor', $objSetor->sigla, 'Setor');
+		$objInstituicao = $MIOLO->GetBusiness('common', 'instituicao');
+		$instituicao = $objInstituicao->GetInstByUASG($this->objPedido->instituicao);
+		$this->_info[3] = new TextLabel('txtInstituicao', $instituicao->result[0][2], 'Instituição beneficiada');
+		if ($this->objPedido->numPro != null) {
+			$processo = $this->manager->GetBusiness('protocolo', 'processo');
+			$numPro = $processo->numProcessoFormatado($this->objPedido->numPro);
+		}
+		$this->_info[4] = new TextLabel('txtNumpro', $numPro, 'Processo anexado');
+		$this->_info[5] = new TextLabel('txtSituacao', $this->objPedido->situacao, 'Situação');
+		if ($this->objPedido->situacao == 'INDEFERIDO') {
+			$objMotivos = $this->manager->GetBusiness('adm', 'motivospedidoscompras');
+			$this->_info[6] = new TextLabel('txtSituacaoMotivo', $objMotivos->getMotivo($this->objPedido->idPedidoCompra), 'Motivo');
+		}
+		if (isset($this->objPedido->idMaterial) && !empty($this->objPedido->idMaterial)) {
+			$material = $MIOLO->GetBusiness($module, 'material');
+			$material->GetById($this->objPedido->idMaterial);
+			$this->_info[7] = new TextLabel('txtMaterial', $material->codmaterial, 'Código do Material');
+			$this->_info[8] = new TextLabel('txtDescricao', $material->descricao, 'Descrição');
+			$this->_info[9] = new TextLabel('txtDescricao', $material->unidade, 'Unidade');
+		}
+		if (isset($this->objPedido->idServico) && !empty($this->objPedido->idServico)) {
+			$servico = $MIOLO->GetBusiness($module, 'servico');
+			$servico->GetById($this->objPedido->idServico);
+			$this->_info[7] = new TextLabel('txtServico', $servico->codServico, 'Código do Serviço');
+			$this->_info[8] = new TextLabel('txtDescricao', $servico->descricao, 'Descrição');
+		}
+		$this->_info[10] = new TextLabel('txtQuantidade', $this->objPedido->quantidade, 'Quantidade');
+		$this->_info[11] = new TextLabel('txtEmpresa1', $this->objPedido->empresa1, 'Nome 1ª Empresa');
+		$this->_info[12] = new TextLabel('txtEmpresa1Cnpj', $this->objPedido->empresa1Cnpj, 'CNPJ 1ª Empresa');
+		$this->_info[13] = new TextLabel('txtEmpresa1Cotacao', $this->objPedido->empresa1Cotacao, 'Cotação 1ª Empresa');
+		$this->_info[14] = new TextLabel('txtEmpresa2', $this->objPedido->empresa2, 'Nome 2ª Empresa');
+		$this->_info[15] = new TextLabel('txtEmpresa2Cnpj', $this->objPedido->empresa2Cnpj, 'CNPJ 2ª Empresa');
+		$this->_info[16] = new TextLabel('txtEmpresa2Cotacao', $this->objPedido->empresa2Cotacao, 'Cotação 2ª Empresa');
+		$this->_info[17] = new TextLabel('txtEmpresa3', $this->objPedido->empresa3, 'Nome 3ª Empresa');
+		$this->_info[18] = new TextLabel('txtEmpresa3Cnpj', $this->objPedido->empresa3Cnpj, 'CNPJ 3ª Empresa');
+		$this->_info[19] = new TextLabel('txtEmpresa3Cotacao', $this->objPedido->empresa3Cotacao, 'Cotação 3ª Empresa');
+		$this->_info[20] = new TextLabel('txtFundamentacao', str_replace("\n", "<br />", $this->objPedido->fundamentacao), 'Fundamentação Legal');
+		$this->_info[21] = new TextLabel('txtJustificativa', $this->objPedido->justificativa, 'Motivação / Justificativa');
+		$this->_info[22] = new TextLabel('txtObjeto', $this->objPedido->objeto, 'Objeto');
+		$this->_info[23] = array();
+		if (strtoupper($this->objPedido->situacao) == 'PENDENTE' && $this->manager->GetLogin()->idkey == $this->objPedido->idUsuario) {
+			$this->_info[23][] = new MButton('btnCancelar', 'Cancelar');
+		}
+		$this->_info[23][] = new MButton('btnImprimir', 'Imprimir', 'PDF');
+		$this->_panel[0] = $panel = new ActionPanel('pnlCompound', 'Opções', '', null);
+		if (strtoupper($this->objPedido->situacao) == 'PENDENTE' && $this->manager->GetLogin()->idkey == $this->objPedido->idUsuario) {
+			$panel->AddAction(
+					'Editar', $ui->GetImageTheme('', 'icons/itens_patrimoniais_editar.png'), $module, $action, $this->oid, array('form' => 'editar')
+			);
+		}
+		if ($this->perms->checkAccess('ADM_COMPRAS', A_ACCESS)) {
+			$this->_info[24] = new MSpacer('5px');
+			if ($this->objPedido->numPro == null && (strtoupper($this->objPedido->situacao) != 'CANCELADO' && strtoupper($this->objPedido->situacao) != 'INDEFERIDO')) {
+				$panel->AddAction(
+						'Anexar processo', $ui->GetImageTheme('', 'icons/anexar.png'), $module, $action, $this->oid, array('form' => 'anexar')
+				);
+			}
+			if (strtoupper($this->objPedido->situacao) == 'PENDENTE') {
+				$panel->AddAction(
+						'Indeferir', $ui->GetImageTheme('', 'icons/licitacao_cancelar.png'), $module, $action, $this->oid, array('form' => 'indeferir')
+				);
+			}
+		}
+		$panel->AddAction(
+				'Copiar', $ui->GetImageTheme('', 'icons/cadastro_de_orcamento.png'), $module, 'main:pedidocompra:new', $this->oid
+		);
+	}
+
+	public function btnCancelar_click() {
+		global $MIOLO, $module, $action;
+		$this->objPedido->situacao = 'CANCELADO';
+		try {
+			$msg = 'Solicitação de compra ' . $this->objPedido->idPedidoCompra . ' cancelada.';
+			$this->objPedido->beginTransaction();
+			$this->objPedido->Log(OP_INS, $msg);
+			$this->objPedido->save();
+			$this->objPedido->endTransaction();
+			$this->manager->Information($msg, $this->manager->GetActionURL('adm', 'main:pedidocompra'));
+		} catch (Exception $e) {
+			$this->manager->Error($e->getMessage());
+		}
+	}
+
+	public function btnEditar_click() {
+		global $MIOLO, $module, $action;
+		$go = $MIOLO->GetActionURL($module, 'main:pedidocompra:edit', $this->oid);
+		$this->page->redirect($go);
+	}
+
+	public function btnImprimir_click() {
+		global $MIOLO, $module, $item;
+		$report = new MJasperReport('sigaept');
+		$parameters['int_pNumPedido'] = $this->objPedido->idPedidoCompra;
+		$parameters['pURL'] = $MIOLO->GetConf('home.url');
+		$parameters['pIdUsuario'] = $MIOLO->login->idkey;
+		$report->Execute($module, 'repSolicitacaoCompra', $parameters);
+	}
+}

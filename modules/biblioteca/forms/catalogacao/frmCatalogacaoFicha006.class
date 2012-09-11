@@ -1,0 +1,117 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+class frmCatalogacaoFicha006 extends MForm
+{
+    public $subficha;
+    public $obra;
+    private $ficha006;
+
+    function __construct($subficha)
+    {
+       $this->subficha = $subficha;
+       parent::__construct($subficha->titulo);
+       
+       // Botão 'fechar', direcionando para o handler biblioteca/main/catalogacao
+		$this->SetClose($this->manager->GetActionURL($module, 'main:catalogacao'));
+    }
+
+    function CreateFields()
+    {
+		$this->obra = $this->manager->getBusiness('biblioteca','obra',$this->subficha->idobra);
+        $this->ficha006 = $this->obra->getCampoFixo('006');
+
+		$campo = new MTextField('subficha006', $this->ficha006, '006', 30);
+		$this->addField($campo);
+		$this->ficha006 = str_replace(' ', '#', $this->ficha006);
+		$this->SetFieldAttr('subficha006', 'readonly', true);
+
+		$ficha = $this->manager->getBusiness('biblioteca','ficha');
+        $posicao = $ficha->getPosicao($this->subficha->idficha,$this->subficha->idsubficha);
+        while (! $posicao->eof)
+        {
+            $obj = $posicao->getRowObject();
+            $field = $ficha->getInputField($this->subficha->idsubficha, $obj);
+            $field->formMode = 2;
+            $field->setValue($this->ficha006{$obj->posicao});
+            $this->addField($field);
+            $posicao->moveNext();
+        }
+        $campo->formMode = 2;
+
+        $buttons = Array(
+           new MButton('btnPost006', '<b>Gravar</b>'),
+        );
+	    $this->SetButtons($buttons);
+
+		//preenche com espaços, quando nao houver registro no banco, para montar a string corretamente no post
+		if ($this->ficha006 == null) 
+		{
+			$this->ficha006 = '                  ';
+		}
+	}
+
+    function btnPost006_click()
+    {
+		global $MIOLO;
+
+		$idEtiqueta = $this->subficha->idetiqueta;
+        $fields = $this->getFieldList();
+        foreach($fields as $field)
+        {
+			if (($field instanceof MTextField) || ($field instanceof MSelection))
+            {
+				$posicao = explode('_',$field->getName());
+                if ($posicao[0] == $this->subficha->idsubficha)
+                {
+					if(strval($field->getValue()) != "") //testa se foi selecionado algum valor para o campo
+					{
+						$this->ficha006{$posicao[2]} = strval($field->getValue());
+					}
+                }
+            }
+        }
+
+		$this->ficha006 = str_replace('#', ' ', $this->ficha006);
+
+		$this->setFieldValue('subficha006', $this->ficha006);
+
+		try
+		{
+			$this->obra->saveSubFicha($this->ficha006, '006');
+		}
+		catch (Exception $e)
+		{
+			$this->addError($e->getMessage());
+		}
+
+		//remove o negrito do botão, pois já foi pressionado uma vez
+		$this->SetButtonAttr('btnPost006','label','Gravar');
+		
+	}
+}
+
+?>

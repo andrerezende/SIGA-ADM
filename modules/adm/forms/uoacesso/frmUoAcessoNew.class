@@ -1,0 +1,77 @@
+<?
+class frmUoAcessoNew extends Form
+{
+	protected $objUo;
+	
+    function __construct()
+    {
+        $this->Form('Novo Requisitante');
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    { 
+		$fields = array(
+            new Selection('selUos','','Uo'),
+			new LookupTextField('lkpUsuario','','Login'),
+			new TextField('nome','','Nome',50),
+			new HiddenField('idUsuario','')
+        );
+		
+        $this->SetFields($fields);
+
+        $login = $this->manager->getLogin();
+        $objUo = $this->manager->GetBusiness('adm','uo');
+        $optionsSelUos = $objUo->sByGestor($login->idkey);
+        $this->SetFieldAttr('selUos','options',$optionsSelUos->chunkResult());
+		
+	    $this->SetFieldAttr('lkpUsuario','module','common');
+	    $this->SetFieldAttr('lkpUsuario','item','usuario');
+	    $this->SetFieldAttr('lkpUsuario','event','filler');
+	    $this->SetFieldAttr('lkpUsuario','related','idUsuario,lkpUsuario,NULL,NULL,NULL,NULL,nome');
+		
+		$buttons = array(
+        	new FormButton('btnSalvar', 'Incluir')
+            );
+		$this->SetButtons($buttons);
+    }
+	
+	public function btnSalvar_click()
+	{
+		$idUsuario = $this->GetFormValue('idUsuario');
+        $idUo = $this->GetFormValue('selUos');
+
+        if( (! isset($idUsuario)) || (! isset($idUo)) )
+        {
+            $this->manager->Error(((isset($idUsuario))?'USUÁRIO':'UO'). ' não informado(a) corretamente.',false);
+            return;
+        }
+
+		$usuario = $this->manager->GetBusiness('common','usuario');
+		$usuario->GetById($idUsuario);
+
+        $objUo = $this->manager->GetBusiness('adm','uo',trim($idUo));
+        
+        if( $objUo->getUsuario($IdUsuario) != null )
+        {
+            $this->manager->Error('Usuário já está relacionado à UO.',false);
+            return;       
+        }
+        
+        $objUo->getUsuarios();
+        
+		$objUo->AddUsuario($usuario);
+	    	
+		try
+		{
+            $objUo->saveAssociation('usuarios');
+			$objUo->Log(OP_INS,"Novo requisitante relacionado à UO");
+            $this->manager->Information("Novo Requisitante foi relacionado à UO com sucesso.",false);
+		}
+		catch (Exception $e)
+		{
+			$this->addError("Informe o seguinte erro a equipe do CGCO: ". $e->getMessage());
+		}
+	}
+ }
+?>

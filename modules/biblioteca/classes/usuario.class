@@ -1,0 +1,350 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+class BusinessBibliotecaUsuario extends Business
+{
+
+	function BusinessBibliotecaUsuario($data = null)
+	{
+	    $this->Business('sigaept', $data);
+	}
+
+	function GetData()
+	{
+		$data = new FormData();
+		$data->idusuario = $this->idusuario;
+		$data->descricao = $this->descricao;
+		return $data;
+	}
+
+
+	function SetData($data)
+	{
+		$this->idusuario = $data->idusuario;
+		$this->descricao = $data->descricao;
+	}
+
+	function GetByCodigo($login)
+	{
+		$sql = new sql('u.login, p.nome, u.idusuario','cm_usuario u, cm_pessoa p',' (u.idpessoa = p.idpessoa) and (u.login = ?)');
+		
+		$query = $this->Query($sql,$login);
+
+		return $query->result;
+	
+	}
+
+	function GetByLogin($login)
+	{
+		$sql = new sql('u.idusuario, p.nome, p.telefone, p.celular','cm_usuario u, cm_pessoa p',' (u.idpessoa = p.idpessoa) and (u.login = ?)');
+		
+		$query = $this->Query($sql,$login);
+
+		return $query->result;
+	
+	}
+	
+	function GetById($idusuario)
+	{
+		$sql = new sql('u.idusuario, p.nome, u.login','cm_usuario u, cm_pessoa p',' (u.idpessoa = p.idpessoa) and (u.idusuario = ?)');
+		
+		$query = $this->Query($sql,$idusuario);
+
+		return $query->result;
+	
+	}
+    /* armengue */
+            public function isUsuarioInterno( $id )
+    {
+        $sql = new sql( '*', 'cm_usuario', 'idusuario = ?' );
+        $query = $this->Query( $sql, $id );
+        
+        if( $query->result )
+            return true;
+        else
+            return false;
+            
+    }
+
+    function GetGrupoByIdusuario($idusuario)
+    {
+		$sql = new sql('idgrupo','bt_vinculo','idusuario = ?');
+		
+		$query = $this->Query($sql, $idusuario);
+
+		return $query->result[0][0];
+
+    }
+
+	function GetByCartao($cartao)
+	{
+		$sql = new sql('idusuario','bt_validacao','codigoacesso = ?');
+		$query = $this->Query($sql,$cartao);
+		return $query->result[0][0];
+	}
+
+    function insertVinculo($idUsuario,$idGrupo)
+    {
+        $sql = new sql('idusuario,idgrupo','bt_vinculo');
+        $args = array(
+            $idUsuario,
+            $idGrupo
+        );
+        $ok = $this->execute($sql->insert($args));
+        return $ok;
+    }
+
+	function ListUsuariosComCartao()
+	{
+		$sql = new sql('v.idusuario, p.nome, v.codigoacesso, u.login, vi.idgrupo', 'bt_validacao v, cm_usuario u, cm_pessoa p, bt_vinculo vi', '(v.idusuario = u.idusuario) and (u.idpessoa = p.idpessoa) and (v.idusuario = vi.idusuario)', 'p.nome');
+		$query = $this->Query($sql);
+		return $query->result;
+	}
+
+	function GetUsuarioByLogin($login) //retorna dados do usuario em cm_usuario ou em bt_usuarioexteno
+	{
+		$sql = new sql('d.idusuario, d.nome, d.login', '(SELECT u.idusuario, p.nome, u.login FROM cm_usuario u, cm_pessoa p WHERE u.idpessoa = p.idpessoa UNION SELECT idusuario, nome, numrg as login FROM bt_usuarioexterno) d', '(d.login = ?)');
+
+		$query = $this->Query($sql,$login);
+
+		return $query->result[0];
+	}
+
+	function GetUsuarioById($id) //retorna dados do usuario em cm_usuario ou em bt_usuarioexteno
+	{
+		$sql = new sql('d.idusuario, d.nome, d.login', '(SELECT u.idusuario, p.nome, u.login FROM cm_usuario u, cm_pessoa p WHERE u.idpessoa = p.idpessoa UNION SELECT idusuario, nome, numrg as login FROM bt_usuarioexterno) d', '(d.idusuario = ?)');
+
+		$query = $this->Query($sql,$id);
+
+		return $query->result[0];
+	}
+
+    function SaveUsuario(&$data)
+    {
+       global $MIOLO,$module;
+       $commands = array();
+	
+       $okVinculo = false;
+
+      if ($data->idUsuario == NULL)
+      {
+         $sql = new sql('idpessoa,nome,bairro,cep,datanasc,nomepai,nomemae,sexo,anochegbrasil,telefone,celular
+,email,gruposanguineo,cpf,numrg,tiporg,orgaorg,ufrg,numcartpro,seriecartpro,ufcartpro,idmunicipio,idpais,idpaisnascimento','cm_pessoa');
+         $idUsuario = $this->GetNextIdUsuario();
+         $idPessoa = $this->GetNextIdPessoa();
+         $sql2 = new sql('idusuario,idpessoa,idsetor,login,password,nick,passmd5','cm_usuario');
+         $sql3 = new sql('matricula,anoingresso,semingresso,situacaoaluno,idtipoingresso,idsituacao,idinstituicao,idpessoa','ga_aluno');
+         $commands[] = $sql->Insert(array($idPessoa,$data->nome,$data->bairro,$data->cep,$data->dataNascimento,$data->nomePai,$data->nomeMae,
+$data->sexo,$data->anoChegada,$data->telefone,$data->celular,$data->email,$data->grupoSanguineo,$data->cpf,$data->numRg,$data->tipoRg,
+$data->orgaoRg,$data->ufRg,$data->numCartPro,$data->serieCartPro,$data->UfCartPro,$data->idMunicipio,$data->idPais,$data->idPaisNascimento));
+         $commands[] = $sql2->Insert(array($idUsuario,$idPessoa,$data->idSetor,$data->login,$data->senha,$data->apelido,$data->passmd5));
+	 $commands[] = $sql3->Insert(array($data->login,$data->anoChegada,$data->semestreIngresso,'1','1','1',$data->idInstituicao,$idPessoa));
+	 $okInsert = $this->Execute($commands);
+	 $data->idUsuario = $idUsuario;
+	 //Insere o usuário num Grupo
+	 $okVinculo = $this->InsereGrupoUsuario($idUsuario,$data);
+      }
+      else
+      {
+         $sql1 = new sql('idpessoa','cm_usuario','idusuario = ?');
+         $query = $this->Query($sql1,$data->idUsuario);
+         $idPessoa = $query->result[0][0];
+         $sql = new sql('nome,bairro,cep,datanasc,nomepai,nomemae,sexo,anochegbrasil,telefone,celular
+,email,gruposanguineo,cpf,numrg,tiporg,orgaorg,ufrg,numcartpro,seriecartpro,ufcartpro,idmunicipio,idpais,idpaisnascimento','cm_pessoa',"idpessoa = $idPessoa" );
+         $sql2 = new sql('idsetor,login,password,nick,passmd5','cm_usuario',"idusuario= $data->idUsuario");
+         $sql3 = new sql('matricula,anoingresso,semingresso,situacaoaluno,idtipoingresso,idsituacao,idinstituicao','ga_aluno',"idpessoa = $idPessoa");
+         $commands[] = $sql->Update(array($data->nome,$data->bairro,$data->cep,$data->dataNascimento,$data->nomePai,$data->nomeMae,
+$data->sexo,$data->anoChegada,$data->telefone,$data->celular,$data->email,$data->grupoSanguineo,$data->cpf,$data->numRg,$data->tipoRg,
+$data->orgaoRg,$data->ufRg,$data->numCartPro,$data->serieCartPro,$data->UfCartPro,$data->idMunicipio,$data->idPais,$data->idPaisNascimento));
+         $commands[] = $sql2->Update(array($data->idSetor,$data->login,$data->senha,$data->apelido,$data->passmd5));
+         $commands[] = $sql3->Update(array($data->login,$data->anoChegada,$data->semestreIngresso,'1','1','1',$data->idInstituicao));
+	 $okUpdate = $this->Execute($commands);
+	  //Altera o usuário num Grupo 
+	 $okVinculo = $this->AlteraGrupoUsuario($data);	
+      }
+
+      return ($okInsert||$okUpdate)&&$okVinculo;
+   }
+
+   function DeleteUsuario($idUsuario)
+   {
+      global $MIOLO,$module;
+      $commands = array();
+      $sql1 = new sql('idpessoa','cm_usuario','idusuario = ?');
+      $query = $this->Query($sql1,$idUsuario);
+      $idPessoa = $query->result[0][0]; 
+
+      $sql2 = new sql('','cm_pessoa','idpessoa = ?');
+      $sql3 = new sql('','cm_usuario', 'idusuario = ?');
+      $sql4 = new sql('','cm_grpusuario','idusuario = ?');
+      $sql5 = new sql('','bt_vinculo','idusuario = ?');
+      $sql6 = new sql('','ga_aluno','idpessoa = ?');
+      
+      $commands[] = $sql6->Delete($idPessoa);
+      $commands[] = $sql5->Delete($idUsuario);
+      $commands[] = $sql4->Delete($idUsuario);
+      $commands[] = $sql3->Delete($idUsuario);
+      $commands[] = $sql2->Delete($idPessoa);
+
+      $ok = $this->execute($commands);
+      return $ok;
+   }
+
+   function ListUsuario()
+   {
+      $sql = new sql('u.idusuario,p.nome,u.login,u.nick, p.cpf','cm_usuario u, cm_pessoa p','p.idpessoa=u.idpessoa','p.nome');
+      $query = $this->Query($sql);
+      return $query;
+   }
+
+   function GetNextIdPessoa()
+   {
+      $id = $this->_db->GetNewId('seq_cm_pessoa');
+      return $id;
+   }
+
+   function GetNextIdUsuario()
+   {
+      $id = $this->_db->GetNewId('seq_cm_usuario');
+      return $id;
+   }
+
+   function GetUserById($idusuario)
+   {
+      $sql = new sql('p.idpessoa,p.nome,p.bairro,p.cep,p.datanasc,p.nomepai,p.nomemae,p.sexo,p.anochegbrasil,p.telefone,p.celular
+,p.email,p.gruposanguineo,p.cpf,p.numrg,p.tiporg,p.orgaorg,p.ufrg,p.numcartpro,p.seriecartpro,p.ufcartpro,p.idmunicipio,p.idpais,p.idpaisnascimento,pa.pais,m.municipio,
+s.siglasetor,u.idusuario,u.idsetor,u.login,u.password,u.nick, i.idinstituicao, i.instituicao, ga.semingresso, v.idgrupo','cm_usuario u, cm_pessoa p,cm_pais pa, cm_municipio m,cm_setor s, cm_instituicao i, ga_aluno ga, bt_vinculo v','(u.idpessoa = p.idpessoa) and (pa.idpais=p.idpaisnascimento) and (m.idmunicipio = p.idmunicipio) and (u.idsetor = s.idsetor)and (ga.idpessoa = p.idpessoa) and (i.idinstituicao = ga.idinstituicao)and(v.idusuario = ?) and (u.idusuario = ?)');
+      $query = $this->Query($sql,Array($idusuario,$idusuario));
+      if ( !$query->eof() ){
+         $data = $this->GerarObjeto($query->GetRowObject());
+      }
+      return $data;
+   }
+
+   function GerarObjeto($tabela)
+   {
+      $data = new FormData();
+      $data->login  = $tabela->login;
+      $data->apelido = $tabela->nick;
+      $data->senha   = $tabela->password;
+      $data->idSetor    = $tabela->idsetor;
+      $data->nome = $tabela->nome;
+      $data->bairro = $tabela->bairro;
+      $data->cep = $tabela->cep;
+      $data->dataNascimento = $tabela->datanasc;
+      $data->nomePai = $tabela->nomepai;
+      $data->nomeMae = $tabela->nomemae;
+      $data->sexo = $tabela->sexo;
+      $data->anoChegada = $tabela->anochegbrasil;
+      $data->telefone = $tabela->telefone;
+      $data->celular = $tabela->celular;
+      $data->email = $tabela->email;
+      $data->grupoSanguineo = $tabela->gruposanguineo;
+      $data->cpf = $tabela->cpf;
+      $data->numRg = $tabela->numrg;
+      $data->tipoRg = $tabela->tiporg;
+      $data->orgaoRg = $tabela->orgaorg;
+      $data->ufRg = $tabela->ufrg;
+      $data->numCartPro = $tabela->numcartpro;
+      $data->serieCartPro = $tabela->seriecartpro;
+      $data->UfCartPro = $tabela->ufcartpro;
+      $data->idMunicipio = $tabela->idmunicipio;
+      $data->idPais = $tabela->idpais;
+      $data->idMunicipio = $tabela->idmunicipio;
+      $data->idPaisNascimento = $tabela->idpaisnascimento;
+      $data->idUsuario = $tabela->idusuario;
+      $data->paisNascimento = $tabela->pais;
+      $data->setor = $tabela->siglasetor;
+      $data->municipio = $tabela->municipio;
+      $data->idInstituicao = $tabela->idinstituicao;
+      $data->instituicao = $tabela->instituicao;
+      $data->semestreIngresso = $tabela->semingresso;
+      $data->idgrupo = $tabela->idgrupo ;
+      $data->idGrupoAnterior = $tabela->idGrupo;
+      return $data;
+   } 
+
+    function getDataLog($Identificador,$Ident1,$Ident2,$Mnemonico)
+    {
+	global $MIOLO;
+	$data = new FormData();
+	$data->data = date("d/m/Y H:i:s");
+        if ($Mnemonico == 'ALTGRUPO')
+	{
+		$data->identificador = $Identificador . '/De grupo ' . $Ident1 . ' para ' . $Ident2;	
+	}
+	elseif ($Mnemonico == 'VALIDACARTAO')
+	{
+		$data->identificador = $Identificador;
+	}
+	elseif ($Mnemonico == 'INCVINCULO')
+	{
+		$data->identificador = $Identificador . ' com vinculo no grupo ' . $Ident1;
+	}
+	$data->idusuario = $MIOLO->GetLogin()->idkey;
+	$operacao = $MIOLO->GetBusiness('biblioteca','operacao');
+	$operacao = $operacao->GetIdoperacaoByMnemonico($Mnemonico);
+	$data->idoperacao = $operacao->GetIdoperacao();
+	return $data;
+    }
+
+    function UpdateGrupo($data)
+    {
+	$sql = new sql('idgrupo','bt_vinculo','idusuario = ?');
+	$values = array($data->idgrupo,$data->idUsuario);
+	$ok = $this->Execute($sql->Update($values));
+	return $ok;
+    }
+    
+    //Insere o relacionamento entre um dado usuário e um dos grupos de usuários que possuem acesso a biblioteca.
+    function InsereGrupoUsuario($idUsuario,$data){
+	global $MIOLO,$module;
+	$log = $MIOLO->GetBusiness($module,'log');
+	$okVinculo =  $this->insertVinculo($idUsuario, $data->idgrupo);
+	$identificador = $idUsuario;
+	$ident1 = $data->idgrupo;
+	$mnemonicogrupo = 'INCVINCULO';
+	// LOG
+	$log->SetData($this->getDataLog($identificador,$ident1,'',$mnemonicogrupo));
+	$log->save();
+	return $okVinculo;
+    }
+    //Altera o relacionamento entre um dado usuário e um dos grupos de usuários que possuem acesso a biblioteca.
+    function AlteraGrupoUsuario($data){
+	global $MIOLO,$module;
+	$log = $MIOLO->GetBusiness($module,'log');
+	$okVinculo =  $this->UpdateGrupo($data);
+	$identificador = $data->idUsuario;
+	$ident1 = $data->idGrupoAnterior;
+	$ident2 = $data->idgrupo;
+	$mnemonicogrupo = 'ALTGRUPO';
+	// LOG
+    	$log->SetData($this->getDataLog($identificador,$ident1,$ident2,$mnemonicogrupo));
+	$log->save();
+	return $okVinculo;
+    }
+}
+?>

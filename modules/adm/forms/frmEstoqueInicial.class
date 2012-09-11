@@ -1,0 +1,203 @@
+<?
+class frmEstoqueInicial extends Form
+{
+	var $material;
+	var $estoque;
+	/*----------------------------------------
+	Construtor
+	----------------------------------------*/
+	function __construct()	
+	{
+		global $MIOLO,$module;
+		$this->material = $MIOLO->GetBusiness($module,'material');
+		$this->estoque = $MIOLO->GetBusiness($module,'estoque');
+		parent::__construct('Gerar Estoque Inicial');
+		$this->EventHandler();
+	}
+	/*----------------------------------------
+	Método createFields()
+	----------------------------------------*/
+	function createFields()
+	{
+		global $MIOLO,$module,$self;
+		$idMaterial = $this->GetFormValue('idMaterial');
+		if ($idMaterial) $this->material->GetById($idMaterial);
+		$fields = Array(
+			new HiddenField('idMaterial','','Idmaterial'),
+			new LookupTextField('lkpMaterial','','Material',40),
+			new TextField('descElemento','','Elemento',40),
+			new LookupTextField('lkpSubElemento','','Subelemento',40),
+			new TextField('estoqueqtd','','Quantidade',10,'Ex: 1000'),
+			new TextField('valortotal','','Valor',10,'Ex: 45,00'),
+			new TextField('estoquemin','','Estoque Mínimo',10,'Ex: 500'),
+		);
+		$this->SetFields($fields);
+		$this->SetFieldAttr('lkpMaterial','module',$module);
+		$this->SetFieldAttr('lkpMaterial','item','material');
+		$this->SetFieldAttr('lkpMaterial','event','btnSelecionarMaterial:click');
+		$this->SetFieldAttr('descElemento','visible',false);
+		$this->SetFieldAttr('lkpSubElemento','visible',false);
+		$this->SetFieldAttr('lkpSubElemento','module',$module);
+		$this->SetFieldAttr('lkpSubElemento','item','subelemento');
+		$this->SetFieldAttr('lkpSubElemento','event','btnAlterarSubElemento:click');
+		$this->SetFieldAttr('estoqueqtd','visible',false);
+		$this->SetFieldAttr('valortotal','visible',false);
+		$this->SetFieldAttr('estoquemin','visible',false);
+		$buttons = Array(
+				new FormButton('btnInserirEstoque','Inserir'),
+				new FormButton('btnAlterarEstoque','Alterar'),
+				new FormButton('btnCancelar','Cancelar',$MIOLO->GetActionUrl($module,$self)),
+		);
+		$this->SetButtons($buttons);
+		$this->SetButtonAttr('btnInserirEstoque','visible',false);
+		$this->SetButtonAttr('btnAlterarEstoque','visible',false);
+		$this->SetButtonAttr('btnCancelar','visible',false);
+	   	$this->defaultButton = false;
+	}
+	/*------------------------------------------------
+	Método btnSelecionarMaterial_click()
+	------------------------------------------------*/
+	function btnSelecionarMaterial_click($key='')
+	{
+		global $MIOLO,$module;
+        $item = ($key != '') ? $key : $item;
+		$this->material->GetById($item);
+		$this->SetFieldValue('idMaterial',$this->material->idmaterial);
+		$this->SetFieldValue('lkpMaterial',$this->material->descricao);
+		$this->SetFieldAttr('lkpMaterial','readonly',true);
+		$this->SetFieldValue('descElemento',$this->material->GetDescricaoElemento());
+		$this->SetFieldAttr('descElemento','visible',true);
+		$this->SetFieldAttr('descElemento','readonly',true);
+		$this->SetFieldValue('lkpSubElemento',$this->material->GetDescricaoSubelemento());
+		$this->SetFieldAttr('lkpSubElemento','visible',true);
+		$this->btnDadosMaterial_click();
+	}
+	/*------------------------------------------------
+	Método btnDadosMaterial_click()
+	------------------------------------------------*/
+	function btnDadosMaterial_click()
+	{
+		global $MIOLO,$module;
+		$this->SetFieldAttr('estoqueqtd','visible',true);
+		$this->SetFieldAttr('valortotal','visible',true);
+		$this->SetFieldAttr('estoquemin','visible',true);
+		@$this->estoque->GetById($this->material->idmaterial);
+		if ($this->estoque->idmaterial)
+		{
+			$this->SetFieldValue('estoqueqtd',$this->estoque->estoque);
+			$this->SetFieldValue('valortotal',$this->estoque->valortotal);
+			$this->SetFieldValue('estoquemin',$this->estoque->estoquemin);
+			$this->SetButtonAttr('btnAlterarEstoque','visible',true);
+		}
+		else $this->SetButtonAttr('btnInserirEstoque','visible',true);
+		$this->SetButtonAttr('btnCancelar','visible',true);
+	}
+	/*------------------------------------------------
+	Método btnAlterarSubelemento_click()
+	------------------------------------------------*/
+	function btnAlterarSubelemento_click($key='')
+	{
+        $item = ($key != '') ? $key : $item;
+		$this->material->idelemento = 339030;
+		$this->material->idsubelemento = $item;
+		if (!$this->material->Update()) $this->AddError('Elemento e subelemento não alterados.');
+		$this->SetFieldValue('idMaterial',$this->material->idmaterial);
+		$this->SetFieldValue('lkpMaterial',$this->material->descricao);
+		$this->SetFieldAttr('lkpMaterial','readonly',true);
+		$this->SetFieldValue('descElemento',$this->material->GetDescricaoElemento());
+		$this->SetFieldAttr('descElemento','visible',true);
+		$this->SetFieldAttr('descElemento','readonly',true);
+		$this->SetFieldValue('lkpSubElemento',$this->material->GetDescricaoSubelemento());
+		$this->SetFieldAttr('lkpSubElemento','visible',true);
+		$this->btnDadosMaterial_click();
+	}
+	/*------------------------------------------------
+	Método btnInserirEstoque_click()
+	------------------------------------------------*/
+	function btnInserirEstoque_click()
+	{
+		global $MIOLO, $module, $action;
+		if (intval($this->GetFormValue('estoqueqtd')))
+		{
+			if (intval($this->GetFormValue('valortotal')))
+			{
+				if (intval($this->GetFormValue('estoquemin')))
+				{
+					$login = $MIOLO->GetLogin();
+					$usuario = $MIOLO->GetBusiness('common','usuario');
+					$usuario->GetById($login->idkey);
+					$data = new FormData();
+					$data->idmaterial = $this->material->idmaterial;
+					$data->idsetor = $usuario->idsetor;
+					$data->estoque = $this->GetFormValue('estoqueqtd');
+					$data->valortotal = $this->GetFormValue('valortotal');
+					$data->estoquemin = $this->GetFormValue('estoquemin');
+					$this->estoque->SetData($data);
+					if ($this->estoque->Insert()) $MIOLO->Information('Material gerado com sucesso.',$MIOLO->GetActionUrl($module,'main:estoqueinicial'));
+					else
+					{
+						$this->AddError('Houve um erro na gravação, tente novamente.');
+						$this->btnDadosMaterial_click();
+					}
+				}
+				else
+				{
+					$this->AddError('Campo ESTOQUE MÍNIMO não numérico ou nulo');
+					$this->btnDadosMaterial_click();
+				}
+			}
+			else
+			{
+				$this->AddError('Campo VALOR TOTAL não numérico ou nulo');
+				$this->btnDadosMaterial_click();
+			}
+		}
+		else
+		{
+			$this->AddError('Campo QUANTIDADE não numérico ou nulo');
+			$this->btnDadosMaterial_click();
+		}
+	}
+	/*------------------------------------------------
+	Método btnAlterarEstoque_click()
+	------------------------------------------------*/
+	function btnAlterarEstoque_click()
+	{
+		global $MIOLO, $module;
+		$this->estoque->GetById($this->material->idmaterial);
+		if (intval($this->GetFormValue('estoqueqtd')))
+		{
+			if (intval($this->GetFormValue('valortotal')))
+			{
+				if (intval($this->GetFormValue('estoquemin')))
+				{
+					$this->estoque->estoque = $this->GetFormValue('estoqueqtd');
+					$this->estoque->valortotal = $this->GetFormValue('valortotal');
+					$this->estoque->estoquemin = $this->GetFormValue('estoquemin');
+					if ($this->estoque->Update()) $MIOLO->Information('O estoque inicial deste material foi alterado com sucesso.',$MIOLO->GetActionUrl($module,'main:EstoqueInicial'));
+					else
+					{
+						$this->AddError('Houve um erro na alteração, tente novamente.');
+						$this->btnDadosMaterial_click();
+					}
+				}
+				else
+				{
+					$this->AddError('Campo ESTOQUE MÍNIMO não numérico ou nulo');
+					$this->btnDadosMaterial_click();
+				}
+			}
+			else
+			{
+				$this->AddError('Campo VALOR TOTAL não numérico ou nulo');
+				$this->btnDadosMaterial_click();
+			}
+		}
+		else
+		{
+			$this->AddError('Campo QUANTIDADE não numérico ou nulo');
+			$this->btnDadosMaterial_click();
+		}
+	}
+}
+?>

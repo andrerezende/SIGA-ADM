@@ -1,0 +1,162 @@
+<?
+class FrmNoticia extends Form
+{
+    var $objNoticia;
+    var $objSistema;
+    var $datagrid;
+
+    function FrmNoticia()
+    {   global $MIOLO, $module, $self;
+
+        $this->objNoticia = $MIOLO->GetBusiness($module,'noticia');
+        $this->objSistema = $MIOLO->GetBusiness($module,'sistema');
+        $this->Form('Noticia');
+        $this->EventHandler();
+        $this->btnList_click();
+    }
+
+    function CreateFields()
+    {
+        global $MIOLO, $action;
+
+        $fields = Array(
+            new MHiddenField('key',''),
+            new MHiddenField('hidIdNoticia',''),
+            array(
+                new MSelection('selIdSistema','','Sistema'),
+                new MCalendarField('edtData','','Data',15)
+            ),
+            new MMultiLineField('edtNoticia','','Notícia',50,5,30)
+        );
+        $this->SetFields($fields);
+        $objQuery = $this->objSistema->ListAll();
+        $this->SetFieldAttr('selIdSistema','options', $objQuery->result);
+
+       $buttons = Array(
+           new MButton('btnPost', 'Enviar'),
+		   new MButton('btnNew', 'Novo', $action),
+           new MButton('btnDelete', 'Excluir'),
+       );
+
+	   $this->SetButtons($buttons);
+	}
+
+	function GetData()  // nome dos formfields != business fields
+	{   global $MIOLO;
+
+        $data = new FormData();
+		$data->idNoticia = $this->GetFieldValue('hidIdNoticia');
+		$data->idSistema = $this->GetFieldValue('selIdSistema');
+		$data->dataNoticia = $this->GetFieldValue('edtData');
+		$data->noticia = $this->GetFieldValue('edtNoticia');
+        return $data;
+	}
+
+	function SetData($data)
+	{
+		$this->SetFieldValue('key', $data->idNoticia);
+		$this->SetFieldValue('hidIdNoticia', $data->idNoticia);
+		$this->SetFieldValue('selIdSistema', $data->idSistema);
+		$this->SetFieldValue('edtData', $data->dataNoticia);
+		$this->SetFieldValue('edtNoticia', $data->noticia);
+	}
+
+	function btnPost_click()
+	{
+		global $MIOLO, $module, $self, $action;
+        $objNoticia = &$this->objNoticia;
+	    if ( $objNoticia )
+		{
+			$key = $this->GetFieldValue('key');
+            $objNoticia->getById($key);
+			$objNoticia->SetData($this->GetData());
+            try
+            {
+                $objNoticia->save();
+                $MIOLO->Information('Noticia atualizada com sucesso.', $MIOLO->getActionUrl('common','mad:news') );
+            }
+            catch ( Exception $e )
+            {
+                $this->AddError($e->GetMessage());
+            }
+	    }
+	}
+
+	function btnList_click()
+	{   
+		global $MIOLO, $module, $self, $theme, $item;
+
+        $sql = new sql('n.idnoticia, s.sistema, n.dtnoticia, substr(n.noticia, 1, 50) as noticia','cm_noticia n, cm_sistema s',' (s.idsistema = n.idsistema)', 'n.dtnoticia DESC');
+        $columns = array(
+           new DataGridColumn('idnoticia','Id','left', true, '1%',false,null,true,true),
+           new DataGridColumn('sistema','Sistema','left', true, '10%',true,null,true,true),
+           new DataGridColumn('dtnoticia','Data', 'right', true, '10%',true),
+           new DataGridColumn('noticia','Notícia', 'left', true, '80%',true)
+        );
+		$href_datagrid = $MIOLO->GetActionURL($module,$self,'', Array('event'=>'btnList_click'));
+        $query = $this->objNoticia->ObjQuery($sql);
+        $datagrid = new DataGrid2($query, $columns, $href_datagrid,15);
+        $datagrid->SetTitle('Relação de Notícias');
+        $datagrid->SetLinkType('linkbutton');
+	    $datagrid->AddActionUpdate($MIOLO->GetActionURL($module,$self,'%0%',Array('event'=>'btnEdit:click')));
+       $datagrid->AddActionDelete($MIOLO->GetActionURL($module,$self,'%0%',
+                                  Array('event'=>'btnDelete:click')));
+        $datagrid->HeaderLink('new', 'Novo Registro',
+                  $MIOLO->GetActionURL($module,$self,'',Array('event'=>'btnInsert:click')));
+        $this->datagrid = &$datagrid;
+	}
+
+	function btnEdit_click()
+	{   
+		global $MIOLO, $module, $item, $self;
+
+        $objNoticia = &$this->objNoticia;
+		if ($objNoticia)
+        {
+		   $this->SetData($objNoticia->GetById($item));
+		   $this->SetButtonAttr('btnNew','label','Cancelar');
+	       $this->AddError( $objNoticia->GetErrors() );
+        }
+	}
+
+	function btnInsert_click()
+	{
+	}
+
+	function btnDelete_click()
+	{   
+		global $MIOLO, $module, $item, $self, $action;
+        $idnoticia = isset($item) ? $item : $this->GetFieldValue('key'); 
+        $MIOLO->Assert( isset($idnoticia), 'Setor não foi informado!', $action);
+        $action = $MIOLO->getActionUrl('common','mad:news');
+        $objNoticia = &$this->objNoticia->GetById($idnoticia);
+        $conf = $this->GetFormValue('conf');
+	    if ( $conf == 'sim')
+	    {
+            try
+            {
+                $objNoticia->Delete();
+                $MIOLO->Information('Registro excluído com sucesso.',$action);
+	        }
+	        catch ( Exception $e )
+	        {
+		       $MIOLO->Information( $objNoticia->GetErrors(),$action);
+            }
+	    }
+	    elseif ( $conf == 'nao')
+        {
+	       $MIOLO->Information('Exclusão cancelada.',$action);
+        }
+	    else
+	    {
+		    $action_sim = $MIOLO->GetActionURL($module,$self,$idnoticia, array('event'=>'btnDelete:click','conf'=>'sim'));
+		    $action_nao = $MIOLO->GetActionURL($module,$self,$idnoticia, array('event'=>'btnDelete:click','conf'=>'nao'));
+	        $MIOLO->Question("Confirma a exclusão?", 
+				$action_sim, $action_nao);
+	    }
+	}
+
+
+}
+
+?>

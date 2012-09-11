@@ -1,0 +1,357 @@
+<?php
+MIOLO::Import('modules::protocolo::controls::linkprocesso');
+class frmProcesso extends CompoundForm
+{
+    protected $oid;
+    protected $processo;
+    protected $setor;
+    protected $setoracesso;
+    protected $perms;
+    function __construct($objProcesso)
+    {
+//      global vars
+        global $MIOLO;
+//      set vars
+        $this->processo = $objProcesso;
+        $this->setor = $MIOLO->getBusiness('protocolo','setor');
+        $this->setoracesso = $MIOLO->getBusiness('protocolo','setoracesso');
+        $this->perms  = $MIOLO->getPerms();
+//      construct
+        parent::__construct();
+        
+        $this->SetClose($this->manager->GetActionURL('protocolo','main'));
+        $this->SetTitle($this->processo->instituicao.'.'.$this->processo->numProcessoFormatado());
+        $this->SetIcon($this->manager->GetUI()->GetImage('protocolo','documento_mini.png'));
+    }
+    function CreateFields()
+    {
+//      actions
+        $form = Form::GetFormValue('form');
+        $formClass['editar']         = 'frmProcessoEditar';
+        $formClass['entrada']         = 'frmProcessoEntrada';
+        $formClass['saida']         = 'frmProcessoSaida';
+        $formClass['capa']         = 'frmProcessoCapa';
+        $formClass['excluir']        = 'frmProcessoExcluir';
+        $formClass['ver']        = 'frmProcessoVer';
+        $formClass['tramite']        = 'frmProcessoTramite';
+        $formClass['decisao']        = 'frmProcessoDecisao';
+        $formClass['anexar']        = 'frmProcessoAnexar';
+        $formClass['apensar']        = 'frmProcessoApensar';
+        $formClass['desapensar']        = 'frmProcessoDesapensar';
+        $formClass['arquivar']        = 'frmProcessoArquivar';
+        $formClass['reabrir']        = 'frmProcessoReabertura';
+        $formClass['separar']        = 'frmProcessoSeparar';
+        // 17-10-2011 - Daniel Bonfim
+        $formClass['observadores']        = 'frmProcessoObservadores';
+        if (isset($formClass[$form]))
+        {
+            $this->_form[0] = $f = $this->manager->GetUI()->GetForm('protocolo',$formClass[$form], $this->processo, 'processos');
+            $f->SetClose($this->manager->GetActionURL('protocolo','main:processos',$this->processo->numProcesso));
+            $this->page->SetAction($this->manager->history->Top('action'));
+        }    	
+        $subform = Form::GetFormValue('subform');
+        $formClass['despacho']         = 'frmProcessoDecisaoVer';
+        if (isset($formClass[$subform]))
+        {
+            $this->_form[1] = $f = $this->manager->GetUI()->GetForm('protocolo',$formClass[$subform], $this->processo, 'processos');
+            $f->SetClose($this->manager->GetActionURL('protocolo','main:processos',$this->processo->numProcesso,array('form'=>'tramite')));
+            $this->page->SetAction($this->manager->history->Top('action'));
+        }
+        $actionFind = $this->manager->GetActionURL('protocolo','main');
+        if(!$this->processo->isPersistent())
+        {
+            $this->manager->Assert(false,'O processo não existe no registro de processos. Entre em contato com a equipe de desenvolvimento',$actionFind);
+        }
+        $action = $this->manager->context->action;
+        $this->_panel[0] = $panel = new ActionPanel('pnlCompound','Opções','',false);
+        $panel->SetIconType('small');
+//      acesso
+        $setores = ($this->perms->checkAccess('PROT_ADMIN', A_ACCESS)) ? $this->setor->selAll() : $this->setoracesso->selSetoresAcesso($this->processo->getSetorUsuario());
+	//      menu apagar : somente para admin e setor origem (processos recem criados)
+		if(
+		    (
+			$this->processo->setorOrigem
+			&& in_array($this->processo->setorOrigem,$setores) 
+			&& count($this->processo->andamento) == 1 
+			&& $this->processo->retencao->status == 'N'
+		    )||
+		    ( $this->processo->retencao->status == 'N'  && $this->perms->checkAccess('PROT_ADMIN', A_ACCESS) )
+		  )
+		{
+			$panel->AddAction('Apagar',
+			$this->manager->GetUI()->GetImageTheme('','icons/apagar.png'),'protocolo', $action ,$this->processo->numProcesso, array("form"=>"excluir"));
+		}
+
+
+//      menu arquivar : somente setor acesso para processo normais
+        if (
+                $this->processo->retencao->setor
+                && in_array($this->processo->retencao->setor,$setores) 
+                && $this->processo->retencao->status == 'N' 
+           )
+        {
+            $panel->AddAction('Arquivar',
+            $this->manager->GetUI()->GetImageTheme('','icons/arquivar.png'),'protocolo',$action, $this->processo->numProcesso, array("form"=>"arquivar"));
+        }
+//      menu reabrir : somente para setor acesso para processo arquivado
+        elseif (
+                    (
+                        $this->processo->retencao->setorDestino
+                        && in_array($this->processo->retencao->setorDestino,$setores)
+                        && $this->processo->retencao->status == 'A' 
+                    ) ||
+                    (
+                        $this->processo->retencao->setorDestino
+                        && !in_array($this->processo->retencao->setorDestino,$this->setor->selAll())
+                        && $this->processo->retencao->status == 'A' 
+                    )||
+                    (
+                        $this->processo->retencao->status == 'A' 
+                    	&& $this->processo->getSetorUsuario() == $this->processo->retencao->setor
+                    )||
+                    (
+                    	$this->processo->retencao->status == 'A'
+                    	&& in_array($this->setoracesso->getSetorFilho($this->processo->getSetorUsuario())->result[0][0], $this->setoracesso->selSetoresAcesso($this->processo->getSetorUsuario()))
+                    )                    
+               ) 
+        {
+            $panel->AddAction('Reabrir',
+            $this->manager->GetUI()->GetImage('protocolo','icons/reabrir.png'),'protocolo',$action, $this->processo->numProcesso, array("form"=>"reabrir"));
+        }
+        
+//      menu trâmite : todos
+	//$theme->ClearContent();
+	//$ui = $MIOLO->GetUI();
+    
+    // insere formulário frmProcessosFind
+//	$form2 = $ui->GetForm($module,'frmProcessoTramite',NULL,'processos');
+//	$theme->InsertContent($form2);
+
+        $panel->AddAction('Trâmite',
+        $this->manager->GetUI()->GetImageTheme('','icons/tramite.png'),'protocolo',$action, $this->processo->numProcesso, array("form"=>"tramite"));
+		//      menu capa : somente para setor origem
+		if (
+
+                    $this->processo->tipo == 'P'
+
+            )
+        {
+            $panel->InsertUserAction(0,'PROT_USR',A_EXECUTE,'Capa',
+            $this->manager->GetUI()->GetImageTheme('','icons/capa.png'),'protocolo',$action, $this->processo->numProcesso, array("form"=>"capa"));
+        }
+//      menu saída : somente para setor acesso para processo normal
+        if (
+                (
+                    $this->processo->retencao->setor
+                    && in_array($this->processo->retencao->setor,$setores) 
+                    && $this->processo->retencao->status == 'N' 
+                ) ||
+                (
+                    $this->processo->retencao->setor
+                    && $this->perms->checkAccess('PROT_ADMIN', A_ACCESS)
+                    && $this->processo->retencao->status == 'N'
+                )    
+            )
+        {
+            $panel->AddAction('Saída',
+            $this->manager->GetUI()->GetImageTheme('','icons/saida.png'),'protocolo',$action, $this->processo->numProcesso, array("form"=>"saida"));
+        }
+        
+//      procedimento para saber se existe processos apensados
+        if (is_array($this->processo->andamento))
+        {
+            foreach ($this->processo->andamento as $andamento)
+            {
+                $decisao = substr($andamento->decisao,0,11);
+                switch ($decisao)
+                {
+                    case 'APENSADO AO':
+                        $countApensado++;
+                    break;
+                    case 'DESAPENSADO':
+                        $countDesapensado++;
+                    break;
+                }
+            }
+        }
+//      menu desapensar : somente para o setor acesso para processo apensado 
+        if (
+                $this->processo->retencao->setor
+                && in_array($this->processo->retencao->setor,$setores) 
+                && $this->processo->retencao->status == 'N' 
+                && $countApensado > $countDesapensado
+           )
+        {
+            $panel->AddAction('Desapensar',
+            $this->manager->GetUI()->GetImage('protocolo','desapensar_mini.png'),'protocolo',$action, $this->processo->numProcesso, array("form"=>"desapensar"));
+        }
+//      menu apensar : somente para setor acesso para processo normal
+        if (
+                $this->processo->retencao->setor
+                && in_array($this->processo->retencao->setor,$setores) 
+                && $this->processo->retencao->status == 'N' 
+           )
+        {
+            $panel->AddAction('Apensar',
+            $this->manager->GetUI()->GetImageTheme('','icons/apensar.png'),'protocolo',$action, $this->processo->numProcesso, array("form"=>"apensar"));
+        }
+//      menu anexar : somente para setor acesso para processo normal
+        if (
+                $this->processo->retencao->setor
+                && in_array($this->processo->retencao->setor,$setores) 
+                && $this->processo->retencao->status == 'N' 
+           )
+        {
+            $panel->AddAction('Anexar',
+            $this->manager->GetUI()->GetImageTheme('','icons/anexar.png'),'protocolo',$action, $this->processo->numProcesso, array("form"=>"anexar"));
+        }
+//      menu desanexar : somente para setor acesso para processo arquivado
+        elseif (
+                    $this->processo->retencao->setorDestino
+                    && in_array($this->processo->retencao->setorDestino,$setores) 
+                    && $this->processo->retencao->status == 'J' 
+                )
+        {
+            $panel->AddAction('Separar',
+            $this->manager->GetUI()->GetImage('protocolo','separar_mini.png'),'protocolo',$action, $this->processo->numProcesso, array("form"=>"separar"));
+        }
+//      menu decisão : somente para setor acesso para processo normal
+        if (
+                (
+                    $this->processo->retencao->setor
+                    && in_array($this->processo->retencao->setor,$setores) 
+                    && $this->processo->retencao->status == 'N' 
+                ) ||
+                (
+                    $this->processo->retencao->setor
+                    && $this->perms->checkAccess('PROT_ADMIN', A_ACCESS)
+                    && $this->processo->retencao->status == 'N'
+                )
+            ) 
+        {
+            
+            if (!$this->processo->retencao->setorDestino) 
+            {
+        	  $panel->AddAction('Decisão',
+              $this->manager->GetUI()->GetImageTheme('','icons/decisao.png'),'protocolo',$action, $this->processo->numProcesso, array("form"=>"decisao"));
+            }
+        }
+//      menu entrada : somente para setor acesso para processo normal
+        if (
+                (
+                    $this->processo->retencao->setorDestino
+                    && $this->processo->retencao->status == 'N' // se o processo não estiver arquivado ou anexado
+                    && in_array($this->processo->retencao->setorDestino,$setores) 
+                ) || 
+                (
+                    !in_array($this->processo->retencao->setorDestino,$this->setor->selAll())
+                    && substr($this->processo->retencao->setorDestino,0,1) != '*'
+                    && $this->processo->retencao->setorDestino
+                    && $this->processo->retencao->status == 'N' // se o processo não estiver arquivado ou anexado
+                ) ||
+                (
+                    !in_array($this->processo->retencao->setor,$this->setor->selAll())
+                    && $this->processo->retencao->setor
+                    && $this->processo->retencao->status == 'N' // se o processo não estiver arquivado ou anexado
+                ) ||
+                (
+                    $this->perms->checkAccess('PROT_ADMIN', A_ACCESS)
+                    && $this->processo->retencao->status == 'N' 
+                )
+            )
+        {
+            $panel->AddAction('Entrada',
+            $this->manager->GetUI()->GetImageTheme('','icons/entrada.png'),'protocolo',$action, $this->processo->numProcesso, array("form"=>"entrada"));
+        }
+//      menu alterar : somente para setor origem ou admin		
+		// Testa os setores filhos
+		$setorFilho = $this->setoracesso->getSetorFilho($this->processo->setorOrigem)->result;
+		$setorUsuario = $this->processo->getSetorUsuario();
+		$efilho = false;
+		if ($setorFilho)
+		{
+			foreach ( $setorFilho as $n )
+			{
+				if ($setorUsuario == $n[0])
+				{
+					$efilho = true;
+				}
+			}
+		}
+		
+		//menu alterar : somente para setor origem ou admin
+        if (
+                ((
+                    
+                    (($this->processo->setorOrigem == $this->processo->getSetorUsuario()) || ($efilho))
+                    && $this->processo->retencao->status == 'N'
+                )                 || (
+                        $this->perms->checkAccess('PROT_ADMIN', A_ACCESS)
+                        && $this->processo->retencao->status != 'A' 
+                )) 	&& (
+		    		$this->processo->retencao->numAndamento < 2 
+		)		  			
+            )
+        {
+            $panel->AddAction('Alterar',
+            $this->manager->GetUI()->GetImageTheme('','icons/alterar.png'),'protocolo',$action, $this->processo->numProcesso, array("form"=>"editar"));
+        }
+//      menu detalhar : para todos que não podem alterar processo
+        else
+        {
+            $panel->AddAction('Detalhar',
+            $this->manager->GetUI()->GetImage('protocolo','visualizar_mini.png'),'protocolo',$action, $this->processo->numProcesso, array("form"=>"ver"));
+        }
+        
+        // 16-10-2011 - Daniel Bonfim
+        $panel->AddAction('Observadores',
+        $this->manager->GetUI()->GetImageTheme('','icons/alterar.png'),'protocolo', $action ,$this->processo->numProcesso, array("form"=>"observadores"));
+        
+        
+//      info
+        $tipo = array("A"=>"PROTOCOLADO","P"=>"PROCESSO");
+        $this->_info[]	= new MTextLabel('tipo',$tipo[$this->processo->tipo],'Tipo');
+		$this->_info[]	= new MTextLabel('numProcesso',$this->processo->instituicao.".".$this->processo->numProcessoFormatado(),'Número');
+		$this->_info[]	= new MTextLabel('dataAbertura',$this->processo->dataFormatada($this->processo->dataAbertura),'Data Abertura');
+		$this->_info[]	= ($this->processo->retencao->setor) ? new MTextLabel('setorAtual',$this->processo->retencao->setor,'Setor') : new MTextLabel('setorAtual','NENHUM','Setor');
+        switch ($this->processo->retencao->status)
+        {
+            case 'N':
+                if ($this->processo->retencao->setorDestino) $this->_info[]	= new MTextLabel('status','AGUARDANDO ENTRADA - '.$this->processo->retencao->setorDestino,'Status');
+                else $this->_info[]	= new MTextLabel('status','NORMAL','Status');
+            break;
+            case 'A':
+		        $this->_info[]	= new MTextLabel('status','ARQUIVADO','Status');
+            break;
+            case 'J':
+		        $this->_info[]	= new MTextLabel('status','ANEXADO','Status');
+            break;
+        }
+		$this->_info[]	= new MTextLabel('solicitante',$this->processo->solicitante,'Interessado');
+		$this->_info[]	= new MTextLabel('titulo',$this->processo->titulo,'Titulo');
+		$this->_info[]	= new MTextLabel('assunto',$this->processo->assunto,'Assunto');
+		$this->_info[]	= new MTextLabel('arquivo',$this->processo->arquivo,'Caixa Arquivo');		
+    	
+    	/*
+    	$grid = $this->manager->GetUI()->GetGrid('protocolo','gridProcessosTramite',$this->processo);
+		$grid->SetTitle("Trâmite do processo");
+    
+    	$fields = array(
+    		$grid,
+    	);
+    	$this->AddFields($fields);
+		*/
+		$this->_panel[1] = $panel2 = new ActionPanel('pnlCompound','Novo Processo','',false);
+		$panel2->SetIconType('small');
+		$panel2->AddAction(
+			'Abrir',
+			$this->manager->GetUI()->GetImage(
+				'adm',
+				'processos.png'
+			),
+			'protocolo',
+			'main:processos:new'
+		);
+    }
+}
+?>

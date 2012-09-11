@@ -1,0 +1,225 @@
+<?php
+class repFinanceiroUO extends PDFReport
+{
+	var $img;
+	var $timestamp;
+	var $total;
+	var $subtotal;
+	var $uo;
+	var $ano;
+	var $objLancamentoInt;
+	var $objOrcamentoInterno;
+	var $objUO;
+
+	function __construct()
+	{
+		global $MIOLO, $module, $page, $context, $self, $action, $perms, $item;
+
+		parent::__construct(NULL, NULL, 55);
+		$ui = $MIOLO->GetUI();
+
+		$this->uo = Form::GetFormValue('selUO');
+		$this->ano = Form::GetFormValue('ano');
+
+		$this->objOrcamentoInterno = $MIOLO->GetBusiness($module,'orcamentointerno');
+		$this->objUO = $MIOLO->GetBusiness($module,'uo');
+		$this->objLancamentoInt = $MIOLO->GetBusiness($module,'lancamentoint');
+
+		$this->img = $ui->GetImageSrc('logonet.png');
+		$this->timestamp = date('d/m/Y G:i');
+		$this->pdf->ezStartPageNumbers(520, 800, 11, 'rigth', 'Página: {PAGENUM}');
+		$this->pdf->ezSetMargins(50, 30, 30, 30);
+		$this->GeneratePageHeader();
+
+		$this->SetOption('fontSize',9);
+
+		$rubrica = $this->objLancamentoInt->ListRubricas($this->uo,$this->ano);
+		
+		$numRubricas = count($rubrica);;
+		$this->total = 0;
+
+		for($i=0; $i<$numRubricas; $i++){
+
+			$query = $this->objLancamentoInt->ListLancamentoInt($this->uo,$this->ano,$rubrica[$i][0]);
+		    $query->SetOrder('idrequisicao');
+
+			$this->subtotal = 0;
+
+			unset($data_idrequisicao);
+			unset($data_descricao);
+			unset($data_valor);
+
+			foreach($query->result as $row)
+			{
+				$this->subtotal += floatval(str_replace(',','.',$row[2]));
+
+				$data_idrequisicao[] = $row[0];
+				$data_descricao[] = $row[1];
+				$data_valor[] = 'R$ ' . number_format(str_replace(',','.',$row[2]),2,',','.');
+			}
+		
+			$summary2[$i] = array(array("<b>Subtotal da Rubrica:</b>", "<b>R$ " .  number_format(str_replace(',','.',$this->subtotal),2,',','.') . "</b>"));
+
+			$this->total += $this->subtotal;
+			$quantidade = count($data_idrequisicao);
+
+			unset($dataini);
+		
+			for($j=0;$j<$quantidade;$j++)
+			{
+				$dataini[] = array(
+					$data_idrequisicao[$j],
+					$data_descricao[$j],
+					$data_valor[$j],
+				);
+			}
+
+			$data[$i]=$dataini;
+
+			$columns = array(
+				new PDFReportColumn('idrequisicao','<b>Nº REQUISIÇÃO</b>','center',true,20,true,null,true),
+				new PDFReportColumn('descricao','<b>TIPO DE REQUISIÇÃO</b>','center',true,35,true,null,true),
+				new PDFReportColumn('valor','<b>VALOR</b>','center',true,20,true,null,true),
+			);
+
+			$somatotal = array(
+				new PDFReportColumn('texto', 'texto', 'right', false, 56, true),
+				new PDFReportColumn('valor', 'valor', 'center', false, 20, true)
+			);
+
+			$somasubtotal = array(
+				new PDFReportColumn('texto', 'texto', 'right', false, 56, true),
+				new PDFReportColumn('valor', 'valor', 'center', false, 20, true)
+			);
+
+			$this->SetColumns($columns);
+			$colDetail[$i] = $this->columns;
+			$this->SetColumns($somasubtotal);
+			$colSubtotal[$i] = $this->columns;
+
+		}
+
+		$summary1[0] = array(array("<b>Total Geral da UO:</b>", "<b>R$ " .  number_format(str_replace(',','.',$this->total),2,',','.') . "</b>"));
+
+		$this->SetColumns($somatotal);
+		$colTotal = $this->columns;
+
+		// gera o report
+		for($i=0; $i<$numRubricas; $i++){
+			$this->SetOption('showHeadings', 1);
+			$this->SetOption('showLines', 0);
+			$this->columns = $colDetail[$i];
+			$this->GenerateGroupHeader($rubrica[$i][0]);
+			$this->GenerateData($data[$i]);
+			$this->SetOption('showHeadings', 0);
+			$this->SetOption('showLines', 1);
+			$this->columns = $colSubtotal[$i];
+			$this->GenerateData($summary2[$i]);
+			$this->GenerateGroupFooter($rubrica[$i][0]);
+		}
+		$this->SetOption('showHeadings', 0);
+		$this->SetOption('showLines', 1);
+		$this->columns = $colTotal;
+		$this->GenerateData($summary1[0]);
+
+		$this->GeneratePageFooter();
+	}
+
+	function GenerateGroupHeader($rubrica)
+	{
+		$this->pdf->SetStrokeColor(0, 0, 0);
+		$x0 = $this->pdf->left;
+
+		$this->pdf->ezSetDy(-32, 'makeSpace');
+		$y = $this->pdf->y;
+		$this->pdf->addText($x0, $y + 19, 12, 'Rubrica: ' . $rubrica);
+		$this->pdf->line($x0, $y + 15, 200, $y + 15);
+	}
+
+	function GenerateGroupFooter($rubrica)
+	{
+		$saldo = $this->objOrcamentoInterno->getSaldoRubrica($this->uo,$this->ano,$rubrica);
+
+		$this->pdf->ezText(' ', 16);
+
+		$saldon[0] = floatval(str_replace(',','.',$saldo[0]));
+		$saldon[1] = floatval(str_replace(',','.',$saldo[1]));
+		$saldon[2] = floatval(str_replace(',','.',$saldo[2]));
+
+		$this->pdf->line($this->pdf->left-5, $this->pdf->y, $this->pdf->right, $this->pdf->y);
+		$this->pdf->line($this->pdf->left-5, $this->pdf->y-15, $this->pdf->right, $this->pdf->y-15);
+
+		$this->pdf->ezText('<b>CRÉDITO: </b>R$ ' . number_format($saldon[0],2,',','.') . '  <b>DÉBITO: </b>R$ ' . number_format($saldon[1],2,',','.') . '  <b>PREVISÃO DE DÉBITO: </b>R$ ' . number_format($saldon[2],2,',','.') . '  <b>SALDO: </b>R$ ' . (number_format($saldon[0] - $saldon[1] - $saldon[2],2,',','.')), 9, array('justification'=>'center'));
+
+		$this->pdf->ezText(' ', 16);
+	}
+
+	function GeneratePageHeader()
+	{   
+		global $MIOLO, $module, $item;
+
+		$h = $this->pdf->getFontHeight(12);
+  
+		$x00=$this->pdf->left;
+		$hh = $this->pdf->getFontHeight(12);
+		$this->pdf->addText($x00, 800, 12, $this->manager->getConf('instituicao.sigla')." - ".$this->manager->getConf('instituicao.nome'));
+		$this->pdf->addText($x00, 800 - $hh, 12, $this->manager->getConf('theme.system'));
+
+  
+	/*	$this->pdf->ezImage($this->img,5,50,'none','left');
+	    $this->pdf->addText(90,800,12,'UFJF - Universidade Federal de Juiz de Fora');
+	    $this->pdf->addText(90,800-$h,12,'CGCO - Centro de Gestão do Conhecimento Organizacional');
+		$this->pdf->addText(90,800-$h-$h,12,'SIGA - Sistema Integrado de Gestão Acadêmica');
+*/	
+
+	$this->pdf->addText(90,800-$h-$h-$h,12,'Módulo Administrativo');
+		$this->pdf->line($this->pdf->left, 800-$h-$h-$h-$h, $this->pdf->right, 800-$h-$h-$h-$h);
+		$this->pdf->addTextWrap($this->pdf->x,800-$h-$h-$h-$h-$h,600,12, 'Relatório Financeiro - ' . $this->objUO->GetById($this->uo)->sigla, 'center');
+		$this->pdf->line($this->pdf->left, 800-$h-$h-$h-$h-$h-3, $this->pdf->right, 800-$h-$h-$h-$h-$h-3);
+
+		$this->pdf->ezSetY(800-$h-$h-$h-$h-$h-$h);
+
+	}
+	
+	function GeneratePageFooter()
+	{
+		global $MIOLO, $module, $item;
+
+		if ($this->pn->pageNumber == $this->pn->pageCount){
+			$saldo = $this->objOrcamentoInterno->getSaldoUO($this->uo,$this->ano);
+
+			$this->pdf->ezText(' ', 16);
+
+			$saldon[0] = floatval(str_replace(',','.',$saldo[0]));
+			$saldon[1] = floatval(str_replace(',','.',$saldo[1]));
+			$saldon[2] = floatval(str_replace(',','.',$saldo[2]));
+
+			$this->pdf->line($this->pdf->left-5, $this->pdf->y, $this->pdf->right, $this->pdf->y);
+			$this->pdf->line($this->pdf->left-5, $this->pdf->y-15, $this->pdf->right, $this->pdf->y-15);
+
+			$this->pdf->ezText('<b>CRÉDITO: </b>R$ ' . number_format($saldon[0],2,',','.') . '  <b>DÉBITO: </b>R$ ' . number_format($saldon[1],2,',','.') . '  <b>PREVISÃO DE DÉBITO: </b>R$ ' . number_format($saldon[2],2,',','.') . '  <b>SALDO: </b>R$ ' . (number_format($saldon[0] - $saldon[1] - $saldon[2],2,',','.')), 9, array('justification'=>'center'));
+
+			$this->pdf->ezText(' ', 12);
+			
+		}
+
+		$this->pdf->ezText($this->timestamp,10,array('justification'=>'right'));
+
+	}
+
+	function GenerateData($data)
+	{
+		$this->pdf->ezSetDy(-5);
+		$this->SetData($data);
+		$this->rawdata = $this->GenerateTableData();
+		$this->GenerateBody($this->rawdata);
+	}
+
+	function Generate()
+	{
+		$this->SetOutput();
+		$this->Execute();
+	}
+
+}
+?>

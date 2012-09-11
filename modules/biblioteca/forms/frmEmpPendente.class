@@ -1,0 +1,171 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+class frmEmpPendente extends MFormAJAX
+{
+    public $objEmprestimo;
+
+
+	function __construct()
+    {   
+		global $MIOLO, $action, $module, $objExemplar;
+
+        parent::__construct('Empréstimos Pendentes- Ordem: Data/Hora Empréstimo');
+        $this->box->AddStyle('padding',"10px");
+	    $this->eventHandler();
+		$this->defaultButton = false;
+		// Botão 'fechar', direcionando para o handler biblioteca/main/circulacao/emprestimo
+		$this->SetClose($this->manager->GetActionURL($module, 'main:circulacao:emprestimo'));
+	}
+
+
+	function CreateFields()
+	{
+	    global $MIOLO, $action, $module, $item, $page;
+
+		$perms = $this->manager->getPerms();
+		$this->objEmprestimo = $MIOLO->GetBusiness($module,'emprestimo');
+		$query = $this->objEmprestimo->SelectEmprestimoPendente();
+
+		$this->grid = $this->manager->getUI()->getGrid($module,'gridEmprPendente',$query);
+
+		$fields = array(
+			$this->grid
+		);
+		$this->setFields($fields);
+
+		$buttons = Array(
+			new MButton('btnVoltar', 'Voltar', $MIOLO->GetActionURL($module = $module, 'main:circulacao:emprestimo')),
+   						);
+		$this->SetButtons($buttons);
+	}
+
+
+	function ajax_detail($id)
+    {
+        // this method is called by CPAINT at doDetail execution
+
+		global $MIOLO, $module;
+        $log = $MIOLO->GetBusiness($module,'log');
+		$opempr = $log->GetOperadorEmprByOperacao($id);
+        $data = array();
+        $data[] = "Operador de Empréstimo: " . $opempr[0][0] . " - " . $opempr[0][1];
+        $control = new MTableRaw('',$data);
+        $control->setAlternate(true);
+        $MIOLO->getTheme()->setAjaxContent($control);
+	}
+
+
+	function btnEdit_click()
+	{
+		global $MIOLO, $module, $action, $item;
+
+		$fields = array(
+			new TextField('idemprestimo','','Código do Empréstimo',20),
+			new TextField('loginPessoa','','Login do Usuário',20),
+			new TextField('numerodotombo','','Número do Exemplar',20),
+			new TextField('datahoradoemprestimo','','Data/Hora do Empréstimo',20),
+			new TextField('datahoraprevisaodevolucao','','Data/Hora Previsão Devolução',20),
+		);
+		$this->SetFields($fields);
+
+		$this->setFieldAttr('idemprestimo','readonly',true);
+		$this->setFieldAttr('loginPessoa','readonly',true);
+		$this->setFieldAttr('numerodotombo','readonly',true);
+
+		$buttons = Array(
+			new FormButton('btnSalvar', 'Salvar'),
+			new FormButton('btnVoltarEd', 'Voltar', $MIOLO->GetActionURL($module = $module, $action = $action)),
+		);
+		$this->SetButtons($buttons);
+		$this->SetButtonAttr('btnVoltar','visible',false);
+
+		$this->objEmprestimo = $MIOLO->GetBusiness($module,'emprestimo');
+		$emprestimo = $this->objEmprestimo->GetEmprestimoById($item);
+		$this->setData($emprestimo);
+		$this->setTitle('Empréstimo Pendente');
+    }
+
+	function getData()
+	{
+		$data = new FormData();
+		$data->idemprestimo = $this->GetFormValue('idemprestimo');
+		$data->login = $this->GetFormValue('loginPessoa');
+		$data->numerodotombo = $this->GetFormValue('numerodotombo');
+		$data->datahoradoemprestimo = $this->GetFormValue('datahoradoemprestimo');
+		$data->datahoraprevisaodevolucao = $this->GetFormValue('datahoraprevisaodevolucao');
+		$data->datahoradadevolucao = null;
+		return $data;
+	}
+
+	function setData($data)
+	{
+		$this->SetFieldValue('idemprestimo',$data->idemprestimo);
+		$this->SetFieldValue('loginPessoa',$data->login);
+		$this->SetFieldValue('numerodotombo', $data->numerodotombo);
+		$this->SetFieldValue('datahoradoemprestimo',$data->datahoradoemprestimo);
+		$this->SetFieldValue('datahoraprevisaodevolucao',$data->datahoraprevisaodevolucao);
+	}
+
+	function btnSalvar_click()
+	{
+		global $MIOLO,$self,$item,$action,$module;
+		$this->objEmprestimo = $MIOLO->GetBusiness($module,'emprestimo');
+		$data = $this->getData();
+		try
+		{
+			$result = $this->objEmprestimo->saveEmprestimo($data);
+
+			if($result === true)
+			{
+				$go = $this->manager->GetActionURL($module, $action);
+				
+				$MIOLO->Information("Empréstimo Modificado", $go );
+			}
+			else
+			{
+				$this->addError($result);
+			}
+		}
+		catch (Exception $e)
+		{
+			$this->addError($e->getMessage());
+		}
+	}
+
+/*
+	// Método a ser executado antes de renderizar cada linha
+	function MyRowMethod($i, $row, $actions, $columns)
+	{
+		//nomes dos operadores (hint)
+		if($row[6] != null)
+		{
+			$columns['usuarioopemprestimo']->control[$i]->SetJsHint($row[7]); //[7] é nome
+		}
+	}
+*/
+}
+?>

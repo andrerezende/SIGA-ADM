@@ -1,0 +1,259 @@
+<?php
+class MListControl extends MFormControl
+{
+    var $options;
+    var $showValues;
+    var $content;
+    var $size;
+    var $cols; 
+    var $type; // used in readonly
+
+    function __construct($name='',$label='',$options='',$showValues=false,$hint='')
+    {
+        parent::__construct($name,'',$label);
+        $this->options = $options;
+        $this->showValues = $showValues;
+        $this->hint = $hint;
+        $this->formMode = 1;
+    }
+
+    function GenerateOptions()
+    {
+        $content = '';
+
+        foreach( array_keys($this->options) as $k )
+        {            
+           $o = $this->options[$k];
+           if ( $o instanceof MOptionGroup )
+           {
+              foreach( $o->options as $oo )
+              {            
+                 $oo->SetControl($this);
+              }
+              $content .= $o->Generate();
+           }
+           else
+           {
+              if ( $o instanceof MOption )
+              {
+                 $oo = $o;
+              }
+              elseif ( is_array($o) ) 
+              {
+                 list ($value,$label) = $o;
+                 $oo = new MOption('',$value,$label);
+              }
+              else
+              {
+                 $oo = new MOption('',$k,$o);
+              } 
+              $oo->checked = ($oo->value === 0) || ($oo->value === '0') ? ($this->value == '0') : ($oo->value == $this->value);
+              $oo->SetControl($this);
+              $content .= $oo->Generate();
+           }
+        }
+        return $content;
+    }
+}
+
+class MSelection extends MListControl
+{
+    var $autoPostBack;
+    var $event; // trigger a event on selection - autopostback true
+
+    function __construct($name='',$value='',$label='', 
+                $options=Array('Não','Sim'),$showValues=false,$hint='',$size='')
+    {
+        parent::__construct($name,$label,$options,$showValues,$hint,$size);
+        $this->setOptions($options);
+        $this->setValue($value);
+		$this->size = $size;
+        $this->autoPostBack = false;
+        $this->event = '';
+    }
+
+    function setOptions($options)
+    {
+        $MIOLO = MIOLO::getInstance();
+        $MIOLO->Assert(is_array($options),_M('$options precisa ser um array'));
+	//var_dump($options);die();
+        if(is_array($options[0]))
+        {
+	    //var_dump($options);die();
+            $keys = array_keys($options[0]);
+	    //var_dump($options[0]);die();
+            $s = array(''=>array('',_M('--Selecione--')));
+	    //var_dump($s);die();
+        }
+        else
+        {
+            $keys = array_keys($options);
+            $s = array(''=>_M('--Selecione--'));
+        }
+//        $options = str_replace('0','',$keys[0]) ? $s + $options : $options;
+        $options = $keys[0] !== '' ? $s + $options : $options;
+        $this->options = $options;
+    }
+    
+	function GetOption($value)
+    {
+        foreach( array_keys($this->options) as $k )
+        {            
+            $o = $this->options[$k];
+            if ( $o instanceof MOptionGroup )
+            {
+                foreach( $o->options as $oo )
+                {            
+                    if (trim($value) == trim($oo->getValue()))
+                       $r = $oo->label;
+                }
+            }
+            elseif ( $o instanceof MOption )
+            {
+                if (trim($value) == trim($o->getValue()))
+                   $r = $o->label;
+            }
+            elseif ( is_array($o) ) 
+            {
+                list($id, $name) = $o;
+                if (trim($value) == trim($id))
+                   if ($this->showValues) $r = $id . ' - ' . $name;
+                   else $r = $name;
+            }
+            elseif (trim($value) == trim($k)) 
+            {
+                if ($this->showValues) $r = $k . ' - ' . $o;
+                else $r = $o;
+            }
+        }
+        return $r;
+    }
+    
+    function SetOption($option,$value)
+    {
+        $this->options[$option] = $value;
+    }
+
+    function SetCols($value)
+    {
+        $this->cols = $value;
+    }
+
+	function SetAutoSubmit($state)
+    {
+        $this->autoPostBack = $state;
+    }
+
+   function GenerateInner()
+   {
+      $selected = false;
+
+      if ( $this->event )
+      {
+         $this->AddAttribute('onChange',"miolo.doPostBack('{$this->event}','');".
+               "miolo.getForm().submit();");
+      }
+      elseif ( $this->autoPostBack )
+      {
+         $this->AddAttribute('onchange',"miolo.getForm().submit();");
+      }
+
+      if ($this->GetClass() == '') $this->SetClass('m-combo');
+	  if ( $this->readonly )
+      {
+          $this->SetClass('m-readonly');
+          $this->AddAttribute('readonly');
+          $this->setId($this->getId() . '_ro');
+          $this->SetValue($this->GetOption($this->GetValue()));
+          $this->size = $this->cols ? $this->cols : strlen(trim($this->getValue())) + 10;
+          $this->type = 'text';
+          $this->inner = $this->GenerateLabel() . $this->GetRender('inputtext');
+      }
+      else
+      {
+          $this->content = $this->GenerateOptions();
+          if ($this->size != '')
+          { 
+              $this->AddAttribute('size', $this->size);
+          }
+          $this->inner = $this->GenerateLabel() . $this->GetRender('select');
+      }
+   }
+}
+
+class MMultiSelection extends MListControl
+{       
+    var $size;
+
+    function __construct($name='', $values=Array('1','2','3'), 
+               $label='&nbsp;', $options=Array('Option1','Option2','Option3'),
+               $showValues=false, $hint='', $size='3')
+    {
+        parent::__construct($name,$label,$options,$showValues,$hint);
+        $this->size       = $size;
+        $this->value      = $values; // is this still necessary?
+    }
+
+   function GenerateInner()
+   {       
+      if ( !is_array($this->value) )
+         echo $this->painter->div(new MDiv('',"Values must be an single-dimensional array",'alert'));
+      if ( !is_array($this->options) )
+         echo $this->painter->div(new MDiv('',"Options must be an {single,multi}-dimensional array",'alert'));
+      $this->content = $this->GenerateOptions();
+      $this->AddAttribute('multiple','');
+      $this->AddAttribute('size', $this->size);
+      if ($this->GetClass() == '') $this->SetClass('m-combo');
+      $this->inner = $this->GenerateLabel() . $this->GetRender('select');
+   }
+}
+
+class MComboBox extends MSelection
+{
+    var $size;
+
+    function __construct($name='',$value='',$label='',$options=Array('Não','Sim'),$showValues=false,$hint='',$size=6)
+    {
+        parent::__construct($name,$value,$label,$options,$hint);
+        $this->size = $size;
+        $this->page->AddScript('m_combobox.js');
+        if (is_array($this->options)) {
+           reset($this->options);
+           $o = current($this->options);
+        } 
+    }
+
+   function GenerateInner()
+   {
+      if ( $this->autoPostBack )
+      {
+         $this->AddAttribute('onchange',"miolo.getForm().submit()");
+      }
+
+	  if ( $this->readonly )
+      {
+          $this->SetClass('m-readonly');
+          $this->AddAttribute('readonly');
+          $this->setId($this->getId() . '_ro');
+          $this->SetValue($this->GetOption($this->GetValue()));
+          $this->type = 'text';
+          $this->inner = $this->GenerateLabel() . $this->GetRender('inputtext');
+          return;
+      }
+      if ($this->GetClass() == '') $this->SetClass('m-combo');
+      $textName = $this->name;
+      $selName = $this->name . '_sel';
+      $text = new MTextField($textName,$this->value,'',$this->size);
+      $text->SetAttributes($this->Attributes());
+      $text->AddAttribute('onBlur',"miolo.comboBox.onTextChange('{$this->label}', '{$textName}','{$selName}')"); 
+      $this->setId($selName);
+      $this->setName($selName);
+      $this->AddAttribute('onChange',"miolo.comboBox.onSelectionChange('{$this->label}', '{$selName}', '{$textName}')");
+
+      $this->content = $this->GenerateOptions();
+      $this->AddAttribute('size', '1');
+      $span = new MSpan('',array($text->Generate(),' - ',$this->GetRender('select')));
+      $this->inner = $this->GenerateLabel() . $span->generate();
+   }
+}
+?>

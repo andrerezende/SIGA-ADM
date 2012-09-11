@@ -1,0 +1,325 @@
+<?
+class BusinessCommonArquivo extends MBusiness
+{
+
+    public $idArquivo;
+    public $md5;                // md5sum hash
+    public $nome;
+    public $caminho;
+    public $tamanho;            // Em bytes
+    public $mesReferencia;
+    public $anoReferencia;
+    public $dataGravacao;        // Data da gravação no DB
+    public $idUsuario;
+    public $processado;
+    public $dataProcessamento;
+    public $nomeArqLog;
+    public $caminhoArqLog;
+    public $scriptProcessamento;
+    public $caminhoScript;
+    public $obs;
+  public $idMime;
+  public $conteudo;
+  public $idRequisicao;   
+    public $requisicao;
+    public $mime;
+
+
+    /**
+     * Construtor da classe
+     * @name __construct
+     * @param data
+     * @return
+     */
+    function __construct($data=null)
+    {
+        parent::__construct('sigaept',$data);
+    }
+
+
+    /**
+     * @name OnCreate
+     * @param data
+     * @return
+     */
+    function OnCreate($data)
+    {
+        if (!empty($data))
+        {
+            $this->GetById($data);
+        }
+    }
+
+
+    /**
+     * Retorna o arquivo cujo idArquivo é igual a id
+     * @name GetById
+     * @param id
+     * @return
+     */
+    function GetById($id)
+    {
+        $this->idArquivo = $id;
+        $this->retrieve();
+        return $this;
+    }
+
+
+    /**
+     * @name GetByMD5
+     * @param MD5
+     * @return
+     */
+    function GetByMD5($MD5)
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->addCriteria('md5','=',"'$MD5'");
+        $query = $criteria->retrieveAsQuery();
+        $id = $query->result[0][0];
+        return $this->GetById($id);
+    }
+
+
+    /**
+     * Lista todos os arquivos registrados no banco
+     * @name ListAll
+     * @param
+     * @return
+     */
+    function ListAll()
+    {
+        $criteria = $this->getCriteria();
+        return $criteria->retrieveAsQuery();
+    }
+
+
+    /**
+     * Lista todos os arquivos registrados no banco e que não foram processados (data de processamento ainda não registrada).
+     * @name ListNaoProcessados
+     * @param
+     * @return
+     */
+    function ListNaoProcessados($naoretornaconteudo=false,$nomearquivo=null)
+    {       
+                $criteria =  $this->getCriteria();
+        if ($naoretornaconteudo)
+        {
+            $criteria->addColumnAttribute('idArquivo');
+            $criteria->addColumnAttribute('md5');
+            $criteria->addColumnAttribute('nome');
+            $criteria->addColumnAttribute('scriptProcessamento');
+            $criteria->addColumnAttribute('caminhoScript');
+            $criteria->addColumnAttribute('caminho');           
+        }       
+        $criteria->addCriteria('dataProcessamento','is','null');     
+      
+       
+        if($nomearquivo != null)
+        {
+        $cc = new CriteriaCondition();           
+                   
+            $cc->addCriteria($criteria->getCriteria('nome','like',$nomearquivo[0] . "%"));
+           
+            for($i=1;$i<=(count($nomearquivo) - 1);$i++)
+            {             
+              $cc->addOrCriteria($criteria->getCriteria('nome','like',$nomearquivo[$i] . "%"));
+            }
+           
+            $criteria->addCriteria($cc);           
+        }  
+                $v = $criteria->retrieveAsQuery();
+                //var_dump($v->sql);
+                                
+                return $criteria->retrieveAsQuery();
+    }
+
+
+
+    /**
+     * @name ListPensionistas
+     * @param
+     * @return
+     */
+    function ListPensionistas()
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->addCriteria('nome','like',"'f-esp-pensao%'");
+        return $criteria->retrieveAsQuery();
+    }
+
+
+    function ListArquivosProcessados()
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->addColumnAttribute('nome');
+        $criteria->addColumnAttribute('mesReferencia');       
+        $criteria->addColumnAttribute('anoReferencia');
+        $criteria->addColumnAttribute('dataProcessamento');
+        $criteria->addCriteria('nome','like',"'f-esp-pensao%'");
+        return $criteria->retrieveAsQuery()->result;
+    }
+
+    function listArquivosConteudo()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('idArquivo');
+        $criteria->addColumnAttribute('nome');
+        $criteria->addCriteria('conteudo','is not','null');
+        return $criteria->retrieveAsQuery();
+    }
+
+    function listQueriesByOwner($idOwner)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('idArquivo');
+        $criteria->addColumnAttribute('nome');
+        $criteria->addCriteria('idUsuario','=',$idOwner);
+        $criteria->addCriteria('nome','like',"%.SQL");
+        $criteria->addOrCriteria('nome','like',"%.sql");
+        return $criteria->retrieveAsQuery();
+    }
+   
+    function saveFile($nomeControle = 'file', $parametros = array(), $sobrepor = array(), $processavel=false)
+    {
+
+        if ( ! empty($sobrepor) )
+        {
+            $_FILES = $sobrepor;
+            $hashmd5 = md5($_FILES['SQL']['sql']);
+        }
+        else
+        {
+            $hashmd5 = hash_file('md5',$_FILES[$nomeControle]['tmp_name']);
+        }
+
+        $tipo = $_FILES[$nomeControle]['type'];
+        $nome = $_FILES[$nomeControle]['name'];
+        $tamanho = $_FILES[$nomeControle]['size'];
+        $name = explode('.', $nome);
+        $extensao = $name[count($name)-1];
+        $idUsuario = $this->_miolo->getLogin()->idkey;
+       
+        $mime = $this->_miolo->getBusiness('common','mime');
+        $mime->getByMimetype($tipo, $extensao);
+        if(is_null($mime->idMime))
+        {
+            $mime->mimetype = $tipo;
+            $mime->extensao = $extensao;
+            $mime->save();
+        }
+       
+        $sequence = $this->_miolo->getBusiness('common','objectid');
+        $idArquivo = $sequence->getNextId('cm_arquivo');
+       
+        $campos  = "idarquivo,md5,nome,tamanho,conteudo,idmime,idusuario";
+        $valores = "$idArquivo,'$hashmd5','$nome',$tamanho,EMPTY_BLOB(),$mime->idMime,$idUsuario";
+        if ( is_null($parametros['dataProcessamento']) and $processavel )
+        {
+            $parametros['dataProcessamento'] = date('d/m/Y');
+        }
+        if ( is_null($parametros['processado']) and $processavel )
+        {
+            $parametros['processado'] = '1';
+        }
+        if (is_array($parametros) and !empty($parametros) )
+        {
+            foreach($parametros as $campo => $valor)
+            {
+                $campos .= ",$campo";
+                $valores .= ",$valor";
+            }       
+        }
+       
+        $db = $this->_miolo->getDatabase('sigaept');
+        $conn = $db->conn->id;
+        $lob = oci_new_descriptor($conn, OCI_D_LOB);
+        $sql = "INSERT INTO cm_arquivo ($campos) VALUES ($valores) RETURNING conteudo INTO :conteudo";
+        $stmt = oci_parse($conn, $sql);
+        oci_bind_by_name($stmt, ':conteudo', $lob, -1, OCI_B_BLOB);
+        oci_execute($stmt, OCI_DEFAULT);
+       
+        //compactar arquivo
+        $zip = new zipArchive();
+        $res = $zip->open("/tmp/$nome.zip",ZipArchive::CREATE);
+        if ( $res == TRUE )
+        {
+            if ( ! empty($sobrepor) )
+            {
+                $sql = $_FILES['SQL']['sql'];
+                //$file = fopen("/tmp/$nome","w+");
+                //var_dump($_FILES);
+                //fwrite($file,$sql);   
+                //fclose($file);
+                //$zip->addFile("/tmp/$nome","$nome");
+                $zip->addFromString("$nome", $sql);
+            }
+            else
+            {
+                $zip->addFile($_FILES[$nomeControle]['tmp_name'],$nome);
+            }
+            $zip->close();
+        }
+        if ($lob->savefile("/tmp/$nome.zip"))
+        {
+            oci_commit($conn);
+            //echo "Blob successfully uploaded\n";
+         }
+        else
+        {
+            //echo "Couldn't upload Blob\n";
+        }       
+        oci_free_descriptor($lob);
+        oci_free_statement($stmt);
+        //oci_close($conn);
+       
+        $this->getById($idArquivo);
+    }
+   
+   
+    function downloadFile($return=false)
+    {
+        $this->retrieveAssociation('mime');
+
+        $fileName = "/tmp/{$this->nome}.zip";
+        $file = fopen($fileName,"w+");
+        fwrite($file,$this->conteudo);   
+        fclose($file);
+       
+        $zip = new ZipArchive;
+        $res = $zip->open($fileName);
+        if ($res === TRUE)
+        {
+            $zip->extractTo('/tmp',$this->nome);
+            $zip->close();
+            $contents = file_get_contents("/tmp/$this->nome");
+        }
+
+        if ($return)
+        {
+            return $contents;
+        }
+        else
+        {
+            $page = $this->_miolo->getPage();
+            $page->generateMethod = 'generateFile';
+            $page->setFile($this->nome,$contents,$this->mime->mimetype,$this->tamanho);
+        }
+    }
+
+    function getByMesAnoServidor($mes, $ano)
+    {
+        $sql = new sql('idarquivo','cm_arquivo',"mesreferencia='$mes' AND anoreferencia='$ano' AND nome like 'siapefitaesp_%'");
+            $query = $this->Query($sql);
+            return $query->result[0][0];
+    }
+
+    function getByMesAnoPensionista($mes, $ano)
+    {
+        $sql = new sql('idarquivo','cm_arquivo',"mesreferencia='$mes' AND anoreferencia='$ano' AND nome like 'f-esp-pensao_%'");
+            $query = $this->Query($sql);
+            return $query->result[0][0];
+    }
+
+
+}
+?>

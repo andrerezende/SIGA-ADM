@@ -1,0 +1,221 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmFileUpload extends MForm
+{
+    protected $erro, $mime_content_type, $hashmd5, $tmp_arquivo,
+              $arrRegistros, $tamanhoArquivo, $cmarquivo, $tmp_name;
+
+    function __construct()
+    {
+        parent::__construct('Carregamento de SIAPEFITAESP/F-ESP-PENSAO');
+        $this->SetClose($this->manager->GetActionURL('rh','main:integracaosiape:importacao'));
+        $this->EventHandler();
+      } 
+
+    function CreateFields()
+    {
+        $ui = $this->manager->getUI();
+        $options = array('Servidores', 'Pensionistas');
+        $fields = array(new MRadioButtonGroup('tipoArquivo', 'Tipo do arquivo', $options, 'false','horizontal', 'single'),
+                        new MText('txtObs', "Envie apenas arquivos com extensão '.txt'", 'blue', true),
+                        new MFileField('fileServidor', '', 'Arquivo de Servidores'), new MSeparator(),
+                        new MSpacer(1),
+                       );
+        $this->SetFields($fields);
+   	$this->defaultButton = false;
+        $buttons = array(new MButton('btnEnviar', 'Enviar'));
+        $this->SetButtons($buttons);
+    } 
+
+
+    function btnEnviar_click()
+    {
+        $data = $this->getData();
+        //arquivo copiado para o servidor, como temporário
+        $tmp_name = $_FILES['fileServidor']['tmp_name'];
+        $tipoArquivo = $this->GetFieldValue('tipoArquivo');
+        if ( ($tmp_name == '')  or  (!$tipoArquivo) )
+        {
+            $this->erro[] = "Tipo do arquivo ou Arquivo não informado";
+        }
+        else
+        {
+            $type = mime_content_type($tmp_name);
+            if     (stripos($type, 'text') !== false)
+            {
+                $this->mime_content_type = 'text';
+            }
+            elseif (stripos($type, 'zip' ) !== false)
+            {
+                $this->mime_content_type = 'zip';
+            }
+
+            if (($this->mime_content_type == 'text') or ($this->mime_content_type == 'zip'))
+            {
+                //verifica se o arquivo foi gravado no servidor e se não está em branco
+                if ((file_exists($tmp_name)) and (filesize($tmp_name) > 0))
+                {
+                    $this->btnEnviar3($tmp_name, $tipoArquivo);
+                }
+                else
+                {
+                    $this->erro[] = "Erro ao carregar o arquivo ou arquivo vazio";
+                }
+            }
+            else
+            {
+                $this->erro[] = "O arquivo não é do tipo 'txt' ou 'zip'";
+            }
+        }
+
+        $this->ErroSucesso();
+    } 
+
+
+   function btnEnviar3($tmp_name, $tipoArquivo)
+    {
+        $this->cmarquivo = $this->manager->getBusiness('common', 'arquivo');
+        $this->cmarquivo->GetByMD5($this->hashmd5);
+        $this->tamanhoArquivo = filesize ($tmp_name);
+        $this->arrRegistros = file($tmp_name);
+        $this->hashmd5 = hash_file('md5',$tmp_name);
+        IF ($this->cmarquivo->IsPersistent())
+        {
+            $this->erro[] = 'O arquivo já foi carregado em ' . $this->cmarquivo->dataGravacao;
+        }
+        ELSE  //caso ainda não gravado
+        {
+            IF ($this->tamanhoArquivo > disk_free_space('/tmp/'))
+            {
+                $this->erro[] = "O tamanho do arquivo é maior que o espaço disponível. Entre em contato com administrador de sistemas";
+            }
+            ELSE   //caso tenha espaço em disco
+            {
+                    if ($tipoArquivo == 'Servidores')
+                    {
+                        $this->Servidores($tmp_name);
+                    }
+                    else
+                    {
+                        $this->Pensionistas($tmp_name);
+                    }
+            } 
+        } 
+    } 
+
+    function Servidores($tmp_name)
+    {
+        $modules = $this->manager->getConf('home.modules');                    
+        $destino = '/rh/files/integracaosiape/importacao/';
+
+        $REGISTRO_TIPO_0 = $this->arrRegistros[0];
+        $NOME_ARQUIVO   = substr($REGISTRO_TIPO_0, 18, 12);
+        $ANO_REFERENCIA = substr($REGISTRO_TIPO_0, 47,  4);
+
+        $MES_REFERENCIA = substr($REGISTRO_TIPO_0, 45,  2);
+
+	$fileNameTxt = "siapefitaesp_".$MES_REFERENCIA."_".$ANO_REFERENCIA.".txt";
+	$this->cmarquivo = $this->manager->getBusiness('common', 'arquivo');
+	$existe = $this->cmarquivo->getByMesAnoServidor($MES_REFERENCIA, $ANO_REFERENCIA);
+
+	if ($existe != NULL)
+	{
+            $this->erro[] = "Mês/Ano já importado: $MES_REFERENCIA/$ANO_REFERENCIA";
+	}
+        elseif ($NOME_ARQUIVO == "SIAPEFITAESP")
+        {
+            $this->Grava('siapefitaesp','importServidor.php', $MES_REFERENCIA , $ANO_REFERENCIA);
+            copy($tmp_name, $modules.$destino.$fileNameTxt);
+        }
+        else
+        {
+            $this->erro[] = "Nome interno não confere: o arquivo apresenta inconsistência de dados ou está corrompido.";
+        }
+    } // Servidores
+
+    function Pensionistas($tmp_name)
+    {
+        $modules = $this->manager->getConf('home.modules');                    
+        $destino = '/rh/files/integracaosiape/importacao/';
+
+        $REGISTRO_TIPO_0 = $this->arrRegistros[0];
+        $NOME_ARQUIVO   =        substr($REGISTRO_TIPO_0, 25, 12);
+        $ANO_REFERENCIA = intval(substr($REGISTRO_TIPO_0, 52,  4));
+        $MES_REFERENCIA = intval(substr($REGISTRO_TIPO_0, 56,  2));
+	$fileNameTxt = "f-esp-pensao_".$MES_REFERENCIA."_".$ANO_REFERENCIA.".txt";
+
+	$this->cmarquivo = $this->manager->getBusiness('common', 'arquivo');
+	$existe = $this->cmarquivo->getByMesAnoPensionista($MES_REFERENCIA, $ANO_REFERENCIA);
+	
+	if ($existe != NULL)
+	{
+            $this->erro[] = "Mês/Ano já importado: $MES_REFERENCIA/$ANO_REFERENCIA";
+	}
+	elseif ($NOME_ARQUIVO == "F-ESP-PENSAO")
+        {
+            $this->Grava('f-esp-pensao','importPensionista.php', $MES_REFERENCIA , $ANO_REFERENCIA);
+	    copy($tmp_name, $modules.$destino.$fileNameTxt);
+        }
+        else
+        {
+            $this->erro[] = "Nome interno não confere: o arquivo apresenta inconsistência de dados ou está corrompido.";
+        }
+    } // Pensionistas
+        
+    function Grava($fileNameTxt, $scriptProcessamento, $MES_REFERENCIA , $ANO_REFERENCIA)
+    {
+        $modules = $this->manager->getConf('home.modules');                    
+        $caminho = $modules.'/rh/files/integracaosiape/importacao/';
+	
+	
+        $this->cmarquivo->nome                = $fileNameTxt . '_' . $MES_REFERENCIA . '_' . $ANO_REFERENCIA;
+        $this->cmarquivo->caminhoScript       = "/rh/offline/"; 
+        $this->cmarquivo->caminho             = $caminho;
+        $this->cmarquivo->scriptProcessamento = $scriptProcessamento;
+        $this->cmarquivo->mesReferencia       = $MES_REFERENCIA;
+        $this->cmarquivo->anoReferencia       = $ANO_REFERENCIA;
+        $this->cmarquivo->tamanho             = $this->tamanhoArquivo;
+        $this->cmarquivo->md5                 = $this->hashmd5;
+        $this->cmarquivo->dataGravacao        = date("d/m/Y");
+        $this->cmarquivo->idUsuario           = $this->manager->getLogin()->idkey;
+
+        $this->cmarquivo->beginTransaction();
+        $this->cmarquivo->Save();
+        $this->cmarquivo->endTransaction();
+    } // Grava
+
+
+    function ErroSucesso()
+    {
+        if (count($this->erro) > 0)
+        {
+            foreach ($this->erro as $e)
+            {
+                $this->addError($e);
+            }
+        }
+        else
+        {
+            $this->addInfo('Arquivo enviado com sucesso! <br> Código de verificação do arquivo texto: ' . $this->hashmd5);
+        }
+    } // ErroSucesso
+
+}
+?>

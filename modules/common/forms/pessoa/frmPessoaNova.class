@@ -1,0 +1,159 @@
+<?
+/**
+ * Formulário para criar uma nova pessoa
+ */
+MIOLO::Import('modules::common::controls::linkpessoa');
+MIOLO::Import('modules::common::controls::selectionpais');
+MIOLO::Import('modules::common::controls::selectionuf');
+MIOLO::Import('modules::common::controls::selectionsexo');
+ 
+class frmPessoaNova extends Form
+{
+    /**
+     * Objeto pessoa
+     * @access protected
+     * @var BusinessCommonPessoa
+     */
+    protected $pessoa;
+
+
+    /**
+     * Step constants
+     */
+    const STEP_CRIA_PESSOA      = 3;
+    
+    public function __construct()
+    {
+        global $MIOLO, $page, $item;
+        $this->pessoa  = $MIOLO->GetBusiness('common','pessoa');
+        
+
+        parent::__construct('Incluir Pessoa');
+        $this->SetClose($MIOLO->GetActionURL('common','main'));
+        $this->SetIcon($MIOLO->GetUI()->GetImage('common','pessoa_mini.png'));
+    }    
+    
+    public function CreateFields()
+    {
+        $fields = array(
+            new HiddenField('step',self::STEP_CRIA_PESSOA),
+            array(
+                new TextField('nome','','Nome',40),
+                new SelectionSexo('sexo','','Sexo'),
+            ),
+            new CalendarField('datanasc','','Data de nascimento'),
+            new LookupTextField('lkpNaturalidade','','Naturalidade',40),
+            new HiddenField('idmunicipio'),
+            new TextField('cep','','CEP',20),
+            new SelectionPais('idpaisnascimento','','País de nascimento'),
+            new SelectionPais('idpais','','Nacionalidade'),
+        );
+        $this->SetFields($fields);
+
+        $buttons = array(
+            new FormButton('btnCreate','Criar'),
+        );
+        $this->SetButtons($buttons);
+        $this->defaultButton = false;
+
+        $this->SetFieldAttr('lkpNaturalidade','module','rh');
+        $this->SetFieldAttr('lkpNaturalidade','item','municipio');
+        $this->SetFieldAttr('lkpNaturalidade','event', 'filler');
+        $this->SetFieldAttr('lkpNaturalidade','related', 'idmunicipio,lkpNaturalidade');
+        
+	$validators = array(
+		new RequiredValidator('nome'),
+		new MDateDMYValidator('datanasc'),
+		new RequiredValidator('lkpNaturalidade'),
+		new RequiredValidator('cep'),
+	);
+	$this->SetValidators($validators);
+
+        $this->EventHandler();
+    }
+    
+    public function SetPessoa($pessoa)
+    {
+        $this->pessoa = $pessoa;
+    }
+    
+    protected function setIdPessoa($idPessoa)
+    {
+        global $MIOLO;
+        $this->pessoa->GetById($idPessoa);
+        if(!$this->pessoa->IsPersistent())
+        {
+            $MIOLO->Assert('Texto',false);
+        }
+    }
+
+    /**
+     * GetData method
+     * @var FormData
+     */
+     public function SetData($data)
+     {
+        foreach($this as $c)
+        {
+            if ($c instanceof Control)
+            {
+               $name = strtolower($c->GetName());
+                 if(!empty($name)) $this->SetFieldValue($name, $data->$name) ;
+            } 
+        }
+     }
+
+    /**
+     * btnCreate click
+     */
+	public function btnCreate_click()
+	{
+		global $MIOLO, $page;
+
+		if( strlen(trim(Form::GetFormValue('nome'))) < 4 )
+		{
+			$this->AddError('O nome deverá possuir pelo menos quatro letras.');
+		}
+		elseif( Form::GetFormValue('sexo') == '' )
+		{
+			$this->AddError('Informe o sexo da pessoa.');
+		}
+		elseif( date('d/m/Y') < Form::GetFormValue('datanasc') )
+		{
+			$this->AddError('A data de nascimento informada é inválida.');
+		}
+		elseif( preg_match("/\D/", Form::GetFormValue('cep')) )
+		{
+			$this->AddError('O CEP está inválido.');
+		}
+		elseif( strlen(trim(Form::GetFormValue('cep'))) < 8 )
+		{
+			$this->AddError('O CEP deve possuir oito algarismos.');
+		}
+		elseif( Form::GetFormValue('idpaisnascimento') == '' )
+		{
+			$this->AddError('O país de nascimento deve ser informado.');
+		}
+		elseif( Form::GetFormValue('idpais') == '' )
+		{
+			$this->AddError('A nacionalidade deve ser informada.');
+		}
+		else
+		{
+
+			$this->pessoa->SetData($this->GetData());
+			$this->pessoa->save();
+			if($this->pessoa->CheckError())
+			{
+				$errors = $this->pessoa->GetErrors();
+				$this->MIOLO->Error($errors);
+			}
+			else
+			{
+				$go = $this->manager->GetActionURL('common','main:pessoa',$this->pessoa->idpessoa);
+				$this->page->Redirect($go);
+			}
+		}
+	}
+}
+?>

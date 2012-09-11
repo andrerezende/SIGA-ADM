@@ -1,0 +1,89 @@
+<?
+class frmRepMateriais extends Form
+{
+	protected $material;
+	protected $subelemento;
+	
+	function __construct()
+    {
+    	global $MIOLO;
+        $this->material = $MIOLO->getBusiness('adm','material');
+        $this->subelemento = $MIOLO->getBusiness('adm','subelemento');
+        $this->Form('Relatório de Material');
+        $this->EventHandler();       
+    }
+
+	function CreateFields()
+	{	
+		$permanentes = $this->material->ListSubElementoByIdElemento(339030);	
+		$consumo = $this->material->ListSubElementoByIdElemento(449052);	
+		
+		$fields = Array(
+            new Text('','Selecione uma opção de material permanente ou de consumo:'),
+			new Selection('idpermanente','','Permanente', $permanentes->result),		
+			new Selection('idconsumo','','Consumo', $consumo->result)					
+		);
+		
+	$this->SetFields($fields);
+	$buttons = Array
+		(
+			new FormButton('btnGerarRelatorio', 'Gerar Relatório','pdf')
+		);
+		$this->SetButtons($buttons);
+	}		
+	
+	function btnGerarRelatorio_click()
+	{
+		$data = $this->getData();		
+        
+		if (!$data->idpermanente && !$data->idconsumo)
+			$this->manager->Error("Voce precisa selecionar uma das opções.");		
+		else
+		{
+			if ($data->idpermanente)
+			{
+				$idElemento = 339030;
+				$idSubelemento = $data->idpermanente;			
+			}
+			else
+			{
+				$idElemento = 449052;
+				$idSubelemento = $data->idconsumo;
+			}
+			$this->subelemento->getById($idElemento,$idSubelemento);
+		    $report = new MEzPDFReport('2','portrait');
+	        $h = $report->pdf->getFontHeight(10);
+	        $ui = $this->manager->GetUI();
+	        $report->pdf->ezImage($ui->GetImage('','logonet.png'),5,50,'none','left',0);
+	        $report->pdf->addText(110,810       ,10,'UNIVERSIDADE FEDERAL DE JUIZ DE FORA');
+	        $report->pdf->addText(110,810-$h,10,'CGCO - CENTRO DE GESTÃO DO CONHECIMENTO ORGANIZACIONAL');
+	        $report->pdf->addText(110,810-2*$h,10,'SISTEMA INTEGRADO DE GESTÃO ACADÊMICA - SIGA');
+	        $report->pdf->ezText('CATÁLOGO DE MATERIAL UFJF/CATMAT',16,array('justification'=>'center'));
+	        $report->pdf->addText(30,810-8*$h,10,$idElemento.' - '.$idSubelemento.' - '.$this->subelemento->descricao);
+	        $report->pdf->ezText('',20);
+	        
+	        $options['textCol'] = array(0,0,0);
+		    $options['shaded'] = 1;
+		    $options['showLines'] = 0;
+		    $options['fontSize'] = 11;
+		    $options['width'] = 540;
+		    $options['xPos'] = 'left';
+		    $options['xOrientation'] = 'right';
+		    
+		    $cols = array('<b>Cod.Mat.</b>','<b>Nome</b>','<b>Unidade</b>','<b>P/C</b>','<b>Est</b>');
+		    
+
+			$dataRel = $this->material->ListByIdSubElemento($idElemento,$idSubelemento);
+			
+			foreach ($dataRel->result as $rs)
+			{
+				$dataRel2[] = array($rs[7],$rs[1],$rs[2],$rs[3],$rs[4]);	
+			}
+
+			  
+	        $report->pdf->ezTable($dataRel2,$cols,'',$options);
+		    $report->Execute();
+		}
+	}
+}
+?>

@@ -1,0 +1,104 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+//lista as funções já ocupadas por um servidor
+class gridOcupacaopeloServidor extends MDataGrid
+{
+
+    function __construct($idvinculo)
+    {
+        global $MIOLO, $module, $perms;
+
+        IF ( (! $perms->isMemberOf(NULL,'ADMIN')) and (! $perms->isMemberOf(NULL,'RH_CADASTRO')) ) //para admin ou cadastro não há restrição
+        {
+            if ($perms->isMemberOf(NULL,'RH_SECRETARIA'))     //previne acesso direto via url
+            {
+                $objprovimento = $MIOLO->GetBusiness($module,'provimento');
+                if (! $objprovimento->seVinculosobSetorLogin($idvinculo, $MIOLO->GetLogin()->id) )
+                {
+                    echo 'Lista de Ocupações, erro: servidor não vinculado a esta secretaria';
+                    die;
+                }
+            }
+            else
+            {
+                $login = $MIOLO->GetLogin()->id;
+                if ($login <> $idvinculo)
+                {
+                    echo 'Lista de Ocupações, erro: vínculo não correspondente ao usuário';
+                    die;
+                }
+            }
+        } // nem admin e nem cadastro
+
+        $columns = array(
+                        new MDataGridColumn('idocupacaofuncao', ''            ,NULL    ,false,' 0%',false),
+                        new MDataGridColumn('descricao'       , 'Descrição'   ,'left'  ,false,'30%'),
+                        new MDataGridColumn('sigla'           , 'Sigla'       ,'left'  ,false,' 5%'),
+                        new MDataGridColumn('nivel'           , 'Nível'       ,'left'  ,false,' 5%'),
+                        new MDataGridColumn('setor'           , 'Setor'       ,'left'  ,false,'15%'),
+                        new MDataGridColumn('datainicio'      , 'Início'      ,'left'  ,false,'10%'),
+                        new MDataGridColumn('datafim'         , 'Término'     ,'left'  ,false,'10%'),
+                        new MDataGridColumn('numeroinicio'    , 'Publ.Início' ,'center',false,'10%'),
+                        new MDataGridColumn('numerofim'       , 'Publ.Término','center',false,'10%'),
+                        new MDataGridColumn('substituicao'    , 'Substituição','center',false,' 5%')
+                   );
+        $obj = $MIOLO->GetBusiness($module,'ocupacaofuncao');
+        $qy = $obj->listOcupacaopeloServidor($idvinculo);
+        parent::__construct($qy, $columns, NULL, 0);
+
+        $this->SetTitle('Funções exercidas');
+        $this->SetClose(NULL);
+        $this->SetFilter(false);
+        $this->SetIndex(1);
+        $this->SetWidth('100%');
+        $this->SetLinkType('hyperlink');
+
+        $ultimafuncao = $obj->ultimaOcupacaoporidVinculo($idvinculo);
+        $titular      = $obj->seServidortemOcupacao($idvinculo, 'titular');
+
+		$hrefcol = $MIOLO->getActionURL($module,'ocupacaofuncao','#0#',array('atual'=>$ultimafuncao[0]));
+        $this->addActionUpdate($hrefcol);
+
+        $ultimadatafim = $ultimafuncao[1];
+        $hoje = date('d/m/Y');
+
+		if ( $perms->isMemberOf(NULL,'RH_CADASTRO') )
+        {
+            $k = new Mkrono();
+
+            //dispõe botão de inclusão somente se servidor não ocupou nenhuma função ou
+            //                                             ocupou mas já todas encerradas (data fim existente mas não no futuro)
+            //if ( (! $ultimafuncao                                                    )    //se nenhum registro ou
+            //or   ( $ultimadatafim and ( $k->compareDate($ultimadatafim,'<=',$hoje) ) ) )  //há registro mas com data fim até hoje
+
+            //dispõe botão de inclusão somente se servidor não ocupa nenhuma função como titular. Já como substituto dispõe
+            if (! $titular)
+            {
+                $buttons[] = new MButton('btnIncluir',"Incluir ocupação",
+                           $MIOLO->GetActionURL('rh','main:vinculo',$idvinculo,array('form'=>'ocupacaofuncaoincluir'   )));
+                //$buttons[] = new MButton('btnSubstituir',"Substituir ocupação",
+                //           $MIOLO->GetActionURL('rh','main:vinculo',$idvinculo,array('form'=>'ocupacaofuncaosubstituir')));
+                $this->SetButtons($buttons);
+            }
+        }
+    } // __construct
+
+
+}
+?>

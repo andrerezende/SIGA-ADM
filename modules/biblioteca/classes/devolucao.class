@@ -1,0 +1,301 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+class BusinessBibliotecaDevolucao extends Business
+{
+   var $idemprestimo;
+   var $datahoradoemprestimo;
+   var $datahoraprevisaodevolucao;
+   var $datahoradadevolucao;
+   var $quantidadederenovacoes;
+   var $idusuario;
+   var $idregracirculacao;
+   var $idgrupousuario;
+   var $idusuarioopemprestimo;
+   var $idusuarioopdevolucao;
+   var $idexemplar;
+   var $numerodotombo;
+   var $emprestimosopn;
+   var $valordamulta;
+   var $diasdeatraso;
+   var $dataHoje;	
+      
+   
+	 function BusinessBibliotecaDevolucao($data = null)
+	 {
+	 	global $MIOLO,$module,$mkrono;
+		
+      	$this->Business('sigaept', $data);
+		$this->objEmprestimo = $MIOLO->GetBusiness($module,'emprestimo');
+		$this->objExemplar = $MIOLO->GetBusiness($module,'exemplar');
+		
+				
+	 }
+	 function GetData()
+	 {
+			$data = new FormData();
+			$data->idusuario = $this->idusuario;
+			$data->descricao = $this->descricao;
+			return $data;
+	 }
+	 function SetData($data)
+	 {
+      		$this->idemprestimo = $data->idemprestimo;
+     		$this->datahoradoemprestimo = $data->datahoradoemprestimo;
+  			$this->datahoraprevisaodevolucao = $data->datahoraprevisaodevolucao;
+    	  	$this->datahoradadevolucao = $data->datahoradadevolucao;
+     	 	$this->quantidadederenovacoes = $data->quantidadederenovacoes;
+      		$this->idusuario = $data->idusuario;
+      		$this->idusuarioopemprestimo = $data->idusuarioopemprestimo;
+      		$this->idusuarioopdevolucao = $data->idusuarioopdevolucao;
+      		$this->idexemplar = $data->idexemplar;
+			$this->idmulta = $data->idmulta;
+			$this->idlogoperacao = $data->idlogoperacao;
+			$this->idestado = $data->idestado;
+	 }
+	 	
+	function GetExemplar($numerodotombo)
+	{
+		global $item;
+
+			
+			$sql = new //sql('x.numerodotombo,o.numerodaobra,o.titulo,o.autor,o.edicao,e.mnemonico as status','bt_estado e,bt_exemplar x, bt_obra o','(x.numerodotombo =?) AND (o.idobra = x.idobra) AND (e.idestado=x.idestado)');
+
+                        // PESQUISANDO COM JOIN NA TABELA AUTOR    25/04/2009
+                                        sql("x.numerodotombo,o.numerodaobra,o.titulo,a.sobrenome || ',' || a.prenome as autor,o.edicao,e.mnemonico as status, a.prenome as autor",'bt_estado e,bt_exemplar x, bt_obra o , bt_autor a','(x.numerodotombo =?) AND (o.idobra = x.idobra)  AND (o.idautor = a.idautor) AND (e.idestado=x.idestado)');
+			$query = $this->Query($sql,$numerodotombo);
+			//var_dump($sql->select($numerodotombo));
+			return $this->Query($sql,$numerodotombo);		
+			
+	}
+	
+	function GetIdByNumeroTombo( $numeroTombo )
+	{
+		$sql = new sql( 'idusuario', '', 'numerodotombo = ?' );
+   		$sql->SetJoin( 'bt_emprestimo e', 'bt_exemplar x', 'e.idexemplar = x.idexemplar' );
+   		$query = $this->Query( $sql, $numeroTombo );
+   		return $query->result[ 0 ][ 0 ];
+	}
+	
+	
+	function GetPrevDevolucao($idexemplar)
+	{
+		global $item;
+		
+				
+		
+		$sql = new sql($this->_db->TimestampToChar('datahoraprevisaodevolucao'),'bt_emprestimo','(idemprestimo = ? )');
+		
+		//var_dump($sql->select($idexemplar));		
+		$query = $this->Query($sql,$idexemplar);
+		//echo $query->result[0][0];
+		return $this->Query($sql,$idexemplar);
+		
+		
+	}
+	
+	function GetValorMulta($idgrupousuario,$idregracirculacao)
+	{
+		$sql = new sql('valordamulta','bt_politica','(idgrupo = ?) and (idregracirculacao = ?)');
+		//var_dump($sql->select(array($idgrupousuario,$idregracirculacao)));	
+		return $this->Query($sql,array($idgrupousuario,$idregracirculacao));
+	}	
+	
+	function GetIdEmprestimo($idexemplar)
+	{
+		$sql = new sql('idemprestimo','bt_emprestimo','(idexemplar = ?) AND (datahoradadevolucao is NULL)');
+		//var_dump($sql->select($idexemplar));
+		return $this->Query($sql,$idexemplar);
+	}
+	
+	function Devolucao($data)
+	{ global $MIOLO,$item,$module;	
+		
+	
+		// Datas
+        $k = new MKrono();
+        $dataHoje = $k->KDate('%d/%m/%Y %H:%i:00');
+        // formatando para o oracle
+		//$dataHoje = ":TO_DATE('". $dataHoje . "','DD/MM/YYYY HH24:MI:SS')";
+		$dataHoje = ":TO_timestamp('". $dataHoje . "','DD/MM/YYYY HH24:MI:SS')";
+		
+		$idexemplar = $this->objEmprestimo->NumeroTomboToIDExemplar($data->hidexemplar);
+		
+		
+		$this->BeginTransaction();
+		
+			$sql = new sql('datahoradadevolucao','bt_emprestimo','idemprestimo = ?');  
+			$values = array($dataHoje,$data->idemprestimo);
+			$ok = $this->Execute($sql->Update($values));
+			
+						// Altera o idsituacao do exemplar!
+			        	$sql = new sql('idestado','bt_exemplar','idexemplar=?');
+			            $objEstado=$MIOLO->GetBusiness($module,'estado'); 
+			       	    $idestado = $objEstado->GetIdByMnemonico("DISPONIVEL");
+			            $ok = $this->Execute($sql->Update(array($idestado,$idexemplar->result[0][0])));		  	
+			
+			
+						//
+				  		// LOG ;)
+				  		//
+				  		$log = $MIOLO->GetBusiness($module,'log'); 
+						$sqlog = $log->Gravar("DEVOLUCAO",$data->idemprestimo);	
+						$this->Execute($sqlog->Insert());	
+			
+		$this->EndTransaction();
+						
+		return $ok;	
+		
+	}
+	
+	function DevolucaoComMulta($data)
+	{
+		global $MIOLO, $module;
+		
+		// Datas
+        $k = new MKrono();
+        $dataHoje = $k->KDate('%d/%m/%Y %H:%i:00');
+        // formatando para o oracle
+		//$dataHoje = ":TO_DATE('". $dataHoje . "','DD/MM/YYYY HH24:MI:SS')";
+		$dataHoje = ":TO_timestamp('". $dataHoje . "','DD/MM/YYYY HH24:MI:SS')";
+		
+		$idexemplar = $this->objEmprestimo->NumeroTomboToIDExemplar($data->hidexemplar);
+		
+		$this->BeginTransaction();
+		
+			$sql = new sql('datahoradadevolucao','bt_emprestimo','idemprestimo = ?');  
+			$values = array($dataHoje,$data->idemprestimo);
+			$ok = $this->Execute($sql->Update($values));
+			
+		
+		$this->idmulta = $this->_db->GetNewId('seq_bt_multa');
+		$sql = new sql('datahora,idmulta,idemprestimo,valor,foipaga','bt_multa');  
+					
+		$values = array($dataHoje,$this->idmulta,$data->idemprestimo,$data->hidmulta,"0");
+				
+		$ok = $this->Execute($sql->Insert($values));
+		
+						// Altera o idsituacao do exemplar!
+			        	$sql = new sql('idestado','bt_exemplar','idexemplar=?');
+			            $objEstado=$MIOLO->GetBusiness($module,'estado'); 
+			       	    $idestado = $objEstado->GetIdByMnemonico("DISPONIVEL");
+			            $ok = $this->Execute($sql->Update(array($idestado,$idexemplar->result[0][0])));		  	
+		
+		
+		
+						//
+				  		// LOG DA DEVOLUCAO ;)
+				  		//
+				  		$log = $MIOLO->GetBusiness($module,'log'); 
+						$sqlog = $log->Gravar("DEVOLUCAO",$data->idemprestimo);	
+						$this->Execute($sqlog->Insert());
+						
+												
+						//
+				  		// LOG DA MULTA  ;)
+				  		//
+				  		//$log = $MIOLO->GetBusiness($module,'log'); 
+						$sqlog2 = $log->Gravar("INCMULTA",$this->idmulta);	
+						$this->Execute($sqlog2->Insert());
+						
+							
+				
+		$this->EndTransaction();
+		
+		return $ok;
+			
+		
+	}
+	
+	function SetLogOperacao($data)
+	{
+		
+		// Datas
+        	$k = new MKrono();
+        	$dataHoje = $k->KDate('%d/%m/%Y %H:%i:00');
+        	// formatando para o oracle
+		//$dataHoje = ":TO_DATE('". $dataHoje . "','DD/MM/YYYY HH24:MI:SS')";
+		$dataHoje = ":TO_timestamp('". $dataHoje . "','DD/MM/YYYY HH24:MI:SS')";
+		
+		//var_dump($dataHoje);	
+	
+		$this->idlogoperacao = $this->_db->GetNewId('seq_bt_logoperacao');
+		$sql = new sql('idlogoperacao,data,idusuario,idoperacao,identificador','bt_logoperacao');
+		
+		
+		$values = array($this->idlogoperacao,$dataHoje,$data->hididopdevolucao,$data->hididoperacao,$data->idemprestimo);
+		
+		//var_dump($sql->Insert($values));
+		
+		$ok = $this->Execute($sql->Insert($values));
+	
+	}
+	
+	function GetIdOperacao($op)
+	{
+		$sql = new sql('idoperacao','bt_operacao','mnemonico = ?');
+		//var_dump($sql->select($op));
+		return $this->Query($sql,$op);
+	
+	}
+	
+	function SetEstado($idestado,$idexemplar)
+	{
+		
+		$sql = new sql('idestado','bt_exemplar','idexemplar = ?');  
+			
+			
+		$values = array($idestado,$idexemplar);
+		
+		//var_dump($sql->Update($values));
+		
+		$ok = $this->Execute($sql->Update($values));
+	
+	}
+	
+	/* Retorna a data a partir de quando o usuário (interno) pode realizar
+	 * empréstimos 
+	 */ 
+	function getDataPermissaoEmprestimoUI( $cartaoAcesso )
+	{
+		$sql = new sql( 'datapermissaoemprestimo','bt_validacao', 'codigoacesso = ?' );
+		$query = $this->Query( $sql, $cartaoAcesso );
+
+		return $query->result[ 0 ][ 0 ];
+	}
+	
+	/* Atualiza a data a partir de quando o usuário (interno) pode realizar
+	 * empréstimos
+	 */
+	function updateDataPermissaoEmprestimoUI( $cartaoAcesso, $novaData )
+	{
+		$sql = new sql( 'datapermissaoemprestimo','bt_validacao', 'codigoacesso = ?' );
+		$values = array( $novaData, $cartaoAcesso );
+		$ok = $this->Execute( $sql->Update( $values ) );
+	}
+}
+
+?>

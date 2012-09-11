@@ -1,0 +1,333 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?
+class frmUsuarioObservacoes extends Form
+{
+
+	var $objUsuarioObservacoes;
+    var $objusuario;
+
+    function frmUsuarioObservacoes()  // construtor da Classe
+    {
+		global $MIOLO,$module;
+
+		// Título do Formulário
+		$this->Form('Cadastro de Observações dos Usuários');
+
+		//Chama o CreateFileds, etc.
+		$this->EventHandler();
+
+		// Botão "enviar" não aparece
+		$this->defaultButton = false;
+		
+		// Botão 'fechar', direcionando para o handler biblioteca/main/circulacao/usuario
+		$this->SetClose($this->manager->GetActionURL($module, 'main:circulacao:usuario'));
+			 
+	}
+   
+    function CreateFields()
+    {
+		global $MIOLO,$module,$action;
+
+		// Campos que aparecem no formulário
+		$fields = Array (
+			new LookupTextField('lkpUsuario','','Usuário',30),
+			new TextField('edtNome','','Nome',60),
+			new TextField('edtObservacoes','','Observações',60),
+			new HiddenField('hidObs'),
+			new HiddenField('hidIdUsuario'),
+			new HiddenField('hidKey') // controla Incluir/Editar
+
+			);
+
+		// Insere os campos
+		$this->SetFields($fields);
+
+		// Botões que aparecem no formulário
+		$buttons = Array(
+			new FormButton('btnConsulta', 'Procurar'),
+			new FormButton('btnEnviar', 'Incluir'),
+			new FormButton('btnExcluir', 'Excluir'),
+			new FormButton('btnVoltar', 'Voltar', $MIOLO->GetActionURL($module, $action)),
+    		);
+
+		//Insere os Botões
+		$this->SetButtons($buttons);
+
+		//As 4 propriedades de um lookup
+		// module = módulo usado
+		// item = A funcao que chama no arquivo classes/lookup.class
+		// event = O evento relacionado quando o usuário clica em "acao"
+		// related = Os campos retornados após a ação
+		$this->SetFieldAttr('lkpUsuario','module','biblioteca');
+		$this->SetFieldAttr('lkpUsuario','item','usuario');
+		$this->SetFieldAttr('lkpUsuario','event','filler');
+		$this->SetFieldAttr('lkpUsuario','related','lkpUsuario,"",""');
+				
+		
+		//Esconde o campo nome e observações
+		$this->SetFieldAttr('edtNome','visible', false);
+		$this->SetFieldAttr('edtObservacoes','visible', false);
+
+		// Botão excluir nao aparece, pois o formulário está em branco
+		$this->SetButtonAttr('btnExcluir','visible',false);
+		$this->SetButtonAttr('btnEnviar','visible',false);
+		$this->SetButtonAttr('btnVoltar','visible',false);
+
+		//Definindo o foco
+		if (!($this->GetFieldValue('lkpUsuario')))
+		{
+			$this->page->onLoad("MIOLO_GetElementById('lkpUsuario').focus();");
+		}
+   }
+
+	// pega os dados que estão no formulário   
+    function GetData()
+    {
+		$data = new FormData();
+        	$data->usuario = $this->GetFieldValue('lkpUsuario');
+		$data->nome = $this->GetFieldValue('edtNome');
+ 	        $data->observacoes = $this->GetFieldValue('edtObservacoes');
+		$data->idobservacao = $this->GetFieldValue('hidObs');
+		$data->idusuario = $this->GetFieldValue('hidIdUsuario');
+    		return $data;
+    }
+
+	
+	// usada para inserir valores no formulário
+	function SetData($data)
+	{
+		$this->SetFieldValue('lkpUsuario',$data->usuario);
+		$this->SetFieldValue('edtNome',$data->nome);
+		$this->SetFieldValue('edtObservacoes',$data->observacoes);
+		$this->SetFieldValue('hidObs',$data->idobservacao);
+		$this->SetFieldValue('hidIdUsuario',$data->idusuario);
+	}
+
+	function btnConsulta_click($sender,$login)
+	{ 
+		global $MIOLO,$module,$item;
+		
+		$data = $this->GetData();
+
+		//A linha abaixo verifica se existe um login no campo lookup
+		//Se nao existir, ela tenta pegar $item que é passada
+		//pelo botao editar do "relação"
+		$login = $this->GetFieldValue('lkpUsuario');
+		$login = ($login != '') ? $login : $item;
+
+		// Já considera que o usuário quer excluir,editar uma usuarioobservacoes
+		$this->SetButtonAttr('btnConsulta','visible',false);
+		$this->SetButtonAttr('btnEnviar','visible',true);	
+ 		$this->SetButtonAttr('btnEnviar','label','Salvar');
+		$this->SetButtonAttr('btnVoltar','visible',true);
+
+		//Instancia o objeto usuario
+		$this->objusuario = $MIOLO->GetBusiness($module,'usuario');
+		// ok retorna os dados de nome
+		$query = $this->objusuario->GetByLogin($login);
+		$nome = $query[0][1];	
+		$idusuario = $query[0][0];
+		//var_dump($query);
+		$this->SetFieldValue('edtNome',$nome);
+		$this->SetFieldValue('hidIdUsuario',$idusuario);
+		
+		
+		$this->SetFieldAttr('lkpUsuario','readonly',true);
+		//Campo Nome e Observações
+		$this->SetFieldAttr('edtNome','visible',true);
+		$this->SetFieldAttr('edtObservacoes','visible',true);
+		$this->SetFieldAttr('edtNome','readonly',true);
+				
+		$this->SetFieldValue('lkpUsuario',$login);
+		
+		$this->btnList_click($nome,$idusuario,$login);
+	
+		//Definindo o foco
+		if (!($this->GetFieldValue('edtObservacoes')))
+		{
+			$this->page->onLoad("MIOLO_GetElementById('edtObservacoes').focus();");
+		}
+	}
+	
+	function btnConsulta2_click($sender)
+	{ 
+		global $MIOLO,$module,$item;
+
+		$campos = explode("@",$item);
+		$id = $campos[0];
+
+		//Instancia o objeto usuarioobservacoes
+    	$this->objUsuarioObservacoes = $MIOLO->GetBusiness($module,'usuarioobservacoes');
+
+		$obs = $this->objUsuarioObservacoes->GetObs($campos);	
+		$this->SetFieldValue('edtObservacoes',$obs[0]);
+
+		// Já considera que o usuário quer excluir,editar uma usuarioobservacoes
+		$this->SetButtonAttr('btnConsulta','visible',false);
+		$this->SetButtonAttr('btnEnviar','visible',true);	
+ 		$this->SetButtonAttr('btnEnviar','label','Salvar');
+		$this->SetButtonAttr('btnVoltar','visible',true);
+
+		//Instancia o objeto usuario
+		$this->objusuario = $MIOLO->GetBusiness($module,'usuario');
+		// ok retorna os dados de nome
+		$query = $this->objusuario->GetById($id);
+		$nome = $query[0][1];	
+		$idusuario = $query[0][0];
+		$login = $query[0][2];
+		//var_dump($idusuario);	
+		$this->SetFieldValue('edtNome',$nome);
+		$this->SetFieldValue('hidIdUsuario',$idusuario);
+		//Coloca o valor do idobservação
+		$this->SetFieldValue('hidObs',$campos[1]);
+		
+		$this->SetFieldAttr('lkpUsuario','readonly',true);
+		//Campo Nome e Observações
+		$this->SetFieldAttr('edtNome','visible',true);
+		$this->SetFieldAttr('edtObservacoes','visible',true);
+		$this->SetFieldAttr('edtNome','readonly',true);
+				
+		$this->SetFieldValue('lkpUsuario',$login);
+	}
+
+	// Enviar pode ser inserir ou editar
+	function btnEnviar_click()
+	{ global $MIOLO,$theme,$module,$item,$self;
+	
+		$data = $this->GetData();
+		//var_dump($data);
+				
+		 //Instancia o objeto usuarioobservacoes
+	    	$this->objUsuarioObservacoes = $MIOLO->GetBusiness($module,'usuarioobservacoes');
+		//var_dump($data);
+		if ( $data->idobservacao )
+		{ // Usuário quer editar um item
+
+			$what = " atualizada ";
+
+			$ok = $this->objUsuarioObservacoes->Update($data);
+				
+		}
+		else
+		{ // Usuário quer inserir novo item
+
+			$what = " inserida ";
+
+			// verificar se já existe idusuarioobservacoes
+			$ok = $this->objUsuarioObservacoes->Insert($data);
+
+		}
+
+        	
+		if ( $ok )
+		{	
+			$theme->ClearContent();
+			$MIOLO->Prompt(Prompt::Information("A observação para '" . $data->nome . "' foi  $what com sucesso.",$MIOLO->GetActionURL($module,$self)));
+		}
+		else
+			$theme->ClearContent();
+			$MIOLO->Error("A observação para '" . $data->nome  . "' não foi $what. ", $MIOLO->GetActionURL($module,$self) );
+
+	}
+
+
+	function btnExcluir_click()
+	{ 
+		global $MIOLO, $module, $item,$action;
+		
+	     //Instancia o objeto usuarioobservacoes
+	    $this->objUsuarioObservacoes = $MIOLO->GetBusiness($module,'usuarioobservacoes');
+		
+		$data = $this->GetData();
+
+		//list($idusuario,$idobservacao) = explode("@",$item);
+		$campos = explode("@",$item);
+		
+		//A linha abaixo verifica se existe um data->idusuarioobservacoes
+       //Se nao existir, ela tenta pegar $item que é passada
+       //pelo botao editar do "relação"
+	   
+
+       $ok = $this->objUsuarioObservacoes->Delete($campos);
+
+	   if ( $ok )
+			$MIOLO->Information("Observação excluída da base de dados", $MIOLO->GetActionURL($module,$self) );
+	   else
+			$MIOLO->Error("As informações não foram excluídas", $MIOLO->GetActionURL($module,$self) );
+
+	}
+
+	function btnList_click($nome=null,$idusuario=null,$login=null)
+	{
+		global $MIOLO, $module, $self, $theme, $action, $page, $item;
+
+	
+		if ( ($nome) AND ($idusuario) AND ($login) )
+		{
+
+			// Coloca os botões visíveis
+			$this->SetButtonAttr('btnConsulta','visible',false);
+			$this->SetButtonAttr('btnEnviar','visible',true);	
+	 		$this->SetButtonAttr('btnEnviar','label','Salvar');
+			$this->SetButtonAttr('btnVoltar','visible',true);
+	
+			$this->SetFieldAttr('lkpUsuario','readonly',true);
+			//Campo Nome e Observações
+			$this->SetFieldAttr('edtNome','visible',true);
+			$this->SetFieldAttr('edtObservacoes','visible',true);
+			$this->SetFieldAttr('edtNome','readonly',true);
+	
+			$columns = array(
+				new DataGridColumn(null),
+				new DataGridColumn(null),
+				new DataGridColumn('descricao','Observações','left', true, '100%',true, null, true,true)
+				);
+	
+			$href_datagrid = $MIOLO->GetActionURL($module,$self,'', Array('event'=>'btnList_click'));
+			$page->SetAction($href_datagrid);
+	
+			 //Instancia o objeto usuarioobservacoes
+		    $this->objUsuarioObservacoes = $MIOLO->GetBusiness($module,'usuarioobservacoes');
+	
+			$query = $this->objUsuarioObservacoes->ListUsuarioObservacoes($idusuario);
+	
+			$datagrid = new DataGrid2($query, $columns, $href_datagrid,20);
+			$datagrid->SetTitle('Observações de: ' . $nome . ' [' . $login . ']');
+			$datagrid->SetLinkType('linkbutton');
+			$datagrid->SetWidth('99%');
+			
+	
+			$href_edit = $MIOLO->GetActionURL($module,$self,'%0%',Array('event'=>'btnConsulta2:click'));
+			$href_dele = $MIOLO->GetActionURL($module,$self,'%0%',Array('event'=>'btnExcluir:click'));
+			
+			$datagrid->AddActionIcon('Editar', 'edit', $href_edit);
+			$datagrid->AddActionIcon('Excluir', 'delete.gif', $href_dele);
+			
+	
+			$theme->AppendContent($datagrid);
+	
+		}
+		
+	}
+
+}
+
+?>

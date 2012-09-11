@@ -1,0 +1,171 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmrepMudancasAmbiente extends MForm
+{
+    protected $data, $listAmbientes;
+
+
+    function __construct()
+    {
+        $this->data[] = 'Histórico de Mudanças de Ambiente';
+        parent::__construct($this->data[0]);
+        $this->SetClose($this->manager->GetActionURL('rh','main:relatorio'));
+        $this->EventHandler();
+    } // __construct
+
+
+    function CreateFields()
+    {
+        global $module;
+
+        $fields[] = array(new MLookupTextField('idVinculo' , '', 'Vínculo do TA' , 12),
+                          new MLabel('clique na lupa para PESQUISAR nomes ou para CONFERIR nome','blue'));
+        $fields[] = new MTextField('nome','','Nome','55');
+        $fields[] = new MSpacer(1);
+
+        $this->SetFields($fields);
+
+        $this->SetFieldAttr('nome','readonly',TRUE);
+
+        $this->SetFieldAttr  ('idVinculo','module'      ,$module);
+          $this->SetFieldAttr('idVinculo','item'        ,'VinculoTA');          //aponta LookupVinculoTA() em BusinessRHLookup
+          $this->SetFieldAttr('idVinculo','event'       ,'btnidVinculo_click'); //filler: enche os campos em 'related'; método: chama o método local
+          $this->SetFieldAttr('idVinculo','autocomplete',false);
+
+        $buttons = array( new MButton('btnReport'  ,'Gerar Relatório', 'PDF'),
+                          new MButton('btnGerarCSV','Gerar Planilha')        );
+        $this->SetButtons($buttons);
+        $this->defaultButton = false;
+    } // CreateFields
+
+
+    function btnidVinculo_click($sender,$key='')
+    {
+        $item = $key ? $key : $item; 
+        $this->SetFieldAttr('idVinculo','value',$item);
+
+        $this->btnidVinculo_click2($item);
+    } // btnidVinculo_click
+
+
+    function btnidVinculo_click2($item)  //descreve a matrícula
+    {
+        if ($item)
+        {
+            $vinculo     = $this->manager->GetBusiness('rh','vinculo');
+            $vinculo->GetById($item);
+            $funcionario = $this->manager->GetBusiness('rh','funcionario');
+            $funcionario->GetById($vinculo->idFuncionario);
+
+            $pessoa      = $this->manager->GetBusiness('common','pessoa');
+            $pessoa->GetById($funcionario->idPessoa);
+            $this->SetFieldValue('nome',$pessoa->nome);
+            $this->data[] = $item;
+            $this->data[] = $pessoa->nome;
+
+            $provimento = $this->manager->GetBusiness('rh','provimento');
+            $this->listAmbientes = $provimento->listAmbientesdoVinculo($item);
+
+            //coleciona só as mudanças de ambiente
+            $anterior = NULL;//'-';
+ if (!$this->listAmbientes->result)
+                $this->listAmbientes->result = array();
+            foreach ($this->listAmbientes->result as $ind => $conteudo)  //índice associativo (para o nome de campo) => conteúdo
+            {
+                if ($conteudo[3] <> $anterior)
+                {
+                    $anterior  = $conteudo[3];
+                    $this->data[3][] = $conteudo;
+                }
+            }
+        }
+        else
+        {
+            $this->SetFieldValue('nome','');
+        }
+    } // btnidVinculo_click2
+
+
+    function btnReport_click()
+    {
+        $idVinculo = $this->GetFormValue('idVinculo');
+        $this->btnidVinculo_click2($idVinculo);
+
+        if ( is_null($idVinculo) or empty($idVinculo) )
+        {
+            $erro[] = "Faltou informar o vínculo";
+        }
+        if ( count($erro) > 0 )
+        {
+            foreach ( $erro as $e )
+            {
+                $this->addError($e);
+            }
+        } 
+        else
+        {   
+            $ui = $this->manager->getUi();
+            $report = $ui->getReport('rh','repMudancasAmbiente',$this->data);
+            $report->generate();
+        }
+    } // btnReport_click
+
+
+    function btnGerarCSV_click()
+    {
+        $idVinculo = $this->GetFormValue('idVinculo');
+        $this->btnidVinculo_click2($idVinculo);
+
+        if ( is_null($idVinculo) or empty($idVinculo) )
+        {
+            $erro[] = "Faltou informar o vínculo";
+        }
+        if ( count($erro) > 0 )
+        {
+            foreach ( $erro as $e )
+            {
+                $this->addError($e);
+            }
+        }
+        else
+        {
+            $resultAux[] = array($this->data[0]);                //título
+            $resultAux[] = array($this->data[1],$this->data[2]); //vínculo e nome
+            $resultAux[] = array('Início','Setor','Cargo','Ambiente Organizacional');
+ if (!$this->data[3])
+                $this->data[3] = array();
+            foreach ($this->data[3] as $data)
+            {
+                $resultAux[] = $data;
+            }
+            $this->listAmbientes->result = $resultAux;
+            $this->listAmbientes->getCSV("MudancasdeAmbiente".$this->data[1]);
+
+            /* alternativa
+            $csv = new MQuery();
+            //$csv->result = $resultAux;
+            //exemplos: $csv->result = ARRAY( array('11')     , array('22')   , array('33')     );
+            //                         ARRAY( array(0,'zero') , array(1,'um') , array(2,'dois') );
+            $csv->getCSV("MudancasdeAmbiente".$this->data[1]); //*/
+        }
+    } // btnGerarCSV_click
+
+}
+?>

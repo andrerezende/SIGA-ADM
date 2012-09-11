@@ -1,0 +1,194 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmJEtiquetasInternas extends MForm
+{
+
+	protected $objOrganograma;
+
+
+	function __construct()
+    {
+		parent::__construct('Etiquetas Internas - Padrão UFJF - Malotes');
+        $this->objOrganograma = $objOrganograma;
+		$this->EventHandler();
+    }
+
+
+    function CreateFields()
+    {
+		$abrangencia = array (
+			'1'=>'DOCENTES',
+			'2'=>'TÉCNICOS ADMINISTRATIVOS'
+		);
+
+        $lkpsetor = new MLookupFieldValue('siglasetor','','Sigla do Setor', 15);
+        $lkpsetor->module  = 'common';
+        $lkpsetor->item    = 'SetorAtivo';                     //método em lookup.class
+        $lkpsetor->event   = 'btnSetor_click';                 //filler: enche os campos em 'related'; método: chama o método local
+
+		$fields = array(
+			new MSelection('abrangencia','','Abrangência',$abrangencia,false),
+			new MSeparator(),
+		    new MText('texto','Caso deseje iniciar de um ponto específico, indique um nome para o ínicio.','green'),
+			$comeco = new MTextField('comeco','','Nome',40,'Inclusive. Max. 40 Caracteres'),
+			new MHiddenField('anomes',$anomes),
+			new MSeparator(),
+		    new MText('texto2','Caso deseje terminar em um ponto específico, indique o último nome.','red'),
+			$termino = new MTextField('termino','','Nome',40,'Inclusive. Max. 40 Caracteres'),
+			new MSeparator(),
+			$lkpsetor,
+			new MTextLabel('nomesetor' ,$nomesetor,'','black'),
+			new MHiddenField('idsetor'),
+			new MCheckBox('setoresfilhos','S','', true,'Setores filhos inclusos'),
+			new MSeparator(),
+			new MText('text','Informe-se sobre a hierarquia dos setores administrativos na árvore abaixo.'),
+		);
+        $this->SetFields($fields);
+
+		$comeco->addAttribute('maxlength',40);
+		$termino->addAttribute('maxlength',40);
+
+		$buttons = Array
+		(
+			new FormButton('btnReport','Gerar Etiquetas')
+		);
+		$this->SetButtons($buttons);
+		$this->getTree();
+    } 
+
+
+    function btnSetor_click($sender,$key='')
+    {
+        $item = $key ? $key : $item; 
+        $obj = $this->manager->GetBusiness('common','setor');
+        $obj->getById($item);
+        $this->SetFieldAttr('siglasetor','value',$obj->sigla); //campo editável, de procura
+        $this->SetFieldAttr('nomesetor' ,'value',$obj->nome ); //visualização acessória
+        $this->SetFieldAttr('idsetor'   ,'value',$item);       //campo invisível, só para gravar
+    } // btnSetor_click
+
+
+	function getTree()
+	{   
+		$this->objOrganograma =  $this->manager->GetBusiness('common','tipoorganograma',1);
+        $organograma = $this->objOrganograma->getOrganograma(TRUE); 
+        if (count($organograma))
+        {
+           array_unshift($organograma, array('root',0,'',''));
+           for ( $i = 0; $i < count($organograma); $i++ )
+           {
+               $idSetor = $organograma[$i][1];
+               $sigla = $organograma[$i][3];
+               if ( $idSetor )
+               {
+                    $setor = $this->manager->getBusiness('common','setor');
+                    $setor->getById($idSetor);
+                    $organograma[$i][3] = "$sigla - $setor->nome";
+               }
+           }
+           $action = $this->manager->GetActionURL('rh','main:consultaorg');
+           $tree = new MTreeMenu('tree',0, 'javascript:;','_self');
+           $tree->SetItemsFromArray($organograma,'0','1,3,2');
+           $tree->setSelectEvent("");
+           $this->AddField($tree);        
+        } 
+	}
+
+
+
+    function btnReport_click()
+    {
+		$abrangencia = $this->GetFormValue('abrangencia');
+		$idSetor = $this->GetFormValue('idsetor');
+		$setoresFilhos = $this->GetFormValue('setoresfilhos');
+
+		if ($setoresFilhos == 'S') $setoresFilhos = true;
+		else $setoresFilhos = false;
+
+		$comeco = strtoupper(trim($this->GetFormValue('comeco')));
+		$termino = strtoupper(trim($this->GetFormValue('termino')));
+        if ( is_null($abrangencia) or empty($abrangencia) )
+        {
+            $erro[] = "Faltou informar a abrangência";
+        }
+        if ( count($erro) > 0 )
+        {
+            foreach ( $erro as $e )
+            {
+                $this->addError($e);
+            }
+        } 
+        else
+        {   
+			if ( !empty($comeco) ) 
+				$parameters['str_COMECO'] = $comeco;
+			else
+				$parameters['str_COMECO'] = "0";
+			if ( !empty($termino) ) 
+				$parameters['str_TERMINO'] = $termino;
+			else
+			$parameters['str_TERMINO'] = "ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ";
+        	$report = new MJasperReport('ufjf');
+
+			if($setoresFilhos)
+			{
+				$setorPai = $this->manager->getBusiness('common','setor');
+				$arrSetoresFilhos = $setorPai->getSetoresFilhos($idSetor);
+				if ( is_array($arrSetoresFilhos) )
+				{
+					foreach ( $arrSetoresFilhos as $setor )
+					{
+						$idSetor .= ",".$setor;
+					}
+				}
+			}
+
+        	//$parameters['str_SUBREPORT_DIR'] = $this->manager->getConf('home.modules') . "/rh/reports/";
+			//var_dump($sql);
+			if ($abrangencia == '1')
+			{
+				if ( empty($idSetor) )
+				{
+					$report->Execute('rh','etiquetas/imagem/RH_EtiquetaImagemDocentesInternas',$parameters,null,'TXT',true);
+				}
+				else
+				{
+					$parameters['str_IDSETOR'] = $idSetor;
+					//var_dump($parameters['str_IDSETOR']);exit;
+					$report->Execute('rh','etiquetas/imagem/RH_EtiquetaImagemDocentesInternasSetor',$parameters,null,'TXT',true);
+				}
+			}
+			if ($abrangencia == '2')
+			{
+				if ( empty($idSetor) )
+				{
+					$report->Execute('rh','etiquetas/imagem/RH_EtiquetaImagemTAsInternas',$parameters,null,'TXT',true);
+				}
+				else
+				{
+			        $parameters['str_IDSETOR'] = $idSetor;
+					//var_dump($parameters);exit;
+					$report->Execute('rh','etiquetas/imagem/RH_EtiquetaImagemTAsInternasSetor',$parameters,null,'TXT',true);
+				}
+			}
+        }
+    } 
+}
+?>

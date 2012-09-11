@@ -1,0 +1,200 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmProadesMembrosSegundaFase extends MForm
+{
+    private $proades;
+    private $equipe;
+    private $reuniao;
+    
+	function __construct($reuniao)
+	{
+        $this->reuniao = $reuniao;
+        $MIOLO = MIOLO::getInstance();
+        $this->proades = $reuniao->proades; 
+        $idEquipe = MForm::getFormValue('idEquipe');
+
+        $this->equipe = $MIOLO->getBusiness('rh','equipe');
+        $this->equipe->getById($idEquipe);
+       
+		parent::__construct("Equipes de Trabalho: ".$this->equipe->nome);
+		$this->EventHandler();
+	}
+    
+	function CreateFields()
+	{
+        $vinculos = $this->proades->getVinculoMembros();
+        
+        $setor = $this->manager->getBusiness('common','setor');
+        $session = $this->manager->session;
+        $idSetor = $setor->getSetoresFilhos($session->getValue('idSetor'));
+        
+        if ( $session->getValue('idSetor') == 1337 )
+        {
+            //se for a chefia de gabinete entao tem que juntar com a secretaria geral
+            $idSetor[] = 1346;
+            $idSetor[] = 1306;
+        }
+
+        $funcionario = $this->manager->getBusiness('rh','funcionario');
+        $qryServidores = $funcionario->listBySetor($idSetor);
+
+        while ( ! $qryServidores->eof() )
+        {
+            $idVinculo = $qryServidores->fields('idvinculo');
+
+            $vinculo = $this->manager->getBusiness('rh','vinculo');
+            $vinculo->getById($idVinculo);
+            
+            if ( $vinculo->isAtivo() )
+            {
+                if ( $session->getValue('idSetor') == 558 ) // HU
+                {
+                    if ( ! (in_array($idVinculo, $vinculos)) )
+                    {
+                        $membros[] = array($idVinculo,$qryServidores->fields('nome'));
+                    }
+                }
+                else
+                {
+                    $membros[] = array($idVinculo,$qryServidores->fields('nome'));
+                }
+            }
+            $qryServidores->moveNext();
+        }
+        
+        if ( count($membros) > 0 )
+        {
+            $fields = array(
+                new MLabel("<b>Principais atividades individuais para o cumprimento das metas</b>"),
+                new MLabel('Cadastro dos membros da equipe de trabalho: '.$this->equipe->nome),
+                new MSelection('idVinculo','','TAE',$membros),
+                new MTextField('atividade','','Atividade','60'),
+                new MHiddenField('idEquipe',$this->equipe->idEquipe),
+                new MHiddenField('idMembro'),
+                new MLink('lnkVoltar','',$this->manager->getActionUrl('rh','proades:reuniao',$this->reuniao->idReuniao,array( 'form'=>'equipes')),'Voltar às equipes')
+            );
+
+            $buttons = array(
+                new MButton('btnSalvar','Enviar')
+            );
+        }
+        else
+        {
+            $fields = array(
+                    new MLabel("<b>Todos os TAE's j&aacute; est&atilde;o vinculados a uma equipe de trabalho.</b>")
+            );
+
+            $buttons = array(
+                new MButton('btnVoltar','Voltar',$this->manager->getActionUrl('rh','main:proades:reuniao',$this->reuniao->idReuniao,array( 'form'=>'equipes')))
+            );
+
+        }
+        
+        $this->SetFields($fields);		
+        $this->setButtons($buttons);
+        $this->setButtonAccess();
+	}
+
+	function btnSalvar_click()
+	{
+		$data = $this->GetData();
+		try
+		{
+            $membro = $this->manager->getBusiness('rh','membro');
+            if ( $data->idMembro )
+            {
+                $membro->getById($data->idMembro);
+            }
+            $membro->setData($data);
+            $membro->beginTransaction();
+			$membro->save();
+            //permitir o acesso a consulta do proades
+            $usuario = $this->manager->getBusiness('common','usuario');
+            $usuario->getByLogin(trim($membro->idVinculo));
+            $acesso = $this->manager->getBusiness('rh','acessoproades');
+            $acesso->getById($this->proades->idProades,$usuario->idUsuario);
+            if ( ! $acesso->isPersistent() )
+            {
+                $acesso->setTransaction($membro->getTransaction());
+                $acesso->save();
+            }
+            $grupo = $this->manager->getBusiness('common','grupo');
+            $grupo->getByGroup('RH_PROADESCONSULTA');
+            if ( ! $usuario->hasGroup($grupo->idGrupo) )
+            {
+                $usuario->addGroup($grupo);
+                $usuario->setTransaction($membro->getTransaction());
+                $usuario->save();
+            }
+            $membro->endTransaction();
+            $go = $this->manager->getActionUrl('rh','main:proades:reuniao',$this->reuniao->idReuniao,array( 'form'=>'membros', 'idEquipe'=>$membro->idEquipe));
+            $this->page->redirect($go);
+		}
+		catch (Exception $e)
+		{
+			$this->AddError($e->GetMessage());
+		}
+	}
+
+    function btnEditar_click()
+    {
+        $idMembro = $this->getFormValue('idMembro');
+        $membro = $this->manager->getBusiness('rh','membro');
+        $membro->getById($idMembro);
+
+        $this->setFieldValue('idMembro',$membro->idMembro);
+        $this->setFieldValue('idVinculo',$membro->idVinculo);
+        $this->setFieldValue('idEquipe',$membro->idEquipe);
+        $this->setFieldValue('atividade',$membro->atividade);
+    }
+
+	function btnExcluir_click()
+	{
+        $idMembro = $this->getFormValue('idMembro');
+        $membro = $this->manager->getBusiness('rh','membro');
+        $membro->getById($idMembro);
+
+		try
+		{
+            $idEquipe = $membro->idEquipe;
+            if ( ! $membro->estaEmMaisdeUmaEquipe() )
+            {
+                $this->proades->removeAcessoUsuario($membro,'RH_PROADESCONSULTA');
+            }
+			$membro->delete();
+
+            $go = $this->manager->getActionUrl('rh','main:proades:reuniao',$this->reuniao->idReuniao,array( 'form'=>'membros', 'idEquipe'=>$membro->idEquipe));
+            $this->page->redirect($go);
+		}
+		catch (Exception $e)
+		{
+			$this->AddError($e->GetMessage());
+		}
+	}
+    function setButtonAccess()
+    {
+        $perms = $this->manager->getPerms();
+        foreach ( $this->buttons as $button )
+        {
+            $this->setButtonAttr($button->name,'visible',$perms->checkAccess('rh_proadesequipe',A_ACCESS));
+        }
+    }
+}
+?>

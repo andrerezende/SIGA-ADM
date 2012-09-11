@@ -1,0 +1,487 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class BusinessRhProades extends MBusiness
+{
+    var $idProades;
+    var $idSetor;
+    var $idDirigente;
+    var $dataInicio;
+    var $dataFim;
+    var $numProcesso;
+    var $missao;
+    var $objetivos;
+    var $resultado;
+    var $status; // 1: Em andamento - 2: Encerrada
+    var $idPublicacao;
+    var $numeroPortariaDirigente;
+    var $diaPortariaDirigente;
+    var $mesPortariaDirigente;
+    var $anoPortariaDirigente;
+
+    var $equipes;
+    var $metas;
+    var $reunioes;
+    var $config;
+    var $naoHabilitados;
+    var $usuarios; //usuarios com acesso permitido
+    var $setor;
+
+    function __construct($data=NULL)
+    {
+       parent::__construct('sigaept',$data);
+    }
+
+    function getById($idProades)
+    {
+       $this->idProades = $idProades;
+       $this->retrieve();
+       return $this;
+    }
+
+    function getByIdDirigente($idDirigente)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addCriteria('idDirigente','=',"'$idDirigente'");
+        $this->retrieveFromCriteria($criteria);
+
+    }
+
+    function getByIdUsuario($idUsuario)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addCriteria('usuarios.idUsuario','=',"'$idUsuario'");
+        $this->retrieveFromCriteria($criteria);
+    }
+
+    function listAll()
+    {
+        $criteria = $this->getCriteria();
+        $query = $criteria->retrieveAsQuery();
+        return $query;
+    }
+
+    function listByDirigente($idDirigente)
+    {
+        $criteria = $this->getCriteria();
+
+        $criteria->addColumnAttribute('idProades');
+        $criteria->addColumnAttribute('dataInicio','datainicio');
+        $criteria->addColumnAttribute('dataFim','datafim');
+        $criteria->addColumnAttribute('setor.nome','nome');
+
+        $criteria->addCriteria('idDirigente','=',"'$idDirigente'");
+        //$criteria->addCriteria('status','=',"'$status'");
+
+        $query = $criteria->retrieveAsQuery();
+        return $query;
+    }
+
+    function listBySetorStatus($idSetor,$status)
+    {
+        $criteria = $this->getCriteria();
+
+        $criteria->addColumnAttribute('idProades');
+        $criteria->addColumnAttribute('dataInicio','datainicio');
+        $criteria->addColumnAttribute('dataFim','datafim');
+        $criteria->addColumnAttribute('setor.nome','nome');
+
+        $criteria->addCriteria('idSetor','=',"'$idSetor'");
+        //$criteria->addCriteria('status','=',"'$status'");
+
+        $query = $criteria->retrieveAsQuery();
+        return $query;
+    }
+
+    function listBySetorEmAndamento($idSetor)
+    {
+        $query = $this->listBySetorStatus($idSetor,1);
+        return $query;
+    }
+
+    function listBySetorEncerrada($idSetor)
+    {
+        $query = $this->listBySetorStatus($idSetor,2);
+        return $query;
+    }
+
+    function getIdEquipeCoordenacao()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('equipes.idEquipe');
+        $criteria->addCriteria('equipes.categoria','=',"'1'");
+        $criteria->addCriteria('equipes.idProades','=',"'$this->idProades'");
+        $query = $criteria->retrieveAsQuery();
+        if ( ! $query->eof() )
+        {
+            return $query->result[0][0];
+        }
+    }
+
+    function getIdEquipeSubCoordenacao()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('equipes.idEquipe');
+        $criteria->addCriteria('equipes.categoria','=',"'2'");
+        $query = $criteria->retrieveAsQuery();
+        if ( ! $query->eof() )
+        {
+            return $query->result[0][0];
+        }
+    }
+
+    function listMembrosEquipeCoordenacao()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('equipes.membros.idMembro');
+        $criteria->addColumnAttribute('equipes.membros.idVinculo');
+        $criteria->addColumnAttribute('equipes.membros.vinculo.funcionario.pessoa.nome');
+        $criteria->addCriteria('equipes.categoria','=','1');
+        $criteria->addCriteria('equipes.idProades','=',"$this->idProades");
+        $criteria->addOrderAttribute('equipes.membros.idMembro');
+        $query = $criteria->retrieveAsQuery();
+        return $query;
+    }
+
+    function listMembrosEquipeSubCoordenacao()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('equipes.membros.idMembro');
+        $criteria->addColumnAttribute('equipes.membros.idVinculo');
+        $criteria->addColumnAttribute('equipes.membros.vinculo.funcionario.pessoa.nome');
+        $criteria->addCriteria('equipes.categoria','=','2');
+        $criteria->addCriteria('equipes.idProades','=',"$this->idProades");
+        $criteria->addOrderAttribute('equipes.membros.idMembro');
+        $query = $criteria->retrieveAsQuery();
+        return $query;
+    }
+
+    function listMetas($definida = null)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('metas.idMeta');
+        $criteria->addColumnAttribute('metas.meta');
+        $criteria->addColumnAttribute('metas.previsao','previsao');
+        $criteria->addColumnAttribute('metas.tipo','tipo');
+        $criteria->addCriteria('metas.idProades','=',"$this->idProades");
+        if ( $definida )
+        {
+            $criteria->addCriteria('metas.definida','in',$definida);
+        }
+        $query = $criteria->retrieveAsQuery();
+        return $query;
+    }
+
+    function listMetasByReuniao($numeroReuniao)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('metas.idMeta');
+        $criteria->addColumnAttribute('metas.meta');
+        $criteria->addColumnAttribute('metas.previsao','previsao');
+        $criteria->addColumnAttribute('metas.tipo','tipo');
+        $criteria->addCriteria('metas.idProades','=',"$this->idProades");
+        $criteria->addCriteria('metas.definida','=',$numeroReuniao);
+        $query = $criteria->retrieveAsQuery();
+        return $query;
+    }
+
+    function listEquipesDeTrabalho()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('equipes.idEquipe');
+        $criteria->addColumnAttribute('equipes.nome');
+        $criteria->addCriteria('equipes.idProades','=',"$this->idProades");
+        $criteria->addCriteria('equipes.categoria','=',"'3'"); //só equipes de trabalho
+        $query = $criteria->retrieveAsQuery();
+        return $query;
+    }
+
+    function listSubCoordenacoes()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('equipes.idEquipe');
+        $criteria->addColumnAttribute('equipes.nome');
+        $criteria->addCriteria('equipes.idProades','=',"$this->idProades");
+        $criteria->addCriteria('equipes.categoria','=',"'2'"); //só equipes de trabalho
+        $query = $criteria->retrieveAsQuery();
+        return $query;
+    }
+
+    function save()
+    {
+        if ( $this->isPersistent() )
+        {
+            parent::save();
+        }
+        else
+        {
+            $this->beginTransaction();
+            parent::save();
+
+            //cria a equipe de coordenacao
+            
+            $coordenacao = $this->_miolo->getBusiness('rh','equipe');
+            $coordenacao->idProades = $this->idProades;
+            $coordenacao->categoria = 1;
+            $coordenacao->nome = "COORDENACAO";
+
+            $coordenacao->setTransaction($this->getTransaction());
+            $coordenacao->save();
+
+            //adiciona o dirigente a equipe de coordenacao
+
+            $dirigente = $this->_miolo->getBusiness('rh','membro');
+            $dirigente->idVinculo = $this->idDirigente;
+            $dirigente->idEquipe = $coordenacao->idEquipe;
+
+            $dirigente->setTransaction($this->getTransaction());
+            $dirigente->save();
+
+            //inicia a tabela de configuração
+
+            /*
+            $config = $this->_miolo->getBusiness('rh','proadesconfig');
+            $config->idProades = $this->idProades;
+            $config->primeiraFase = 'N';
+            $config->segundaFase = 'N';
+            $config->terceiraFase = 'N';
+            $config->save();
+            */
+
+            $this->endTransaction();
+        }
+    }
+
+    function primeiraFaseHabilitada()
+    {
+        return ( $this->config->primeiraFase == 'S' );
+    }
+
+    function segundaFaseHabilitada()
+    {
+        return ( $this->config->segundaFase == 'S' );
+    }
+
+    function terceiraFaseHabilitada()
+    {
+        return ( $this->config->terceiraFase == 'S' );
+    }
+
+    function habilitaPrimeiraFase()
+    {
+        $this->config->primeiraFase = 'S';
+        $this->config->save();
+    }
+
+    function getVinculoMembros()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('equipes.membros.idVinculo');
+        $criteria->addCriteria('equipes.idProades','=',"$this->idProades");
+        $query = $criteria->retrieveAsQuery();
+
+        while ( ! $query->eof() )
+        {
+            $vinculos[] = $query->fields('idVinculo');
+            $query->moveNext();
+        }
+        
+        if ( is_array($vinculos) )
+        {
+            return $vinculos;
+        }
+        else
+        {
+            return array();
+        }
+    }
+
+    function listMembrosPorEquipe($idEquipe)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('equipes.membros.idMembro');
+        $criteria->addColumnAttribute('equipes.membros.idVinculo');
+        $criteria->addColumnAttribute('equipes.membros.vinculo.funcionario.pessoa.nome');
+        $criteria->addColumnAttribute('equipes.membros.atividade');
+        
+        $criteria->addCriteria('equipes.idEquipe','=',"'$idEquipe'");
+        $criteria->addCriteria('equipes.idProades','=',"$this->idProades");
+        $criteria->addOrderAttribute('equipes.membros.vinculo.funcionario.pessoa.nome');
+        $query = $criteria->retrieveAsQuery();
+        return $query;
+    }
+    
+    function listAtividadesPorMeta($idMeta)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('metas.atividades.idAtividade');
+        $criteria->addColumnAttribute('metas.atividades.descricao');
+        //$criteria->addColumnAttribute('equipes.membros.vinculo.funcionario.pessoa.nome');
+        $criteria->addCriteria('metas.idMeta','=',"'$idMeta'");
+        $criteria->addCriteria('metas.idProades','=',"$this->idProades");
+        $criteria->addOrderAttribute('metas.atividades.descricao');
+        $query = $criteria->retrieveAsQuery();
+        return $query;
+    }
+    
+    function listMetasAtividades()
+    {
+        $meta = $this->_miolo->GetBusiness('rh','meta');
+        $criteria = $meta->getCriteria();
+        $criteria->addColumnAttribute('idAtividade');
+        $criteria->addColumnAttribute('descricao');
+        $criteria->addCriteria('idProades','=',$this->idProades);
+
+        $criteria->setAssociationType('atividades','right');
+        return $criteria->retrieveAsQuery();
+    }
+
+    function listReunioes()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('reunioes.idReuniao');
+        $criteria->addColumnAttribute('reunioes.data','data');
+        $criteria->addColumnAttribute('reunioes.inicio');
+        $criteria->addColumnAttribute('reunioes.termino');
+        $criteria->addCriteria('reunioes.idProades','=',"$this->idProades");
+        $query = $criteria->retrieveAsQuery();
+        return $query;
+    }
+
+    function getReuniaoByNum($numero)
+    {
+        if ( ! is_array($this->reunioes) )
+        {
+            $this->retrieveAssociation('reunioes');
+        }
+
+        if ( is_array($this->reunioes) )
+        {
+            foreach ( $this->reunioes as $reuniao )
+            {
+                if ( $reuniao->numero == $numero )
+                {
+                    return $reuniao;
+                }
+            }
+        }
+        //return NULL;
+	return $reuniao;
+    }
+
+    function listNaoHabilitados()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('naoHabilitados.idNaoHabilitado');
+        $criteria->addColumnAttribute('naoHabilitados.idVinculo');
+        $criteria->addColumnAttribute('naoHabilitados.vinculo.funcionario.pessoa.nome','nome');
+        $criteria->addColumnAttribute('naoHabilitados.justificativa');
+        $criteria->addCriteria('naoHabilitados.idProades','=',"$this->idProades");
+        $query = $criteria->retrieveAsQuery();
+        return $query;
+    }
+
+    function removeAcessoUsuario($membro,$nomeGrupo)
+    {
+        if ( ! is_array($this->usuarios) )
+        {
+            $this->retrieveAssociation('usuarios');
+            if ( is_array($this->usuarios) )
+            {
+                foreach ( $this->usuarios as $acesso )
+                {
+                    $usuario = $this->_miolo->getBusiness('common','usuario');
+                    $usuario->getById($acesso->idUsuario);
+                    if ( trim($usuario->login) == trim($membro->idVinculo) )
+                    {
+                        $acesso->delete();
+                        foreach ( $usuario->grupos as $grupo )
+                        {
+                            if ( $grupo->grupo != $nomeGrupo )
+                            {   
+                                $gruposAux[] = $grupo;
+                            }
+                        }
+                        $usuario->grupos = $gruposAux;
+                        $usuario->save();
+                    }
+                }
+            }
+        }
+    }
+
+    function listEmAndamento()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('idProades');
+        $criteria->addColumnAttribute('setor.nome','nome');
+        $criteria->addColumnAttribute('dataInicio','data');
+        $criteria->addOrderAttribute('setor.nome');
+        return $criteria->retrieveAsQuery();
+    }
+
+    function permiteCriacaoSubCoord()
+    {
+        $query = $this->listSubCoordenacoes();
+        if ( count($query->result) == $this->config->quantSubCoord )
+        {
+            return FALSE;
+        }
+        else
+        {
+            return TRUE;
+        }
+    }
+
+    function dirigenteEmOUtraUnidade()
+    {
+        $query = $this->listByDirigente($this->idDirigente);
+        if ( ! $query->eof() )
+        {
+            return ( count($query->result) > 1 );
+        }
+        return FALSE;
+    }
+
+    function listUnidades()
+    {
+        $criteria = $this->getCriteria();
+
+        $criteria->addColumnAttribute('idProades');
+        $criteria->addColumnAttribute('setor.nome','nome');
+        $criteria->addOrderAttribute('setor.nome');
+        $query = $criteria->retrieveAsQuery();
+        return $query;
+    }
+
+    function listResultados()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('reunioes.resultados.idMeta');
+        $criteria->addColumnAttribute('reunioes.resultados.meta.meta');
+        $criteria->addColumnAttribute('reunioes.resultados.resultado','resultado');
+        $criteria->addCriteria('reunioes.idProades','=',"'$this->idProades'");
+        $criteria->addGroupAttribute('reunioes.resultados.idMeta');
+        $criteria->addGroupAttribute('reunioes.resultados.meta.meta');
+        $criteria->addGroupAttribute('reunioes.resultados.resultado');
+        return $criteria->retrieveAsQuery();
+    }
+
+}
+?>

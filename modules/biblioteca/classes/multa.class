@@ -1,0 +1,402 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+class BusinessBibliotecaMulta extends Business
+{
+  	var $idmulta;
+	var $datahora;
+	var $valor;
+	var $observacao;
+	var $foipaga;
+	var $datahorapagamento;
+	var $idemprestimo;
+
+
+	function BusinessBibliotecaMulta($data = null)
+	{
+      $this->Business('sigaept', $data);
+	}
+      
+   
+	function ListMultas($idusuario)
+	{
+		$sql = new sql('m.idemprestimo, ex.numerodotombo, ' . $this->_db->DateToChar('m.datahora') . 'as datahora, m.valor, m.observacao, m.foipaga','bt_emprestimo e, bt_multa m, bt_exemplar ex',"(e.idusuario = $idusuario) and (e.idemprestimo = m.idemprestimo) and (e.idexemplar = ex.idexemplar) and (m.foipaga = '0')");
+		
+		$query = $this->Query($sql);
+		
+		for ($i=0; $i<count($query->result); $i++){
+
+			$query->result[$i][3] = 'R$ '. number_format(str_replace(',','.',$query->result[$i][3]),2,',','.');
+			if ($query->result[$i][5] == 0)
+				$query->result[$i][5] = 'Não';
+			if ($query->result[$i][5] == 1)
+				$query->result[$i][5] = 'Sim';
+		}
+
+		return $query;
+	}
+
+	function ListMultasNaoPagas($idusuario)
+	{
+		$sql = new sql('m.idmulta, m.idemprestimo, ex.numerodotombo, o.titulo, e.datahoraprevisaodevolucao, m.datahora, m.valor, m.observacao','bt_emprestimo e, bt_multa m, bt_exemplar ex, bt_obra o',"(e.idusuario = ?) and (e.idemprestimo = m.idemprestimo) and (e.idexemplar = ex.idexemplar) and (ex.idobra = o.idobra) and (m.foipaga = '0')", 'm.idmulta');
+
+		$query = $this->Query($sql,$idusuario);
+
+		for ($i=0; $i<count($query->result); $i++){
+			$query->result[$i][6] = 'R$ '. number_format(str_replace(',','.',$query->result[$i][6]),2,',','.');
+		}
+
+		return $query;
+	}
+	
+	function ListMultasNaoPagasDoRecinto($idusuario)
+	{
+		$sql = new sql('m.idmulta, m.idemprestimo, ex.numerodotombo, o.titulo, e.datahoraprevisaodevolucao, m.datahora, m.valor, m.observacao','bt_emprestimo e, bt_multa m, bt_exemplar ex, bt_obra o',"(e.idusuario = ?) and (e.idemprestimo = m.idemprestimo) and (e.idexemplar = ex.idexemplar) and (e.emprhoras=1) and (ex.idobra = o.idobra) and (m.foipaga = '0')", 'm.idmulta');
+
+		$query = $this->Query($sql,$idusuario);
+
+		for ($i=0; $i<count($query->result); $i++){
+			$query->result[$i][6] = 'R$ '. number_format(str_replace(',','.',$query->result[$i][6]),2,',','.');
+		}
+
+		return $query;
+	}
+
+	function GetTotalMultasNaoPagas($idusuario)
+	{
+		$sql = new sql('sum(m.valor)', 'bt_multa m, bt_emprestimo e', "(e.idusuario = ?) and (e.idemprestimo = m.idemprestimo) and (m.foipaga = '0')");
+		$query = $this->Query($sql,$idusuario);
+		return $query->result[0][0];
+	}
+	
+   function saveNovaMulta()
+	{
+		//global $MIOLO,$module;
+
+		$commands = array();
+		$idMulta = new sql('nextval(\'seq_bt_multa\')');
+		$idMulta = $this->Query($idMulta);
+		$sql = new sql('idmulta,datahora,valor,observacao,foipaga,datahorapagamento,idemprestimo','bt_multa');
+		$commands[] = $sql->Insert(array($idMulta->result[0][0],$this->datahora,$this->valor,$this->observacao,0,NULL,$this->idemprestimo));
+		//LOG
+		
+		$this->Execute($commands);
+	}
+
+	function PagarMulta($id)
+	{
+		$sql = new sql('foipaga, datahorapagamento', 'bt_multa', 'idmulta = ?');
+
+		// values é um array com cada campo do primeiro parametro do sql mais os parâmetros do where 
+		$values = array(1, $this->_db->CharToTimestamp(date("d/m/Y H:i:s")), $id);
+
+		$ok = $this->Execute($sql->Update($values));
+
+		return $ok;
+	}
+
+	function setData($data)
+	{
+     $this->datahora = $data->datahora;
+     $this->valor = $data->valor;
+     $this->observacao = $data->observacao;
+     $this->foipaga = $data->foipaga;
+     $this->datahorapagamento = $data->datahorapagamento;
+     $this->idemprestimo = $data->idemprestimo;
+  }
+
+	function SelectMultaPendente()
+	{
+		$sql = new sql('m.idmulta, u.login, m.idemprestimo, ex.numerodotombo, '.$this->_db->TimestampToChar('m.datahora').' as datahora, m.valor, m.observacao, m.datahora as datahoraordem','bt_multa m, bt_emprestimo e, bt_exemplar ex, (select idusuario, login from cm_usuario union select idusuario, numrg||\'<BR><font color=red>Externa</font>\' as login from bt_usuarioexterno) u',"m.idemprestimo = e.idemprestimo and e.idexemplar = ex.idexemplar and u.idusuario = e.idusuario and m.foipaga = '0'", 'datahoraordem');
+		$query = $this->Query($sql);
+		for ($i=0; $i<count($query->result); $i++){
+			$query->result[$i][5] = 'R$ '. number_format(str_replace(',','.',$query->result[$i][5]),2,',','.');
+		}
+		return $query;
+	}
+
+	function SelectMultaPendentePorUsuario($idusuario)
+	{
+		$sql = new sql('m.idmulta, u.login, m.idemprestimo, ex.numerodotombo, '.$this->_db->TimestampToChar('m.datahora').' as datahora, m.valor, m.observacao, m.datahora as datahoraordem','bt_multa m, bt_emprestimo e, bt_exemplar ex, cm_usuario u',"m.idemprestimo = e.idemprestimo and e.idexemplar = ex.idexemplar and u.idusuario = e.idusuario and m.foipaga = '0' and e.idusuario = " . $idusuario .' ORDER BY datahoraordem');
+		$query = $this->Query($sql);
+		for ($i=0; $i<count($query->result); $i++){
+			$query->result[$i][5] = 'R$ '. number_format(str_replace(',','.',$query->result[$i][5]),2,',','.');
+		}
+		return $query;
+	}
+
+	function SelectMultaPendentePorExemplar($idexemplar)
+	{
+		$sql = new sql('m.idmulta, u.login, m.idemprestimo, ex.numerodotombo, '.$this->_db->TimestampToChar('m.datahora').' as datahora, m.valor, m.observacao, m.datahora as datahoraordem','bt_multa m, bt_emprestimo e, bt_exemplar ex, cm_usuario u',"m.idemprestimo = e.idemprestimo and e.idexemplar = ex.idexemplar and m.foipaga = '0' and e.idusuario = u.idusuario and e.idexemplar = " . $idexemplar . ' ORDER BY datahoraordem');
+		$query = $this->Query($sql);
+		for ($i=0; $i<count($query->result); $i++){
+			$query->result[$i][5] = 'R$ '. number_format(str_replace(',','.',$query->result[$i][5]),2,',','.');
+		}
+		return $query;
+	}
+	
+	function SelectMultaPendentePorExemplarComunidade($idexemplar)
+	{
+		$sql = new sql('m.idmulta, u.numrg as login, m.idemprestimo, ex.numerodotombo, '.$this->_db->TimestampToChar('m.datahora').' as datahora, m.valor, m.observacao, m.datahora as datahoraordem','bt_multa m, bt_emprestimo e, bt_exemplar ex, bt_usuarioexterno u',"m.idemprestimo = e.idemprestimo and e.idexemplar = ex.idexemplar and m.foipaga = '0' and e.idusuario = u.idusuario and e.idexemplar = " . $idexemplar . ' ORDER BY datahoraordem');
+		$query = $this->Query($sql);
+		for ($i=0; $i<count($query->result); $i++){
+			$query->result[$i][5] = 'R$ '. number_format(str_replace(',','.',$query->result[$i][5]),2,',','.');
+		}
+		return $query;
+	}
+
+  function GetById($id)
+	{
+		$this->idmulta = $id;
+		$this->retrieve();
+		return $this;
+	}
+
+	function GetIdMulta()
+  {
+    return $this->idmulta;
+  }
+
+  function GetIdEmprestimo()
+  {
+    return $this->idemprestimo;
+  }
+
+  function GetDatahora()
+  {
+    return $this->datahora;
+  }
+
+  function GetValor()
+  {
+    return $this->valor;
+  }
+
+  function GetObservacao()
+  {
+    return $this->observacao;
+  }
+
+  function GetDatahoraPagamento()
+  {
+    return $this->datahorapagamento;
+  }
+
+  function GetFoiPaga()
+  {
+    return $this->foipaga;
+  }
+
+  //Comparação de um campo Varchar com um campo Inteiro. - Mudei a estrutura do banco. campo Identificador : Integer
+  function HistoricoMultaRecebidaPorOperador($data)
+  {
+     global $MIOLO;
+
+     $cobaia[0] = $this->_db->CharToTimestamp($data[1]);
+     $cobaia[1] = $this->_db->CharToTimestamp($data[2]);
+
+     $cobaia[0] = substr($cobaia[0],1);
+     $cobaia[1] = substr($cobaia[1],1);
+     
+     $operacao = $MIOLO->GetBusiness('biblioteca','operacao');
+     $operacao = $operacao->GetIdoperacaoByMnemonico('RECMULTA');
+     
+     $sql = new sql('DISTINCT m.idmulta, ' . $this->_db->TimestampToChar('m.datahorapagamento').'as data, m.valor','bt_multa m, bt_logoperacao l','l.idoperacao = ' . $operacao->idoperacao . ' and l.identificador = CAST(m.idmulta AS VARCHAR(100)) and l.idusuario = '.$data[0].' and l.data >= '."$cobaia[0]".' and l.data <= '."$cobaia[1] ORDER BY data");
+
+    $query = $this->Query($sql);
+	for($i = 0; $i < count($query->result); $i++)
+	{
+		$query->result[$i][2] = 'R$ '. number_format(str_replace(',','.',$query->result[$i][2]),2,',','.');
+	}
+	return $query;
+  }
+
+	function GetTotalMultasOperador($idusuario,$data1,$data2)
+	{
+		global $MIOLO;
+
+		$data1 = $this->_db->CharToTimestamp($data1);
+		$data2 = $this->_db->CharToTimestamp($data2);
+		$data1 = substr($data1,1);
+		$data2 = substr($data2,1);
+
+		$operacao = $MIOLO->GetBusiness('biblioteca','operacao');
+		$operacao = $operacao->GetIdoperacaoByMnemonico('RECMULTA');
+
+		$sql = new sql("sum(m.valor)", "bt_multa m, bt_logoperacao l", "l.idoperacao = " . $operacao->idoperacao . " and l.identificador = CAST(m.idmulta AS VARCHAR(100)) and l.idusuario = $idusuario and l.data >= $data1 and l.data <= $data2");
+
+		$query = $this->Query($sql);
+		return $query->result[0][0];
+	}
+
+	function Delete($idmulta)
+	{
+		global $MIOLO, $module;
+
+		$this->BeginTransaction();
+			$sql = new sql('','bt_multa','idmulta = ?');
+			$ok = $this->Execute($sql->Delete($idmulta));
+
+			// LOG
+			$log = $MIOLO->GetBusiness($module,'log'); 
+			$sqlog = $log->Gravar("EXCMULTA",$idmulta);	
+			$this->Execute($sqlog->Insert());		
+		$this->EndTransaction();
+	}
+	
+	
+	/*
+	*   Nova função para salvar a multa, verificando 
+	*   se a multa foi editada. Se foi, salva no log de
+	*   pagamento de multa também.
+	*/
+	function SalvarMulta()
+	{global $MIOLO, $module;
+		$data = $this->getData();
+		
+		$incluirLogFoiPaga = false;
+		$dataHoraPagamento = "";
+		
+		if ($data->foipaga == 1)
+		{
+			// O usuário selecionou "foi paga"
+			// Deve-se verificar se no banco, a multa já está paga.
+			
+			$sql = new sql('foipaga','bt_multa','idmulta=?');
+			$query = $this->Query($sql,$data->idmulta);
+			
+			
+			if ($query->result[0][0] == 0)
+			{
+				$k = new MKrono();
+		        $dataHoje = $k->KDate('%d/%m/%Y   %H:%i:00');
+		        $dataHoje = ":TO_DATE('". $dataHoje . "','DD/MM/YYYY HH24:MI:SS')";    
+				
+		        $dataHoraPagamento = $dataHoje;
+		        
+				$incluirLogFoiPaga = true;	
+			}
+				
+		}
+		
+
+		/*
+		* realiza o update
+		*/
+		$sql = new sql('datahora,valor,observacao,foipaga,datahorapagamento','bt_multa','idmulta = ?');
+		$values = array(":TO_DATE('". $data->datahora . "','DD/MM/YYYY HH24:MI:SS')",$data->valor,$data->observacao,$data->foipaga,$dataHoraPagamento,$data->idmulta);		
+				
+		$this->BeginTransaction();
+		
+			$ok = $this->Execute($sql->Update($values));
+			
+			if ($incluirLogFoiPaga)
+			{
+				// LOG DE RECEBIMENTO
+				$log = $MIOLO->GetBusiness($module,'log'); 
+				$sqlog = $log->Gravar("RECMULTA",$data->idmulta);	
+				$this->Execute($sqlog->Insert());		
+			}
+			
+			
+				// LOG DE PAGAMENTO
+				$log = $MIOLO->GetBusiness($module,'log'); 
+				$sqlog = $log->Gravar("EDTMULTA",$data->idmulta);	
+				$this->Execute($sqlog->Insert());		
+				
+				
+		$this->EndTransaction();
+		
+		return true;
+	}
+	
+	function perdoarMulta()
+	{global $MIOLO, $module;
+		$data = $this->getData();
+		
+		/*
+		* realiza o update, alterando o foipaga para 2
+		*/
+		
+		$sql = new sql('observacao,foipaga,datahorapagamento','bt_multa','idmulta = ?');
+		$values = array($data->observacao,'2',$this->_db->CharToTimestamp($data->datahorapagamento),$data->idmulta);		
+		
+		$this->BeginTransaction();
+		
+			$ok = $this->Execute($sql->Update($values));
+			
+			$log = $MIOLO->GetBusiness($module,'log'); 
+			$sqlog = $log->Gravar("PERDOAMULTA",$data->idmulta);	
+			$this->Execute($sqlog->Insert());		
+
+		$this->EndTransaction();
+		
+		return true;
+		
+	}
+	
+	function RelatorioMultasAplicadasPorPeriodo($dataIni, $dataFim)
+	{
+		
+		$sql = new sql('count(idmulta) as Multas, sum(valor) as Valor', 'bt_multa', '(datahora >= '.substr($this->_db->CharToTimestamp($dataIni),1).') and (datahora <= '.substr($this->_db->CharToTimestamp($dataFim),1).')');		
+		$query = $this->Query($sql);
+		return $query; 
+	}
+	
+	function RelatorioMultasRecebidasPorPeriodo($dataIni, $dataFim)
+	{
+		
+		$sql = new sql('count(idmulta) as Multas, sum(valor) as Valor', 'bt_multa', '(datahora >= '.substr($this->_db->CharToTimestamp($dataIni),1).') and (datahora <= '.substr($this->_db->CharToTimestamp($dataFim),1).' and foipaga=\'1\')');		
+		$query = $this->Query($sql);
+		return $query; 
+	}
+	
+	function RelatorioMultasPendentesPorPeriodo($dataIni, $dataFim)
+	{
+		
+		$sql = new sql('count(idmulta) as Multas, sum(valor) as Valor', 'bt_multa', '(datahora >= '.substr($this->_db->CharToTimestamp($dataIni),1).') and (datahora <= '.substr($this->_db->CharToTimestamp($dataFim),1).' and foipaga=\'0\')');		
+		$query = $this->Query($sql);
+		return $query; 
+	}	
+	
+	function RelatorioMultasPerdoadasPorPeriodo($dataIni, $dataFim)
+	{
+		
+		$sql = new sql('count(idmulta) as Multas, sum(valor) as Valor', 'bt_multa', '(datahora >= '.substr($this->_db->CharToTimestamp($dataIni),1).') and (datahora <= '.substr($this->_db->CharToTimestamp($dataFim),1).' and foipaga=\'2\')');		
+		$query = $this->Query($sql);
+		return $query; 
+	}
+	
+	/* Liquida todas as multas não pagas da tabela bt_multa. */ 
+	function LiquidaMultas()
+	{		
+		$data  = new FormData();
+		$sql = new sql( 'foipaga','bt_multa','foipaga = \'0\'' );
+		$values = array( 1 );
+        $this->Execute( $sql->Update( $values ) );		
+	}
+}
+?>

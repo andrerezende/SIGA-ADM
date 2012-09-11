@@ -1,0 +1,154 @@
+<?php
+class BusinessCommonTransacao extends Business implements ITransaction
+{
+    var $idTransacao;
+	var $transacao;
+	var $idSistema;
+    var $acesso;  // cursor
+    var $sistema; // object
+
+    function __construct($data=null)
+    {
+       parent::__construct('common',$data);
+    }
+
+	function SetData($data)
+	{
+		$this->idTransacao = $data->idTransacao;
+		$this->transacao = strtoupper($data->transacao);
+		$this->idSistema = $data->idsistema;        
+        $this->SetAcesso($data->acesso);
+	}
+
+    function GetById($id)
+    {
+        $this->idTransacao = $id; 
+        $this->retrieve();
+        return $this;
+    }
+
+    function GetByName($transacao)
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->addCriteria('transacao','=', "'$transacao'");
+        return $this->retrieveFromCriteria($criteria);
+    }
+
+    function GetByGroup($grupo=NULL)
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->addCriteria('acesso.grupo.grupo','=', "'$grupo'");
+        return $this->retrieveAsQuery($criteria);
+    }
+
+    function Save()
+    {
+        $op = $this->IsPersistent() ? OP_UPD : OP_INS;
+        parent::save();
+        $this->Log($op,"idtrans = $this->idTransacao; transacao = $this->transacao");
+    }
+    
+    function Delete()
+    {
+        parent::delete();
+        $this->Log(OP_DEL,"idtrans = $this->idTransacao; transacao = $this->transacao");
+    }
+
+    function ListRange($range=NULL)
+    {
+        $sql = new sql('t.idtrans, t.transacao, t.idsistema, s.sistema','cm_transacao t, cm_sistema s',
+                       't.idsistema = s.idsistema','t.transacao');
+        $sql->SetRange($range);
+        $query = $this->Query($sql);
+        return $query;
+    }
+
+	function ListAll()
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->AddColumnAttribute('idTransacao');
+        $criteria->AddColumnAttribute('transacao');
+        $criteria->AddColumnAttribute('idSistema');
+        $criteria->AddColumnAttribute('sistema.sistema');
+        $criteria->addOrderAttribute('transacao');
+        return $criteria->retrieveAsQuery();
+    }
+
+    function ListByTransaction($transacao='')
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->addCriteria('transacao','LIKE', "'%$transacao%'");
+        $criteria->addOrderAttribute('transacao');
+        return $criteria->retrieveAsQuery();
+    }
+
+    function GetArrayGroups()
+    {
+        $aGroups = array();
+        if ($this->acesso != NULL)
+        {
+            if (!is_array($this->acesso))
+            {
+                $this->acesso = array($this->acesso);  
+            }
+            foreach($this->acesso as $a)
+            {
+                $aGroups[] = array($a->idGrupo,$a->direito);
+            }
+        } 
+        return $aGroups;
+    }
+
+    function ListAcessoByIdTransacao($idTransacao)
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->AddColumnAttribute('acesso.idGrupo');
+        $criteria->AddColumnAttribute('acesso.direito');
+        $criteria->addCriteria('idTransacao','=', "'{$this->idTransacao}'");
+        $criteria->addOrderAttribute('acesso.idGrupo');
+        return $this->retrieveAsQuery($criteria);
+    }
+
+    function SetAcesso($acesso)
+    {
+        $this->acesso = NULL;
+        if (count($acesso))
+        {
+            foreach($acesso as $a)
+            {
+                $this->acesso[] = $obj = $this->_miolo->GetBusiness('common','access');
+                $obj->idTransacao = $this->idTransacao;
+                $obj->idGrupo = $a[0];
+                $obj->direito = $a[1];
+            }
+        }
+    }
+
+    function GetUsersAllowed($action = A_ACCESS)
+    {
+    }
+
+    function GetGroupsAllowed($action = A_ACCESS)
+    {
+    }
+
+    function getAcesso($idGrupo)
+    {
+        if ( $this->acesso != NULL )
+        {
+            foreach ( $this->acesso as $acesso )
+            {
+                if ( $acesso->idGrupo == $idGrupo )
+                {
+                    return $acesso;
+                }
+            }
+        }
+
+        $acesso = $this->_miolo->getBusiness('common','acesso');
+        $acesso->idTransacao = $this->idTransacao;
+        return $acesso;
+        
+    }
+}
+?>

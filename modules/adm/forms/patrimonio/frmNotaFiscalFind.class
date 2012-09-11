@@ -1,0 +1,160 @@
+<?php
+global $MIOLO;
+/**
+ * Use Module Control
+ */
+$MIOLO->Uses('controls/linknotafiscal.class','adm');
+
+/**
+ * Formulário básico para seleção de itens do patrimonio
+ *
+ */
+class frmNotaFiscalFind extends MCompoundForm {
+
+        public $objNotaFiscal;
+        public $ids;
+
+        function __construct() {
+		global $MIOLO, $module, $action;
+		$this->objNotaFiscal = $MIOLO->GetBusiness($module, 'notafiscal');
+		parent::__construct('Pesquisar nota fiscal');
+		$this->SetClose($MIOLO->GetActionURL($module,'main:patrimonio'));
+		$this->EventHandler();
+	}
+
+	function CreateFields() {
+		global $MIOLO, $module, $action;
+
+
+		$findButton = new ButtonFind('');
+		$findButton->SetName('btnFind');
+		$cnpj_field=new MTextField('cnpj','','CNPJ',23);
+		$dataateste_field=new MCalendarField('dataAteste','','Data do Ateste',15);
+		$datanotafiscal_field=new MCalendarField('dataNotaFiscal','','Data nota fiscal',15);
+
+		/*-----------------Inserção dos Campos em 2 Arrays------------------*/
+		$fields = array(
+			array(
+
+			    new MTextField('notaFiscal','','Nota fiscal',25),
+			    $datanotafiscal_field,
+			    new MTextField('valor','','Valor',20),
+			    $dataateste_field,
+			    new MTextField('tomboanterior','','Tombo Anterior', 25),
+			    new MTextField('empenho','','Empenho',15),
+			    $cnpj_field,
+			    new MTextField('numeroserie','','Nº de série',15),
+			    $findButton,
+				),
+
+			    $lnkNotaFiscalNew,
+			    new MSpacer(1),
+			    );
+
+		/*-------------Pegando os Campos dos formulários e alocando------------*/
+		$campos = array(
+			    $idnotafiscal,
+			    $notafiscal= MForm::GetFormValue('notaFiscal'),
+			    $datanotafiscal= MForm::GetFormValue('dataNotaFiscal'),
+			    $valor= MForm::GetFormValue('valor'),
+			    $dataateste= MForm::GetFormValue('dataAteste'),
+			    $tomboanterior=MForm::GetFormValue('tomboanterior'),
+			    $empenho=MForm::GetFormValue('empenho'),
+			    $cnpj=MForm::GetFormValue('cnpj'),
+			    $numeroserie=MForm::GetFormValue('numeroserie'),
+			    $situacao,
+				);
+
+		/*----------------------------Check de permissão de bloqueio---------------------------------------*/
+		     if ($this->manager->perms->checkAccess('adm_patrimonio_bloquear',A_EXECUTE)){
+		    $bloqbutton = new MButton('bloqbutton', 'Bloquear Notas');
+		    $desbloqbutton = new MButton('desbloqbutton', 'Desbloquear Notas');
+		    $this->AddButton($bloqbutton);
+		    $this->AddButton($desbloqbutton);
+
+
+				    }
+		    if(is_numeric($valor) || $valor=="" ) {
+			$ui = $MIOLO->GetUI();
+			$this->ids = $this->objNotaFiscal->Filtrar2($campos);
+			$grid = $ui->GetGrid('adm','gridNotaFiscal');
+			$grid->SetTitle(NULL);
+			$this->SetFields($fields);
+			$this->AddField($grid);
+
+			if(
+			$cnpj!=""
+			|| $notafiscal!=""
+			|| $datanotafiscal!=""
+			|| $valor!=""
+			|| $dataateste!=""
+			|| $tomboanterior!=""
+			|| $numeroserie!=""
+			|| $empenho!=""
+		    ){
+			$grid->setTitle("Notas Fiscais");
+			    }else{
+				$grid->setTitle("Notas Fiscais dos últimos 7 dias");
+			}
+
+
+			}else{
+			$this->addError("Certifique-se de que o campo \"Valor\" é um valor numérico!");
+			$this->SetFields($fields);
+
+		    }
+
+		$this->page->addJsCode(file_get_contents(dirname(__FILE__) . '/../../ui/js/mask.js'));
+		$cnpj_field->addAttribute('onKeyUp', 'makeMask(this, \'##.###.###/####-##\');');
+		$cnpj_field->addAttribute('onFocus', 'makeMask(this, \'##.###.###/####-##\');');
+		$cnpj_field->addAttribute('maxlength',18);
+		$dataateste_field->addAttribute('onFocus', 'makeMask(this, \'##/##/####\');');
+		$dataateste_field->addAttribute('onKeyUp', 'makeMask(this, \'##/##/####\');');
+		$dataateste_field->addAttribute('maxlength',10);
+
+		$datanotafiscal_field->addAttribute('onFocus', 'makeMask(this, \'##/##/####\');');
+		$datanotafiscal_field->addAttribute('onKeyUp', 'makeMask(this, \'##/##/####\');');
+		$datanotafiscal_field->addAttribute('maxlength',10);
+		$this->notaFiscal->addAttribute('maxlength',16);
+		$this->valor->addAttribute('maxlength',14);
+		$this->tomboanterior->addAttribute('maxlength',20);
+		$this->empenho->addAttribute('maxlength',14);
+		$this->numeroserie->addAttribute('maxlength',15);
+
+
+		$this->defaultButton = false;
+	}
+
+        function bloqbutton_click(){
+            global $MIOLO;
+            foreach ($this->ids as &$idnota){
+                    $idsnotas .= $idnota[0].', ';
+                    $this->objNotaFiscal = $this->objNotaFiscal->GetById($idnota[0]);
+                    $this->objNotaFiscal->bloqueio = 'S';
+                    try {
+                       $this->objNotaFiscal->update();
+                    } catch (Exception $e) {
+                            $this->AddInfo("ad_notafiscal: Falha ao atualizar a nota".$idnota[0]);
+                       }
+             }
+             $idsnotas = substr($idsnotas, 0, strlen($idsnotas)-2);
+             $MIOLO->Information("Item(ns) ".$idsnotas." bloqueado(s) com sucesso.", $go);
+        }
+
+        function desbloqbutton_click(){
+            global $MIOLO;
+            foreach ($this->ids as &$idnota){
+                    $idsnotas .= $idnota[0].', ';
+                    $this->objNotaFiscal = $this->objNotaFiscal->GetById($idnota[0]);
+                    $this->objNotaFiscal->bloqueio = 'N';
+                    try {
+                       $this->objNotaFiscal->update();
+                    } catch (Exception $e) {
+                            $this->AddInfo("ad_notafiscal: Falha ao atualizar a nota".$idnota[0]);
+                       }
+             }
+             $idsnotas = substr($idsnotas, 0, strlen($idsnotas)-2);
+             $MIOLO->Information("Item(ns) ".$idsnotas." desbloqueado(s) com sucesso.", $go);
+        }
+
+}

@@ -1,0 +1,228 @@
+CREATE TABLE RH_FICHACLINICA(
+    IDFICHACLINICA     INTEGER      NOT NULL,
+    IDVINCULO          CHAR(7)           NOT NULL,
+    DATA               DATE              NOT NULL,
+    TIPOEXAME          CHAR(1)           NOT NULL,
+    FUNCANTERIOR       VARCHAR(150),
+    QUEIXACLINICA      VARCHAR(2000),
+    ANTCLINICO         VARCHAR(2000),
+    CIDANTCLINICO      VARCHAR(2000),
+    ANTCIRURGICO       VARCHAR(2000),
+    SIHANTCIRURGICO    VARCHAR(2000),
+    EPILEPSIA          VARCHAR(2000),
+    MEDICAMENTO        VARCHAR(2000),
+    TABAGISMO          VARCHAR(2000),
+    ETILISMO           VARCHAR(2000),
+    ALERGIA            VARCHAR(2000),
+    PA                 VARCHAR(75),
+    PULSO              VARCHAR(75),
+    COMPLEMENTAR       VARCHAR(2000),
+    PENDENTE           VARCHAR(2000),
+    TEMPOPROF          VARCHAR(150),
+    TEMPOUFJF          VARCHAR(150),
+    ATVFISICA          VARCHAR(2000),
+    FREQUENCIA         VARCHAR(150),
+    TURNO              CHAR(1),
+    COLEGAS            CHAR(1),
+    SUPERIORES         CHAR(1),
+    FAMILIARES         CHAR(1),
+    AGRADA             CHAR(1),
+    FERIAS             DATE,
+    CNDTRABALHO        VARCHAR(2000),
+    PESO               VARCHAR(25),
+    ALTURA             VARCHAR(25),
+    IMC                VARCHAR(25),
+    R                  VARCHAR(25),
+    CA                 VARCHAR(25),
+    DNTFREQUENCIA      CHAR(1),
+    DNTPERDIDO         CHAR(1),
+    EXMVISTA           CHAR(1),
+    AUDICAO            CHAR(1),
+    DORLOCAL           VARCHAR(150),
+    ANMPOSTURAL        VARCHAR(150),
+    SUPDOR             VARCHAR(150),
+    SUPLOCAL           VARCHAR(150),
+    SUPOUTRO           VARCHAR(2000),
+    INFDOR             VARCHAR(150),
+    INFPARESIA         CHAR(1),
+    INFOUTRO           VARCHAR(2000),
+    FNCINTESTINAL      VARCHAR(2000),
+    AVAUROLOGICA       VARCHAR(2000),
+    UROUTRO            VARCHAR(2000),
+    DIURESE            VARCHAR(150),
+    MENARCA            VARCHAR(25),
+    CLCMENSTRUAL       VARCHAR(25),
+    DUM                VARCHAR(25),
+    DSTMENSTRUAL       VARCHAR(150),
+    PREVENTIVO         DATE,
+    G                  VARCHAR(25),
+    P                  VARCHAR(25),
+    A                  VARCHAR(25),
+    FLHVIVO            VARCHAR(25),
+    PARTO              VARCHAR(150),
+    CONTRACEPTIVO      VARCHAR(150),
+    RUBEOLA            CHAR(1),
+    MENINGITE          CHAR(1),
+    HEPATITE           CHAR(1),
+    TUBERCULOSE        CHAR(1),
+    SARAMPO            CHAR(1),
+    TETANO             CHAR(1),
+    POLIOMELITE        CHAR(1),
+    COQUELUCHE         CHAR(1),
+    GRIPE              CHAR(1),
+    VCNOUTROS          VARCHAR(2000),
+    CAGE_1             CHAR(1),
+    CAGE_2             CHAR(1),
+    CAGE_3             CHAR(1),
+    CAGE_4             CHAR(1),
+    FAGE_1             CHAR(1),
+    FAGE_2             CHAR(1),
+    FAGE_3             CHAR(1),
+    FAGE_4             CHAR(1),
+    FAGE_5             CHAR(1),
+    FAGE_6             CHAR(1),
+    ANTOCUPACIONAL     VARCHAR(2000),
+    ADCOUTROS          VARCHAR(2000),
+    INFALTERACOES      VARCHAR(150),
+    INFLOCAL           VARCHAR(150),
+    INTALTERACOES      VARCHAR(2000),
+    RISCO_QUIMICO      CHAR(1),
+    RISCO_FISICO       CHAR(1),
+    RISCO_BIOLOGICO    CHAR(1),
+    RISCO_RUIDO        CHAR(1),
+    DEFORMIDADE        CHAR(1),
+    EDEMA              CHAR(1),
+    VARIZ              CHAR(1),
+    INFPARESTESIA      CHAR(1),
+    SUPARESIA          CHAR(1),
+    SUPARESTESIA       CHAR(1),
+    FISICO             VARCHAR(2000),
+    JORNADAUFJF        VARCHAR(150),
+    JORNADATOTAL       VARCHAR(150),
+    PRIMARY KEY (IDFICHACLINICA)
+)
+;
+
+
+-- 
+-- TABLE: RH_VINCULOCID 
+--
+
+CREATE TABLE RH_VINCULOCID(
+    IDVINCULOCID    INTEGER    NOT NULL,
+    IDVINCULO       CHAR(7)         NOT NULL,
+    CID             CHAR(3)         NOT NULL,
+    SUB             CHAR(4)         NOT NULL,
+    PRIMARY KEY (IDVINCULOCID)
+)
+;
+
+
+
+-- 
+-- TABLE: RH_VINCULOSIH 
+--
+
+CREATE TABLE RH_VINCULOSIH(
+    IDVINCULOSIH    INTEGER    NOT NULL,
+    IDVINCULO       CHAR(7)         NOT NULL,
+    IDCIRURGIA      INTEGER    NOT NULL,
+    PRIMARY KEY (IDVINCULOSIH)
+)
+;
+
+
+-- 
+-- TABLE: RH_CIRURGIA 
+--
+
+CREATE TABLE RH_CIRURGIA(
+    CODIGO       INTEGER     NOT NULL,
+    DESCRICAO    VARCHAR(125)    NOT NULL,
+    SEXO         CHAR(1)          NOT NULL,
+    PRIMARY KEY (CODIGO)
+)
+;
+
+
+
+-- 
+-- TABLE: RH_FICHACLINICA 
+--
+
+ALTER TABLE RH_FICHACLINICA ADD CONSTRAINT FK_RH_FICHACLINICA1_RH_VI 
+    FOREIGN KEY (IDVINCULO)
+    REFERENCES RH_VINCULO(IDVINCULO)
+;
+
+
+-- 
+-- TABLE: RH_VINCULOCID 
+--
+
+ALTER TABLE RH_VINCULOCID ADD CONSTRAINT FK_RH_VINCULOCID1_RH_VI 
+    FOREIGN KEY (IDVINCULO)
+    REFERENCES RH_VINCULO(IDVINCULO)
+;
+
+ALTER TABLE RH_VINCULOCID ADD CONSTRAINT FK_RH_VINCULOCID2_RH_CI 
+    FOREIGN KEY (CID)
+    REFERENCES RH_CIDCATEGORIA(IDCIDCATEGORIA)
+;
+
+
+-- 
+-- TABLE: RH_VINCULOSIH 
+--
+
+ALTER TABLE RH_VINCULOSIH ADD CONSTRAINT FK_RH_VINCULOSIH1_RH_VI 
+    FOREIGN KEY (IDVINCULO)
+    REFERENCES RH_VINCULO(IDVINCULO)
+;
+
+ALTER TABLE RH_VINCULOSIH ADD CONSTRAINT FK_RH_VINCULOSIH2_RH_CI 
+    FOREIGN KEY (IDCIRURGIA)
+    REFERENCES RH_CIRURGIA(CODIGO)
+;
+
+
+-- 
+-- SEQUENCE: SEQ_RH_FICHACLINICA 
+--
+
+CREATE SEQUENCE SEQ_RH_FICHACLINICA
+    START WITH 101
+    INCREMENT BY 1
+;
+
+-- 
+-- SEQUENCE: SEQ_RH_VINCULOCID 
+--
+
+CREATE SEQUENCE SEQ_RH_VINCULOCID
+    START WITH 1
+    INCREMENT BY 1
+;
+
+-- 
+-- SEQUENCE: SEQ_RH_VINCULOSIH 
+--
+
+CREATE SEQUENCE SEQ_RH_VINCULOSIH
+    START WITH 121
+    INCREMENT BY 1
+;
+
+
+-- 
+-- SEQUENCE: SEQ_RH_CIRURGIA 
+--
+
+CREATE SEQUENCE SEQ_RH_CIRURGIA
+    START WITH 1
+    INCREMENT BY 1
+;
+
+INSERT into rh_cirurgia values (1, 'CIRURGIA PLASTICA',1);
+INSERT into rh_cidcategoria values ('1', 'C','CID TESTE');
+INSERT into rh_cidsubcategoria values ('1','1','C','CID SUB',5);

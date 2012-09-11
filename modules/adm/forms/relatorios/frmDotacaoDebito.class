@@ -1,0 +1,88 @@
+<?
+class frmDotacaoDebito extends Form
+{
+	protected $orcamentointerno;
+	protected $uo;
+	function __construct() 
+	{
+        global $MIOLO;
+        $this->orcamentointerno = $MIOLO->getBusiness('adm','orcamentointerno');
+        $this->uo = $MIOLO->getBusiness('adm','uo');
+        $this->Form('Relação de Dotação e Debito');
+        $this->EventHandler();       
+    }
+
+    function CreateFields()
+	{
+		global $MIOLO, $module;
+		
+        $anos = $this->orcamentointerno->getAnos();
+        $uo = $MIOLO->getBusiness('adm','uo');
+        $rubrica = $MIOLO->getBusiness('adm','rubrica');
+
+        $fields = array(
+            new Selection('selUo','','UO',$uo->ListByNomeAtivo('%','S')->result),
+            new Selection('selAno','','Ano',$anos->result),
+            new Selection('selRubrica','','Rubrica',$rubrica->ListRubricasDoOrcamentoInterno()->result),
+        );
+        
+
+       	$this->SetFields($fields);
+    
+    	$buttons = Array
+		(
+			new FormButton('btnGerarRelatorioJasper', 'Gerar Relatório','pdf'),
+			//new FormButton('btnGerarRelatorio', 'Gerar Relatório','pdf'),
+			new FormButton('btnGerarCSV', 'Gerar Planilha')
+		);
+
+		$this->SetButtons($buttons);
+	}
+
+	function btnGerarCSV_click()
+	{
+		$data = $this->getData();
+		$orcamentointerno = $this->orcamentointerno;
+
+		$consulta = $orcamentointerno->getDotacaoDebito($data->selAno,$data->selRubrica,$data->selUo);
+	    
+	    
+		$resultAux[] = array('SIGLA','RUBRICA','ANO','CREDITO','DEBITO','PREVISÃO DEBITO','SALDO');
+	    foreach ($consulta->result as $result)
+	    {
+	    	$result[] = number_format(str_replace(',','.',(float)str_replace(',','.',$result[3]) - (float)str_replace(',','.',$result[4]) - (float)str_replace(',','.',$result[5]) ),2,',','');
+	    	$resultAux[] = $result;
+	    	//var_dump($result[0]);
+	    }
+	    $consulta->result = $resultAux;
+		$consulta->getCSV("debito.$data->selAno");
+	}
+		
+	function btnGerarRelatorio_click()
+	{		    
+	    global $MIOLO, $module;
+
+	 	$ui = $MIOLO->GetUI();
+     	$report = $ui->GetReport($module,'repDotacaoDebito');
+     	$report->Generate();  
+    }
+
+	function btnGerarRelatorioJasper_click()
+	{
+		global $MIOLO;
+
+		$report = new MJasperReport( 'sigaept' );
+		$parameters[ 'str_TITULO' ] = "DOTACAO E DEBITO";
+		$parameters[ 'str_RUBRICA' ] = $this->getFormValue( 'selRubrica' );
+		$parameters[ 'int_IDUO' ] = $this->getFormValue( 'selUo' );
+		$parameters[ 'int_ANO' ] = $this->getFormValue( 'selAno' );
+		$parameters[ 'LOGO' ] = $MIOLO->GetConf( 'home.url' );
+		$parameters[ 'SUBREPORT_DIR' ] = $MIOLO->GetConf('home.modules').'/common/reports/';
+		$parameters[ 'int_IDUSUARIO' ] = $MIOLO->login->idkey;
+
+		$report->Execute( 'adm', 'Dotacao', $parameters );
+	}
+
+
+}
+?>

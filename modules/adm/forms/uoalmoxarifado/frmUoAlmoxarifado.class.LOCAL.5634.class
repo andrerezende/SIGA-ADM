@@ -1,0 +1,255 @@
+<?php
+class frmUoAlmoxarifado extends MCompoundForm {
+
+	protected $oid;
+	protected $uoalmoxarifado;
+
+	public function __construct($objUoAlmoxarifado) {
+		$this->uoalmoxarifado = $objUoAlmoxarifado;
+		parent::__construct($this->uoalmoxarifado->nome);
+		$this->SetTitle($this->uoalmoxarifado->nome);
+		$this->SetIcon($this->manager->GetUi()->GetImage('adm','almoxarifado_mini.png'));
+	}
+
+	public function CreateFields() {
+		global $MIOLO, $page, $module, $context, $action, $history;
+		$login = $MIOLO->GetLogin();
+		$uoalmoxarifado = $this->uoalmoxarifado;
+		if ($this->oid == NULL) $this->oid = $uoalmoxarifado->idUo;
+		// Util::SetIfNull($this->oid, $uoalmoxarifado->idUo);
+		parent::CreateFields();
+		// form
+		$ui = $this->manager->GetUI();
+		$form = Form::GetFormValue('form');
+
+		$fields=array(
+		    new MTextLabel('iduo', $this->uoalmoxarifado->idUo, 'Nº da UO'),
+		    new MTextLabel('iduo', $this->uoalmoxarifado->nome, 'Nome da UO'),
+		    new MTextLabel('user', $login->user, 'Usuário'),
+		    new MSpacer(0.5),
+		    new MSeparator(''),
+		    new MSpacer(1),
+		    //new MBasePanel('teste', '                                                      Opções                                                            '),
+		);
+		$this->AddFields($fields);
+		switch ($form) {
+			case 'entrada2006':
+				if (($id = Form::GetFormValue('id')) != NULL) {
+					$material = $uoalmoxarifado->GetMaterial($id);
+					$this->_form[0] = $ui->GetForm('adm','frmUoAlmoxarifadoMaterial',$material,'uoalmoxarifado');
+					$this->_form[1] = $ui->GetForm('adm','frmUoAlmoxarifadoEntrada2006',$material,'uoalmoxarifado');
+				} else {
+					$this->_form[0] = $ui->GetForm('adm','frmUoAlmoxarifadoEntrada2006Find',$uoalmoxarifado,'uoalmoxarifado');
+				}
+				break;
+			case 'estorno2006':
+				if (($id = Form::GetFormValue('id')) != NULL && Form::GetFormValue('estorno') == true) {
+					$movimentoEntrada = $movimento = $MIOLO->getBusiness('adm', 'movimento', $id);
+					$this->estorno($movimentoEntrada);
+				} else if (($id = Form::GetFormValue('id')) != NULL) {
+					$material = $uoalmoxarifado->GetMaterial($id);
+					$this->_form[0] = $ui->GetForm('adm','frmUoAlmoxarifadoMaterial',$material,'uoalmoxarifado');
+					$this->_form[1] = $ui->GetForm('adm','frmUoAlmoxarifadoMovimentoFind',$material,'uoalmoxarifado');
+				} else {
+					$this->_form[0] = $ui->GetForm('adm','frmUoAlmoxarifadoEstorno2006Find',$uoalmoxarifado,'uoalmoxarifado');
+				}
+				break;
+			case 'estoqueinicial':
+				if (($id = Form::GetFormValue('id')) != NULL) {
+					$material = $uoalmoxarifado->GetMaterial($id);
+					$this->_form[0] = $ui->GetForm('adm','frmUoAlmoxarifadoEstoqueInicial',$material,'uoalmoxarifado');
+				} else {
+					$this->_form[0] = $ui->GetForm('adm','frmUoAlmoxarifadoEstoqueInicialFind',$uoalmoxarifado,'uoalmoxarifado');
+				}
+				break;
+			case 'entradamaterial':
+				if (Form::getFormValue('idEmpenho')) {
+					$this->_form[0] = $ui->GetForm('adm','frmUoAlmoxarifadoEntradaMaterialEmpenho',$uoalmoxarifado,'uoalmoxarifado');
+				} else {
+					$this->_form[0] = $ui->GetForm('adm','frmUoAlmoxarifadoEntradaMaterialEmpenhosFind',$uoalmoxarifado,'uoalmoxarifado');
+				}
+				break;
+			case 'entradamaterial2':
+                if (Form::getFormValue('idEmpenho')) {
+					$this->_form[0] = $ui->GetForm('adm','frmUoAlmoxarifadoEntradaMaterialEmpenho2',$uoalmoxarifado,'uoalmoxarifado');
+				} else {
+					$this->_form[0] = $ui->GetForm('adm','frmUoAlmoxarifadoEntradaMaterialEmpenhosFind2',$uoalmoxarifado,'uoalmoxarifado');
+				}
+				break;
+			case 'estornoentradamaterial':
+				if (Form::getFormValue('idEmpenho')) {
+					$this->_form[0] = $ui->GetForm('adm','frmUoAlmoxarifadoEstornoEntrada',$uoalmoxarifado,'uoalmoxarifado');
+				} else {
+					$this->_form[0] = $ui->GetForm('adm','frmUoAlmoxarifadoEstornoEntradaEmpenhosFind',$uoalmoxarifado,'uoalmoxarifado');
+				}
+				break;
+			case 'saidamaterial':
+				if (Form::getFormValue('idRequisicao')) {
+					$this->_form[0] = $ui->GetForm('adm','frmUoAlmoxarifadoSaidaMaterial',$uoalmoxarifado,'uoalmoxarifado');
+				} else {
+					$this->_form[0] = $ui->GetForm('adm','frmUoAlmoxarifadoSaidaMaterialRequisicoesFind',$uoalmoxarifado,'uoalmoxarifado');
+				}
+				break;
+			case 'estornosaidamaterial':
+				if (Form::getFormValue('idRequisicao')) {
+					$this->_form[0] = $ui->GetForm('adm','frmUoAlmoxarifadoEstornoSaida',$uoalmoxarifado,'uoalmoxarifado');
+				} else {
+					$this->_form[0] = $ui->GetForm('adm','frmUoAlmoxarifadoEstornoSaidaRequisicoesFind',$uoalmoxarifado,'uoalmoxarifado');
+				}
+				break;
+			case 'ordementrega':
+				if (Form::getFormValue('idOrdemEntrega')) {
+					$this->_form[0] = $ui->GetForm('adm','frmUoAlmoxarifadoOrdemEntrega',$uoalmoxarifado,'uoalmoxarifado');
+				} else {
+					$this->_form[0] = $ui->GetForm('adm','frmUoAlmoxarifadoOrdemEntregaRequisicoesFind',$uoalmoxarifado,'uoalmoxarifado');
+				}
+				break;
+			case 'baixademateriais':
+				$this->_form[0] = $ui->GetForm('adm','frmUoAlmoxarifadoBaixaMateriais',$uoalmoxarifado,'uoalmoxarifado');
+				break;
+			case 'tomadadeconta':
+				$this->_form[0] = $ui->GetForm('adm','frmUoAlmoxarifadoRepTomadaDeConta',$uoalmoxarifado,'uoalmoxarifado');
+				break;
+			case 'listamateriais':
+				$this->_form[0] = $ui->GetForm('adm','frmUoAlmoxarifadoRepListaMateriais',$uoalmoxarifado,'uoalmoxarifado');
+				break;
+			case 'movimentacaoSubElementoPreco':
+				$this->_form[0] = $ui->GetForm('adm','frmUoAlmoxarifadoRepMovimentacaoSubElemPreco',$uoalmoxarifado,'uoalmoxarifado');
+				break;
+			case 'movimentacaoSubElementoQuantidade':
+				$this->_form[0] = $ui->GetForm('adm','frmUoAlmoxarifadoRepMovimentacaoSubElemQuantidade',$uoalmoxarifado,'uoalmoxarifado');
+				break;
+                            // 22-12-2011 - Daniel Bonfim
+                        case 'movimentacaoMaterialQuantidade':
+                                $this->_form[0] = $ui->GetForm('adm','frmUoAlmoxarifadoRepMovimentacaoMaterialQuantidade',$uoalmoxarifado,'uoalmoxarifado');
+				break;
+                            // 22-12-2011 - Daniel Bonfim
+                        case 'movimentacaoMaterialPreco':
+                            $this->_form[0] = $ui->GetForm('adm','frmUoAlmoxarifadoRepMovimentacaoMaterialPreco',$uoalmoxarifado,'uoalmoxarifado');
+                            break;
+			case 'bd':
+				$this->_form[0] = $ui->GetForm('adm','frmUoAlmoxarifadoBoletimDiario',$uoalmoxarifado,'uoalmoxarifado');
+				break;
+            case 'resumoPorEmpenho':
+				$this->_form[0] = $ui->GetForm('adm','frmUoAlmoxarifadoRepResumoPorEmpenho',$uoalmoxarifado,'uoalmoxarifado');
+				break;
+			case 'resumoPorUo':
+				$this->_form[0] = $ui->GetForm('adm','frmUoAlmoxarifadoRepResumoPorUo',$uoalmoxarifado,'uoalmoxarifado');
+				break;
+			case 'repEstoque':
+				$this->_form[0] = $ui->GetForm('adm','frmUoAlmoxarifadoRepEstoque',$uoalmoxarifado,'uoalmoxarifado');
+				break;
+                            // 13-11-2011 - Daniel Bonfim
+                        case 'repMovimentacaoSubelemento';
+                                $this->_form[0] = $ui->GetForm('adm','frmRepMovimentacaoSubelemento',NULL,'patrimonio');
+                                break;
+                        // 14-11-2011 - Daniel Bonfim
+                        case 'repMovimentacaoNotaFiscal';
+                                $this->_form[0] = $ui->GetForm('adm','frmRepMovimentacaoNotaFiscal',NULL,'patrimonio');
+                                break;
+		}
+        /*
+        if ($this->_form[0]) {
+			$this->_form[0]->SetClose($this->manager->GetActionURL('adm','main:uoalmoxarifado', $uoalmoxarifado->idUo));
+        }
+        */
+
+		// panel
+		$action = $this->manager->context->action;
+		if($form=="" || $form==entrada2006 || $form==estorno2006 || $form=="baixademateriais" || $form=="estornosaidamaterial" || $form=="saidamaterial"){
+		$this->_panel[0] = $panel = new ActionPanel('pnlCompound','Opções','Operações',false);
+
+		$panel->SetTitle('Opções');
+		$panel->InsertUserAction(0,'ADM_ALMOXARIFADO',A_EXECUTE,'Baixa de Materiais',$ui->GetImage('','Baixa.png'),'adm',$action, $this->oid, array("form"=>"baixademateriais"));
+		$panel->InsertUserAction(0,'ADM_ALMOXARIFADO',A_EXECUTE,'Estorno de Entrada',$ui->GetImage('','EstornoEntrada.png'),'adm',$action, $this->oid, array("form"=>"estorno2006"));
+		$panel->InsertUserAction(0,'ADM_ALMOXARIFADO',A_EXECUTE,'Entrada de Material',$ui->GetImage('','Entrada.png'),'adm',$action, $this->oid, array("form"=>"entrada2006"));
+		$panel->InsertUserAction(0,'ADM_ALMOXARIFADO',A_EXECUTE,'Estorno de Saída',$ui->GetImage('','EstornoSaida.png'),'adm',$action, $this->oid, array("form"=>"estornosaidamaterial"));
+		$panel->InsertUserAction(0,'ADM_ALMOXARIFADO',A_EXECUTE,'Saída de Material',$ui->GetImage('','Saida.png'),'adm',$action, $this->oid, array("form"=>"saidamaterial"));
+		}
+
+		if($form=="" || $form=="repEstoque" || $form=="listamateriais" ||$form=="ordementrega" ||$form=="resumoPorUo" || $form=="repMovimentacaoSubelemento" || $form=="repMovimentacaoNotaFiscal" ){
+		$this->_panel[1] = $panel2 = new ActionPanel('pnlRepCompras','Relatórios');
+
+
+
+
+		$panel2->InsertUserAction(0,'ADM_ALMOXARIFADO',A_EXECUTE,'Resumo por Uo',$ui->GetImage('adm','ResumoPorUO.png'),'adm',$action, $this->oid, array("form"=>"resumoPorUo"));
+         		$panel2->InsertUserAction(0,'adm_patrimonio', A_EXECUTE, 'Movimentação por Subelemento', $ui->GetImage('adm','MovPorSubelemento.png'),'adm',$action, $this->oid, array("form"=>"repMovimentacaoSubelemento"));
+		$panel2->InsertUserAction(0,'adm_patrimonio', A_EXECUTE, 'Movimentação por Nota Fiscal', $ui->GetImage('adm','MovPorNotaFiscal.png'),'adm',$action, $this->oid, array("form"=>"repMovimentacaoNotaFiscal"));
+		$panel2->InsertUserAction(0,'ADM_ALMOXARIFADO',A_EXECUTE,'Movimentação de Estoque',$ui->GetImage('adm','MovdeEstoque.png'),'adm',$action, $this->oid, array("form"=>"repEstoque"));
+		$panel2->InsertUserAction(0,'ADM_ALMOXARIFADO',A_EXECUTE,'Lista de Materiais',$ui->GetImage('adm','ListadeMateriais.png'),'adm',$action, $this->oid, array("form"=>"listamateriais"));
+		$panel2->InsertUserAction(0,'ADM_ALMOXARIFADO',A_EXECUTE,'Ordem de Entrega',$ui->GetImage('adm','OrdemdeEntrega.png'),'adm',$action, $this->oid, array("form"=>"ordementrega"));
+
+	}
+		if($form=="" || $form=="movimentacaoMaterialPreco" || $form=="movimentacaoSubElementoPreco"){
+
+		$panel3 = new ActionPanel('contabeis','Relatórios Contábeis',false);
+		$this->_panel[2]=$panel3;
+		$panel3->InsertUserAction(0,'ADM_ALMOXARIFADO',A_EXECUTE,'RMA Material - Preço',$ui->GetImage('adm','RMA.png'),'adm',$action, $this->oid, array("form"=>"movimentacaoMaterialPreco"));
+		$panel3->InsertUserAction(0,'ADM_ALMOXARIFADO',A_EXECUTE,'RMA SubElemento - Preço',$ui->GetImage('adm','RMA.png'),'adm',$action, $this->oid, array("form"=>"movimentacaoSubElementoPreco"));
+		$panel3->SetIconType('large');
+		}
+		}
+
+	public function estorno($movimentoEntrada) {
+		global $item, $MIOLO, $module;
+
+		$cf = new MCurrencyFormatter();
+
+		$go = $this->manager->GetActionURL($module, 'main:uoalmoxarifado', $item, array('form' => 'estorno2006', 'estorno' => '1'));
+
+		// Antes de tudo, deve haver um movimento igual ao movimento
+		// criado anteriormente
+		$objMovimento = $MIOLO->GetBusiness($module, 'movimento');
+		$objEstoque = $MIOLO->GetBusiness($module, 'estoque');
+		//$movAntigo = $objMovimento->getByValorQuantidade($cf->toDecimal($data->valorTotal), $data->estoque, $data->idMaterial);
+		if ($movimentoEntrada) { // existe movimento
+			// Gera uma alteração no AD ESTOQUE
+			$objEstoque->getById($item, $movimentoEntrada->idMaterial);
+			$objEstoque->estoque = ($objEstoque->estoque - $movimentoEntrada->quantidade) > 0 ? $objEstoque->estoque - $movimentoEntrada->quantidade : 0;
+			$objEstoque->valorTotal = ($cf->toDecimal($objEstoque->valorTotal - $movimentoEntrada->valorTotal) > 0) ? $cf->toDecimal($objEstoque->valorTotal - $movimentoEntrada->valorTotal) : 0;
+
+			try {
+				$objEstoque->update();
+				// Adiciona o movimento na AD_MOVIMENTO
+				$objMovimento = $MIOLO->GetBusiness($module, 'movimento');
+				$objMovimento->idMovimentoRef = $movimentoEntrada->idMovimento;
+				$objMovimento->idUoAlmoxarifado = $movimentoEntrada->idUoAlmoxarifado;
+				$objMovimento->tipoMovimento = "2";
+				$objMovimento->dataMovimento = date("d/m/Y");
+				$objMovimento->datahora = date("Y-m-d H:i:s");
+				$objMovimento->quantidade = $movimentoEntrada->quantidade;
+				$objMovimento->valorTotal = $cf->toDecimal($movimentoEntrada->valorTotal);
+				$objMovimento->idMaterial = $movimentoEntrada->idMaterial;
+				$objMovimento->extraOrcamentario = 'N';
+
+				$valoresUnitariosQuantidades = $objMovimento->getValorUnitarioQuantidade($movimentoEntrada->idMaterial);
+				$valor = 1;
+				$quantidade = 0;
+				$precoMedio = 0;
+
+				foreach($valoresUnitariosQuantidades as $val) {
+					$valor += ($val[0]*$val[1]);
+					$quantidade += $val[1];
+				}
+
+				$valor -= ($movimentoEntrada->valorTotal/$movimentoEntrada->quantidade)*$movimentoEntrada->quantidade;
+				$quantidade -= $movimentoEntrada->quantidade;
+				$precoMedio = $valor/$quantidade;
+
+				$objMovimento->valorunitario = $precoMedio;
+				$objMovimento->quantidadetotal = $quantidade;
+
+				$objMovimento->save();
+
+				$movimentoEntrada->idMovimentoRef = $objMovimento->idMovimento;
+				$movimentoEntrada->update();
+				$this->manager->Information('Material estornado com sucesso.', $go);
+			} catch (Exception $e) {
+				$this->AddError('Não foi possível realizar a operação. Motivo: ' . $e->getMessage());
+			}
+		} else { // não existe movimento
+			$this->AddError("Não existe um movimento com estes valores para ser estornado.", $go);
+		}
+	}
+}

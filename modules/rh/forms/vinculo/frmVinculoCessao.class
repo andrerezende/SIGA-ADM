@@ -1,0 +1,399 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmVinculoCessao extends MForm
+{
+    protected $cessao;
+    protected $vinculo;
+    protected $provimento;
+
+    function __construct($objects)
+    {
+        $this->cessao = $objects[0];
+        $this->vinculo = $objects[1];
+        
+        parent::__construct('Exercício em outro órgão');
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+        //var_dump($this->vinculo->idVinculo);
+        $this->provimento = $this->vinculo->getUltimoProvimento();
+        //var_dump($this->provimento->idSituacao);
+		//var_dump($this->cessao->idPublicacao);
+		//var_dump($this->cessao->idInstituicao);
+
+        
+        $tabelaGeral = $this->manager->getBusiness('common','tabelageral');
+        $query = $tabelaGeral->listByTabela('RH_TIPOCESSAO');
+
+        $fields = array(
+            new MCalendarField('dataInicio',date('d/m/Y'),'Data de início','10','DD/MM/YYYY'),
+            new MCalendarField('dataFim','','Data final','10','DD/MM/YYYY'),
+            new MSelection('tipoCessao','','Tipo',$query->ChunkResult()),
+            new MSelection('idOcorrencia','','Ocorrência'),
+            new MSelection('tipoInstituicao','','Tipo do Órgão'),
+            new MLookupFieldValue('instituicao','','Órgão',50),
+            new MSelection('tipoOnus','','Tipo do Ônus'),
+            new MHiddenField('idPublicacao'),
+            new MHiddenField('idInstituicao'),
+            new MLookupFieldValue('numero','','Publicação',50),
+            new MultiLineField('obs','','Motivo',25,5,40,'Máx. 500 caracteres'),
+        );
+        
+        $this->setFields($fields);
+        $this->SetFieldAttr('numero','module','rh');
+        $this->SetFieldAttr('numero','item','publicacao');
+        $this->SetFieldAttr('numero','event','filler');
+        $this->SetFieldAttr('numero','related','idPublicacao,null,numero');
+
+        $this->SetFieldAttr('instituicao','module','common');
+        $this->SetFieldAttr('instituicao','item','instituicao');
+        $this->SetFieldAttr('instituicao','event','filler');
+        $this->SetFieldAttr('instituicao','related','idInstituicao,null,instituicao');
+        
+        $this->setFieldAttr('idOcorrencia','visible',FALSE);
+        $this->setFieldAttr('tipoInstituicao','visible',FALSE);
+        $this->setFieldAttr('instituicao','visible',FALSE);
+        $this->setFieldAttr('tipoOnus','visible',FALSE);
+        $this->setFieldAttr('numero','visible',FALSE);
+        $this->setFieldAttr('obs','visible',FALSE);
+        
+        $buttons = array(
+            new MButton('btnPost','Salvar'),
+            new MButton('btnSalvar','Enviar'),
+            new MButton('btnExcluir','Excluir'),
+            new MButton('btnEncerrar','Encerrar')
+            );
+        
+        $this->setButtons($buttons);
+        $this->setButtonAttr('btnSalvar','visible',FALSE);
+        $this->setButtonAttr('btnExcluir','visible',FALSE);
+        $this->setButtonAttr('btnEncerrar','visible',FALSE);
+
+        $validators = array(
+            new MRequiredValidator('dataInicio'),
+            );
+
+        $this->SetValidators($validators);
+
+        if ( $this->cessao->isPersistent() )
+        {
+            $this->setData();
+            $this->btnPost_click();
+        }
+
+        // Alteração 03/08/2006
+        $dtFim = $this->getFieldValue('dataFim');
+		/*
+        if ( empty($dtFim) or is_null($dtFim) )
+        {
+            $this->setButtonAttr('btnEncerrar','visible',TRUE);
+        }
+        else
+        {
+            $this->setButtonAttr('btnEncerrar','visible',FALSE);
+        }
+		*/
+
+        
+    }
+
+    function SetData()
+    {
+        $this->cessao->retrieveAssociation('instituicao');
+        $this->SetFieldValue('dataInicio',$this->cessao->dataInicio);
+        $this->SetFieldValue('dataFim',$this->cessao->dataFim);
+        $this->SetFieldValue('tipoCessao',$this->cessao->tipoCessao);
+        $this->SetFieldValue('idOcorrencia',$this->cessao->idOcorrencia);
+        $this->SetFieldValue('tipoInstituicao',$this->cessao->tipoInstituicao);
+        $this->SetFieldValue('idInstituicao',$this->cessao->idInstituicao);
+        $this->SetFieldValue('instituicao',$this->cessao->instituicao->nome);
+        $this->SetFieldValue('tipoOnus',$this->cessao->tipoOnus);
+        $this->SetFieldValue('idPublicacao',$this->cessao->idPublicacao);
+        $this->SetFieldValue('obs',$this->cessao->obs);
+    }
+
+    function btnPost_click()
+    {
+        $dataInicio = ( $this->cessao->dataInicio ) ? $this->cessao->dataInicio : $this->getFormValue('dataInicio');
+        $dataFim = ( $this->cessao->dataFim ) ? $this->cessao->dataFim : $this->getFormValue('dataFim');
+        if ( $this->vinculo->permiteCessao($dataInicio,$dataFim,$this->cessao->isPersistent()) )
+        {
+            $tipoLicAfast = $this->manager->getBusiness('rh','tipolicafast');
+            $tipoCessao = ( $this->cessao->tipoCessao ) ? $this->cessao->tipoCessao : $this->getFormValue('tipoCessao');
+
+            switch ($tipoCessao)
+            {
+                case 1: //Requisição
+                    $t = $tipoLicAfast->getByTipo('CESSAOREQ');
+                    if ( $this->vinculo->emLicenca($dataInicio) )
+                    {
+                        $erro[] = "Servidor possui registro de licença/afastamento no período informado.";
+                    }
+                break;
+                    /*$dataFim = ( $this->cessao->dataFim ) ? $this->cessao->dataFim : $this->getFormValue('dataFim');
+                    if ( ! $dataFim )
+                    {
+                        $erro[] = "É obrigatório o preenchimento da data de fim para esta ocorrência.";
+                    }*/
+                    if ( ! $this->cessao->isPersistent() )
+                    {
+                        if ( $this->vinculo->emLicenca($dataInicio) )
+                        {
+                            $erro[] = "Servidor possui registro de licença/afastamento no período informado.";
+                        }
+                    }
+                    break;
+                
+                case 2: //Cessão
+                    $tipoLicAfast->getByTipo('CESSAOCES');
+                    if ( $this->vinculo->emLicenca($dataInicio) )
+                    {
+                        $erro[] = "Servidor possui registro de licença/afastamento no período informado.";
+                    }
+                break;
+                    /*$dataFim = ( $this->cessao->dataFim ) ? $this->cessao->dataFim : $this->getFormValue('dataFim');
+                    if ( ! $dataFim )
+                    {
+                        $erro[] = "É obrigatório o preenchimento da data de fim para esta ocorrência.";
+                    }*/
+                    if ( ! $this->cessao->isPersistent() )
+                    {
+                        if ( $this->vinculo->emLicenca($dataInicio) )
+                        {
+                            $erro[] = "Servidor possui registro de licença/afastamento no período informado.";
+                        }
+                    }
+                    break;
+                
+                case 3: //Mandato Classista
+                    $tipoLicAfast->getByTipo('CESSAOMANDATO');
+                    $dataFim = ( $this->cessao->dataFim ) ? $this->cessao->dataFim : $this->getFormValue('dataFim');
+                    if ( ! $dataFim )
+                    {
+                        $erro[] = "É obrigatório o preenchimento da data de fim para esta ocorrência.";
+                    }
+                    if ( ! $this->cessao->isPersistent() )
+                    {
+                        if ( $this->vinculo->emLicenca($dataInicio) )
+                        {
+                            $erro[] = "Servidor possui registro de licença/afastamento no período informado.";
+                        }
+                    }
+                break;
+                
+                case 4: //Lotação Provisória
+                    $tipoLicAfast->getByTipo('CESSAOPROVISORIA');
+                    /*if ( ! $this->cessao->isPersistent() )
+                    {
+                        if ( $this->vinculo->emLicenca($dataInicio) )
+                        {
+                            $erro[] = "Servidor possui registro de licença/afastamento no período informado.";
+                        }
+                    }
+                break;*/
+                    /*$dataFim = ( $this->cessao->dataFim ) ? $this->cessao->dataFim : $this->getFormValue('dataFim');
+                    if ( ! $dataFim )
+                    {
+                        $erro[] = "É obrigatório o preenchimento da data de fim para esta ocorrência.";
+                    }*/
+                    if ( ! $this->cessao->isPersistent() )
+                    {
+                        if ( $this->vinculo->emLicenca($dataInicio) )
+                        {
+                            $erro[] = "Servidor possui registro de licença/afastamento no período informado.";
+                        }
+                    }
+                    break;
+            }
+            
+            if ( count($erro) > 0 )
+            {
+                foreach ( $erro as $e )
+                {
+                    $this->addError($e);
+                }
+            }
+            else
+            {
+                $tabelaGeral = $this->manager->getBusiness('common','tabelageral');
+                $query = $tabelaGeral->listByTabela('RH_TIPOINSTITUICAO');
+                $this->setFieldAttr('tipoInstituicao','options',$query->chunkResult());
+                $query = $tabelaGeral->listByTabela('RH_TIPOONUS');
+
+                $this->setFieldAttr('tipoOnus','options',$query->chunkResult());
+
+                $tipoLicAfast->getOcorrencias();
+if (!$tipoLicAfast->ocorrencias)
+                $tipoLicAfast->ocorrencias = array();
+                foreach ( $tipoLicAfast->ocorrencias as $o )
+                {
+                    $ocorrencias[$o->idOcorrencia] = $o->descricao; 
+                }
+
+                $this->setFieldAttr('dataInicio','readonly',true);
+				if ( $this->cessao->dataFim )
+				{
+	                $this->setFieldAttr('dataFim','readonly',true);
+				}
+                $this->setFieldAttr('tipoCessao','readonly',true);
+                $this->setFieldAttr('idOcorrencia','options',$ocorrencias);
+                $this->setFieldAttr('idOcorrencia','visible',true);
+                $this->setFieldAttr('tipoInstituicao','visible',true);
+                $this->setFieldAttr('instituicao','visible',true);
+                $this->setFieldAttr('tipoOnus','visible',true);
+                $this->setFieldAttr('numero','visible',true);
+                $this->setFieldAttr('obs','visible',true);
+
+                $this->setButtonAttr('btnPost','visible',FALSE);
+                $this->setButtonAttr('btnSalvar','visible',TRUE);
+                $this->setbuttonattr('btnExcluir','visible',TRUE);
+            }
+        }
+        else
+        {
+            $this->addInfo("Não é permitido o lançamento de cessão para esse servidor! Verifique as datas de início e fim.");
+        }
+    }
+
+    public function btnEncerrar_click()
+    {
+
+            $this->setButtonAttr('btnEncerrar','visible',FALSE);
+            $this->setButtonAttr('btnPost','visible',FALSE);
+            $this->setbuttonattr('btnExcluir','visible',FALSE);
+            $this->setButtonAttr('btnSalvar','visible',TRUE);
+    
+            $this->setFieldAttr('dataFim','readonly',FALSE);
+        
+/*
+        $dataFim = ( $this->cessao->dataFim ) ? $this->cessao->dataFim : $this->getFormValue('dataFim');
+        if ( ! $dataFim )
+        {
+            $erro[] = "É obrigatório o preenchimento da data de fim para o encerramento.";
+        }
+        else
+        {
+            $this->setButtonAttr('btnEncerrar','visible',FALSE);
+            $this->setButtonAttr('btnPost','visible',FALSE);
+            $this->setbuttonattr('btnExcluir','visible',FALSE);
+            $this->setButtonAttr('btnSalvar','visible',TRUE);
+    
+            $this->setFieldAttr('dataFim','readonly',FALSE);
+        }
+        if ( count($erro) > 0 )
+        {
+            foreach ( $erro as $e )
+            {
+                $this->addError($e);
+            }
+        }
+*/
+    }
+
+    
+    public function btnSalvar_click()
+    {
+        $update = $this->cessao->isPersistent();
+        $data = $this->getData();
+        $this->cessao->setData($data);
+        $this->cessao->idGrupoOcorrencia = 3;
+        try
+        {
+            if ( !is_null($data->dataFim) or !empty($data->dataFim) )
+            {
+                if ($this->provimento->idSituacao == "8")
+                {
+                    $this->provimento->idSituacao = 1;
+                    $this->provimento->save();
+                    $this->provimento->log($op,"vinculo: ".$this->cessao->idVinculo." idsituacao: ".$this->provimento->idSituacao);
+                }
+            }
+            $op = $update ? OP_UPD : OP_INS; 
+            $this->cessao->save();
+            $this->cessao->log($op,"vinculo: ".$this->cessao->idVinculo." data de inicio: ".$this->cessao->dataInicio." data fim: ".$this->cessao->dataFim." grupo ocorrencia: ".$this->cessao->idGrupoOcorrencia." ocorrencia: ".$this->cessao->idOcorrencia." instituicao:".$this->cessao->idInstituicao);
+            if ( $this->cessao->tipoCessao == 3 || $this->cessao->tipoCessao == 4 )
+            {
+                $licenca = $this->vinculo->getLicAfast($this->cessao->dataInicio);
+                $data = new FormData();
+                $data->idVinculo = $this->cessao->idVinculo;
+                $data->dataInicio = $this->cessao->dataInicio;
+                $data->dataFim = $this->cessao->dataFim ;
+                $data->idGrupoOcorrencia = $this->cessao->idGrupoOcorrencia ;
+                $data->idOcorrencia = $this->cessao->idOcorrencia ;
+                $data->idPublicacao = $this->cessao->idPublicacao;
+                $licenca->setData($data);
+                $licenca->save();
+                $licenca->log($op,"vinculo: ".$licenca->idVinculo." data de inicio: ".$licenca->dataInicio." data fim: ".$licenca->dataFim." grupo ocorrencia: ".$licenca->idGrupoOcorrencia." ocorrencia: ".$licenca->idOcorrencia);
+            }
+            $go = $this->manager->getActionURL('rh','main:vinculo',$this->cessao->idVinculo, array('form'=>'cessao'));
+            if ($update)
+            {
+                $this->manager->information('Cessão atualizada com sucesso.', $go );
+            }
+            else    
+            {
+                $this->manager->information('Cessão inserida com sucesso.', $go );
+            }
+        }
+        catch ( ESimpleRnException $e )
+        {
+            $this->AddError($e->getMessage());
+        }
+    }
+
+    function btnExcluir_click()
+    {
+        $action_sim = $this->manager->getActionURL('rh','main:vinculo',$this->cessao->idVinculo,array('form'=>'cessao','id'=>$this->cessao->dataInicio,'conf'=>'sim','event'=>'btnExcluir:click'));
+        $action_nao = $this->manager->getActionURL('rh','main:vinculo',$this->cessao->idVinculo,array('form'=>'cessao','id'=>$this->cessao->dataInicio));
+
+        $conf = $this->GetFormValue('conf');
+
+        if ($conf == 'sim')
+        {
+            try
+            {
+                $this->cessao->delete();
+                $this->cessao->log(OP_DEL,"vinculo: ".$this->cessao->idVinculo." data de inicio: ".$this->cessao->dataInicio." data fim: ".$this->cessao->dataFim." grupo ocorrencia: ".$this->cessao->idGrupoOcorrencia." ocorrencia: ".$this->cessao->idOcorrencia." instituicao:".$this->cessao->idInstituicao);
+                if ( $this->cessao->tipoCessao == 3 || $this->cessao->tipoCessao == 4 )
+                {            
+                    $this->vinculo->getLicAfasts();
+                    $licAfast = $this->vinculo->getLicAfast($this->cessao->dataInicio);
+                    $licAfast->delete();
+                    $licAfast->log(OP_DEL,"vinculo: ".$licAfast->idVinculo." data de inicio: ".$licAfast->dataInicio." data fim: ".$licAfast->dataFim." grupo ocorrencia: ".$licAfast->idGrupoOcorrencia." ocorrencia: ".$licAfast->idGrupoOcorrencia);
+                }
+                $this->manager->information('Cessão excluída com sucesso',$this->manager->GetActionURL('rh','main:vinculo',$this->cessao->idVinculo,array('form'=>'cessao')));
+            }
+            catch ( Exception $e )
+            {
+                $this->manager->error("Informe o seguinte erro à equipe do CGCO: ".$e->getMessage());
+            }
+                    
+       }
+       else
+       {
+           $this->manager->question("Tem certeza que deseja excluir a cessão ".$this->cessao->ocorrencia->descricao."?",$action_sim,$action_nao);
+        }
+    }
+
+
+}
+?>

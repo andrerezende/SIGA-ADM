@@ -1,0 +1,174 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmTrocaSenha extends MForm
+{
+	function __construct()
+    {
+		$this->defaultButton = false;
+		parent::__construct('Troca Senha de Usuário (Técnicos e Docentes)');
+        $this->page->AddScript('m_md5.js');
+        $this->AddJsCode($this->doChallengeResponse());
+        $this->AddJsCode($this->doCheckSamePassword());
+        $this->AddJsCode($this->doPasswordMD5());
+        $this->OnSubmit('doCheckSamePassword()');
+        $this->OnSubmit('doPasswordMD5()');
+	    $this->eventHandler();
+	}
+
+    function CreateFields()
+	{  global $MIOLO, $action;
+
+       $challenge = uniqid(rand());
+       $fields = array(
+           new MHiddenField('key',''),
+           new MHiddenField('challenge', $challenge),
+           new MHiddenField('response', ''),
+           new MHiddenField('newpass', ''),
+           new MTextLabel('txtIdUsuario','', 'Id'),
+		   new MLookupTextField('lkpLogin','','Login',20,'Escolha o usuário clicando no ícone da lupa'),
+           new MTextField('txtNome','','Nome',80),
+           new MPasswordField('edtSenha1','','Nova Senha',20),
+           new MPasswordField('edtSenha2','','Confirmação',20)
+       );
+	   $this->SetFields($fields);
+
+	   $this->SetFieldAttr('lkpLogin','baseModule','common');
+	   $this->SetFieldAttr('lkpLogin','module','common');
+	   $this->SetFieldAttr('lkpLogin','item','usuarioservidor');
+	   $this->SetFieldAttr('lkpLogin','event', 'btnEdit:click');
+	   $this->SetFieldAttr('txtIdUsuario','visible', false);
+	   $this->SetFieldAttr('txtNome','visible', false);
+	   $this->SetFieldAttr('edtSenha1','visible', false);
+	   $this->SetFieldAttr('edtSenha2','visible', false);
+
+       $buttons = Array(
+           new MButton('btnPost', 'Trocar Senha'),
+       );
+
+	   $this->SetButtons($buttons);
+	   $this->SetButtonAttr('btnPost','visible',FALSE);
+	}
+
+	function GetData()  // nome dos formfields != business fields
+	{
+        $data = new FormData();
+		$data->idusuario = $this->GetFieldValue('key');
+		$data->challenge = $this->GetFieldValue('challenge');
+		$data->response = $this->GetFieldValue('response');
+		$data->newpass = $this->GetFieldValue('newpass');
+		$data->login = $this->GetFieldValue('txtLogin');
+		$data->pwdatual = $this->GetFieldValue('edtSenhaAtual');
+		$data->pwdnew1 = $this->GetFieldValue('edtSenha1');
+		$data->pwdnew2 = $this->GetFieldValue('edtSenha2');
+        return $data;
+	}
+
+	function btnPost_click()
+	{
+		global $MIOLO, $module, $self, $action;
+
+        $data = $this->GetData();
+        $objUsuario = $this->manager->getBusiness('common','usuario',$data->idusuario);
+        if ($objUsuario->login != '')
+        {
+            try
+            {
+               $ok = $objUsuario->UpdatePasswordMD5($data->newpass);
+               $this->AddInfo('Senha atualizada com sucesso.', $action);
+            } 
+            catch( Exception $e )
+            {
+                $this->AddError('Confirmação da senha não confere!');
+            }
+        }
+        else
+        {
+            $this->AddError('Usuário não cadastrado!');
+        }
+	}
+
+	function btnEdit_click($sender=NULL,$key='')
+	{   
+		global $MIOLO, $module, $item, $self, $action;
+		
+        $item = ($key != '') ? $key : $item;		
+        $objUsuario = $this->manager->getBusiness('common','usuario',$item);
+		if ($objUsuario)
+        {
+	       $this->SetFieldAttr('txtIdUsuario','visible',TRUE);
+		   $this->SetFieldAttr('edtSenha1','visible',TRUE);
+		   $this->SetFieldAttr('edtSenha2','visible',TRUE);
+		   $this->SetFieldAttr('txtNome','visible',TRUE);
+		   
+		   $this->SetFieldAttr('lkpLogin','readonly',TRUE);
+		   $this->SetFieldAttr('txtNome','readonly',TRUE);
+
+		   $this->SetFieldAttr('lkpLogin','hint','');
+	   	   
+		   $this->SetButtonAttr('btnPost','visible',TRUE);
+
+		   $this->SetFieldValue('txtIdUsuario',$objUsuario->idUsuario);
+		   $this->SetFieldValue('lkpLogin',$objUsuario->login);
+		   $this->SetFieldValue('txtNome',$objUsuario->nome);
+		   $this->SetFieldValue('key',$objUsuario->idUsuario);
+		   
+	       $this->AddError( $objUsuario->GetErrors() );
+        }
+	}
+
+    function doChallengeResponse()
+    {
+       $code = "function doChallengeResponse() { \n".
+               "  var str = MIOLO_GetElementById('txtLogin').value + \":\" + \n" .
+               "        MD5(MIOLO_GetElementById('edtSenhaAtual').value) + \":\" + \n" .
+               "        MIOLO_GetElementById('challenge').value; \n".
+               "  MIOLO_SetElementValueById('edtSenhaAtual','');\n".
+               "  MIOLO_SetElementValueById('response',MD5(str));\n".
+               "  return true;\n".
+               "}\n";
+       return $code;
+    }
+
+    function doPasswordMD5()
+    {
+       $code = "function doPasswordMD5() { \n".
+               "  MIOLO_SetElementValueById('newpass',MD5(MIOLO_GetElementById('edtSenha1').value));\n".
+               "  return true;\n".
+               "}\n";
+       return $code;
+    }
+
+    function doCheckSamePassword()
+    {
+       $code = "function doCheckSamePassword() { \n".
+               "  var ok = (MIOLO_GetElementById('edtSenha1').value == MIOLO_GetElementById('edtSenha2').value);\n".
+               "  if ( !ok )\n".
+               "  {\n".
+               "     alert(\"Nova Senha difere da Confirmação!\");\n".
+               "  }\n".
+               "  return ok;\n".
+               "}\n";
+       return $code;
+    }
+
+
+}
+
+?>

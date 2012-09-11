@@ -1,0 +1,96 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+class gridProadesEquipesSegundaFase extends MDataGrid
+{
+	function __construct($reuniao)
+	{
+        $proades = $reuniao->proades;
+        $MIOLO = MIOLO::getInstance(); 
+        $perms = $MIOLO->getPerms();
+		$action = $MIOLO->getContext()->action;
+        
+		$href = $MIOLO->getActionURL('rh','main:proades:main','#0#');
+
+        $select = $MIOLO->getActionURL( 'rh', $action, $reuniao->idReuniao, array( 'form'=>'membros', 'idEquipe'=>"#0#" ) );
+		$columns = array(
+				new MDataGridColumn('idequipe','Código','center',false,'10%',false),
+				new MDataGridHyperlink('nome','Nome',$select,'100%',true),
+        );
+
+		$hrefGrid = $MIOLO->GetActionURL('rh','main:proades:find');
+
+        $query = $proades->listEquipesDeTrabalho();
+
+		parent::__construct($query,$columns,$hrefGrid,15);
+
+        $this->setTitle("Equipes de Trabalho");
+
+        $href_edit = $MIOLO->getActionURL( 'rh', 'main:proades:reuniao', $reuniao->idReuniao, array( 'form'=>'equipes','idEquipe'=>'#0#','event' => 'btnEditar:click' ) );
+        $href_dele = $MIOLO->getActionURL( 'rh', 'main:proades:reuniao', $reuniao->idReuniao, array( 'form'=>'equipes','idEquipe'=>'#0#','event' => 'btnExcluir:click' ) );
+        if ( $perms->checkAccess('rh_proadesequipe',A_ACCESS) )
+        {
+            $this->addActionUpdate( $href_edit );
+            $this->addActionDelete( $href_dele );
+        }
+        
+        $this->setRowMethod( 'gridProadesEquipesSegundaFase', 'MyRowMethod' );
+
+		$this->SetFilter(false);
+
+		$this->SetIndex(1);
+
+		$this->SetLinkType('hyperlink');
+
+        $this->eventHandler();
+
+	}
+
+	function GenerateFooter()
+	{
+		if ( ! $this->data )
+		$footer[] = $this->GenerateEmptyMsg();
+		$footer[] = new MSeparator();
+		$footer[] = $this->GenerateControls();
+		return $footer;
+	}
+
+    public function myRowMethod( $i, $row, $actions, $columns )
+    {
+        $MIOLO = MIOLO::getInstance();
+
+        $idEquipe = $row[0];
+
+        $equipe = $MIOLO->getBusiness('rh','equipe');
+        $equipe->getById($idEquipe);
+
+        $equipe->retrieveAssociation('proades');
+        $query = $equipe->proades->listMembrosPorEquipe($idEquipe);
+
+        if ( $query->eof() )
+        {
+            //nao possui membros
+            $actions[1]->enabled = TRUE;
+        }
+        else
+        {
+            $actions[1]->enabled = FALSE;
+        }
+    }
+}
+?>

@@ -1,0 +1,630 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+class frmCatalogacaoArtigo extends Form
+{
+   var $objExemplarPeriodico;
+   var $objArtigo;
+   var $objEstado;
+   var $objRegraCirculacao;
+   var $objUnidade;
+   var $objAutor;
+   var $issn;
+   
+   var $periodico;
+   function frmCatalogacaoArtigo(){  // construtor da Classe
+      global $MIOLO,$module;
+      
+      //Instancia objetos
+      $this->periodico = $MIOLO->GetBusiness($module,'periodico');
+      $this->objExemplarPeriodico = $MIOLO->GetBusiness($module,'exemplarperiodico');
+      $this->objEstado = $MIOLO->GetBusiness($module,'estado');
+      $this->objArtigo= $MIOLO->GetBusiness($module,'artigo');
+      $this->objRegraCirculacao = $MIOLO->GetBusiness($module,'regracirculacao');
+      $this->objUnidade = $MIOLO->GetBusiness($module,'unidade');
+      
+      
+      // Título do Formulário
+      $this->Form('Catalogação de Artigos');
+      
+      //Chama o CreateFileds, etc.
+      $this->EventHandler();
+      
+      // Botão "enviar" não aparece
+      $this->defaultButton = false;
+      
+      // Botão 'fechar', direcionando para o handler biblioteca/main/catalogacao
+      $this->SetClose($this->manager->GetActionURL($module, 'main:catalogacao:periodicos'));
+   }
+
+    function CreateFields(){
+
+        global $MIOLO,$module,$action,$item;
+        // Buscando dados para as caixas de seleção
+
+        $ui = $MIOLO->getUI();
+        // Campos que aparecem no formulário
+        $fields = Array (
+
+            new MTextLabel('Texto1',"Busque o periódico para ver sua relação de exemplares:"),
+            new TextField('edtPeriodicoIni','','ISSN do Periódico',16),
+            new MTextLabel('ou','&nbsp;&nbsp;&nbsp; -Ou- &nbsp;&nbsp;&nbsp;','&nbsp;'),
+            new LookupTextField('titulo','','Título',45,'Pesquise pelo título'),
+
+            new HiddenField('hidKeyPeriodico'),
+            new HiddenField('hidKeyExemplarPeriodico'),
+            new HiddenField('hidKeyArtigoPeriodico'),  // controla incluir/editar
+            new HiddenField('idautor'),
+            new HiddenField('idAutoresSec'),
+
+            new TextField('edtTituloPeriodico','','Título do Periódico',60),
+            new TextField('edtTituloExemplar','','Título do Exemplar',60),
+
+
+                new MTextLabel('Texto2',"Adicione um novo Artigo:"),
+            new TextField('edtTituloArtigo','','Título do Artigo',60),
+            new MultiLineField('edtResumo','','Resumo', $size=80, $rows=10, $cols=60,'',null),
+
+            new LookupTextField('lkpassunto','',"Assunto",27,'Pesquisar Assunto'),
+            new LookupTextField('lkpautor','','Autor',45,'Pesquisar Autor'),
+            new LookupTextField('lkpautorSec','','Buscar Novo Autor Secundário',45,'Pesquisar Autor Secundário'),
+            new TextField('edtOutrosAutores','','Autores Secundários adicionados',60),
+
+            new TextField('edtCutter','','Cutter',5),
+
+        );
+                
+        $this->SetFields($fields);
+            
+
+        //As 4 propriedades de um lookup
+        // module = módulo usado
+        // item = A funcao que chama no arquivo classes/lookup.class
+        // event = O evento relacionado quando o usuário clica em "acao"
+        // related = Os campos retornados após a ação
+        $this->SetFieldAttr('lkpautor','module','biblioteca');
+        $this->SetFieldAttr('lkpautor','item','autor');                // Metodo
+            $this->SetFieldAttr('lkpautor','event','filler');
+        $this->SetFieldAttr('lkpautor','related','idautor,lkpautor,edtCutter');
+
+        $this->SetFieldAttr('lkpautorSec','module','biblioteca');
+        $this->SetFieldAttr('lkpautorSec','item','autor');                // Metodo
+        $this->SetFieldAttr('lkpautorSec','event','filler');
+        $this->SetFieldAttr('lkpautorSec','related','idautor,lkpautorSec,edtCutter');
+        
+        $this->SetFieldAttr('titulo','module','biblioteca');
+        $this->SetFieldAttr('titulo','item','periodico');
+        $this->SetFieldAttr('titulo','event','btnConsultaLookUp:click');
+        $this->SetFieldAttr('titulo','related','idperiodico');
+
+        $this->SetFieldAttr('lkpassunto','module','biblioteca');
+        $this->SetFieldAttr('lkpassunto','item','assunto');
+        $this->SetFieldAttr('lkpassunto','event','filler');
+        $this->SetFieldAttr('lkpassunto','related','idassunto,lkpassunto,ocorrencia,idetiqueta');
+        $this->SetFieldAttr('lkpassunto','filter','lkpassunto,hidKeyPeriodico');   
+        
+        
+        if($item != null){
+            $obra = $this->objExemplarPeriodico->GetAllByCodigo($item)->issn;
+        }
+        // Botões que aparecem no formulário
+        $buttons = Array(
+            new FormButton('btnConsultar', 'Procurar'),
+            new FormButton('btnEnviar', 'Incluir'),
+            new FormButton('btnSalvarAutorSec', 'Incluir Autor Secundário'),
+            new FormButton('btnVoltar', 'Voltar', $MIOLO->GetActionURL($module = $module, "main:catalogacao:periodicos"))
+        );
+        $this->SetButtons($buttons);
+        
+    //Escondendo os campos
+        $this->SetFieldAttr('edtTituloPeriodico','visible',false);
+    
+        $this->SetFieldAttr('Texto2','visible',false);
+        $this->SetFieldAttr('edtTituloExemplar','visible',false);
+        $this->SetFieldAttr('edtTituloArtigo','visible',false);
+        $this->SetFieldAttr('edtResumo','visible',false);
+        $this->SetFieldAttr('lkpassunto','visible',false);
+        $this->SetFieldAttr('lkpautor','visible',false);
+        $this->SetFieldAttr('lkpautorSec','visible',false);
+        $this->SetFieldAttr('edtOutrosAutores','visible',false);
+        $this->SetFieldAttr('edtCutter','visible',false);
+        $this->SetbuttonAttr('btnEnviar','visible',false);
+        $this->SetbuttonAttr('btnVoltar','visible',true);
+        $this->SetbuttonAttr('btnCriar','visible',false);
+        $this->SetbuttonAttr('btnSalvarAutorSec','visible',false);
+        
+    //Definindo o foco
+        if ( (!$this->page->isPostBack()) and ($this->GetFormValue('event') == null) )
+        {
+            $this->page->onLoad("MIOLO_GetElementById('edtPeriodicoIni').focus();");
+        }
+    }
+   
+    function btnConsultaLookUp_click($sender,$idperiodico)
+    {
+        global $MIOLO,$module;
+        if($idperiodico!=''){
+            $this->periodico = $MIOLO->GetBusiness($module,'periodico');
+            $this->periodico->GetById($idperiodico);
+            $this->SetFieldValue('edtPeriodicoIni', $this->periodico->issn);
+            $this->SetFieldValue('titulo', $this->periodico->titulo);
+            $this->SetFieldValue('hidKeyPeriodico', $this->periodico->idPeriodico);
+        }
+    }
+
+      // pega os dados que estão no formulário
+    function GetData() 
+    {
+        $data = new FormData();
+        $data->tituloartigo = $this->GetFieldValue('edtTituloArtigo');
+        $data->resumo = $this->GetFieldValue('edtResumo');
+        $data->assunto = $this->GetFieldValue('lkpassunto');
+        $data->idautor = $this->GetFieldValue('idautor');
+        $data->outrosautores = $this->GetFieldValue('edtOutrosAutores');
+        $data->idexemplarperiodico = $this->GetFieldValue('hidKeyExemplarPeriodico');
+        $data->idartigo = $this->GetFieldValue('hidKeyArtigoPeriodico');
+        return $data;
+    }
+   
+    function GetDataAutorSec(){
+        global $MIOLO, $item, $module;
+        $data = new FormData();
+        $data->idartigo = $item;
+        $data->idautor = $this->GetFieldValue('idautor');
+        $data->nome = $this->GetFieldValue('lkpautorSec');
+        return $data;
+    }
+
+    // usada para inserir valores no formulário
+    function SetData()
+    {  global $MIOLO,$item,$theme,$module;
+
+        $this->SetFieldValue('hidKeyPeriodico',$this->objExemplarPeriodico->idperiodico);
+        $this->SetFieldValue('hidKeyExemplarPeriodico',$this->objExemplarPeriodico->idexemplarperiodico);
+        $this->SetFieldValue('hidKeyArtigoPeriodico',$this->objArtigo->idartigo);
+
+        $this->SetFieldValue('edtPeriodicoIni',$this->objExemplarPeriodico->issn);
+        $this->SetFieldValue('edtTituloPeriodico',$this->objExemplarPeriodico->tituloperiodico);
+        $this->SetFieldValue('edtTituloExemplar',$this->objExemplarPeriodico->tituloedicao);
+
+        $this->SetFieldValue('edtTituloArtigo',$this->objArtigo->titulo);
+        $this->SetFieldValue('edtResumo',$this->objArtigo->resumo);
+        $this->SetFieldValue('lkpassunto',$this->objArtigo->assunto);
+        if($this->objArtigo->idautor!=null){
+            $this->objAutor = $MIOLO->GetBusiness($module,'autor');
+            $this->objAutor->GetByCodigo($this->objArtigo->idautor);
+            $this->SetFieldValue('idautor',$this->objAutor->idautor);
+            $this->SetFieldValue('lkpautor',$this->objAutor->sobrenome.",".$this->objAutor->prenome);
+        }
+        $this->SetFieldValue('edtOutrosAutores',$this->objArtigo->outrosautores);
+    }
+
+      //consulta retorna do lookup
+    function btnConsultar_click()
+    {
+        global $MIOLO,$item,$theme,$module;
+        //buscando o valohidKeyArtigoPeriodicor nos campos iniciais e guardando no principal,
+        $obraIni = $this->GetFormValue('edtPeriodicoIni');
+        $obraIni = ($obraIni != null) ? $obraIni : $item;
+
+        if($obraIni == null)
+        {
+            $obraIni = $this->GetFormValue('edtPeriodicoIni');
+        }
+        if($obraIni == null)
+        {
+            //chama consulta relativa a exemplar
+            if($this->GetFormValue('edtPeriodicoIni')==''){
+                $MIOLO->Error("Preencha um ISSN cadastrado ou faça uma busca por título",'');
+            }else{
+                $exemplarIni = $this->GetFormValue('edtExemplarIni');
+                $obraIni = $this->objExemplarPeriodico->GetObraIdExemplarByTombo($exemplarIni);
+                $this->SetFieldValue('edtPeriodicoIni', $obraIni[0]);
+                $item = $obraIni[1];
+                $this->btnConsulta2_click();
+            }
+        }
+        else
+        {
+
+            $this->SetFieldValue('edtPeriodicoIni', $obraIni);
+
+            $this->issn = $this->GetFieldValue('edtPeriodicoIni');
+            //$this->numerodaobra = ($this->numerodaobra != null) ? $this->numerodaobra : $item;
+
+            $this->objExemplarPeriodico->GetPeriodicoByCodigo($this->issn);
+
+
+            $this->SetFieldValue('hidKeyPeriodico',$this->objExemplarPeriodico->idperiodico);
+            $this->SetFieldValue('edtTituloPeriodico',$this->objExemplarPeriodico->tituloperiodico);
+
+        //Inserindo os campos
+            $this->SetFieldAttr('Texto1', 'visible', false);
+            $this->SetFieldAttr('Texto2','visible',false);
+            $this->SetFieldAttr('edtPeriodicoIni', 'visible', false);
+            //$this->SetFieldAttr('edtExemplarIni', 'visible', false);
+            $this->SetFieldAttr('titulo', 'visible', false);
+            $this->SetFieldAttr('edtTituloPeriodico','readonly',true);
+            //$this->SetFieldAttr('edtTituloExemplar','readonly',true);
+
+            $this->SetFieldAttr('ou', 'visible', false);
+
+            $this->SetFieldAttr('edtPeriodicoIni','visible',true);
+            $this->SetFieldAttr('edtTituloPeriodico','visible',true);
+        // $this->SetFieldAttr('edtTituloExemplar','visible',true);
+
+            //$this->SetFieldAttr('edtNumeroTombo','visible',true);
+            $this->setFieldAttr('hidKeyPeriodico','value',"$obraIni");
+            $this->SetFieldAttr('lkpautor','visible',false);
+            $this->SetFieldAttr('edtOutrosAutores','visible',false);
+            $this->SetFieldAttr('edtResumo','visible',false);
+            $this->SetFieldAttr('edtTituloArtigo','visible',false);
+            $this->SetFieldAttr('lkpassunto','visible',false);
+
+            //Valores default
+
+            // Campos readonly
+            $this->SetFieldAttr('edtPeriodicoIni','readonly',true);
+
+                // Atributos dos botões
+            $this->SetbuttonAttr('btnEnviar','visible',true);
+            $this->SetbuttonAttr('btnVoltar','action',$MIOLO->GetActionURL($module,$action) );
+            $this->SetbuttonAttr('btnVoltar','visible',true);
+            $this->SetbuttonAttr('btnVoltar','label','Escolher outro Periódico');
+
+            $this->SetbuttonAttr('btnVoltarTrans','visible',false);
+            $this->SetbuttonAttr('btnConsultar','visible',false);
+            $this->SetbuttonAttr('btnEnviar','visible',false);
+            $this->SetbuttonAttr('btnImprimir','visible',false);
+            $this->SetbuttonAttr('btnSalvarAutorSec','visible',false);
+
+        $this->GridExemplares();
+        }
+    }
+
+
+        
+    // consulta2 retorna do grid
+    function btnConsulta2_click()
+    {
+        global $MIOLO,$item,$theme,$module;
+        $idexemplar = $item;
+        $this->SetData();
+        //Inserindo os campos
+        $this->SetFieldAttr('Texto1', 'visible', false);
+        $this->SetFieldAttr('Texto2','visible',true);
+        $this->SetFieldAttr('edtPeriodicoIni', 'visible', false);
+        // $this->SetFieldAttr('edtExemplarIni', 'visible', false);
+        $this->SetFieldAttr('titulo', 'visible', false);
+        $this->SetFieldAttr('ou', 'visible', false);
+
+        // $this->SetFieldAttr('edtNumero','visible',true);
+        $this->SetFieldAttr('edtPeriodicoIni','visible',true);
+        $this->SetFieldAttr('edtTituloPeriodico','visible',true);
+        $this->SetFieldAttr('edtTituloExemplar','visible',true);
+
+        $this->SetFieldAttr('edtTituloArtigo','visible',true);
+        $this->SetFieldAttr('edtResumo','visible',true);
+        $this->SetFieldAttr('lkpassunto','visible',true);
+        $this->SetFieldAttr('lkpautor','visible',true);
+        $this->SetFieldAttr('lkpautorSec','visible',false);
+        $this->SetFieldAttr('edtOutrosAutores','visible',false);
+
+        // Campos readonly
+        $this->SetFieldAttr('edtPeriodicoIni','readonly',true);
+        $this->SetFieldAttr('edtTituloPeriodico','readonly',true);
+        $this->SetFieldAttr('edtTituloExemplar','readonly',true);
+
+        // Atributos dos botões
+        $this->SetbuttonAttr('btnConsultar','visible',false);
+        $this->SetbuttonAttr('btnVoltar','visible',true);
+        $this->SetbuttonAttr('btnVoltar','action',$MIOLO->GetActionURL($module,$action,$this->objExemplarPeriodico->issn,array('event'=>'btnConsultar_click')) );
+        $this->SetbuttonAttr('btnVoltarTrans','visible',false);
+        $this->SetbuttonAttr('btnImprimir','visible',false);
+        $this->SetbuttonAttr('btnSalvarAutorSec','visible',false);
+
+        $perms = $this->manager->getPerms();
+        if ( $perms->checkAccess('bib_catalogacao',A_ACCESS) )
+            {
+                $this->SetbuttonAttr('btnEnviar','visible',true);
+                $this->SetbuttonAttr('btnEnviar','label','Incluir Artigo');
+            }
+            $this->SetbuttonAttr('btnVoltar','label','Voltar à lista de Exemplares');
+
+            $this->GridArtigos();
+            //escolhe um campo ->
+            $this->page->onLoad("MIOLO_GetElementById('edtTituloArtigo').focus();");
+    }
+
+    function btnEditArtigo_click()
+    {
+        global $MIOLO,$item,$theme,$module;
+        $idartigo= $item;
+
+        $this->objArtigo->GetAllByCodigo($idartigo);
+        $this->objExemplarPeriodico->GetAllByCodigo($this->objArtigo->idexemplarperiodico);
+        $this->SetData();
+
+        //Inserindo os campos
+        $this->SetFieldAttr('edtPeriodicoIni', 'visible', false);
+        // $this->SetFieldAttr('edtExemplarIni', 'visible', false);
+            $this->SetFieldAttr('Texto1', 'visible', false);
+        $this->SetFieldAttr('Texto2','visible',false);
+        $this->SetFieldAttr('titulo', 'visible', false);
+        $this->SetFieldAttr('ou', 'visible', false);
+
+        // $this->SetFieldAttr('edtNumero','visible',true);
+        $this->SetFieldAttr('edtPeriodicoIni','visible',true);
+        $this->SetFieldAttr('edtTituloPeriodico','visible',true);
+        $this->SetFieldAttr('edtTituloExemplar','visible',true);
+
+        $this->SetFieldAttr('edtTituloArtigo','visible',true);
+        $this->SetFieldAttr('edtResumo','visible',true);
+        $this->SetFieldAttr('lkpassunto','visible',true);
+        $this->SetFieldAttr('lkpautor','visible',true);
+        $this->SetFieldAttr('lkpautorSec','visible',false);
+        $this->SetFieldAttr('edtOutrosAutores','visible',false);
+
+        // Campos readonly
+        $this->SetFieldAttr('edtPeriodicoIni','readonly',true);
+        $this->SetFieldAttr('edtTituloPeriodico','readonly',true);
+        $this->SetFieldAttr('edtTituloExemplar','readonly',true);
+
+        // Atributos dos botões
+        $this->SetbuttonAttr('btnConsultar','visible',false);
+        $this->SetbuttonAttr('btnVoltar','visible',true);
+
+        $this->SetbuttonAttr('btnVoltar','action',$MIOLO->GetActionURL($module,$action,$this->objArtigo->idexemplarperiodico,array('event'=>'btnConsulta2_click')) );
+        $this->SetbuttonAttr('btnVoltarTrans','visible',false);
+        $this->SetbuttonAttr('btnImprimir','visible',false);
+        $this->SetbuttonAttr('btnSalvarAutorSec','visible',false);
+        $perms = $this->manager->getPerms();
+        if ( $perms->checkAccess('bib_catalogacao',A_ACCESS) )
+        {
+            $this->SetbuttonAttr('btnEnviar','visible',true);
+            $this->SetbuttonAttr('btnEnviar','label','Salvar Alterações');
+        }
+        $this->SetbuttonAttr('btnVoltar','label','Cancelar');
+        $this->GridArtigos();
+    }
+
+    function btnAutoresSec_click()
+    {
+        global $MIOLO,$item,$theme,$module;
+        $idartigo= $item;
+
+        $this->objArtigo->GetAllByCodigo($idartigo);
+        $this->objExemplarPeriodico->GetAllByCodigo($this->objArtigo->idexemplarperiodico);
+        $this->SetData();
+        //Inserindo os campos
+            $this->SetFieldAttr('Texto1', 'visible', false);
+        $this->SetFieldAttr('Texto2','visible',false);
+        $this->SetFieldAttr('edtPeriodicoIni', 'visible', false);
+        // $this->SetFieldAttr('edtExemplarIni', 'visible', false);
+        $this->SetFieldAttr('titulo', 'visible', false);
+        $this->SetFieldAttr('ou', 'visible', false);
+
+        // $this->SetFieldAttr('edtNumero','visible',true);
+        $this->SetFieldAttr('edtPeriodicoIni','visible',false);
+        $this->SetFieldAttr('edtTituloPeriodico','visible',false);
+        $this->SetFieldAttr('edtTituloExemplar','visible',false);
+
+        $this->SetFieldAttr('edtTituloArtigo','visible',false);
+        $this->SetFieldAttr('edtResumo','visible',false);
+        $this->SetFieldAttr('lkpassunto','visible',false);
+        $this->SetFieldAttr('lkpautor','visible',false);
+        $this->SetFieldAttr('lkpautorSec','visible',true);
+        $this->SetFieldAttr('edtOutrosAutores','visible',false);
+
+        // Campos readonly
+        $this->SetFieldAttr('edtPeriodicoIni','readonly',true);
+        $this->SetFieldAttr('edtTituloPeriodico','readonly',true);
+        $this->SetFieldAttr('edtTituloExemplar','readonly',true);
+
+        // Atributos dos botões
+        $this->SetbuttonAttr('btnVoltar','action',$MIOLO->GetActionURL($module,$action,$this->objArtigo->idexemplarperiodico,array('event'=>'btnConsulta2_click')) );
+        $this->SetbuttonAttr('btnConsultar','visible',false);
+        $this->SetbuttonAttr('btnVoltar','visible',true);
+        $this->SetbuttonAttr('btnVoltarTrans','visible',false);
+        $this->SetbuttonAttr('btnImprimir','visible',false);
+        $perms = $this->manager->getPerms();
+        if ( $perms->checkAccess('bib_catalogacao',A_ACCESS) )
+        {
+            $this->SetbuttonAttr('btnSalvarAutorSec','visible',true);
+
+        }
+        $this->SetbuttonAttr('btnVoltar','label','voltar à lista de artigos');
+        $this->GridAutoresSec();
+    }
+    // Inserir ou editar dados
+    function btnEnviar_click()
+    {
+        global $MIOLO,$module,$action;
+        $data = $this->GetData();
+
+        if ($data->idartigo!=null)
+        {
+            try
+            {
+            $ok = $this->objArtigo->Update($data);
+            $MIOLO->Information("Artigo: ". $data->tituloartigo . " atualizado com sucesso. ", $MIOLO->GetActionURL($module,$action,$data->idexemplarperiodico,array('event'=>'btnConsulta2_click')) );
+            }
+            catch (Exception $e)
+            {
+            $this->addError($e->getMessage());
+            }
+        }
+        else
+        {
+            try
+            {
+
+            if($data->tituloartigo!=null){
+                $ok = $this->objArtigo->Save($data);
+                $MIOLO->Information("Artigo: ". $data->tituloartigo . " incluído com sucesso. ", $MIOLO->GetActionURL($module,$action,$data->idexemplarperiodico,array('event'=>'btnConsulta2_click')));
+            }else{
+                $MIOLO->Information("Cadastre um Título para o Artigo", $MIOLO->GetActionURL($module,$action,$data->idexemplarperiodico,array('event'=>'btnConsulta2_click')));
+            }
+            }
+            catch (Exception $e)
+            {
+            $this->addError($e->getMessage());
+            }
+        }
+    }
+
+function btnSalvarAutorSec_click(){
+    //lkpautorSec
+    global $MIOLO,$module,$action,$item;
+    $data = $this->GetDataAutorSec();
+    try{
+        if(($data->idartigo!=null) && ($data->nome!=null)){
+            $this->objArtigo->saveAutorSecMaterial($data->idartigo,$data->nome);
+            $MIOLO->Information("Autor Secundário ".$data->nome." incluído com sucesso", $MIOLO->GetActionURL($module,$action,$data->idartigo, array('event'=>btnAutoresSec_click)) );
+            }
+        }
+        catch (Exception $e){
+                $this->addError($e->getMessage());
+        }
+
+
+}
+function btnExcluir_click()
+    {
+        global $MIOLO,$item,$theme,$module;
+        $idartigo = $item;
+        $data = $this->objArtigo->GetAllByCodigo($idartigo);
+        try
+        {
+            $ok = $this->objArtigo->Delete($idartigo);
+            $MIOLO->Information("Artigo: ". $data->titulo . " excluído com sucesso.", $MIOLO->GetActionURL($module,$action,$this->objArtigo->idexemplarperiodico,array('event'=>'btnConsulta2_click')) );
+        //array('event'=>'btnConsultar_click')
+        }
+        catch (Exception $e)
+        {
+            $this->addError($e->getMessage());
+        }
+    }
+      
+    function btnExcluirAutor_click()
+    {
+        global $MIOLO,$item,$theme,$module;
+
+        $idmaterial = $item;
+        //$data = $this->objArtigo->GetAllByCodigo($idartigo);
+        try
+        {
+        $ok = $this->objArtigo->DeleteSecundarioByIdmaterial($idmaterial);
+        $MIOLO->Information("Autor secundário excluído com sucesso.", $MIOLO->GetActionURL($module,$action,$this->objArtigo->idartigo,array('event'=>'btnAutoresSec_click')) );
+        //array('event'=>'btnConsultar_click')
+        }
+        catch (Exception $e)
+        {
+        $this->addError($e->getMessage());
+        }
+    }
+      
+    function GridExemplares()
+    {
+        global $MIOLO, $module, $self, $theme, $action, $page, $action;
+        $columns = array(
+        new DataGridColumn('tituloedicao','Titulo da Edição','left', true, '10%'),
+        new DataGridColumn('numerodotombo','Numero do Tombo','center', true, '10%'),
+        new DataGridColumn('descregra','Regra de Circulação','center', true, '30%'),
+        new DataGridColumn('descunidade','Unidade','center', true, '25%'),
+        new DataGridColumn('descestado','Estado','center', true, '25%'),
+        );
+
+        $href_datagrid = $MIOLO->GetActionURL($module,$action);
+
+        $query = $this->objExemplarPeriodico->ListExemplar($this->issn);
+
+        $datagrid = new DataGrid2($query, $columns, $href_datagrid,0);
+        $datagrid->SetTitle('Relação de Exemplares do Periódico: '.$this->GetFieldValue('edtTituloPeriodico'));
+        $datagrid->SetLinkType('linkbutton');
+        $datagrid->SetWidth('99%');
+
+        $href_edit = $MIOLO->GetActionURL($module,$action,'%0%',Array('event'=>'btnConsulta2:click'));
+
+        $datagrid->AddActionText('Adicionar Artigo', 'Artigos', $href_edit);
+
+        $this->AddField($datagrid);
+    }
+
+    function GridArtigos()
+    {
+        global $MIOLO, $module, $self, $theme, $action, $page, $action;
+        $columns = array(
+            new DataGridColumn('idartigo','','center', true, '0%'),
+            new DataGridColumn('titulo','Titulo do Artigo','center', true, '100%'),
+            //new DataGridColumn('assunto','Assunto','center', true, '40%')
+        );
+
+        $href_datagrid = $MIOLO->GetActionURL($module,$action);
+        $query = $this->objExemplarPeriodico->ListArtigos($this->objExemplarPeriodico->idexemplarperiodico);
+        //aqui o exemplar vai retornar seus artigos
+
+        $datagrid = new DataGrid2($query, $columns, $href_datagrid,0);
+        $datagrid->SetTitle('Relação de Artigos do Exemplar: '.$this->objExemplarPeriodico->tituloedicao);
+        $datagrid->SetLinkType('linkbutton');
+        $datagrid->SetWidth('99%');
+
+        $href_edit = $MIOLO->GetActionURL($module,$action ,'%0%',Array('event'=>'btnEditArtigo:click'));
+        $datagrid->AddActionIcon('Editar Artigo', 'Etiqueta', $href_edit);
+
+        $href_autorSec = $MIOLO->GetActionURL($module,$action ,'%0%',Array('event'=>'btnAutoresSec:click'));
+        $datagrid->AddActionIcon('Autores Secundários', 'Etiqueta', $href_autorSec);
+
+        $href_dele = $MIOLO->GetActionURL($module,$action,'%0%',Array('event'=>'btnExcluir:click'));
+        $datagrid->AddActionIcon('Excluir', 'delete.gif', $href_dele);
+        $this->AddField($datagrid);
+    }
+
+    function GridAutoresSec()
+    {
+        global $MIOLO,$item, $module, $self, $theme, $action, $page, $action;
+        $columns = array(
+            new DataGridColumn('idmaterial','','left',false,'0%',false,null,false,false),
+            new DataGridColumn('conteudo','Nome','left',true, '50%',true, null, true,false),
+            new DataGridColumn('ocorrencia','Ocorrencia','center', true, '50%',true, null, true,true)
+        );
+
+        $page->SetAction($href_datagrid);
+        $item = $this->objArtigo->idartigo;
+        $query = $this->objArtigo->GetAutorSecundarioByArtigo($this->objArtigo->idartigo);
+        $datagrid = new DataGrid2($query, $columns, $href_datagrid,20);
+        $datagrid->SetTitle('Relação de Autores Secundários do Artigo '.$this->objArtigo->titulo);
+        $datagrid->SetLinkType('linkbutton');
+        $datagrid->SetWidth('100%');
+
+        $href_dele = $MIOLO->GetActionURL($module,$action,'%0%',Array('event'=>'btnExcluirAutor:click'));
+        $datagrid->AddActionIcon('Excluir', 'delete.gif', $href_dele);
+        //$theme->InsertContent($datagrid);
+        $this->AddField($datagrid);
+    }
+
+}
+?>

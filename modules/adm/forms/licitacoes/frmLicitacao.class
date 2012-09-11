@@ -1,0 +1,362 @@
+<?
+/**
+ * Form Licitacao
+ */
+class frmLicitacao extends CompoundForm
+{
+	public $oid;
+    protected $licitacao;
+    /**
+     * Construtor
+     */
+    function __construct($objLicitacao)
+    {
+      global $MIOLO;
+      
+      $this->licitacao = $objLicitacao;
+      parent::__construct();
+      $this->SetClose($MIOLO->GetActionURL('adm','main:licitacao:find'));
+      $this->SetTitle("Dados da Licitação");
+      $this->SetIcon($MIOLO->GetUi()->GetImage('adm','default_mini.png'));
+    }
+
+    function CreateFields()
+    {
+        global $MIOLO, $page, $module, $context, $history, $self;
+
+        $k = new MKrono();
+
+        $licitacao = $this->licitacao;
+        if ($this->oid == NULL) $this->oid = $licitacao->idLicitacao;
+
+// form
+        $ui = $MIOLO->GetUI();
+        $form = Form::GetFormValue('form');
+
+        switch ($form)
+        {
+            case 'editar':
+                $this->_form[] = $ui->GetForm('adm','frmLicitacaoEditar',$licitacao,'licitacoes');
+                break;
+
+            case 'voltar':
+                $this->_form[] = $ui->GetForm('adm','frmLicitacaoVoltar',$licitacao,'licitacoes');
+                break;
+
+            case 'cancelar':
+                $this->_form[] = $ui->GetForm('adm','frmLicitacaoCancelar',$licitacao,'licitacoes');
+                break;
+
+            case 'itens' :                
+                if (($idi = $this->getFormValue('idi')) != NULL)
+                {
+                    $this->_form[] = $ui->GetForm('adm','frmLicitacaoItem',array($idi,$licitacao),'licitacoes');
+                   // array_unshift($this->_form, $ui->GetGrid('adm','gridLicitacaoItens',$licitacao));
+                }
+                else
+                    $this->_form[] = $ui->GetForm('adm','frmLicitacaoItem',array($idi,$licitacao),'licitacoes');				
+                    //$this->_form[] = $ui->GetGrid('adm','gridLicitacaoItens',$licitacao);
+					break;
+                
+            case 'participantes' :
+
+                // Se licitação foi feita depois de 17/09/2007 deve realizar procedimento novo
+                //var_dump($k->compareDate(substr($this->licitacao->dataCriacao,0,10),'>','17/09/2007'));
+                if ($k->compareDate(substr($this->licitacao->dataCriacao,0,10),'>','17/09/2007'))
+                {
+                    // Exclui da tabela participantes
+                    $licitacao->getFornecedores();
+                    if ( ($id = $this->getFormValue('id')) != NULL )
+                    {
+                        $licitacao->deleteFornecedor($id);
+                        $licitacao->getFornecedores();
+                    }
+
+                    // Exclui do mapa de licitacao
+                    $licitacao->getParticipantes();
+                    if ( ($id = $this->getFormValue('id')) != NULL )
+                    {
+                        $licitacao->deleteParticipante($id);
+                        $licitacao->getParticipantes();
+                    }
+                }
+                else // Senão realiza procedimento antigo
+                {
+                    $licitacao->getParticipantes();
+                    if ( ($id = $this->getFormValue('id')) != NULL )
+                    {
+                        $licitacao->deleteParticipante($id);
+                        $licitacao->getParticipantes();
+                    }
+                }
+
+                // Habilita formulário de cadastro de participantes se status = "MONTADA"
+                if ($this->licitacao->status == '1' OR $this->licitacao->status == '2')
+                    $this->_form[] = $ui->GetForm('adm','frmLicitacaoParticipante',$licitacao,'licitacoes');
+
+                $url = $this->manager->getActionURL('adm',$self,$licitacao->idLicitacao,array('form'=>$form));
+                $this->page->setAction($url);
+
+                array_unshift($this->_form, $ui->GetGrid('adm','gridLicitacaoParticipantes', $licitacao));
+                break;
+                
+            case 'propostas' :
+
+                $url = $this->manager->getActionURL('adm',$self,$licitacao->idLicitacao,array('form'=>$form));
+                $this->page->setAction($url);
+
+                if ($licitacao->status != '4')
+                    $this->_form[] = $ui->GetForm('adm','frmLicitacaoFinalizaProposta',$licitacao,'licitacoes');
+
+                if (($idf = $this->getFormValue('idf')) != NULL)
+                    array_unshift($this->_form, $ui->GetForm('adm','frmLicitacaoProposta',array($idf,$licitacao),'licitacoes'));       
+                    
+                array_unshift($this->_form, $ui->GetGrid('adm','gridLicitacaoPropostas', $licitacao));
+                break;
+
+            case 'vencedores':
+                $this->_form[] = $ui->GetForm('adm','frmLicitacaoVencedores',$licitacao,'licitacoes');
+                array_unshift($this->_form, $ui->GetGrid('adm','gridLicitacaoMapa', $licitacao));
+                break;
+                
+            case 'acrescentarItens':
+                $this->_form[] = $ui->GetForm('adm','frmLicitacaoAcrescentarItens',$licitacao,'licitacoes');
+                break;
+               
+            case 'mapacomp':
+                $this->_form[] = $ui->GetForm('adm','frmLicitacaoMapaComp',$licitacao,'licitacoes');
+                break;
+            case 'RepItens':
+                $this->_form[] = $ui->GetForm('adm','frmRepItens',$licitacao,'licitacoes');
+                break;			 
+			 case 'mapacomplivro':
+                $this->_form[] = $ui->GetForm('adm','frmLicitacaoMapaCompLivro',$licitacao,'licitacoes');
+                break;
+			
+			 case 'mapacomp':
+                $this->_form[] = $ui->GetForm('adm','frmLicitacaoMapaComp',$licitacao,'licitacoes');
+                break;
+				
+            case 'sidec':
+                $this->_form[] = $ui->GetForm('adm','frmLicitacaoSidec',$licitacao,'licitacoes');
+                break;
+                
+             case 'convite':
+                $this->_form[] = $ui->GetForm('adm','frmLicitacaoConvite',$licitacao,'licitacoes');
+                break;
+                
+             case 'repParticipantes':
+                $this->_form[] = $ui->GetForm('adm','frmLicitacaoRepParticipantes',$licitacao,'licitacoes');
+                break;
+               
+             case 'edital':
+                $this->_form[] = $ui->GetForm('adm','frmLicitacaoEdital',$licitacao,'licitacoes');
+                break;
+              
+			    case 'termref':
+                $this->_form[] = $ui->GetForm('adm','frmLicitacaoTermRef',$licitacao,'licitacoes');
+                break;
+				
+				//Itens Cancelados
+				   case 'itemcanc':
+                $this->_form[] = $ui->GetForm('adm','frmLicitacaoItemCanc',$licitacao,'licitacoes');
+                break;
+				
+				 case 'termreflivro':
+                $this->_form[] = $ui->GetForm('adm','frmLicitacaoTermRefLivro',$licitacao,'licitacoes');
+                break;
+				
+				 case 'relreqjust':
+                $this->_form[] = $ui->GetForm('adm','frmLicitacaoReqJust',$licitacao,'licitacoes');
+                break;
+				
+				 case 'relreqjustlivro':
+                $this->_form[] = $ui->GetForm('adm','frmLicitacaoReqJustLivro',$licitacao,'licitacoes');
+                break;
+				// Atribuição de Orçamento
+				
+				case 'relatriborc':
+                $this->_form[] = $ui->GetForm('adm','frmLicitacaoAtribOrc',$licitacao,'licitacoes');
+                break;
+				//			  
+            case 'status':
+                $this->_form[] = $ui->GetForm('adm','frmLicitacaoChangeStatus',$licitacao,'licitacoes');
+                break;
+                  
+            case 'excluir'     : 
+                $this->_form[0] = $ui->GetForm('adm','frmLicitacaoDel', $licitacao, 'licitacao'); 
+                break;
+
+			case 'julgamento':
+                $this->_form[] = $ui->GetForm('adm','frmLicitacaoJulgamento',$licitacao,'licitacoes');
+                break;
+                
+			case 'fechamento':
+                $this->_form[] = $ui->GetForm('adm','frmRepEncLicitacao',$licitacao,'licitacoes');
+                break;
+                
+ 			case 'capa':
+                $this->_form[] = $ui->GetForm('adm','frmLicitacaoProcesso',$licitacao,'licitacoes');
+                break;
+				
+			case 'planilha':
+                $this->_form[] = $ui->GetForm('adm','frmLicitacaoPlanilha',$licitacao,'licitacoes');
+                break;
+				
+			case 'planilhaservico':
+                $this->_form[] = $ui->GetForm('adm','frmLicitacaoPlanilhaServico',$licitacao,'licitacoes');
+                break;
+				
+  			case 'resultado':
+                $this->_form[] = $ui->GetForm('adm','frmRepResultado',$licitacao,'licitacoes');
+                break;
+
+			case 'etiquetas':
+                $this->_form[] = $ui->GetForm('adm','frmLicitacaoEtiquetas',$licitacao,'licitacoes');
+                break;
+
+            case 'orctermo':
+                $this->_form[] = $ui->GetForm('adm','frmGerarOrctermo',$licitacao,'licitacoes');
+                break;
+
+			case 'original':
+                $this->_form[] = $ui->GetForm('adm','frmLicitacaoOriginal',$licitacao,'financeiro');
+                break;
+        }
+
+        if ($this->_form[0])
+        {
+            $this->_form[0]->SetClose($MIOLO->GetActionURL('adm','main:licitacoes',$licitacao->idLicitacao));
+        }
+
+
+        $cf = new MCurrencyFormatter();
+        $tabelaGeral = $this->manager->GetBusiness('common','tabelageral');
+	   	$statusLic = $tabelaGeral->GetByItem('AD_ALMOXSTATUSLIC',trim($this->licitacao->status));
+        
+        if ($this->licitacao->pregao == "S") $pregao = "SIM";
+        if ($this->licitacao->pregao == "N") $pregao = "NÃO";
+
+        if ($this->licitacao->getValorReal() > 0)
+            $valorReal = $cf->formatWithSymbol($this->licitacao->getValorReal());
+        else $valorReal = 'NÃO INFORMADO';
+
+        $processo  = $MIOLO->GetBusiness('protocolo','processo',$this->licitacao->numProcesso);
+
+        if ($this->licitacao->imediata == '1')
+            $imediata = 'SIM';
+        else
+            $imediata = 'NÃO';
+
+        if ($this->licitacao->idTipoLicitacao == 1)
+            $tipoLicitacao = 'MATERIAL CONSUMO';
+        else if ($this->licitacao->idTipoLicitacao == 2)
+            $tipoLicitacao = 'SERVIÇO';
+        else if ($this->licitacao->idTipoLicitacao == 3)
+            $tipoLicitacao = 'LIVRO';
+        else if ($this->licitacao->idTipoLicitacao == 4)
+            $tipoLicitacao = 'MATERIAL PERMANENTE';
+
+        $tabelaGeral2 = $this->manager->GetBusiness('common','tabelageral');
+        $tipoEntrega = $tabelaGeral2->GetByItem('AD_TIPOENTREGA',$this->licitacao->tipoEntrega);
+        $empenho = $this->manager->GetBusiness('adm','empenho');
+
+		$this->_info[0]	= new TextLabel('dataCriacao',$this->licitacao->dataCriacao,'Criação');
+		$this->_info[1]	= new TextLabel('dataAbertura',$this->licitacao->dataAbertura,'Abertura');
+        $this->_info[2]	= new TextLabel('imediata',$imediata,'Imediata');
+		$this->_info[3] = new TextLabel('txtStatus',$statusLic->item2,'Status');
+		$this->_info[4]	= new TextLabel('modalidade',strtoupper($this->licitacao->modalidade->descricao),'Modalidade');
+    	$this->_info[5] = new TextLabel('processo',$processo->numProcessoFormatado(),'Processo');
+		$this->_info[6] = new TextLabel('valorEstimado',$cf->formatWithSymbol($this->licitacao->getValorEstimado()),'Valor Est.');
+		$this->_info[7] = new TextLabel('valorReal',$valorReal,'Valor Real');
+		$this->_info[8] = new TextLabel('tipo',$tipoLicitacao,'Tipo Licitação');
+        $this->_info[9] = new TextLabel('tipo',$tipoEntrega->item2,'Tipo Entrega');
+        $this->_info[10] = new TextLabel('validade',$this->licitacao->validade.' DIAS','Validade');
+
+		// panel        
+        $action = $context->action;
+        $this->_panel[0] = $panel = new ActionPanel('pnlCompound','Operações','',false);
+        $panel->SetIconType('small');
+
+        if ($this->licitacao->status < 4)
+        {
+			if ($this->licitacao->status != '4')       
+			{
+
+        
+//inseridos por José Roberto - imagens corretas **********************
+			$panel->AddUserAction('adm_compras',A_ACCESS,'Editar',$ui->GetImageTheme('','icons/licitacao_editar.png'),'adm',$action, $this->oid, array("form"=>"editar"));
+			}
+			$panel->AddUserAction('adm_compras',A_ACCESS,'Cancelar',$ui->GetImage('adm','licitacao_cancelar.png'),'adm',$action, $this->oid, array("form"=>"cancelar"));
+   			$panel->AddUserAction('adm_compras',A_ACCESS,'Itens',$ui->GetImage('adm','itens.png'),'adm',$action, $this->oid, array("form"=>"itens"));         
+			$panel->AddUserAction('adm_compras',A_ACCESS,'Participantes',$ui->GetImage('adm','participantes.png'),'adm',$action, $this->oid, array("form"=>"participantes"));
+			$panel->AddUserAction('adm_compras',A_ACCESS,'Propostas',$ui->GetImage('adm','propostas.png'),'adm',$action, $this->oid, array("form"=>"propostas"));
+			$panel->AddUserAction('adm_compras',A_ACCESS,'Vencedores',$ui->GetImage('adm','vencedores.png'),'adm',$action, $this->oid, array("form"=>"vencedores"));
+			$panel->AddUserAction('adm_compras',A_ACCESS,'Gerar Termos',$ui->GetImage('adm','licitacoesEmAndamento.png'),'adm',$action, $this->oid, array("form"=>"orctermo"));
+		}
+
+        if ($this->licitacao->status == '1')
+        {
+ // **************  Adicionado por José  Roberto
+
+		$panel->AddUserAction('adm_compras',A_ACCESS,'Adicionar Itens',$ui->GetImageTheme('','icons/adicionar_itens.png'),'adm',$action, $this->oid, array("form"=>"acrescentarItens"));  
+        }
+
+
+        $queryEmp = $empenho->ListByIdLicitacao($this->licitacao->idLicitacao,"('1','2','3','4','6','9','A','B')");
+        if ($this->licitacao->status == '4' && count($queryEmp->result) == 0)
+        {
+		    $panel->AddUserAction('adm_compras',A_ACCESS,'Voltar Status',$ui->GetImage('adm','edit.png'),'adm',$action, $this->oid, array("form"=>"voltar"));
+        }       
+
+        $this->_panel[1] = $panel2 = new ActionPanel('pnlRepCompras','Relatórios');
+        $panel2->SetIconType('large');
+
+        $panel2->AddUserAction('adm_compras',A_ACCESS,'Itens',$ui->GetImage('adm','relatorio.png'),'adm',$actions,$this->oid,array('form'=>'RepItens')); // mudança de 'main:repItens' para 'repItens'
+
+        $panel2->AddUserAction('adm_compras',A_ACCESS,'Participantes',$ui->GetImage('adm', 'relatorio.png'),'adm',$actions,$this->oid,array('form'=>'repParticipantes'));
+   //Removido até a inserção do ORCTERMO
+        $panel2->AddUserAction('adm_compras',A_ACCESS,'Mapa Comparativo',$ui->GetImage('adm','relatorio.png'),'adm',$actions,$this->oid,array('form'=>'mapacomp'));
+     
+		//$panel2->AddUserAction('adm_compras',A_ACCESS,'Mapa Comparativo - Livro',$ui->GetImage('adm','relatorio.png'),'adm',$actions,$this->oid,array('form'=>'mapacomplivro'));
+        $panel2->AddUserAction('adm_compras',A_ACCESS,'Sidec',$ui->GetImage('adm','relatorio.png'),'adm',$actions,$this->oid,array('form'=>'sidec'));        
+	// Removido Referencia Antiga    
+	//    $panel2->AddUserAction('adm_compras',A_ACCESS,'Convite',$ui->GetImage('adm','relatorio.png'),'adm',$actions,$this->oid,array('form'=>'convite'));
+	// Removido Referencia Antiga   	
+	//        $panel2->AddUserAction('adm_compras',A_ACCESS,'Dispensa',$ui->GetImage('adm','relatorio.png'),'adm',$actions,$this->oid,array('form'=>'edital'));
+		//Removido até a inserção do ORCTERMO
+		$panel2->AddUserAction('adm_compras',A_ACCESS,'Termo de Referência',$ui->GetImage('adm','relatorio.png'),'adm',$actions,$this->oid,array('form'=>'termref'));
+		
+		//$panel2->AddUserAction('adm_compras',A_ACCESS,'Termo de Referência - Livro',$ui->GetImage('adm','relatorio.png'),'adm',$actions,$this->oid,array('form'=>'termreflivro'));
+		$panel2->AddUserAction('adm_compras',A_ACCESS,'Relatório de Requisições e Justificativas',$ui->GetImage('adm','relatorio.png'),'adm',$actions,$this->oid,array('form'=>'relreqjust'));
+		//$panel2->AddUserAction('adm_compras',A_ACCESS,'Relatório de Requisições e Justificativas - Livro',$ui->GetImage('adm','relatorio.png'),'adm',$actions,$this->oid,array('form'=>'relreqjustlivro'));
+		//novo relatório Atribuição de orçamento
+		$panel2->AddUserAction('adm_compras',A_ACCESS,'Relatório de Atribuição de Orçamento',$ui->GetImage('adm','relatorio.png'),'adm',$actions,$this->oid,array('form'=>'relatriborc'));
+       //Itens Cancelados
+	//	$panel2->AddUserAction('adm_compras',A_ACCESS,'Itens Cancelados',$ui->GetImage('adm','relatorio.png'),'adm',$actions,$this->oid,array('form'=>'itemcanc'));
+
+	   if ($this->licitacao->idTipoLicitacao == 1 OR $this->licitacao->idTipoLicitacao == 4)
+        {
+			$panel2->AddUserAction('adm_compras',A_ACCESS,'Planilha',$ui->GetImage('adm','relatorio.png'),'adm',$actions,$this->oid,array('form'=>'planilha'));
+		}
+		else if ($this->licitacao->idTipoLicitacao == 2)
+        {
+			$panel2->AddUserAction('adm_compras',A_ACCESS,'Planilha',$ui->GetImage('adm','relatorio.png'),'adm',$actions,$this->oid,array('form'=>'planilhaservico'));
+		}
+
+        if ($this->licitacao->status >= '3')
+            $panel2->AddUserAction('adm_compras',A_ACCESS,'Vencedores',$ui->GetImage('adm','relatorio.png'),'adm',$actions,$this->oid,array('form'=>'resultado'));
+
+        $panel2->AddUserAction('adm_compras',A_ACCESS,'Capa',$ui->GetImage('adm','relatorio.png'),'adm',$actions,$this->oid,array('form'=>'capa'));
+		$panel2->AddUserAction('adm_compras',A_ACCESS,'Julgamento',$ui->GetImage('adm','relatorio.png'),'adm',$actions,$this->oid,array('form'=>'julgamento'));
+
+		if($this->licitacao->status != 1)
+			$panel2->AddUserAction('adm_compras',A_ACCESS,'Etiquetas',$ui->GetImage('adm','relatorio.png'),'adm',$actions,$this->oid,array('form'=>'etiquetas'));
+
+		if (($this->licitacao->status == '4') || ($this->licitacao->status == '5'))
+		    $panel2->AddUserAction('adm_compras',A_ACCESS,'Fechamento',$ui->GetImage('adm','relatorio.png'),'adm', $actions,$this->oid,array('form'=>'fechamento'));
+
+        $panel2->AddUserAction('adm_compras',A_ACCESS,'Licitação Original',$ui->GetImage('adm','relatorio.png'),'adm',$actions,$this->oid,array('form'=>'original'));
+ 	}
+}
+?>

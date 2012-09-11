@@ -1,0 +1,194 @@
+<?
+class BusinessAdmItemVeiculo extends Business
+{
+	public $idRequisicao;
+	public $idPessoa;
+	public $tipoVeiculo;
+	public $tipoTransporte;    
+	//public $bairroOrig;
+	//public $cepOrig;       
+ 	//public $enderecoOrig;       
+	//public $referenciaOrig;
+	//public $dataHoraSaidaOrig;
+	//public $enderecoDest;        
+	//public $bairroDest;     
+	//public $cepDest;       
+	//public $referenciaDest;
+	public $prevDataHoraChegDest;
+	public $justificativa;
+	public $quilometragemEst;
+	public $valorEstimado;
+	public $dataHoraAutExec;
+	public $dataHoraSaidaGaragem;
+ 	public $dataHoraChegadaGaragem;
+	public $odometroSaida;
+	public $odometroChegada;
+ 	public $valorReal;   
+	public $ocorrencias;
+	public $conceito;
+	public $obs;
+	public $placa;
+	public $idMotorista;
+	//public $idMunicipioOrig;
+	//public $idMunicipioDest;
+	public $prevDataHoraRetorno;
+    public $outrosPassageiros;
+	//public $municipioOrig;
+	//public $municipioDest;
+	public $pessoa;
+        // 24-11-2011 - Daniel Bonfim
+        public $qtdPassageiros;
+
+	function __construct($data = null)
+	{
+		parent::__construct('sigaept', $data);
+	}
+
+	
+	function ListAllViagensLiberadasOrigem()
+	{
+		$criteria = $this->getCriteria();
+		
+		$criteria->addColumnAttribute('dataHoraSaidaOrig');
+		$criteria->addColumnAttribute('motorista.pessoa.nome');
+		$criteria->addColumnAttribute('placa');
+		//$criteria->addColumnAttribute('municipioDest.municipio');
+		
+		
+		$criteria->addCriteria('requisicao.status','=',"'7'");
+		
+        return $criteria->retrieveAsQuery();
+	}
+	
+	function ListAllViagensLiberadasDestino()
+	{
+		$criteria = $this->getCriteria();
+		
+		$criteria->addColumnAttribute('dataHoraSaidaOrig');
+		$criteria->addColumnAttribute('motorista.pessoa.nome');
+		$criteria->addColumnAttribute('placa');
+		//$criteria->addColumnAttribute('municipioOrig.municipio');
+		
+		
+		$criteria->addCriteria('requisicao.status','=',"'7'");
+		
+        return $criteria->retrieveAsQuery();
+	}
+	
+	
+	
+
+	function ListAllByData()//$dataInicio,$dataFim)
+	{
+		$criteria =  $this->getCriteria();
+		
+		$criteria->addColumnAttribute('idmotorista');
+		
+		return $criteria->retrieveAsQuery();	
+	}
+	
+	function listViagens()
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('idMotorista');
+		$criteria->addColumnAttribute('motorista.pessoa.nome');
+		//$criteria->addColumnAttribute('idMunicipioOrig');
+		//$criteria->addColumnAttribute('idMunicipioDest');
+
+		return $criteria->retrieveAsQuery();	
+	}
+
+	function listViagensbyMotorista($idMotorista,$dataInicio,$dataFim)
+	{
+		$criteria = $this->getCriteria();
+		//$criteria->addColumnAttribute('idMunicipioOrig');
+		//$criteria->addColumnAttribute('idMunicipioDest');
+		$criteria->addCriteria('idMotorista','=',$idMotorista);
+		$criteria->addCriteria('dataHoraSaidaGaragem','>=',"to_date('$dataInicio','DD/MM/YYYY')");
+        $criteria->addCriteria('dataHoraChegadaGaragem','<=',"to_date('$dataFim','DD/MM/YYYY')");
+		
+
+		return $criteria->retrieveAsQuery();	
+	}
+    function ASeremLiberadas()
+    {
+	    global $MIOLO;
+ 	    $sql = new MSql("
+            r.status,
+            r.idrequisicao,
+            TO_CHAR(r.datahorareq,'DD/MM/YYYY HH24:MI:SS') AS hora_requisicao,
+ 	    p.nome,
+            TO_CHAR(i.datahorasaidaorig,'DD/MM/YYYY HH24:MI:SS') as Data_saida,
+            --m.municipio as origem,
+ 	    --m2.municipio as destino,
+            TO_CHAR(i.prevdatahoraretorno,
+            'DD/MM/YYYY HH24:MI:SS') as Data_retorno, 
+ 	    t.descricao 
+            
+            FROM 
+            ad_requisicao r, 
+            ad_itemreqveiculo i, 
+            --cm_municipio m, 
+            --cm_municipio m2, 
+            cm_usuario u,
+ 	    cm_pessoa p, 
+            ad_tipoveiculo t 
+            
+            WHERE 
+            r.idrequisicao = i.idrequisicao AND 
+            --i.idmunicipioorigem = m.idmunicipio AND 
+ 	    --m2.idmunicipio = i.idmunicipiodestino 
+            AND r.status = '4' 
+ 	    AND r.idusuarioreq = u.idusuario 
+            AND u.idpessoa = p.idpessoa 
+            AND i.tipoveiculo = t.tipoveiculo
+            
+ 	    ORDER BY TO_CHAR(i.datahorasaidaorig, 'yyyy/mm/dd') asc");
+            
+ 	    $query = $this->Query($sql);
+ 	    return $query;
+    }
+    function listarViagens($dataSaida,$origem,$destino)
+    {
+    	global $MIOLO;
+    	$sql = new MSql("
+                r.status,
+                r.idrequisicao, 
+                req.nome, 
+                p.nome, 
+                --munor.municipio, 
+                --mundest.municipio,
+                TO_CHAR(i.datahorasaidaorig,'DD/MM/YYYY'), 
+                TO_CHAR(i.datahoracheggar,'DD/MM/YYYY'), 
+                v.modelo 
+                
+                FROM 
+                ad_itemreqveiculo i, 
+                ad_requisicao r, 
+                ad_motorista m, 
+                ad_veiculo v, 
+                --cm_municipio munor,
+    	--cm_municipio mundest, 
+                cm_pessoa p, 
+                cm_pessoa req, 
+                cm_usuario u  
+                
+                WHERE 
+    	(TO_CHAR(i.datahorasaidaorig,'DD/MM/YYYY') = '$dataSaida') and 
+                (i.idmotorista = m.idmotorista) AND 
+                (m.idpessoa = p.idpessoa) AND 
+                --(mundest.idmunicipio = i.idmunicipiodestino) and
+    	--(munor.idmunicipio=i.idmunicipioorigem) AND 
+                --(i.idmunicipioorigem = '$origem') AND 
+                --(i.idmunicipiodestino = '$destino') AND 
+                (v.placa = i.placa) AND 
+                (u.idusuario = r.idusuarioreq) AND 
+                (i.idrequisicao = r.idrequisicao) AND 
+                (u.idpessoa = req.idpessoa) AND 
+                ((r.status = '9') Or (r.status = 'g'))");
+        
+    	 $query = $this->Query($sql);
+    	 return  $query;   	
+    }
+}
+?>

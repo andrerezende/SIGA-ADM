@@ -1,0 +1,278 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?
+class frmEditarObra extends Form
+{
+    var $objObra;
+    var $objAutor;
+    var $objGenero;
+    var $objSimples;
+    var $objEditora;
+
+
+    function frmEditarObra()  // construtor da Classe
+    {
+        global $MIOLO,$module;
+
+        //Instancia o objeto precatalogacao
+        $this->objObra = $MIOLO->GetBusiness($module,'obra');
+        $this->objGenero = $MIOLO->GetBusiness($module,'genero');
+        $this->objSimples = $MIOLO->GetBusiness($module,'pesquisasimples');
+
+        // Título do Formulário
+        $this->Form('Editar Obra da Biblioteca');
+
+        //Chama o CreateFileds, etc.
+        $this->EventHandler();
+
+        // Botão "enviar" não aparece
+        $this->defaultButton = false;
+        
+        // Botão 'fechar', direcionando para o handler biblioteca/main/catalogacao
+        $this->SetClose($this->manager->GetActionURL($module, 'main:catalogacao'));
+    }
+   
+    function CreateFields()
+    {           
+
+        global $MIOLO, $module ;
+
+        $query = $this->objGenero->ListGenero();
+
+    // Verifica se existe algum gênero já cadastrado.
+        if ($query->result == NULL)
+        {           
+            $go = $this->manager->GetActionURL('biblioteca','main:catalogacao','','');
+            $this->manager->Error("Falta cadastrar Gênero.", $go);
+        }
+        else
+        {   
+            for($i = 0; $i < count($query->result); $i++)
+            {
+                $generos[$query->result[$i][0]] = $query->result[$i][0] . ' - ' . $query->result[$i][1];
+            }
+        
+        $assunto = array('Info','Mat'); 
+
+    // Campos que aparecem no formulário - -DATA: 25/11/2009- Alterado a ordem dos campos, seguindo agora o padrão do MARC
+            $fields = Array (
+                new TextField('edtISBN','','ISBN',20),
+             //   new LookupTextField('lkpautor','','Autor',45,'Pesquisar'),
+//--- > 14/04/2010 ALTERADO O CAMPO DE AUTOR PARA NÃO EDITAVEL SIMILAR O CAMPO EDITORA
+                new MlookupFieldValue('lkpautor','','Autor',45,'Pesquisar'),
+                new HiddenField('idautor'),
+                new TextField('edtCutter','','Cutter',9),
+                new TextField('edtTitulo','','Título',60),
+                new TextField('edtSubtitulo','','Subtítulo',60),
+                new TextField('edtEdicao','','Edição',20),
+                new MlookupFieldValue('lkpEditora','','Editora',58,''),
+                new LookupTextField('lkpLocalDePublicacao','','Local de Publicação',50,'Pesquisar'),
+                //new TextField('edtEditora','','Editora',60),
+                new TextField('edtDataDePublicacao','','Data de Publicação',20,'Somente o ano. Ex.: 1998'),
+                new TextField('edtDescFisica','','Descrição Física',20),
+                new Selection('selGenero','','Gênero',$generos),
+        new HiddenField('ideditora')
+
+             );
+            
+
+
+            $this->SetFields($fields);
+
+            //As 4 propriedades de um lookup
+            // module = módulo usado
+            // item = A funcao que chama no arquivo classes/lookup.class
+            // event = O evento relacionado quando o usuário clica em "acao"
+            // related = Os campos retornados após a ação
+            $this->SetFieldAttr('lkpautor','module','biblioteca');
+            $this->SetFieldAttr('lkpautor','item','autor');                // Metodo
+//          $this->SetFieldAttr('lkpautor','event','btnConsulta:click');        
+            $this->SetFieldAttr('lkpautor','event','filler');     
+            $this->SetFieldAttr('lkpautor','related','idautor,lkpautor,edtCutter');
+    
+            //Lookup Local de publicacao de obra
+        $this->SetFieldAttr('lkpLocalDePublicacao','module','common');
+        $this->SetFieldAttr('lkpLocalDePublicacao','item','municipio');
+        $this->SetFieldAttr('lkpLocalDePublicacao','event','filler');    
+        $this->SetFieldAttr('lkpLocalDePublicacao','related','idMunicipio,lkpLocalDePublicacao');   
+
+         // 4 propiedades do lookup
+        $this->SetFieldAttr('lkpEditora','module','biblioteca');
+        $this->SetFieldAttr('lkpEditora','item','editora');
+        $this->SetFieldAttr('lkpEditora','event','filler');
+//            $this->SetFieldAttr('lkpEditora','event','btnConsulta:click');
+            $this->SetFieldAttr('lkpEditora','related', 'ideditora,lkpEditora');
+
+            // Insere os campos
+            $this->SetFields($fields);
+
+            // Botões que aparecem no formulário
+            $buttons = Array(
+                new FormButton('btnIncluir', 'Incluir'),
+                     new MButtonWindow('btnAutor', 'Novo Autor', $MIOLO->GetActionURL($module,'main:admin:autor', 'autor', '')),                 
+            );
+
+           // validators
+            $this->AddValidator(new RequiredValidator('lkpautor'));
+            $this->AddValidator(new RequiredValidator('edtCutter'));
+        $this->AddValidator(new RequiredValidator('lkpEditora'));
+            //Insere os Botões
+            $this->SetButtons($buttons);
+
+            //Definindo o foco
+            if (!($this->GetFieldValue('edtTitulo')))
+            {
+                $this->page->onLoad("MIOLO_GetElementById('edtTitulo').focus();");
+            }
+        }
+    }
+
+
+    // pega os dados que estão no formulário   -DATA: 25/11/2009- Alterado a ordem dos campos, seguindo agora o padrão do MARC
+
+    function GetData()
+    {
+        $data = new FormData();
+
+//Modificado 20/04/2009 : retirada do campo texto "Autor" da tabela id_Obra
+        //$data->autor = trim($this->objSimples->RetirarCaracteresEspeciais($this->GetFieldValue('lkpautor')));
+        $data->idautor = $this->GetFieldValue('idautor');
+        $data->isbn = trim($this->objSimples->RetirarCaracteresEspeciais($this->GetFieldValue('edtISBN')));
+        
+        $data->cutter = trim($this->objSimples->RetirarCaracteresEspeciais($this->GetFieldValue('edtCutter')));
+        $data->titulo = trim($this->objSimples->RetirarCaracteresEspeciais($this->GetFieldValue('edtTitulo')));
+        $data->subtitulo = trim($this->objSimples->RetirarCaracteresEspeciais($this->GetFieldValue('edtSubtitulo')));
+        $data->edicao = trim($this->objSimples->RetirarCaracteresEspeciais($this->GetFieldValue('edtEdicao')));
+
+        $data->localdepublicacao = trim($this->objSimples->RetirarCaracteresEspeciais($this->GetFieldValue('lkpLocalDePublicacao')));
+        $data->editora = trim($this->objSimples->RetirarCaracteresEspeciais($this->GetFieldValue('lkpEditora')));
+    $data->ideditora = $this->GetFieldValue('ideditora');
+        $data->datadepublicacao = trim($this->objSimples->RetirarCaracteresEspeciais($this->GetFieldValue('edtDataDePublicacao')));
+        $data->descfisica = trim($this->objSimples->RetirarCaracteresEspeciais($this->GetFieldValue('edtDescFisica')));
+        $data->idgenero = $this->GetFieldValue('selGenero');
+        $data->keygenero = $this->GetFieldValue('selGenero');
+        $data->edicao = eregi_replace("[ªº°]","",$data->edicao);
+  
+      
+       
+        return $data;
+    }
+
+
+// usada para inserir valores no formulário
+
+    function SetData($data)
+    {
+//Modificado 20/04/2009 : retirada do campo texto "Autor" da tabela id_Obra
+//  $this->SetFieldValue('lkpautor',$data->autor);
+        $this->SetFieldValue('edtCutter',$data->cutter);
+//      $this->SetFieldValue('hidKey',$data->idautor);     //
+        $this->SetFieldValue('idautor',$data->idautor);     //
+        $this->SetFieldValue('ideditora',$data->ideditora);
+        $this->SetFieldValue('lkpEditora',$data->descricao);
+
+    }
+
+
+
+    // Consulta: função chamada após o usuário usar o lookup
+    function btnConsulta_click($sender,$ideditora)
+    { 
+    global $MIOLO,$module,$item;
+
+    //A linha abaixo verifica se existe um ideditora
+    //Se nao existir, ela tenta pegar $item que é passada
+    //pelo botao editar do "relação"
+    $ideditora = ($ideditora != '') ? $ideditora : $item;
+    
+    // Já considera que o usuário quer excluir,editar uma editora
+//  $this->SetButtonAttr('btnExcluir','visible',true);  
+//  $this->SetButtonAttr('btnEnviar','label','Salvar'); 
+    
+    //Instancia o objeto editora
+        $this->objEditora = $MIOLO->GetBusiness($module,'editora');
+    // ok retorna os dados de ideditora
+    $ok = $this->objEditora->GetByCodigo($ideditora);   
+
+    // este é o setdata deste arquivo. não é o setdata da classe de negócios
+    // veja que é $this->SetData e nao $this->objEditora->SetData
+    $this->SetData($ok);    
+
+    }
+
+
+
+
+    // Inserir dados
+    function btnIncluir_click()
+    { 
+        global $MIOLO,$module;
+
+        $data = $this->GetData();
+        $data->idobra = $this->objObra->GetNextIdObra();
+        $data->numerodaobra = $this->objObra->GetNextNumeroObra();
+
+        //já grava o 008 na pré-catalogação
+        $ficha008 = date('ymd') . '                 r               d';
+
+        try
+        {
+            $this->objObra->saveObra($data);
+
+            $this->objObra->saveSubFicha($ficha008, '008');
+
+            $MIOLO->Prompt(Prompt::Information("Obra " . $data->numerodaobra . " inserida com sucesso.",$this->listURL));
+        }
+        catch (Exception $e)
+        {
+            $this->addError($e->getMessage());
+        }
+    }
+
+
+
+// Consulta: função chamada após o usuário usar o lookup
+//  function btnConsulta_click($lkpautor,$hidKey)
+//  { 
+//      global $MIOLO,$module, $item ,$prenome;
+
+
+      //$prenome = $lkpautor->getFilterValue('prenome');
+
+        //A linha abaixo verifica se existe um idautor
+        //Se nao existir, ela tenta pegar $item que é passada
+        //pelo botao editar do "relação"
+        //$idautor = ($hidKey != '') ? $hidKey : $item;
+    
+    
+        // ok retorna os dados de idautor
+    //  $ok = $this->objAutor->GetByCodigo($hidKey);    
+      
+  //    var_dump($ok);
+        // este é o setdata deste arquivo. não é o setdata da classe de negócios
+        // veja que é $this->SetData e nao $this->objAutor->SetData
+    //  $this->SetData($ok);
+        
+    //   $this->SetFieldAttr('lkpautor','readonly',true);
+   
+//  }
+    
+}
+?>

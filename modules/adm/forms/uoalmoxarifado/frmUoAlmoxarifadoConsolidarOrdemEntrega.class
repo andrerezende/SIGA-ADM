@@ -1,0 +1,104 @@
+<?
+class frmUoAlmoxarifadoConsolidarOrdemEntrega extends MForm
+{
+    protected $uoalmoxarifado;
+    function __construct($objUO)
+    {
+        $this->uoalmoxarifado = $objUO;
+		parent::__construct('Consolidar');
+        $this->eventHandler();
+    }
+
+    function CreateFields()
+    {
+		$buttons = array(
+        	new MButton('btnConsolidar', 'Consolidar Todas'),
+        );
+		$this->SetButtons($buttons);
+    }
+
+    function btnConsolidar_click()
+    {
+        $movimentos = $this->uoalmoxarifado->getMovimentosAConsolidar();
+        $action_voltar = $this->manager->getActionURL('adm','main:uoalmoxarifado',$this->uoalmoxarifado->idUo,array("form"=>"ordementrega"));
+        if ($movimentos)
+        {
+            try
+            {
+                $movimentos[0]->beginTransaction();
+                foreach ($movimentos as $movimento)
+                {
+                    $movimento->retrieveAssociation('requisicao');
+                    $numOrdens[$movimento->requisicao->idUoRequisitante] = ($numOrdens[$movimento->requisicao->idUoRequisitante]) ? $numOrdens[$movimento->requisicao->idUoRequisitante] : $this->uoalmoxarifado->addNumeroOrdemEntrega();
+                    $movimento->idOrdemEntrega = $numOrdens[$movimento->requisicao->idUoRequisitante];
+                    $movimento->setTransaction($movimentos[0]->getTransaction());
+                    $movimento->save();
+                }
+                $movimentos[0]->endTransaction();
+			    $action_rep = $this->manager->getActionURL('adm','main:uoalmoxarifado',$this->uoalmoxarifado->idUo,array("form"=>"ordementrega","subform"=>"gerar","event"=>"btnRelatorio:click"));
+                $this->manager->Confirmation("Ordens de Entrega geradas com sucesso. Clique em OK para imprimir todas as Ordens de Entrada ou em CANCELAR para voltar.",$action_rep, $action_voltar);
+            }
+            catch (Exception $e)
+            {
+                $this->addError($e->getMessage());
+            }
+        }
+        else $this->manager->information("Não há Ordens de Entrega a serem geradas.",$action_voltar);
+    }
+   
+    function btnRelatorio_click()
+    {   
+		$cf = new MCurrencyFormatter();
+        $report = new MEzPDFReport('2','landscape');
+        $report->pdf->ezText('',20);
+        $cols = array('Código','Material','Unidade','Requisição','Quantidade','Valo Unitário','Valor Total');
+        $options['textCol'] = array(0,0,0);
+        $options['shaded'] = 1;
+        $options['showLines'] = 0;
+        $options['fontSize'] = 10;
+        $options['width'] = 740;
+        $options['xPos'] = 'left';
+        $options['xOrientation'] = 'right';
+        $report->pdf->ezText('',20);
+        $movimentos = $this->uoalmoxarifado->getMovimentosByOENaoImpressas();
+        if ($movimentos)
+        {
+            try
+            {
+                $movimentos[0]->beginTransaction();
+                foreach ($movimentos as $movimento)
+                {
+                    $movimento->retrieveAssociation('requisicao');
+                    $movimento->requisicao->retrieveAssociation('uoRequisitante');
+                    $movimento->retrieveAssociation('itemreq');
+                    $movimento->retrieveAssociation('ordem');
+                    $movimento->ordem->setTransaction($movimentos[0]->getTransaction());
+                    $movimento->ordem->impresso = 1;
+                    $movimento->ordem->save();
+                    $dados[$movimento->requisicao->uoRequisitante->nome][$movimento->idOrdemEntrega][] = array($movimento->idMaterial,$movimento->itemreq->material->descricao,$movimento->itemreq->material->unidade,$movimento->idRequisicao,$movimento->quantidade,$cf->formatWithSymbol($cf->toDecimal($movimento->valorTotal)/$movimento->quantidade),$cf->formatWithSymbol($cf->toDecimal($movimento->valorTotal)));
+                }
+                $movimentos[0]->endTransaction();
+            }
+            catch (Exception $e)
+            {
+                $this->addError($e->getMessage());
+            }
+            foreach ($dados as $nome=>$dadosOE)
+            {
+                foreach ($dadosOE as $oe=>$dado)
+                {
+                    $report->pdf->ezText("UNIVERSIDADE FEDERAL DE JUIZ DE FORA\nCGCO - CENTRO DE GESTÃO DO CONHECIMENTO ORGANIZACIONAL\nSISTEMA INTEGRADO DE GESTÃO ACADÊMICA - SIGA\nCOORDENADORIA DE SUPRIMENTOS - SETOR DE ESTOQUE",12,array("spacing"=>"1"));
+                    $report->pdf->ezText('',20);
+                    $report->pdf->ezText("NÚMERO OE: {$oe} - SETOR: {$nome}",16,array("justification"=>"center","spacing"=>"1"));
+                    $report->pdf->ezText('',20);
+                    $report->pdf->ezText('',5);
+                    $report->pdf->ezTable($dado,$cols,'',$options);
+				    $report->pdf->ezNewPage();
+                }
+            }
+	        $report->Execute();
+        }
+    }
+
+ }
+?>

@@ -1,0 +1,163 @@
+<?
+class frmTransfOrcamento extends Form
+{
+    function __construct()
+    {
+		global $MIOLO, $module, $action;
+		
+        $this->Form('Transferência de Orçamento');
+		$this->SetClose($MIOLO->GetActionURL($module,'main:financeiro'));
+		$this->page->SetAction($MIOLO->GetActionURL($module,$action));
+		$this->EventHandler();
+		$this->defaultButton = false;
+    }
+
+	function CreateFields()
+	{
+		global $MIOLO, $module, $action;
+
+		$fields = array(
+			new MSeparator('Orçamento original:'),
+			array(
+				new MTextField('ano1', date("Y"), 'Ano', 5),
+				new MTextField('esfera1', '', 'Esfera', 5),
+				new MTextField('idptr1', '', 'PTR', 10),
+				new MTextField('idfonte1', '', 'Fonte', 13),
+				new MLookupTextField('idrubrica1', '', 'Rubrica', 10),
+//				new MTextField('saldo1', '', 'Saldo', 13),
+				new HiddenField('idOrcamento1'),
+			),
+			new MSpacer(1),
+			new MSeparator('Orçamento de destino:'),
+			array(
+				new MTextField('ano2', date("Y"), 'Ano', 5),
+				new MTextField('esfera2', '', 'Esfera', 5),
+				new MTextField('idptr2', '', 'PTR', 10),
+				new MTextField('idfonte2', '', 'Fonte', 13),
+				new MLookupTextField('idrubrica2', '', 'Rubrica', 10),
+//				new MTextField('saldo2', '', 'Saldo', 13),
+				new HiddenField('idOrcamento2'),
+			),
+			new MSpacer(2),
+			new MSeparator('Valor a ser transferido:'),
+			new MTextField('valor', '', 'Valor', 10),
+		);
+		$this->SetFields($fields);
+
+		$this->SetFieldAttr('idrubrica1','module',$module);
+		$this->SetFieldAttr('idrubrica1','item','Orcamento');
+		$this->SetFieldAttr('idrubrica1','event','filler');
+		$this->SetFieldAttr('idrubrica1','related', "idOrcamento1,ano1,idptr1,idfonte1,idrubrica1,,esfera1");
+		$this->SetFieldAttr('idrubrica1','filter','ano1_ro,idptr1,idfonte1,idrubrica1,esfera1');
+		$this->SetFieldAttr('ano1','readonly',true);
+
+		$this->SetFieldAttr('idrubrica2','module',$module);
+		$this->SetFieldAttr('idrubrica2','item','Orcamento');
+		$this->SetFieldAttr('idrubrica2','event','filler');
+		$this->SetFieldAttr('idrubrica2','related', "idOrcamento2,ano2,idptr2,idfonte2,idrubrica2,,esfera2");
+		$this->SetFieldAttr('idrubrica2','filter','ano2_ro,idptr2,idfonte2,idrubrica2,esfera2');
+		$this->SetFieldAttr('ano2','readonly',true);
+
+		$buttons = array(
+			new FormButton('btnTransferir', 'Transferir'),
+		);
+		$this->SetButtons($buttons);
+	}
+
+	function btnTransferir_click()
+	{
+		global $MIOLO, $module, $action;
+
+		$data = $this->GetData();
+		$orcamento = $MIOLO->GetBusiness($module, 'orcamento');
+		$cf = new MCurrencyFormatter();
+
+		if(!$data->idOrcamento1)
+		{
+			$idOrcamento1 = $orcamento->GetByClassOrcamentaria($data->ano1, $data->idptr1, $data->idfonte1, $data->idrubrica1, $data->esfera1);
+			if(!$idOrcamento1->result)
+			{
+				$MIOLO->Error('Orçamento original não encontrado.', $MIOLO->GetActionURL($module,$action));
+				return;
+			}
+			$data->idOrcamento1 = $idOrcamento1->result[0][0];
+		}
+		$tipoTransf = '2';//SUPLEMENTACAO
+		if(!$data->idOrcamento2)
+		{
+			$idOrcamento2 = $orcamento->GetByClassOrcamentaria($data->ano2, $data->idptr2, $data->idfonte2, $data->idrubrica2, $data->esfera2);
+			$data->idOrcamento2 = $idOrcamento2->result[0][0];
+			if(!$idOrcamento2->result)//cria orçamento destino
+			{
+				$orcamento->dotacao = ":0";
+				$orcamento->suplementacao = ":0";
+				$orcamento->bloqueio = ":0";
+				$orcamento->anulacao = ":0";
+				$orcamento->pago = ":0";
+				$orcamento->ano = $data->ano2;
+				$orcamento->idPtr = $data->idptr2;
+				$orcamento->idFonte = $data->idfonte2;
+				$orcamento->idRubrica = $data->idrubrica2;
+				$orcamento->esfera = $data->esfera2;
+				try
+				{
+					$orcamento->save();
+					$orcamento->Log(OP_INS,"Novo orcamento criado: ".$orcamento->idOrcamento);
+				}
+				catch (Exception $e)
+				{
+					$this->addError($e->getMessage());
+				}
+				$tipoTransf = '1';//DOTACAO
+				$data->idOrcamento2 = $orcamento->idOrcamento;
+			}
+		}
+
+		$saldo1 = $cf->toDecimal($orcamento->GetSaldo($data->idOrcamento1));
+		$data->valor = $cf->toDecimal($data->valor);
+
+		if($data->valor > $saldo1)
+		{
+			$MIOLO->Error('Orçamento original não possui saldo suficiente.', $MIOLO->GetActionURL($module,$action));
+			return;
+		}
+
+		$orcamentoHist1 = $MIOLO->GetBusiness($module, 'orcamentohist');
+		$orcamentoHist1->idOrcamento = $data->idOrcamento1;
+		$orcamentoHist1->data = $orcamentoHist1->_db->CharToTimestamp(date('d/m/Y H:i:s'));
+		$orcamentoHist1->tipoOrc = '5'; //ESTORNO DOTACAO
+		$orcamentoHist1->valor = $data->valor;
+		$orcamentoHist2 = $MIOLO->GetBusiness($module, 'orcamentohist');
+		$orcamentoHist2->idOrcamento = $data->idOrcamento2;
+		$orcamentoHist2->data = $orcamentoHist1->_db->CharToTimestamp(date('d/m/Y H:i:s'));
+		$orcamentoHist2->tipoOrc = $tipoTransf; //DOTACAO ou SUPLEMENTACAO
+		$orcamentoHist2->valor = $data->valor;
+		try
+		{
+			$orcamentoHist1->beginTransaction();
+			$orcamentoHist1->save();
+			$orcamentoHist2->setTransaction($orcamentoHist1->getTransaction());
+			$orcamentoHist2->save();
+			$orcamentoHist2->endTransaction();
+		
+			
+			$orc = $MIOLO->GetBusiness($module, 'orcamento');
+			//
+			$IdOrc1 = $data->idOrcamento1;
+			$IdOrc2 = $data->idOrcamento2;
+			$ValOrc1 = $orcamento->GetDotacao($IdOrc1);
+			$ValOrc2 = $orcamento->GetDotacao($IdOrc2);
+			$Quant = $data->valor;
+			$orc->TransfereOrc($IdOrc1,$IdOrc2,$ValOrc1,$ValOrc2,$Quant);
+		//
+		
+			$orcamento->Log(OP_INS,"Transferencia de orcamento: " . $data->idOrcamento1 . ' a ' . $data->idOrcamento2 . ' R$ ' . $data->valor);
+			$MIOLO->Information('Transferência feita com sucesso.', $MIOLO->GetActionURL($module,$action));
+		}
+		catch (Exception $e)
+		{
+			$this->addError($e->getMessage());
+		}
+	}
+}
+?>

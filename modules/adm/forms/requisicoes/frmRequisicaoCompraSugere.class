@@ -1,0 +1,64 @@
+<?
+class frmRequisicaoCompraSugere extends MForm
+{
+	protected $objRequisicao;
+    function __construct($objRequisicao)
+    {
+		$this->objRequisicao = $objRequisicao;
+        parent::__construct('Solicitar Novo Material');
+        $this->EventHandler();
+    }
+    function CreateFields()
+    {
+        $usuario = $this->manager->getBusiness('common','usuario');
+        $usuario->getById($this->manager->GetLogin()->idkey);
+        $fields = array(
+            new MHiddenField('form','sugere'),
+            new MMultiLineField('descricao','','Descricao',500,6,50,'Máximo 500'),
+            new MSeparator('Dados para contato'),
+            new MTextField('nome',$usuario->pessoa->nome,'Nome',52),
+            new MTextField('telefone','','Telefone',12),
+            new MTextField('email',$usuario->pessoa->email,'Email',52),
+        );
+        $this->SetFields($fields);
+        $this->nome->setReadOnly(true);
+        $validators = array(
+			new MRequiredValidator('descricao'),
+            new MPhoneValidator('telefone','','required'),
+            new MEmailValidator('email','','required'),
+		);
+		$this->SetValidators($validators);
+        $this->addButton(new MButton('btnSugere','Solicitar Material'));
+        $this->addButton(new MButton('btnVoltar','Voltar','return'));
+    }
+    function btnSugere_click()
+    {
+        $data = $this->GetData();
+        $usuario = $this->manager->getBusiness('common','usuario');
+        $usuario->getById($this->manager->GetLogin()->idkey);
+        $material = $this->manager->getBusiness('adm','novomaterial');
+        try
+        {
+            $material->beginTransaction();
+            $material->setData($data);
+            $material->setStatus(1);
+            $material->dataPedido = date('d/m/Y');
+            $material->setUsuario($this->manager->getLogin()->idkey);
+            $material->save();
+            if ($data->email != $usuario->pessoa->email)
+            {
+                $usuario->pessoa->setTransaction($material->getTransaction());
+                $usuario->pessoa->email = $data->email;
+                $usuario->pessoa->save();
+            }
+            $material->endTransaction();
+            $material->Log(OP_INS,'Material incluído ['.$material->idNovoMaterial.']');
+   		    $this->manager->information("Solicitação de novo material enviada com sucesso.",$this->manager->getActionUrl('adm','main:requisicoes',$this->objRequisicao->idRequisicao,array("form"=>"item","idTipoReq"=>$this->objRequisicao->idTipoReq)) );               
+        }
+        catch (Exception $e)
+        {
+            $this->AddError($e->GetMessage());
+        }
+     }
+}
+?>

@@ -1,0 +1,1569 @@
+<?php
+class BusinessAdmUo extends Business
+{
+    public $idUo;
+    public $sigla;
+    public $nome;
+    public $tipo;
+    public $documentoRef;
+    public $idSetor;
+    public $ativo;
+    public $dataBloqueio;
+
+    public $usuarios;
+    public $tipoReqs;
+    public $requisitadas;
+    public $orcamento;
+    public $aconfirmar;
+    public $gestores;
+    public $executores;
+    public $almoxExecutores;
+    public $estoque;
+    public $saldoPublico;
+    public $setor;
+    public $ordemEntrega;
+
+    public $tipoReqsAutorizadas;
+    public $tipoServInt;
+
+    function __construct($data = null)
+    {
+        parent::__construct('sigaept', $data);
+    }
+
+    function OnCreate($data)
+    {
+        if (empty($data))
+        {
+//            $this->initialize();
+        }
+        else
+        {
+            $this->GetById($data);
+        }
+    }
+
+    function GetById($id)
+    {
+      $this->idUo = $id;
+      $this->retrieve();
+      return $this;
+    }
+
+    function GetBySigla($sigla)
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->addColumnAttribute('idUo');
+        $criteria->addCriteria('sigla','=', "'$sigla'");
+        $query = $criteria->retrieveAsQuery();
+        return $query->result[0][0];
+    }
+
+    function GetByNome($nome)
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->addColumnAttribute('idUo');
+        $criteria->addCriteria('nome','=', "'$nome'");
+        $query = $criteria->retrieveAsQuery();
+        return $query->result[0][0];
+    }
+
+    function ListByNome($nome)
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->addCriteria('nome','LIKE', "%$nome%");
+        $criteria->addOrderAttribute('nome');
+        return $criteria->retrieveAsQuery();
+    }
+
+    function ListByNomeAtivo($nome, $ativo)
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->addCriteria('nome','LIKE', "'%$nome%'");
+        $criteria->addCriteria('ativo','=', "'$ativo'");
+        $criteria->addOrderAttribute('nome');
+        return $criteria->retrieveAsQuery();
+    }
+
+    function ListRequisicoesForAlmoxarifado($idRequisicao=null,$requisitante=null)
+    {
+        global $MIOLO;
+        $requisitante = strtoupper($requisitante);
+        $requisicao = $MIOLO->getBusiness('adm','requisicao');
+        $criteria =  $requisicao->getCriteria();
+        $criteria->addCriteria('status','=',"'4'");
+        $criteria->addCriteria('idTipoReq','=', "8");
+        $criteria->addCriteria('idUoExecutante','=',"{$this->idUo}");        
+        $cc = new CriteriaCondition();
+	$idValido = false;
+        if ( $idRequisicao and is_numeric($idRequisicao) )
+        {
+            $cc->addCriteria($criteria->getCriteria('idRequisicao','=',$idRequisicao));
+            if ($requisitante) $cc->addOrCriteria($criteria->getCriteria('usuario.pessoa.nome','like',"'%{$requisitante}%'"));
+	    $idValido = true;
+        }
+        elseif($requisitante)
+        {
+            if ($requisitante) $cc->addCriteria($criteria->getCriteria('usuario.pessoa.nome','like',"'%{$requisitante}%'"));
+        }
+
+        if ($idValido || $requisitante) $criteria->addCriteria($cc);
+        $criteria->addOrderAttribute('idRequisicao', false);
+        $cursor = $criteria->retrieveAsCursor();
+        while ($requisicao = $cursor->getObject())
+        {
+            $requisicao->retrieveAssociation('usuario');
+            $objects[] = $requisicao;
+        }
+        return $objects;
+    }
+
+    function ListRequisicoesForAlmoxarifadoSaida($idRequisicao=null,$requisitante=null)
+    {
+        global $MIOLO;
+        $requisitante = strtoupper($requisitante);
+        $requisicao = $MIOLO->getBusiness('adm','requisicao');
+        
+        $criteria = $requisicao->getCriteria();
+        $criteria->setDistinct(true);
+        $criteria->addCriteria('idTipoReq','=', "8");
+        $criteria->addCriteria('idUoExecutante','=',"{$this->idUo}");
+        $criteria->addCriteria('materialAlmoxarifado.movimento.tipoMovimento','=',"'3'");
+        $criteria->addCriteria('idMovimentoRef','IS', "null");
+        $criteria->addOrderAttribute('idRequisicao', false);
+        $cc = new CriteriaCondition();
+        if ( $idRequisicao and is_numeric($idRequisicao) )
+        {
+            $cc->addCriteria($criteria->getCriteria('idRequisicao','=',$idRequisicao));
+            if ($requisitante) $cc->addOrCriteria($criteria->getCriteria('usuario.pessoa.nome','like',"'%{$requisitante}%'"));
+        }
+        elseif ($requisitante)
+        {
+            if ($requisitante) $cc->addCriteria($criteria->getCriteria('usuario.pessoa.nome','like',"'%{$requisitante}%'"));
+        }
+        if ($idRequisicao || $requisitante) $criteria->addCriteria($cc);        
+        $cursor = $criteria->retrieveAsCursor();
+        while ($requisicao = $cursor->getObject())
+        {
+            $requisicao->retrieveAssociation('usuario');
+            $objects[] = $requisicao;
+        }        
+        return $objects;
+    }
+
+    function ListOrdemEntregaForAlmoxarifado($numero=null,$idRequisicao=null)
+    {
+        global $MIOLO;
+        $requisitante = strtoupper($requisitante);
+        $ordem = $MIOLO->getBusiness('adm','ordementrega');
+        $criteria =  $ordem->getCriteria();
+        if ($numero || $idRequisicao)
+        {
+            $cc = new CriteriaCondition();
+            if ($numero)
+                $cc->addCriteria($criteria->getCriteria('numero','=',"$numero"));
+            if ($idRequisicao)
+                $cc->addOrCriteria($criteria->getCriteria('movimento.idRequisicao','=', $idRequisicao));
+            $criteria->addCriteria($cc);
+        }
+        else
+        {
+            $criteria->addCriteria('impresso','=',"'0'");
+        }
+        $criteria->addCriteria('idUoExecutante','=',"{$this->idUo}");
+        $cursor = $criteria->retrieveAsCursor();
+        while ($ordem = $cursor->getObject())
+        {
+            $ordem->retrieveAssociation('movimento');
+            if ($ordem->movimento)
+            {
+                $ordem->movimento[0]->retrieveAssociation('requisicao');
+                $ordem->movimento[0]->requisicao->retrieveAssociation('uoRequisitante');
+                $ordem->movimento[0]->requisicao->retrieveAssociation('usuario');
+                $ordem->movimento[0]->retrieveAssociation('itemNota');
+                if ($ordem->movimento[0]->itemNota)
+                {
+                    $ordem->movimento[0]->itemNota->retrieveAssociation('empenhado');
+                    $ordem->movimento[0]->itemNota->empenhado->retrieveAssociation('empenho');
+                }
+            $objects[] = $ordem;
+            }
+        }
+        return $objects;
+    }
+
+    function ListOrdemEntregaForPeriodo($dataInicio,$dataFim)
+    {
+        global $MIOLO;
+        $k = new MKrono();
+        $dataInicio = $k->invertDate($dataInicio);
+        $dataFim = $k->invertDate($dataFim);
+        $ordem = $MIOLO->getBusiness('adm','ordementrega');
+        $criteria =  $ordem->getCriteria();
+        $criteria->addCriteria('data','>=',"'{$dataInicio}'");
+        $criteria->addCriteria('data','<=',"'{$dataFim}'");
+        $criteria->addOrderAttribute('data');
+        $cursor = $criteria->retrieveAsCursor();
+        while ($ordem = $cursor->getObject())
+        {
+            $ordem->retrieveAssociation('movimento');
+            if ($ordem->movimento)
+            {
+                $ordem->movimento[0]->retrieveAssociation('requisicao');
+                $ordem->movimento[0]->requisicao->retrieveAssociation('usuario');
+            $objects[] = $ordem;
+            }
+        }
+        return $objects;
+    }
+
+    function ListAlmoxarifadosByUsuario($idUsuario)
+    {
+	//	Alteração para Almoxarifado 2009
+        $dateY = date("Y")-1;
+        $criteria =  $this->getCriteria();
+        $criteria->addCriteria('tipoReqs.idTipoReq','=','8');
+
+		// Alterado em 7/1/2010, por ñ encontrar aplicação prática desse filtro
+	//	$criteria->addCriteria('execucoes.ano','=',"'{$dateY}'");
+        $criteria->addCriteria('executores.idUsuario','=',$idUsuario);
+        $criteria->addOrderAttribute('nome');
+        return $criteria->retrieveAsQuery();
+    }
+
+    function ListAlmoxarifados()
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->addColumnAttribute('idUo');
+        $criteria->addColumnAttribute('nome');
+       // Alterado em 7/1/2010, por ñ encontrar aplicação prática desse filtro
+	   // $criteria->addCriteria('execucoes.ano','=',date("Y"));
+
+	   // Alteração para empenho em 2009
+	   //$criteria->addCriteria('execucoes.ano','=',date("Y")-1);
+
+
+        $criteria->addCriteria('tipoReqs.idTipoReq','=',"8");
+        $criteria->addOrderAttribute('nome');
+        return $criteria->retrieveAsQuery();
+    }
+
+    function getTipoReqs()
+    {
+      $this->retrieveAssociation('tipoReqs');
+          if ($this->tipoReqs != NULL)
+          {
+              if (!is_array($this->tipoReqs))
+              {
+                  $this->tipoReqs = array($this->tipoReqs);
+              }
+          }
+    }
+
+    function getTipoReqsAutorizadasByAno($ano)
+    {
+        $this->retrieveAssociation('tipoReqsAutorizadas');
+        if ($this->tipoReqsAutorizadas)
+        {
+            foreach ($this->tipoReqsAutorizadas as $requisita)
+            {
+                if (($requisita->ano == $ano) && ($requisita->ativo == "S"))
+                {
+                    $tipoReqsAutorizadas[] = $requisita;
+                }
+            }
+            return $tipoReqsAutorizadas;
+        }
+    }
+
+    function getTipoReq($id)
+    {
+        if ( $this->tipoReqs != NULL )
+        {
+    		$this->retrieveAssociation('tipoReqs');
+            if ($this->tipoReqs != NULL)
+            {
+                foreach ( $this->tipoReqs as $t )
+                {
+                    if ( $t->idTipoReq == $id )
+                        return $t;
+                }
+            }
+        }
+    }
+
+    function AddTipoReq($tipoReq)
+    {
+        $this->tipoReqs[] = $tipoReq;
+    }
+
+    function getUsuarios()
+    {
+        $this->retrieveAssociation('usuarios');
+        if ($this->usuarios != NULL)
+        {
+            if (!is_array($this->usuarios))
+            {
+                $this->usuarios = array($this->usuarios);
+            }
+        }
+
+    }
+
+    function getUsuario($id)
+    {
+        if ( $this->usuarios == NULL )
+        {
+    		$this->retrieveAssociation('usuarios');
+        }
+
+        if ($this->usuarios != NULL)
+        {
+            foreach ( $this->usuarios as $u )
+            {
+                if ( $u->idUsuario == $id )
+                    return $u;
+            }
+        }
+
+        return null;
+    }
+
+    function listUsuariosByNome($nome)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('usuarios.idUsuario');
+        $criteria->addColumnAttribute('usuarios.login');
+        $criteria->addColumnAttribute('usuarios.pessoa.nome');
+        $criteria->addCriteria('usuarios.pessoa.nome','like', "'$nome%'");
+        $criteria->addCriteria('idUo','=', $this->idUo);
+        return $criteria->retrieveAsQuery();
+    }
+
+    function AddUsuario($usuario)
+    {
+        $this->usuarios[] = $usuario;
+    }
+
+    function DeleteUsuario($id)
+    {
+        $usuario = $this->getUsuario($id);
+        $this->deleteAssociation('usuarios',$usuario);
+    }
+
+    function DeleteTipoReq($id)
+    {
+        $tipoReq = $this->getTipoReq($id);
+        $this->deleteAssociation('tipoReqs',$tipoReq);
+    }
+
+    function getByTipoReq($idTipoReq)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('idUo');
+        $criteria->addCriteria('tipoReqs.idTipoReq','=', $idTipoReq);
+        $query = $criteria->retrieveAsQuery();
+        $this->idUo = $query->result[0][0];
+        $this->retrieve();
+        return $this;
+
+    }
+
+    function listByTipoReq($idTipoReq)
+    {
+        $ano = date("Y");
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('idUo');
+        $criteria->addColumnAttribute('nome');
+        $criteria->addCriteria('tipoReqs.idTipoReq','=', $idTipoReq);
+        $criteria->addCriteria('execucoes.ano','=', $ano);
+        return $criteria->retrieveAsQuery();
+    }
+    
+    //Tiago Macedo 16/08/2012
+    function listByTipoReq2($idTipoReq)
+    {        
+        $ano = date("Y");
+        $sql = new sql('u.iduo, u.nome', '');
+        $sql->SetJoin('ad_uo u','ad_executa e',"u.iduo = e.iduo");        
+        $sql->SetWhere('e.idtiporeq = '.$idTipoReq);        
+        $query = $this->Query($sql);
+        return $query;        
+    }
+
+      function listAlmoxExecutores($idUoRequisitante)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('acessoAlmox.idUoExecutante');
+        $criteria->addColumnAttribute('nome');
+        $criteria->addCriteria('acessoAlmox.idUoRequisitante','=', $idUoRequisitante);
+        return $criteria->retrieveAsQuery();
+    }
+
+    function listByUsuario($idUsuario,$suplementar=false)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('idUo');
+        $criteria->addColumnAttribute('nome');
+        $criteria->addCriteria('usuarios.idUsuario','=', $idUsuario);
+        return $criteria->retrieveAsQuery();
+    }
+
+    function listByUsuario2($idUsuario)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('idUo');
+        $criteria->addColumnAttribute('nome');
+        $criteria->addCriteria('usuarios.idUsuario','=', $idUsuario);
+        return $criteria->retrieveAsQuery();
+    }
+
+    function listSiglaByUsuario($idUsuario)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('idUo');
+        $criteria->addColumnAttribute('sigla');
+        $criteria->addCriteria('usuarios.idUsuario','=', $idUsuario);
+        return $criteria->retrieveAsQuery();
+    }
+
+    function isGestorOf($id)
+    {
+        $this->retrieveAssociation('gestores');
+        if ($this->gestores != NULL)
+        {
+            foreach ( $this->gestores as $g )
+            {
+                $k = new MKrono();
+                if ( ($g->idUsuario == $id) and ( ($k->invertDate($g->dataFim) >= date("Y/m/d")) or ($g->dataFim == null) or ($g->dataFim == '01/01/0001') ) )
+                {
+                    return TRUE;
+                }
+            }
+        }
+        return FALSE;
+    }
+
+    function isExecutorOf($id)
+    {
+        $this->retrieveAssociation('executores');
+        if ($this->executores != NULL)
+        {
+            foreach ( $this->executores as $e )
+            {
+                $k = new MKrono();
+                if ( ($e->idUsuario == $id) and ( ($k->invertDate($e->dataFim) >= date("Y/m/d")) or ($e->dataFim == null) or ($e->dataFim == '01/01/0001') ) )
+                {
+                    return TRUE;
+                }
+            }
+        }
+        return FALSE;
+    }
+
+    function isExecutorServicoInternoOf($idUsuario,$idTipoServInt)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addCriteria('tipoServInt.executorServInt.idUsuario','=',$idUsuario);
+        $criteria->addCriteria('idUo','=', $this->idUo);
+        $criteria->addCriteria('tipoServInt.idTipoServInt','=', $idTipoServInt);
+        $query = $criteria->retrieveAsQuery();
+        return ! $query->eof();
+    }
+
+    /*
+    // retorna verdadeiro se existem requisicoes solicitadas
+    // para a instÃ¢ncia atual da uo
+    */
+    function hasSolicitadas()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('solicitadas.idRequisicao');
+        $criteria->addCriteria('solicitadas.status','=','2');
+        $criteria->addCriteria('idUo','=',$this->idUo);
+        $query = $criteria->retrieveAsQuery();
+        return ! $query->eof();
+    }
+
+    /*
+    // retorna verdadeiro se existem requisicoes a serem
+    // executadas pela instÃ¢ncia atual da uo
+    */
+    function hasAutorizadas()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('autorizadas.idRequisicao');
+        $criteria->addCriteria('autorizadas.status','=','4');
+        $criteria->addCriteria('idUo','=',$this->idUo);
+        $query = $criteria->retrieveAsQuery();
+        return ! $query->eof();
+    }
+
+    /*
+    // retorna verdadeiro se existem requisicoes a serem
+    // confirmadas pela instÃ¢ncia atual da uo
+    */
+    function hasAConfirmar()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('aconfirmar.idRequisicao');
+        $criteria->addCriteria("aconfirmar.status","=","'9'");
+        $criteria->addCriteria("aconfirmar.idTipoReq","not in","(6,7,8,9)"); // compra
+        $criteria->addCriteria('idUo','=',$this->idUo);
+        $query = $criteria->retrieveAsQuery();
+        return ! $query->eof();
+    }
+
+    function listRequisicoes($tipo,$all=false,$idUsuario=false)	//usada para oção do executor e gestor
+    {
+        $criteria = $this->getCriteria();
+
+        $tipo = explode("_",$tipo);
+        $assoc = $tipo[1];
+        $status = $tipo[0];
+
+        $criteria->addColumnAttribute("$assoc.idRequisicao");
+        $criteria->addColumnAttribute("$assoc.dataHora","datahorareq");
+        $criteria->addColumnAttribute("$assoc.usuario.pessoa.nome");
+        $criteria->addColumnAttribute("$assoc.tipoRequisicao.descricao","tipo");
+
+        if ($status == "G") //Se Finalizada entÃ£o mostra tb as executadas (parcialmente e totalmente) de almoxarifado, compras e serviÃ§o
+        {
+            $cc2 = new CriteriaCondition();
+            // ou (idTipoReq = '7' e status = '8')  COMPRA
+            $cc3 = new CriteriaCondition();
+            $cc3->addCriteria($criteria->getCriteria("$assoc.idTipoReq",'=', "'7'"));
+            $cc3->addCriteria($criteria->getCriteria("$assoc.status",'=', "'8'"));
+            $cc2->addOrCriteria($cc3);
+
+            // ou (idTipoReq = '7' e status = '9') COMPRA
+            $cc4 = new CriteriaCondition();
+            $cc4->addCriteria($criteria->getCriteria("$assoc.idTipoReq",'=', "'7'"));
+            $cc4->addCriteria($criteria->getCriteria("$assoc.status",'=', "'9'"));
+            $cc2->addOrCriteria($cc4);
+
+            // ou (idTipoReq = '8' e status = '8') ALMOXARIFADO
+            $cc5 = new CriteriaCondition();
+            $cc5->addCriteria($criteria->getCriteria("$assoc.idTipoReq",'=', "'8'"));
+            $cc5->addCriteria($criteria->getCriteria("$assoc.status",'=', "'8'"));
+            $cc2->addOrCriteria($cc5);
+
+            // ou (idTipoReq = '8' e status = '9') ALMOXARIFADO
+            $cc6 = new CriteriaCondition();
+            $cc6->addCriteria($criteria->getCriteria("$assoc.idTipoReq",'=', "'8'"));
+            $cc6->addCriteria($criteria->getCriteria("$assoc.status",'=', "'9'"));
+            $cc2->addOrCriteria($cc6);
+
+            // ou (idTipoReq = '9' e status = '8') SERVIÃ‡O
+            $cc7 = new CriteriaCondition();
+            $cc7->addCriteria($criteria->getCriteria("$assoc.idTipoReq",'=', "'9'"));
+            $cc7->addCriteria($criteria->getCriteria("$assoc.status",'=', "'8'"));
+            $cc2->addOrCriteria($cc7);
+
+            // ou (idTipoReq = '9' e status = '9') SERVIÃ‡O
+            $cc8 = new CriteriaCondition();
+            $cc8->addCriteria($criteria->getCriteria("$assoc.idTipoReq",'=', "'9'"));
+            $cc8->addCriteria($criteria->getCriteria("$assoc.status",'=', "'9'"));
+            $cc2->addOrCriteria($cc8);
+
+            // e status = 'G'
+            $cc9 = new CriteriaCondition();
+            $cc9->addCriteria($criteria->getCriteria("$assoc.status",'=',"'$status'"));
+            $cc2->addOrCriteria($cc9);
+            $criteria->addCriteria($cc2);
+        }
+        else if ($status == "9")
+        {
+            $criteria->addCriteria("$assoc.status",'=', "'$status'");
+            $criteria->addCriteria("$assoc.idTipoReq",'<>', "'7'"); // COMPRA
+            $criteria->addCriteria("$assoc.idTipoReq",'<>', "'8'"); // ALMOXARIFADO
+            $criteria->addCriteria("$assoc.idTipoReq",'<>', "'9'"); // SERVIÃ‡O
+        }
+        else
+        {
+            $criteria->addCriteria("$assoc.status",'=', "'$status'");
+        }
+
+
+        if ((!$all) and ($this->idUo!=''))
+        {
+            $criteria->addCriteria('idUo','=',$this->idUo);
+        }
+        else
+        {
+            if($idUsuario)
+		$criteria->addCriteria('gestores.idUsuario','=',$idUsuario);
+            //$criteria->addCriteria('gestores.dataFim','IS','NULL');
+            $criteria->addOrCriteria('gestores.dataFim','=',"'01/01/0001'");
+        }
+        $criteria->addOrderAttribute("$assoc.idRequisicao");
+        return $criteria->retrieveAsQuery();
+    }
+
+    function listRequisicoesDeVeiculo($tipo)
+    {
+        $criteria = $this->getCriteria();
+        $tipo = explode("_",$tipo);
+        $assoc = $tipo[1];
+        $status = $tipo[0];
+        $criteria->addColumnAttribute("$assoc.idRequisicao");
+        $criteria->addColumnAttribute("$assoc.veiculo.dataHoraSaidaOrig","datahorasaida");
+        $criteria->addColumnAttribute("$assoc.usuario.pessoa.nome");
+        $criteria->addColumnAttribute("$assoc.tipoRequisicao.descricao","tipo");
+        $criteria->addCriteria("$assoc.status",'=',"'$status'");
+        $criteria->addCriteria('idUo','=',$this->idUo);
+        $criteria->addOrderAttribute("$assoc.veiculo.dataHoraSaidaOrig");
+        return $criteria->retrieveAsQuery();
+    }
+
+    function listRequisicoesDeDiaria($tipo)
+    {
+        $criteria = $this->getCriteria();
+        $tipo = explode("_",$tipo);
+        $assoc = $tipo[1];
+        $status = $tipo[0];
+        $criteria->addColumnAttribute("$assoc.idRequisicao");
+        $criteria->addColumnAttribute("$assoc.dataHora","datahorareq");
+        $criteria->addColumnAttribute("$assoc.diaria.vinculo.funcionario.pessoa.nome");
+        $criteria->addColumnAttribute("$assoc.tipoRequisicao.descricao","tipo");
+        $criteria->addCriteria("$assoc.status",'=',"'$status'");
+        $criteria->addCriteria('idUo','=',$this->idUo);
+        $criteria->addOrderAttribute("$assoc.idRequisicao");
+        return $criteria->retrieveAsQuery();
+    }
+
+    function getOrcamentos()
+    {
+        $this->retrieveAssociation('orcamento');
+        if ( ! $this->orcamento == NULL )
+        {
+            foreach ( $this->orcamento as $o )
+            {
+                $o->setSaldo();
+            }
+        }
+    }
+
+    function getOrcamento($idRubrica,$ano=null)
+    {
+        global $MIOLO;
+        if (!$ano) $ano = date('Y');
+        $this->getOrcamentos();
+        if ($this->orcamento)
+        {
+            foreach ($this->orcamento as $o)
+            {
+                if ($o->idRubrica == $idRubrica && $o->ano == $ano) return $o;
+            }
+        }
+        $o = $MIOLO->getBusiness('adm','orcamentointerno');
+        $o->idUo = $this->idUo;
+        $o->idRubrica = $idRubrica;
+        $o->ano = $ano;
+        return $o;
+    }
+
+    function getOrcamentoByRubrica($idRubrica,$ano=null)
+    {
+        global $MIOLO;
+        if (!$ano) $ano = date('Y');
+        $this->retrieveAssociation('orcamento');
+        if ( $this->orcamento )
+        {
+            foreach ( $this->orcamento as $o )
+            {
+                if ( trim($o->idRubrica) == trim($idRubrica) && $o->ano == $ano)
+                {
+                    return $o;
+                }
+            }
+            $o = $MIOLO->getBusiness('adm','orcamentointerno');
+            $o->idRubrica = $idRubrica;
+            $o->ano = $ano;
+            $o->idUo = $this->idUo;
+			$o->retrieve();
+            return $o;
+        }
+        else
+        {
+            $o = $MIOLO->getBusiness('adm','orcamentointerno');
+            $o->idRubrica = $idRubrica;
+            $o->ano = $ano;
+            $o->idUo = $this->idUo;
+            return $o;
+        }
+    }
+
+    function getRubricaByTipoReq($idTipoReq)
+    {
+// Alterado para funcionamento das licitações de 2009
+//        $this->getTipoReqsAutorizadasByAno(date('Y')-1);
+        $this->getTipoReqsAutorizadasByAno(date('Y'));
+        if ($this->tipoReqsAutorizadas)
+        {
+            foreach ($this->tipoReqsAutorizadas as $tipoReq)
+            {
+// Alterado para funcionamento das licitações de 2009
+//                if ($tipoReq->idTipoReq == trim($idTipoReq) && $tipoReq->ano == date("Y")-1)
+                if ($tipoReq->idTipoReq == trim($idTipoReq) && $tipoReq->ano == date("Y"))
+                {
+                    return $tipoReq->idRubrica;
+                }
+            }
+        }
+    }
+
+    function getSaldoByTipoReq($idTipoReq,$ano=null)
+    {
+        if (!$ano) $ano = date('Y');
+        $idRubrica = $this->getRubricaByTipoReq($idTipoReq,$ano);
+        $saldo = $this->getSaldoByRubrica($idRubrica,$ano);
+        return $saldo;
+    }
+
+    function getSaldoByRubrica($idRubrica,$ano=null)
+    {
+        if (!$ano) $ano = date('Y');
+        $orcamento = $this->getOrcamentoByRubrica($idRubrica,$ano);
+        $saldo = ( str_replace(',','.',$orcamento->credito) - (str_replace(',','.',$orcamento->debito) + str_replace(',','.',$orcamento->previsaoDebito)) );
+        return $saldo;
+    }
+
+    function temSaldoByRubrica($idRubrica,$valorReal,$valorEstimado = 0)
+    {
+        // O Saldo da UO Ã© o seu saldo normal (cred-deb-prev) + valor estimado - valor real
+        $saldo = $this->getSaldoByRubrica($idRubrica);
+        $saldo = str_replace(',','.',$saldo) + str_replace(',','.',$valorEstimado);
+        if ($saldo < str_replace(',','.',$valorReal))
+            return false;
+        else
+            return true;
+    }
+
+    function temSaldoPraFazerRequisicaoByRubrica($idRubrica,$valorEstimado)
+    {
+        // O Saldo da UO Ã© o seu saldo normal (cred-deb-prev) + valor estimado - valor real
+        $saldo = $this->getSaldoByRubrica($idRubrica);
+        if ($saldo < $valorEstimado)
+            return false;
+        else
+            return true;
+    }
+
+    function addPrevisaoDebito($idRubrica,$debito,$ano)
+    {
+        $orcamento = $this->getOrcamentoByRubrica($idRubrica,$ano);
+        $criteria = $this->getCriteria();
+        $criteria->addCriteria('idUo','=',$this->idUo);
+        $criteria->addCriteria('idRubrica','=',"'$idRubrica'");
+        $criteria->addCriteria('ano','=',$ano);
+
+        if ($this->getTransaction())
+            $orcamento->setTransaction($this->getTransaction());
+        $orcamento->addPrevisaoDebito($debito);
+        $orcamento->save();
+    }
+
+    function removePrevisaoDebito($idRubrica,$debito,$ano)
+    {
+        $orcamento = $this->getOrcamentoByRubrica($idRubrica,$ano);
+        if ($this->getTransaction())
+            $orcamento->setTransaction($this->getTransaction());
+        $orcamento->removePrevisaoDebito($debito);
+        $orcamento->save();
+    }
+
+    function addDebito($idRubrica,$debito,$ano)
+    {
+        $orcamento = $this->getOrcamentoByRubrica($idRubrica,$ano);
+        if ($this->getTransaction())
+            $orcamento->setTransaction($this->getTransaction());
+        $orcamento->addDebito($debito);
+        $orcamento->save();
+    }
+
+    function addCredito($idRubrica,$credito,$ano)
+    {
+        $orcamento = $this->getOrcamentoByRubrica($idRubrica,$ano);
+        if ($this->getTransaction())
+            $orcamento->setTransaction($this->getTransaction());
+        $orcamento->addCredito($credito);
+        $orcamento->save();
+    }
+
+    function removeDebito($idRubrica,$debito,$ano)
+    {
+        $orcamento = $this->getOrcamentoByRubrica($idRubrica,$ano);
+        if ($this->getTransaction())
+            $orcamento->setTransaction($this->getTransaction());
+        $orcamento->removeDebito($debito);
+        $orcamento->save();
+    }
+
+    function removeCredito($idRubrica,$credito,$ano)
+    {
+        $orcamento = $this->getOrcamentoByRubrica($idRubrica,$ano);
+        if ($this->getTransaction())
+            $orcamento->setTransaction($this->getTransaction());
+        $orcamento->removeCredito($credito);
+        $orcamento->save();
+    }
+
+    function addCreditoExecutante($idRubrica,$credito,$ano)
+    {
+        $orcamento = $this->getOrcamentoByRubrica($idRubrica,$ano);
+        if ($this->getTransaction())
+            $orcamento->setTransaction($this->getTransaction());
+        $orcamento->addCreditoExecutante($credito);
+        $orcamento->save();
+    }
+
+    function removeCreditoExecutante($idRubrica,$credito,$ano)
+    {
+        $orcamento = $this->getOrcamentoByRubrica($idRubrica,$ano);
+        if ($this->getTransaction())
+            $orcamento->setTransaction($this->getTransaction());
+        $orcamento->removeCreditoExecutante($credito);
+        $orcamento->save();
+    }
+
+    function addDebitoRemovePrevisao($idRubrica,$debito,$previsao,$ano)
+    {
+        $orcamento = $this->getOrcamentoByRubrica($idRubrica,$ano);
+        if ($this->getTransaction())
+            $orcamento->setTransaction($this->getTransaction());
+        $orcamento->addDebito($debito);
+        $orcamento->removePrevisaoDebito($previsao);
+        $orcamento->save();
+    }
+
+    function addPrevisaoRemoveDebito($idRubrica,$previsao,$debito,$ano)
+    {
+        $orcamento = $this->getOrcamentoByRubrica($idRubrica,$ano);
+        if ($this->getTransaction())
+            $orcamento->setTransaction($this->getTransaction());
+        $orcamento->addPrevisaoDebito($previsao);
+        $orcamento->removeDebito($debito);
+        $orcamento->save();
+    }
+
+    function getSaldoTotal()
+    {
+        if ( ! $this->orcamento == NULL )
+        {
+          $this->getOrcamentos();
+          foreach ( $this->orcamento as $o )
+          {
+            $saldo += $o->saldo;
+          }
+        }
+        return $saldo;
+    }
+
+    function getOrcamentoByRubricaAndAno($filterRubrica="",$filterAno="")
+    {
+        if ( ! $this->orcamento == NULL )
+        {
+            $i=0;
+
+            if ($filterRubrica == "" and $filterAno == "")
+            {
+                foreach ( $this->orcamento as $o )
+                {
+                    $o->setSaldo();
+                    $arrayorc[$i++]=$o;
+                }
+            }
+
+            if ($filterRubrica == "" and $filterAno != "")
+            {
+                foreach ( $this->orcamento as $o )
+                {
+                    if ($o->ano == $filterAno)
+                    {
+                        $o->setSaldo();
+                        $arrayorc[$i++]=$o;
+                    }
+                }
+            }
+
+            if ($filterRubrica != "" and $filterAno == "")
+            {
+                foreach ( $this->orcamento as $o )
+                {
+                    if ($o->rubrica->descricao == $filterRubrica)
+                    {
+                        $o->setSaldo();
+                        $arrayorc[$i++]=$o;
+                    }
+                }
+            }
+
+            if ($filterRubrica != "" and $filterAno != "")
+            {
+                foreach ( $this->orcamento as $o )
+                {
+                    if ( $o->rubrica->descricao == $filterRubrica and $o->ano == $filterAno)
+                    {
+                        $o->setSaldo();
+                        $arrayorc[$i++]=$o;
+                    }
+                }
+            }
+            return $arrayorc;
+        }
+    }
+
+    function GetSigla()
+    {
+        return $this->sigla;
+    }
+
+    function sByGestor($idUsuarioGestor)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('idUo');
+        $criteria->addColumnAttribute('sigla');
+	$criteria->addCriteria('gestores.idUsuario','=', $idUsuarioGestor);
+        $criteria->addOrderAttribute('sigla');
+        return $criteria->retrieveAsQuery();
+    }
+
+    function getGestores()
+    {
+        $this->retrieveAssociation('gestores');
+        if ($this->gestores != NULL)
+        {
+            if (!is_array($this->gestores))
+            {
+                $this->gestores = array($this->gestores);
+            }
+        }
+
+    }
+
+    function getExecutores()
+    {
+        $this->retrieveAssociation('executores');
+        if ($this->executores != NULL)
+        {
+            if (!is_array($this->executores))
+            {
+                $this->executores = array($this->executores);
+            }
+        }
+
+    }
+
+    /* @return: array de obj. usuario que sao gestores da uo */
+    function getUsuariosGestores()
+    {
+        $this->getGestores();
+
+        $Usuarios = array();
+
+        if ( $this->gestores != NULL )
+        {
+            foreach($this->gestores as $objGestor)
+            {
+                $objGestor->retrieveAssociation('usuario');
+                $Usuarios[] = $objGestor->usuario;
+            }
+        }
+
+        return $Usuarios;
+    }
+
+    function getUsuariosGestoresAtivos()
+    {
+        $this->getGestores();
+
+        $Usuarios = array();
+
+        if ( $this->gestores != NULL )
+        {
+            foreach($this->gestores as $objGestor)
+            {
+            	// ( ! $objGestor->dataFim )
+                if (($objGestor->dataFim == null) or ($objGestor->dataFim == '01/01/0001'))
+                {
+                    $objGestor->retrieveAssociation('usuario');
+                    $Usuarios[] = $objGestor->usuario;
+                }
+            }
+        }
+
+        return $Usuarios;
+    }
+
+    function getUsuariosExecutoresAtivos()
+    {
+        $this->getExecutores();
+
+        $Usuarios = array();
+
+        if ( $this->executores != NULL )
+        {
+            foreach($this->executores as $objExecutor)
+            {
+                //if ( ! $objExecutor->dataFim )
+                if (($objExecutor->dataFim == null) or ($objExecutor->dataFim == '01/01/0001'))
+                {
+                    $objExecutor->retrieveAssociation('usuario');
+                    $Usuarios[] = $objExecutor->usuario;
+                }
+            }
+        }
+
+        return $Usuarios;
+    }
+
+    function AddGestor($usuario)
+    {
+        $this->gestores[] = $usuario;
+    }
+
+    function AddExecutor($usuario)
+    {
+        $this->executores[] = $usuario;
+    }
+
+    function DeleteGestor($idu)
+    {
+        $this->getGestores();
+
+        if ( $this->gestores != NULL )
+        {
+            foreach($this->gestores as $Gestor)
+            {
+                if( $Gestor->idUsuario == $idu )
+                {
+                    $Gestor->dataFim = date('d/m/Y');
+
+                    try
+                    {
+                        $Gestor->save();
+                    }
+                    catch(Exception $e)
+                    {
+                        $this->manager->Error("Informe o seguinte erro à  equipe do CGCO: ",$e->getMessage());
+                    }
+                }
+            }
+        }
+    }
+
+    function getGestor($id)
+    {
+        $this->retrieveAssociation('gestores');
+        if ($this->gestores != NULL)
+        {
+            foreach ( $this->gestores as $g )
+            {
+                if ( $g->idUsuario == $id )
+                    return $g;
+            }
+        }
+    }
+
+    function getExecutor($id)
+    {
+        $this->retrieveAssociation('executores');
+        if ($this->executores != NULL)
+        {
+            foreach ( $this->executores as $e )
+            {
+                if ( $e->idUsuario == $id )
+                    return $e;
+            }
+        }
+
+        return null;
+    }
+
+    function DeleteExecutor($idu)
+    {
+        $this->getExecutores();
+
+        if ( $this->executores != NULL )
+        {
+            foreach($this->executores as $Executor)
+            {
+                if( $Executor->idUsuario == $idu )
+                {
+                    $Executor->dataFim = date('d/m/Y');
+
+                    try
+                    {
+                        $Executor->save();
+                    }
+                    catch(Exception $e)
+                    {
+                        $this->manager->Error("Informe o seguinte erro à  equipe do CGCO: ",$e->getMessage());
+                    }
+                }
+            }
+        }
+    }
+
+    function listMateriais()
+    {
+        $this->retrieveAssociation('estoque');
+        return $this->estoque;
+    }
+
+    function listMateriaisByNome($nome)
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->addColumnAttribute('estoque.idMaterial');
+        $criteria->addColumnAttribute('estoque.material.codmaterial');
+        $criteria->addColumnAttribute('estoque.material.descricao');
+        $criteria->addCriteria('estoque.material.descricao','LIKE', "$nome");
+        $criteria->addCriteria('estoque.idUo','=', $this->idUo);
+        $criteria->addOrderAttribute('estoque.material.descricao');
+        return $criteria->retrieveAsQuery();
+    }
+
+	function listMateriaisByNomeCod($entrada)
+	{
+		$criteria =  $this->getCriteria();
+
+		$criteria->addColumnAttribute('estoque.idMaterial');
+		$criteria->addColumnAttribute('estoque.material.codmaterial');
+		$criteria->addColumnAttribute('estoque.material.descricao');
+		$criteria->addColumnAttribute('estoque.estoque');
+		$criteria->addColumnAttribute('TRUNC(estoque.valorTotal, 2)', 'valorTotal');
+		$criteria->addColumnAttribute('estoque.estoqueMin');
+
+		$cc = new CriteriaCondition();
+		$cc->addCriteria($criteria->getCriteria('estoque.material.descricao','LIKE', "'%$entrada%'"));
+		if (is_numeric($entrada)) {
+			$cc->addOrCriteria($criteria->getCriteria('estoque.material.codmaterial','=', $entrada));
+		}
+		$criteria->addCriteria($cc);
+
+		$criteria->addCriteria('estoque.idUo','=', $this->idUo);
+
+		$criteria->addOrderAttribute('estoque.material.descricao');
+		return $criteria->retrieveAsQuery();
+
+	}
+
+    function getMovimentosByMaterial($idMaterial)
+    {
+        global $MIOLO;
+        $movimento = $MIOLO->getBusiness('adm','movimento');
+        $criteria =  $movimento->getCriteria();
+        $criteria->addColumnAttribute('idMovimento');
+        $criteria->addColumnAttribute('tipoMovimento');
+        $criteria->addColumnAttribute('dataMovimento','datamov');
+        $criteria->addColumnAttribute('quantidade');
+        $criteria->addColumnAttribute('valorTotal');
+        $criteria->addColumnAttribute('idMaterial');
+        $criteria->addColumnAttribute('idOrdemEntrega');
+        $criteria->addColumnAttribute('idRequisicao');
+        $criteria->addCriteria('idMaterial','=', "$idMaterial");
+        $criteria->addCriteria('itemreq.requisicao.uoExecutante.idUo','=',$this->idUo);
+        $criteria->addOrderAttribute('idMovimento');
+        return $criteria->retrieveAsCursor();
+    }
+
+    function getMovimentosByMaterialAndData($idMaterial,$dataInicio,$dataFim)
+    {
+        global $MIOLO;
+        $k = new MKrono();
+        $dataInicio = $k->invertDate($dataInicio);
+        $dataFim = $k->invertDate($dataFim);
+        $movimento = $MIOLO->getBusiness('adm','movimento');
+        $criteria =  $movimento->getCriteria();
+        $criteria->addCriteria('idMaterial','=', $idMaterial);
+        $criteria->addCriteria('dataMovimento','>=',"'$dataInicio'");
+        $criteria->addCriteria('dataMovimento','<=',"'$dataFim'");
+        $criteria->addCriteria('itemreq.requisicao.uoExecutante.idUo','=',"{$this->idUo}");
+        $criteria->addOrderAttribute('idMovimento');
+        $cursor = $criteria->retrieveAsCursor();
+        while ($movimento = $cursor->getObject())
+        {
+            $objects[] = $movimento;
+        }
+        return $objects;
+    }
+
+    function getMaterial($id)
+    {
+        global $MIOLO;
+        $this->retrieveAssociation('estoque');
+        if ($this->estoque != NULL)
+        {
+            foreach ( $this->estoque as $e )
+            {
+                if ( $e->idMaterial == $id )
+                    return $e;
+            }
+        }
+        $e = $MIOLO->GetBusiness('adm','estoque');
+        $e->idUo = $this->idUo;
+        return $e;
+    }
+
+    function getAlmoxExecutores()
+    {
+        $this->retrieveAssociation('almoxExecutores');
+        if ($this->almoxExecutores != NULL)
+        {
+            if (!is_array($this->almoxExecutores))
+            {
+                $this->almoxExecutores = array($this->almoxExecutores);
+            }
+        }
+        return $this->almoxExecutores;
+
+    }
+
+    function getAcessoAlmoxarifado($id)
+    {
+        global $MIOLO;
+        $this->retrieveAssociation('almoxExecutores');
+        if ($this->almoxExecutores != NULL)
+        {
+            foreach ( $this->almoxExecutores as $a )
+            {
+                if ( $a->idUoExecutante == $id )
+                    return $a;
+            }
+        }
+        $a = $MIOLO->GetBusiness('adm','executoralmox');
+        $a->idUoRequisitante = $this->idUo;
+        return $a;
+    }
+
+    function deleteAcessoAlmoxarifado($id)
+    {
+        $acesso = $this->getAcessoAlmoxarifado($id);
+        $acesso->Delete();
+    }
+
+    function getMovimentosAConsolidar()
+    {
+        global $MIOLO;
+        $movimento = $MIOLO->getBusiness('adm','movimento');
+        $criteria = $movimento->getCriteria();
+        $cc = new CriteriaCondition();
+        $cc->addCriteria($criteria->getCriteria('tipoMovimento','=',"3"));
+        $cc->addOrCriteria($criteria->getCriteria('tipoMovimento','=',"5"));
+        $criteria->addCriteria($cc);
+        $criteria->addCriteria('itemNota.empenhado.empenho.idUoEntrega','=',"{$this->idUo}");
+        $criteria->addCriteria('idOrdemEntrega','is',"null");
+        $cursor = $criteria->retrieveAsCursor();
+        while ($movimento = $cursor->getObject())
+        {
+            $objects[] = $movimento;
+        }
+        return $objects;
+    }
+
+    function getMovimentosByOENaoImpressas()
+    {
+        global $MIOLO;
+        $movimento = $MIOLO->getBusiness('adm','movimento');
+        $criteria = $movimento->getCriteria();
+        $cc = new CriteriaCondition();
+        $cc->addOrCriteria($criteria->getCriteria('tipoMovimento','=',"5"));
+        $criteria->addCriteria('itemNota.empenhado.empenho.idUoEntrega','=',"{$this->idUo}");
+        $criteria->addCriteria('ordem.impresso','=',"0");
+        $cursor = $criteria->retrieveAsCursor();
+        while ($movimento = $cursor->getObject())
+        {
+            $objects[] = $movimento;
+        }
+        return $objects;
+    }
+
+    function addNumeroOrdemEntrega()
+    {
+        global $MIOLO;
+        $ordentrega = $MIOLO->getBusiness('adm','ordementrega');
+        $ordentrega->newOrdemEntrega($this->idUo);
+        return $ordentrega->idOrdemEntrega;
+    }
+
+    function hasSaldoPublico() {
+		if ($this->saldoPublico == '1') {
+			return true;
+		} else {
+			return false;
+		}
+	}
+
+    function addLancamento($tipo,$rubrica,$valor,$obs=null)
+    {
+        global $MIOLO;
+        $lancamento = $MIOLO->getBusiness('adm','lancamentoint');
+        $lancamento->tipoLancamento = $tipo;
+        $lancamento->idRubrica = $rubrica;
+        $lancamento->valor = $valor;
+        $lancamento->idUoRequisitante = $this->idUo;
+        $lancamento->idUoExecutante = $this->idUo;
+        $lancamento->data = date("d/m/Y");
+        $lancamento->ano = date("Y");
+        $lancamento->obs = $obs;
+        $lancamento->idUsuario = $MIOLO->GetLogin()->idkey;
+        try
+        {
+            $lancamento->save();
+        }
+        catch(Exception $e)
+        {
+            $MIOLO->Error("Informe o seguinte erro Ã  equipe do CGCO: ",$e->getMessage());
+        }
+    }
+
+    function ReqByData($idUo,$dataInicio,$dataFim)
+    {
+        global $MIOLO;
+        $requisicao = $MIOLO->getBusiness('adm','requisicao');
+        $criteria   = $requisicao->getCriteria();
+        $criteria->addColumnAttribute('idUoRequisitante');
+        $criteria->addColumnAttribute('idTipoReq');
+        $criteria->addColumnAttribute('idRequisicao');
+        $criteria->addCriteria('dataHora','>=',"to_date('$dataInicio','DD/MM/YYYY')");
+        $criteria->addCriteria('dataHora','<=',"to_date('$dataFim','DD/MM/YYYY')");
+        $criteria->addCriteria('status','=',"'E'");
+        $criteria->addOrderAttribute('idUoRequisitante');
+        $criteria->addOrderAttribute('idTipoReq');
+        $criteria->addOrderAttribute('idRequisicao');
+        return $criteria->retrieveAsQuery();
+    }
+
+    function listUos()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('idUo');
+        $criteria->addColumnAttribute('sigla');
+        $criteria->addOrderAttribute('idUo');
+        return $criteria->retrieveAsQuery();
+    }
+
+	function listUosOrdemNome()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('idUo');
+        $criteria->addColumnAttribute('sigla');
+        $criteria->addOrderAttribute('sigla');
+        return $criteria->retrieveAsQuery();
+    }
+
+//////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////
+    function aaaaa($idUo)
+    {
+    	global $MIOLO;
+
+    }
+//////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////
+
+    function getGastoItemReq($idRequisicao)
+    {
+        global $MIOLO;
+        $requisicao = $MIOLO->getBusiness('adm','requisicao');
+        $requisicao->getById($idRequisicao);
+        $item = $requisicao->getItem();
+        switch ($requisicao->idTipoReq)
+        {
+            default:
+                return $item->valorReal;
+            break;
+        }
+    }
+
+    function listNomesUos()
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->addColumnAttribute('idUo');
+        $criteria->addColumnAttribute('nome');
+        $criteria->addOrderAttribute('nome');
+        return $criteria->retrieveAsQuery();
+    }
+
+    function getSiglaByIduo($id)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('sigla');
+        $criteria->addCriteria('idUo','=',$id);
+        return $criteria->retrieveAsQuery();
+    }
+
+    function getMovimentos($inicio=null,$fim=null)
+    {
+        global $MIOLO;
+        $k = new MKrono();
+        $inicio = $k->invertDate($inicio);
+        $fim = $k->invertDate($fim);
+        $movimento = $MIOLO->getBusiness('adm','movimento');
+        $criteria = $movimento->getCriteria();
+        if ($inicio)
+            $criteria->addCriteria('dataMovimento','>',"'$inicio'");
+        if ($fim)
+            $criteria->addCriteria('dataMovimento','<',"'$fim'");
+        $criteria->addCriteria('material.idelemento','=',"'339030'");
+        $cursor = $criteria->retrieveAsCursor();
+        while ($movimento = $cursor->getObject())
+        {
+            $objects[] = $movimento;
+        }
+        return $objects;
+    }
+
+    function getSaldoEstoqueNoDia($dia)
+    {
+        if ($this->isPersistent())
+        {
+            $k = new MKrono();
+            $movimento = $this->_miolo->getBusiness('adm','movimento');
+            $criteria = $movimento->getCriteria();
+            $criteria->addColumnAttribute("sum(valortotal)");
+            $criteria->addCriteria('dataMovimento','>',"'{$k->invertDate($dia)}'");
+            $criteria->addCriteria('material.idelemento','=',"'339030'");
+            $criteria->addCriteria('tipoMovimento','=',"1");
+            $cc = new CriteriaCondition();
+            $cc->addCriteria($criteria->getCriteria('requisicao.idUoRequisitante','=',"'{$this->idUo}'"));
+            $cc->addOrCriteria($criteria->getCriteria('requisicao.idUoExecutante','=',"'{$this->idUo}'"));
+            $criteria->addCriteria($cc);
+            $criteria->addCriteria('idMovimentoRef','is',"null");
+            $totalEntrada = $criteria->retrieveAsQuery()->result[0][0];
+            $criteria = $movimento->getCriteria();
+            $criteria->addColumnAttribute("sum(valortotal)");
+            $criteria->addCriteria('dataMovimento','>',"'{$k->invertDate($dia)}'");
+            $criteria->addCriteria('material.idelemento','=',"'339030'");
+            $criteria->addCriteria('tipoMovimento','=',"3");
+            $cc = new CriteriaCondition();
+            $cc->addCriteria($criteria->getCriteria('requisicao.idUoRequisitante','=',"'{$this->idUo}'"));
+            $cc->addOrCriteria($criteria->getCriteria('requisicao.idUoExecutante','=',"'{$this->idUo}'"));
+            $criteria->addCriteria($cc);
+            $criteria->addCriteria('idMovimentoRef','is',"null");
+            $totalSaida = $criteria->retrieveAsQuery()->result[0][0];
+            $estoque = $this->_miolo->getBusiness('adm','estoque');
+            $criteria = $estoque->getCriteria();
+            $criteria->addColumnAttribute("sum(valortotal)");
+            $criteria->addCriteria('idUo','=',"'{$this->idUo}'");
+            $saldoAtual = $criteria->retrieveAsQuery()->result[0][0];
+            $cf = new MCurrencyFormatter();
+            $saldoDia = $cf->toDecimal($saldoAtual) - $cf->toDecimal($totalEntrada) + $cf->toDecimal($totalSaida);;
+            return $saldoDia;
+        }
+    }
+
+    function getSaldoEstoque()
+    {
+        if ($this->isPersistent())
+        {
+            $estoque = $this->_miolo->getBusiness('adm','estoque');
+            $criteria = $estoque->getCriteria();
+            $criteria->addColumnAttribute("sum(valortotal)");
+            $criteria->addCriteria('idUo','=',"'{$this->idUo}'");
+            return $criteria->retrieveAsQuery()->result[0][0];
+        }
+    }
+
+    function getSaldoEstoquePorSubelemento($subelemento)
+    {
+        $sql = new sql("sum(e.valortotal)","ad_estoque e, ad_material m, ad_subelemento s","e.idmaterial = m.idmaterial and m.idelemento = s.idelemento and m.idsubelemento = s.idsubelemento and s.idelemento = 339030 and s.idsubelemento = {$subelemento} and e.iduo = {$this->idUo}");
+        $query = $this->Query($sql);
+        return $query->result[0][0];
+    }
+
+    function listMovimentosByBoletimDiario($dataInicio,$dataFim)
+    {
+        $k = new MKrono();
+        $dataInicio = $k->invertDate($dataInicio);
+        $dataFim = $k->invertDate($dataFim);
+        $movimento = $this->_miolo->getBusiness('adm','movimento');
+        $criteria = $movimento->getCriteria();
+        $criteria->addColumnAttribute('tipoMovimento');
+        $criteria->addColumnAttribute('material.codmaterial');
+        $criteria->addColumnAttribute('material.descricao');
+        $criteria->addColumnAttribute('material.unidade');
+        $criteria->addColumnAttribute('idRequisicao');
+        $criteria->addColumnAttribute('quantidade');
+        $criteria->addColumnAttribute('valorTotal');
+        $criteria->addCriteria('dataMovimento','>=',"'$dataInicio'");
+        $criteria->addCriteria('dataMovimento','<=',"'$dataFim'");
+        return $criteria->retrieveAsQuery()->result;
+    }
+
+    function listFechamento($dataInicio,$dataFim)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->setDistinct('iduo');
+        $criteria->addColumnAttribute('iduo', 'uo');
+      //
+        $subCriteria1 = $this->getCriteria();
+        $subCriteria1->setDistinct('iduo');
+        $subCriteria1->addColumnAttribute('iduo', 'uo');
+        $subCriteria1->addCriteria('solicitadas.materialCompra.licitacao.status','=',"'4'");
+        $subCriteria1->addCriteria('solicitadas.materialCompra.idLicitacao','=','solicitadas.materialCompra.licitacao.idLicitacao');
+        $subCriteria1->addCriteria('solicitadas.materialCompra.idRequisicao','=','solicitadas.idRequisicao');
+        $subCriteria1->addCriteria('solicitadas.dataHora','>=',"'$dataInicio'");
+        $subCriteria1->addCriteria('solicitadas.dataHora','<=',"'$dataFim'");
+      //
+        $subCriteria2 = $this->getCriteria();
+        $subCriteria2->setDistinct('iduo');
+        $subCriteria2->addColumnAttribute('iduo', 'uo');
+        $subCriteria2->addCriteria('solicitadas.servext.licitacao.status','=',"'4'");
+        $subCriteria2->addCriteria('solicitadas.servext.licitacao.idTipoLicitacao','=',"'2'");
+        $subCriteria2->addCriteria('solicitadas.servext.idLicitacao','=','solicitadas.servext.licitacao.idLicitacao');
+        $subCriteria2->addCriteria('solicitadas.servext.idRequisicao','=','solicitadas.idRequisicao');
+        $subCriteria2->addCriteria('solicitadas.dataHora','>=',"'$dataInicio'");
+        $subCriteria2->addCriteria('solicitadas.dataHora','<=',"'$dataFim'");
+      //
+        $criteria->addCriteria('iduo','IN',$subCriteria1);
+        $criteria->addOrCriteria('iduo','IN',$subCriteria2);
+        return $criteria->retrieveAsQuery();
+    }
+    //IFSP
+    function ListAll()
+	{
+
+        $criteria =  $this->getCriteria();
+        return $criteria->retrieveAsQuery();
+	}
+   function ListRange($range=NULL, $where = 'sigla')
+    {
+        $sql = new sql('*', 'ad_uo', '', $where);
+        $sql->SetRange($range);
+        $query = $this->Query($sql);
+        return $query;
+    }
+    
+    function updateBloqueio(){
+        $sql = new sql();
+        $sql->SetColumns('
+                databloqueio
+        ');
+        $sql->SetTables('
+                ad_uo
+        ');
+        $sql->SetWhere('iduo = '.$this->idUo);
+        $values = array($this->dataBloqueio);        
+        $ok = $this->Execute($sql->Update($values));
+        return $ok;
+    }
+    
+    function materialByIdUo($idmaterial, $iduo){        
+        $sql = new sql();
+        $sql->SetColumns('
+                m.idmaterial,
+                m.descricao,
+                m.codmaterial,			
+                e.estoque,			
+                e.estoquemin
+        ');
+        $sql->SetTables('
+                ad_material m inner join ad_estoque e on m.idmaterial = e.idmaterial
+        ');
+        $sql->SetWhere('m.idmaterial = '.$idmaterial);
+        $sql->SetWhereAnd('e.iduo = '.$iduo);
+        return $this->Query($sql);       
+    }
+}

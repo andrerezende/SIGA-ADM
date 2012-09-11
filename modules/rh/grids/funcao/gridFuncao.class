@@ -1,0 +1,115 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+/*tvz a forma de permitir ao usuario reniciar a pesquisa 
+(contornando aquele erro de nao achar apos ter ja feito uma outra procura)
+seja criar uma ligacao no menu horizontal -ou qualquer botao- 'Reiniciar pesquisa'*/
+
+
+class gridFuncao extends MDataGrid2
+{
+
+    
+    function __construct()
+	{
+        global $module;
+        $MIOLO = MIOLO::getInstance();
+
+        $obj = $MIOLO->GetBusiness($module,'funcao');
+        $qy = $obj->ListAll( Form::getFormValue('pesquisadescricao' ),
+                             Form::getFormValue('pesquisasiglasetor'),
+                             Form::getFormValue('pesquisasiglanivel'),
+							 Form::getFormValue('pesquisatipo' 		));
+        if ($qy->eof())
+        {
+    		parent::__construct($qy,null,null);
+        }
+        else
+        {
+            $hrefindex = $MIOLO->getActionURL($module,'main:funcao','#0#');
+            $hrefgrid  = $MIOLO->GetActionURL($module,'funcao:find','%0%');
+            $columns = array(
+                             new MDataGridColumn('idfuncao'          ,''            ,NULL    ,false,' 0%',false),
+                             new MDataGridColumn('descricao'         ,'Descrição'   ,'left'  ,false,'22%'      ),
+                             new MDataGridColumn('sigla'             ,'Nível'       ,'center',false,' 5%'      ),
+                             new MDataGridColumn('nivel'             ,''            ,NULL    ,false,' 0%',false),
+                             new MDataGridColumn('setor'             ,'Setor'       ,'left'  ,false,'15%'      ),
+                             new MDataGridColumn('datainicio'        ,'Início'      ,'left'  ,false,' 9%'      ),
+                             new MDataGridColumn('datafim'           ,'Término'     ,'left'  ,false,' 9%'      ),
+                             new MDataGridColumn('mandato'           ,'Mandato'     ,'center',false,' 7%'      ),
+                             new MDataGridColumn('idpublicacaoinicio',''            ,NULL    ,false,' 0%',false), //descreve publicação
+                             new MDataGridColumn('idpublicacaofim'   ,''            ,NULL    ,false,' 0%',false), //descreve publicação
+                             new MDataGridColumn('numeroinicio'      ,'Publ.Início' ,'center',false,' 8%'      ),
+                             new MDataGridColumn('numerofim'         ,'Publ.Término','center',false,' 8%'      ),
+                             new MDataGridColumn('idvinculo'         ,'Vínculo'     ,'center',false,' 8%'      ),
+                             new MDataGridColumn('datafimidvinculo'  ,'Término'     ,'left'  ,false,' 9%'      ),
+                             new MDataGridColumn('fimproximo'        ,'fim'         ,NULL    ,false,' 0%',false)
+                       );
+    		parent::__construct($qy,$columns,$hrefgrid,35,0);
+
+            $fields[] = new MLabel('Em vermelho as ocupações vencendo em trinta dias','red',TRUE);
+            $container = new MVContainer('container', $fields);
+            $this->manager->getTheme()->insertContent( $container );
+
+            $this->addActionUpdate($hrefindex);
+    		$this->SetFilter(false);
+    		$this->SetLinkType('hyperlink');
+            $this->SetRowMethod('gridFuncao',"myRowMethod");
+        }
+    } // __construct
+
+
+    public function myRowMethod( $indrow, $row, $actions, $columns ) //$row: colunas da tabela
+    {
+        global $MIOLO, $module;  //não aceita $this->..
+
+        $obj = $MIOLO->GetBusiness($module,'publicacao');
+
+        //coluna nova numeroinicio
+          $qy = $obj->GetById($row[8]);
+          //descreve na coluna a publicação inicial
+          $columns['numeroinicio']->control[$indrow]->setValue($qy->numero);
+
+        //coluna nova numerofim
+          $idpublicacaofim = $row[9];
+          if ($idpublicacaofim)
+          {
+              $qy = $obj->GetById($idpublicacaofim);
+              //descreve na coluna a publicação final
+              $columns['numerofim']->control[$indrow]->setValue($qy->numero);
+          }
+
+        //coluna fimproximo
+          if ($row[12] == 'a')
+          {
+              foreach ($columns as $ind => $reg)
+              {
+                  $columns[$ind]->control[$indrow]->addStyle('color', 'red');
+              }
+          }
+          else
+          {
+              $columns['idvinculo'       ]->control[$indrow]->addStyle('color', 'blue');
+              $columns['datafimidvinculo']->control[$indrow]->addStyle('color', 'blue');
+          }
+    } // myRowMethod
+
+
+}
+?>

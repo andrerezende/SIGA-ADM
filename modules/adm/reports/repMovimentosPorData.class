@@ -1,0 +1,147 @@
+<?php
+class repMovimentosPorData extends PDFReport
+{
+	var $img;
+	var $timestamp;
+	var $objRequisicao;
+
+	function __construct($info)
+	{
+		global $MIOLO, $module, $page, $context, $self, $action, $perms;
+
+		$this->idsetoralmox = $info['idsetoralmox'];
+		$this->dataInicio = $info['dataInicio'];
+		$this->dataFim = $info['dataFim'];	
+
+		$ui = $MIOLO->GetUI();
+		$this->img = $ui->GetImageSrc('logonet.png'); 
+		$columns = array(
+		    	new PDFReportColumn('idmaterial','Cód.','center',true,40,true,null,true),
+			new PDFReportColumn('descricao','Descrição','left',true,340,true,null,true),
+			new PDFReportColumn('unidade','UN','center',true,50,true,null,true),
+			new PDFReportColumn('numero','Req.','center',true,40,true,null,true),
+			new PDFReportColumn('idordement','','Ord.Ent.','center',true,40,true,null,true),
+			new PDFReportColumn('quantidade','Qtde.','center',true,10,true,null,true),
+			new PDFReportColumn('valortotal','Valor','center',true,60,true,null,true)
+		);
+        
+		$this->objRequisicao = $MIOLO->GetBusiness($module,'requisicao');
+
+		$query = $this->objRequisicao->ListMovimentosByDataSetor($info['idsetoralmox'],$info['dataInicio'],$info['dataFim']);
+		
+
+		//$setor = $MIOLO->GetBusiness('common','setor');
+		//$setor->GetById($this->idsetoralmox);		
+
+
+        if (is_array($query->result))
+        {
+            foreach($query->result as $row)
+            {
+                $dataIdMaterial[] = $row[0];
+                $dataDescricao[] = $row[1];
+                $dataUnidade[] = $row[2];
+                $dataIdRequisicao[] = $row[3];
+                $dataIdOrdemEnt[] = $row[4];
+                $dataQuandidade[] = $row[5];
+                $dataValorTotal[] = $row[6];
+            }
+            
+            $quantidade = count($dataIdMaterial);
+
+            for($i=0;$i<$quantidade;$i++)
+            {
+                $dataFinal[] = array(
+                    $dataIdMaterial[$i],
+                    $dataDescricao[$i], 
+                    $dataUnidade[$i],
+                    $dataIdRequisicao[$i],
+                    $dataIdOrdemEnt[$i],
+                    $dataQuandidade[$i],
+                    number_format(str_replace(',','.',$dataValorTotal[$i]),2,',','')				
+                );
+                $i++;
+            }
+		}
+		parent::__construct($dataFinal,$columns,40);
+        
+		$this->SetTitle('Relatório de Movimento de Material do Almoxarifado: '.$setor->nomesetor);
+		$this->SetOption('showTableTitle',1);
+		$this->SetOption('showLines',0);
+		$this->timestamp = date('d/m/Y'); 
+	}
+		
+	function GeneratePageHeader()
+	{   
+		$h = $this->pdf->getFontHeight(12);
+		$this->pdf->addText(520,800,9,$this->timestamp);
+	      	$this->pdf->addText(520,800-$h,10,'Página: ' . $this->pn->pageNumber . '/' . $this->pn->pageCount);
+
+		$x00=$this->pdf->left;
+		$hh = $this->pdf->getFontHeight(12);
+		$this->pdf->addText($x00, 800, 12, $this->manager->getConf('instituicao.sigla')." - ".$this->manager->getConf('instituicao.nome'));
+		$this->pdf->addText($x00, 800 - $hh, 12, $this->manager->getConf('theme.system'));
+
+/*
+		$this->pdf->ezImage($this->img,5,50,'none','left');
+		$this->pdf->addText(90,800,12,'UFJF - Universidade Federal de Juiz de Fora');
+
+		$this->pdf->addText(90,800-$h,12,'CGCO - Centro de Gestão do Conhecimento Organizacional');
+		$this->pdf->addText(90,800-$h-$h,12,'SIGA - Sistema Integrado de Gestão Acadêmica');
+*/
+
+
+		$this->pdf->addText(90,800-$h-$h-$h,10,'Coordenadoria de Suprimentos - Setor de Estoque');	
+		$this->pdf->addText(90,800-4*$h,10,'Boletim diário no período de '.$this->dataInicio.' a '.$this->dataFim);	
+		$this->pdf->ezSetY(770-$h-$h-$h);
+	}
+
+	function GeneratePageFooter()
+	{
+      		if( $this->pn->pageNumber == $this->pn->pageCount )
+	      	{
+			//$totalEntradas = $this->objRequisicao->GetTotalTipoMovimentoByDataSetor($this->idsetoralmox,$this->dataInicio,$this->dataFim,'1');
+			//$totalSaidas = $this->objRequisicao->GetTotalTipoMovimentoByDataSetor($this->idsetoralmox,$this->dataInicio,$this->dataFim,'3');
+			//$saldoAtual = $this->objRequisicao->GetSaldoByAlmoxarifado($this->idsetoralmox);
+			//$objNomeCargo = $this->objRequisicao->GetNomeCargoByAlmoxarifado($this->idsetoralmox);
+			//$nomeCargo = $objNomeCargo->result;
+			
+			/*
+            foreach ($nomeCargo as $rs)
+			{
+				$nome = $rs[0];
+				$cargo = $rs[1];
+			}
+            */
+			
+			$this->pdf->SetStrokeColor(0,0,0); 
+			$this->pdf->ezSetDy(-10);
+    
+	 		$this->pdf->line(370,$this->pdf->y,570,$this->pdf->y);
+			$this->pdf->ezSetDy(-15);
+			$this->pdf->addTextWrap(370,$this->pdf->y,200,10,'Total Entradas: '. number_format(str_replace(',','.',$totalEntradas),2,',',''),'right');
+			
+			$this->pdf->ezSetDy(-10);		
+			$this->pdf->addTextWrap(370,$this->pdf->y,200,10,'Total Saidas: '. number_format(str_replace(',','.',$totalSaidas),2,',',''),'right');
+
+			$this->pdf->ezSetDy(-10);		
+			$this->pdf->addTextWrap(370,$this->pdf->y,200,10,'Saldo Anterior: '. number_format(str_replace(',','.',$saldoAtual-$totalEntradas+$totalSaidas),2,',',''),'right');
+
+			$this->pdf->ezSetDy(-10);		
+			$this->pdf->addTextWrap(370,$this->pdf->y,200,10,'Saldo Atual: '. number_format(str_replace(',','.',$saldoAtual),2,',',''),'right');
+
+			$this->pdf->ezSetDy(-50);
+			$this->pdf->line(75,$this->pdf->y,225,$this->pdf->y);
+			$this->pdf->line(325,$this->pdf->y,475,$this->pdf->y);
+
+			$this->pdf->ezSetDy(-15);
+			$this->pdf->addTextWrap(75,$this->pdf->y,150,8,'COORDENADOR DE SUPRIMENTOS','center');
+			$this->pdf->addTextWrap(325,$this->pdf->y,150,8,$cargo,'center');
+
+			$this->pdf->ezSetDy(-15);
+			$this->pdf->addTextWrap(75,$this->pdf->y,150,8,'WANDERLEY RODRIGUES','center');
+			$this->pdf->addTextWrap(325,$this->pdf->y,150,8,$nome,'center');
+		}
+	}
+}
+?>

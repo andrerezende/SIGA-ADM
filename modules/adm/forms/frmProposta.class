@@ -1,0 +1,213 @@
+<?
+class frmProposta extends Form
+{
+	function __construct()
+	{   
+		parent::__construct('Adicionar Propostas');
+		$this->EventHandler();
+	}
+	
+	Function CreateFields()
+	{
+		global $MIOLO,$module,$item,$self;
+
+		$objLicitacao = $MIOLO->GetBusiness($module,'licitacao');
+		$fields = Array(
+//			new Separator('<b>Informe a Licitação:</b>'),
+			new LookupTextField('lkpLicitacao','','Número',15),
+			new HiddenField('status','2') //Participantes Definidos
+		);
+		$this->SetFields($fields);
+		$this->SetFieldAttr('lkpLicitacao','module',$module);
+		$this->SetFieldAttr('lkpLicitacao','item','Licitacao');
+		$this->SetFieldAttr('lkpLicitacao','event','btnListaFornecedores:click');
+		$this->SetFieldAttr('lkpLicitacao','filter','status,lkpLicitacao');
+
+		$buttons = Array(
+	        	new FormButton('btnListaFornecedores','Listar Fornecedores'),
+	        	new FormButton('btnFinaliza','Finalizar Gravação de Propostas'),
+    			new FormButton('btnVoltar','Voltar',$MIOLO->GetActionURL($module,'sectionsCompras'))
+		);
+		$this->SetButtons($buttons);
+		$this->SetButtonAttr('btnFinaliza','visible',false);
+		$this->SetButtonAttr('btnListaFornecedores','visible',false);
+	}
+	
+	/*------------------------------------------------
+
+	Método btnListaFornecedores_click()
+
+	------------------------------------------------*/
+	function btnListaFornecedores_click($sender='',$key='')
+	{
+		global $MIOLO,$module,$page,$self,$item, $theme;
+
+		$objLicitacao = $MIOLO->GetBusiness($module,'licitacao');
+
+		$item = ($key != '') ? $key : $item;
+        
+		//$numero = $this->GetFormValue('lkpLicitacao');
+		//if ($numero)
+		//	$idLicitacao = $objLicitacao->GetIdBynumero($numero);
+		//else
+		
+        $idLicitacao = $item;		
+		$list = $objLicitacao->ListFornecedoresByLicitacao($idLicitacao);
+
+		//var_dump($idLicitacao);
+        $columns = array(
+			   new GridColumn('idinstituicao','left',true,'0%',false),
+			   new GridColumn('Fornecedor','left',true,'80%',true),
+    		   new GridColumn('idLicitacao','left',true,'0%',false),
+    		   new GridColumn('idParticipante','left',true,'0%',false),
+        );
+        $grid = new Grid($list, $columns, $this->listURL,15,0);
+
+        $grid->SetTitle('Participantes da Licitação');
+	 	$href_edit = $MIOLO->GetActionURL($module,'main:proposta','%0%_%2%_%3%', array('event'=>'btnAdicionaProposta:click'));
+        $grid->AddActionText('alt','Adicionar Proposta',$href_edit);
+
+		$fields = Array(
+			$grid,
+			new Hiddenfield('idLicitacao',$idLicitacao)
+		);
+		$this->SetFields($fields);
+		$this->SetButtonAttr('btnListaFornecedores','visible',false);
+		$this->SetButtonAttr('btnFinaliza','visible',true);	
+
+	}
+
+	/*------------------------------------------------
+
+	btnAdicionaProposta_click()
+
+	------------------------------------------------*/
+	function btnAdicionaProposta_click()
+	{
+		global $MIOLO,$module,$item;
+		
+		$item = explode("_",$item);
+		$idFornecedor = trim($item[0]);
+		$idLicitacao = trim($item[1]);
+		$idParticipante = trim($item[2]);
+		$precoZerado = '0';
+				
+		//Se não existirem, insere os registros em ad_mapalicitacao
+		$objLicitacao = $MIOLO->GetBusiness('adm','licitacao');
+		$objLicitacao->GetById($idLicitacao);
+		$queryList = $objLicitacao->ListItensByIdLicitacao($idLicitacao);
+		foreach ($queryList as $rs)
+		{
+			if (!$objLicitacao->ExisteMapaLicitacao($idLicitacao,$rs[0],$idParticipante))
+				$objLicitacao->InsertMapaLicitacao($idLicitacao,$rs[0],$idParticipante,$precoZerado);
+		}
+	
+		$objItem = $MIOLO->GetBusiness('adm','itemreq');
+      	$qryItem = $objItem->ListItensSemDescricaoByLicitacao($idLicitacao,$idParticipante);
+       	$qryItem2 = $objItem->ListItensComDescricaoByLicitacao($idLicitacao,$idParticipante);
+	
+		//Monta o array de resultado com os arrays qryItem e qryItem2 (os que existirem)
+		if (!$qryItem->result)
+			$result = $qryItem2->result;
+		elseif (!$qryItem2->result)
+			$result = $qryItem->result;
+		else
+			$result = array_merge($qryItem->result,$qryItem2->result);
+		
+		$textFieldPreco = new TextField('preco','%4%','Preco',10);
+
+		$columns = array(
+			new GridColumn('Material','left',false,'40%'),
+			new GridColumn('Qtd.','center',true,'5%'),
+			new GridColumn('Descrição','left',true,'40%'),
+			new GridControl($textFieldPreco,'Preco','center',true,'15%',true,'',false,true),
+		);
+
+		//Instacia um novo objeto de Licitacao para pegar os dados os participante
+		$objLicitacao2 = $MIOLO->GetBusiness('adm','licitacao');
+		$objLicitacao2->GetInstituicaoByIdParticipante($idParticipante);
+		// instancia o grid
+		$href_grid = $MIOLO->GetActionURL($module,$self);
+        $grid = new Grid($result, $columns, $href_grid,15,0);
+
+		$fields = Array(
+			new TextLabel('','Licitação n&ordm; '.$objLicitacao->idLicitacao.' - Participante: '.$objLicitacao2->nome),		
+			$grid,
+			new HiddenField('idLicitacao',$idLicitacao),
+			new HiddenField('idParticipante',$idParticipante)
+	    );    
+		
+        $this->SetFields($fields);
+
+		$this->SetButtonAttr('btnListaFornecedores','visible',false);
+		
+	        $buttons = Array(
+			new FormButton('btnGravaProposta','Gravar Proposta'),
+	        );
+    
+	    $this->SetButtons($buttons);
+	}
+
+	function btnGravaProposta_click()
+	{
+		global $MIOLO,$module,$item;
+	
+		$preco = $this->GetFormValue('preco');
+		$idLicitacao = $this->GetFormValue('idLicitacao');    
+		$idParticipante = $this->GetFormValue('idParticipante'); 
+	
+//     	$this->SetFields($fields);
+
+		$this->SetButtonAttr('btnListaFornecedores','visible',false);
+
+		$objItem = $MIOLO->GetBusiness('adm','itemreq');
+
+       	$qryItem = $objItem->ListItensSemDescricaoByLicitacao($idLicitacao,$idParticipante);
+       	$qryItem2 = $objItem->ListItensComDescricaoByLicitacao($idLicitacao,$idParticipante);
+		//Monta o array de resultado com os arrays qryItem e qryItem2 (os que existirem)
+
+		if (!$qryItem->result)
+			$result = $qryItem2->result;
+		elseif (!$qryItem2->result)
+			$result = $qryItem->result;
+		else
+			$result = array_merge($qryItem->result,$qryItem2->result);
+
+		$objLicitacao = $MIOLO->GetBusiness('adm','licitacao');
+		
+		$i = 0;	
+		foreach ($result as $rs)
+		{
+			$item = $rs[3];
+			if ($objLicitacao->UpdateMapaLicitacao($idLicitacao,$item,$idParticipante,$preco[$i]))
+			{
+				$action = $MIOLO->GetActionURL($module, 'proposta', '',array('event'=>'btnListaFornecedores:click','item'=>$idLicitacao));
+			        $MIOLO->Information('Proposta cadastrada com sucesso',$action);
+			}
+			$i++;
+		}		
+	}
+
+	/*------------------------------------------------
+
+	btnFinaliza_click()
+	
+	Finaliza a Gravação de Propostas
+
+	------------------------------------------------*/
+	function btnFinaliza_click()	
+	{
+		global $MIOLO, $module,$item, $page, $theme, $action;
+	
+		$idLicitacao = $this->GetFormValue('idLicitacao');    
+		$objLicitacao = $MIOLO->GetBusiness($module,'licitacao');
+		$objLicitacao->GetById($idLicitacao);
+		if ($objLicitacao->SetStatus("3"))
+		{	
+			$action = $MIOLO->GetActionURL($module, 'sectionsCompras', '','');
+			$MIOLO->Information('Inclusão de propostas concluida com sucesso.',$action);
+		}
+	}
+
+}
+?>

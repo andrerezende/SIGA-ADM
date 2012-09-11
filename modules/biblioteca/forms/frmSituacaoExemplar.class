@@ -1,0 +1,186 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?
+class frmSituacaoExemplar extends Form
+{
+	var $objExemplar;
+	var $objEmprestimo;
+	var $objReserva;
+	var $objUsuario;
+	var $objUsuarioExterno;
+
+	//function __construct()
+
+      function frmSituacaoExemplar()  // construtor da Classe
+    {  
+		global $MIOLO, $action;
+
+		//$this->Form('Balcão de Empréstimos - Verificação da Situação do Exemplar');
+                $this->Form('Balcão de Empréstimos- Verifica Situação do Exemplar');
+		$this->EventHandler();
+  		$this->defaultButton = false;
+  		// Botão 'fechar', direcionando para o handler biblioteca/main/emprestimos
+		$this->SetClose($this->manager->GetActionURL($module, 'main:emprestimos'));
+
+	}
+
+
+        
+	function CreateFields()
+    {
+		global $MIOLO,$module;
+
+		if (! $this->page->IsPostBack()){
+			// Campos que aparecem no formulário
+			$fields = Array (
+				new TextField('edtTombo','','Exemplar',20),
+			);
+
+			// Insere os campos
+			$this->SetFields($fields);
+
+			// validators
+			$this->AddValidator(new RequiredValidator('edtTombo'));
+
+			// Botões que aparecem no formulário
+			$buttons = Array(
+				new FormButton('btnVerificar', 'Verificar'),
+			);
+			
+			if (!($this->GetFieldValue('edtTombo')))
+		{
+			//Definindo o foco
+			//$this->page->onLoad('document.'.$this->name.'.edtTombo.focus();');
+			$this->page->onLoad("MIOLO_GetElementById('edtTombo').focus();");
+		}
+
+			//Insere os Botões
+			$this->SetButtons($buttons);
+		}
+	}
+
+	function btnVerificar_click()
+	{
+		global $MIOLO,$module,$item,$self,$page,$theme,$action;
+
+		$this->SetButtonAttr('btnVerificar','visible',false);
+
+		if($item==null)
+			$tombo = $this->GetFormValue('edtTombo');
+		else
+			$tombo = $item;
+
+		$this->objExemplar = $MIOLO->GetBusiness($module, 'exemplar');
+		$exemplar = $this->objExemplar->GetByNumeroTombo($tombo);
+		$estado = $exemplar->idestado;
+
+		if($exemplar->numerodotombo == null){
+			$MIOLO->Error("Exemplar " . $tombo . " não foi encontrado.", $MIOLO->GetActionURL($module,$self));
+		}
+
+		$fields = Array (
+			new TextField('edtExemplar',$tombo,'Exemplar',20),
+			new TextField('edtEstado',$estado,'Estado',20),
+		);
+
+		if($estado == 'Emprestado'){
+			$this->objEmprestimo = $MIOLO->GetBusiness($module, 'emprestimo');
+			$this->objUsuario = $MIOLO->GetBusiness($module, 'usuario');
+			
+
+			$idemprestimo = $this->objEmprestimo->GetIdemprestimoByTombo($tombo);
+			if($idemprestimo <> null){
+				$emprestimo = $this->objEmprestimo->GetById($idemprestimo);
+				$usuario = $this->objUsuario->GetById($emprestimo->idusuario);
+				$nome = $usuario[0][2];
+				
+				//
+				// Verifica se usuário é externo
+				//
+				if (!($nome))
+				{
+					$this->objUsuarioExterno = $MIOLO->GetBusiness($module, 'usuarioexterno');
+					$nome = $this->objUsuarioExterno->GetById($emprestimo->idusuario)->nome;
+				}
+				
+								
+				$data = $emprestimo->datahoraprevisaodevolucao;
+			}
+			else{
+				$nome = '';
+				$data = '';
+			}
+
+			$fields[] = new TextField('edtUsuario',$nome,'Usuário',20);
+			$fields[] = new TextField('edtData',$data,'Previsão de Devolução',20);
+		}
+
+		$this->objReserva = $MIOLO->GetBusiness($module, 'reserva');
+
+		if($estado == 'Reservado'){
+			$this->objUsuario = $MIOLO->GetBusiness($module, 'usuario');
+
+			$reserva = $this->objReserva->ListReservaAtendidaExemplar($tombo);
+
+			if($reserva <> null){
+				$nome = $reserva->result[0][1];
+				$data = $reserva->result[0][7];
+			}
+			else{
+				$nome = '';
+				$data = '';
+			}
+
+			$fields[] = new TextField('edtUsuario',$nome,'Usuário',20);
+			$fields[] = new TextField('edtData',$data,'Limite',20);
+		}
+
+		$columns = array(
+			new DataGridColumn('idreserva','Nº Reserva','center',true, '30%',true, null, false, false),
+			new DataGridColumn('login','Cód Usuário','center',true, '30%',true, null, false, false),
+			new DataGridColumn('datahoradareserva','Solicitação','center',true, '40%',true, null, false, false),
+		);
+
+		$query = $this->objReserva->ListReservaEsperaExemplar($tombo);
+		
+		$href_datagrid = $MIOLO->GetActionURL($module,$action,$tombo,Array('event'=>'btnVerificar_click'));
+		$page->SetAction($href_datagrid);
+
+		$datagrid = new DataGrid2($query, $columns, $href_datagrid,15);
+		$datagrid->SetTitle('Reservas Solicitadas para o Exemplar');
+		$datagrid->SetWidth('99.5%');
+		$datagrid->SetControls(new MSeparator);
+		$datagrid->SetControls(new MButton('btnVoltar', 'Voltar', $MIOLO->GetActionURL($module,$self)));
+
+		$fields[] = new Spacer(1);
+		$fields[] = $datagrid;
+
+		// Insere os campos
+		$this->SetFields($fields);
+
+		$this->SetFieldAttr('edtEstado','readonly',true);
+		$this->SetFieldAttr('edtExemplar','readonly',true);
+		$this->SetFieldAttr('edtUsuario','readonly',true);
+		$this->SetFieldAttr('edtData','readonly',true);
+
+	}
+
+}
+?>

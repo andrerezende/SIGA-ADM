@@ -1,0 +1,78 @@
+<?
+/**
+ * Formulário de exclusão uo
+ */
+class frmRequisicaoAcao extends Form
+{
+	/**
+	 * Objeto Requisicao
+	 * @access protected
+	 * @var BusinessRhRequisicao
+	 */
+	protected $objRequisicao;
+	protected $status;
+	protected $acao;
+	protected $idRubrica;
+	protected $valor;
+
+    function __construct($info)
+    {
+		$this->objRequisicao = $info[0];
+		$this->status = $info[1];
+		$this->acao = $info[2];
+		$this->idRubrica = $info[3];
+        parent::__construct('Alterar Status');
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+		$action_sim = $this->manager->GetActionURL('adm','main:requisicoes',$this->objRequisicao->idRequisicao,array('form'=>'status','acao'=>$this->acao,'conf'=>'sim'));
+		$action_nao = $this->manager->GetActionURL('adm','main:requisicoes',$this->objRequisicao->idRequisicao,array("form"=>"item","tipoReq"=>$this->objRequisicao->idTipoReq));
+
+		$conf = $this->GetFormValue('conf');
+
+		switch ( $this->acao ) 
+		{
+			case 'autorizar':
+				$txt = 'autorizada';
+			break;
+			case 'devolver':
+				$txt = 'devolvida';
+			break;
+			case 'cancelar':
+				$txt = 'cancelada';
+			break;
+		}
+
+		if ($conf == 'sim')
+		{
+			if ( $this->status == 4 )
+			{
+				//codigo para autorizar, registro em lancamento interno, aumento na previsao de debito
+				$this->objRequisicao->getUoRequisitante();
+				$valor = $this->objRequisicao->getItemValorEstimado();
+				$this->objRequisicao->uoRequisitante->addPrevisaoDebito($this->idRubrica,$valor);
+				
+			}
+			$this->objRequisicao->setStatus($this->status);
+			$this->objRequisicao->save();
+			
+			$this->objRequisicao->Log(OP_INS,"Requisicao ".$this->objRequisicao->idRequisicao." $txt com sucesso.");
+			
+			if (!$this->objRequisicao->CheckError())
+			{
+				$this->manager->Information("Requisição $txt com sucesso",$this->manager->GetActionURL('adm','main:requisicoes:find'));
+			}
+					
+	   }
+	   else
+	   {
+		   $this->manager->Question("Tem certeza que deseja $this->acao a requisição ".$this->objRequisicao->idRequisicao."?",$action_sim,$action_nao);
+		}
+	   
+    }
+
+
+ }
+?>

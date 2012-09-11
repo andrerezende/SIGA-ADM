@@ -1,0 +1,200 @@
+<?php
+class repClassificadorPorElemento extends PDFReport
+{
+	var $img;
+	var $timestamp;
+    var $level = array();
+	var $idRubrica;
+	var $objItemPatrimonio;
+
+	function __construct()
+	{
+        global $MIOLO, $module, $page, $context, $self, $action, $perms;
+
+        parent::__construct(NULL, NULL, 55);
+        $ui = $MIOLO->GetUI();
+		$this->img = $ui->GetImageSrc('logo_siga.png',$module); 
+        //        $this->SetPDF(new ezPDFReport('2'));
+        $this->timestamp = date('d/m/Y G:i');
+        //        $this->SetTrigger('AfterNewPage','repMultiLevel2','AfterNewPage', $this);
+        $this->pdf->ezStartPageNumbers(520, 800, 12, 'rigth', 'Página: {PAGENUM}');
+        $this->pdf->ezSetMargins(100, 30, 30, 30);
+        $this->GeneratePageHeader();
+        $this->GeneratePageFooter();
+		$this->SetOption('fontSize',9);
+
+		$this->idRubrica = Form::GetFormValue('idRubrica');
+		$this->objItemPatrimonio = $MIOLO->GetBusiness($module,'itempatrimonio');
+
+		//montagem da árvore de idelementos.idsubelementos
+		if(!$this->idRubrica)
+		{
+			$rubricas = $this->objItemPatrimonio->GetSubelementos();
+			$numRubricas = $rubricas->GetRowCount();
+			$rubricas->moveFirst();
+		}
+		else
+		{
+			$numRubricas = 1;
+		}
+
+		$tree = array();
+		for ($j = 0; $j < $numRubricas; $j++)
+		{
+			//busca e agrupa dados para cada rubrica(elemento,subelemento)
+			if(!$this->idRubrica)
+			{
+				$rowSubelemento = $rubricas->getRowValues();
+				$rowRubrica = array('449052', $rowSubelemento[0]);
+				$rubricas->moveNext();
+			}
+			else
+			{
+				$rowRubrica = array(substr($this->idRubrica,0,6), substr($this->idRubrica,7,2));
+			}
+			//$data0 = [0-c.idclassificador, 1-s.idsetor, 2-ip.descricao, 3-ip.dataaquisicao, 4-e.numero, 5-ip.notafiscal, 6-ip.idempenhado, 7-ip.idmaterial, 8-ip.iditempatrimonio, 9-ip.valor]
+			$data = $this->objItemPatrimonio->GetClassificadoresPorRubrica($rowRubrica[1]);
+			$soma21 = 0;
+			for($d = 0; $d < count($data); $d++)
+			{
+				$soma21 += $data[$d][2];//quantidade
+			}
+			$tree[$rowRubrica[0] . '.' . $rowRubrica[1]] = $data;
+			$summary2[] = array(array(
+				"<b>Total da Rubrica:</b>",
+				"<b>$soma21</b>",
+			));
+			$soma11 += $soma21;
+		}
+		if(!$this->idRubrica)
+		{
+			$summary1 = array(array(
+				"<b>Total Geral:</b>",
+				"<b>$soma11</b>",
+			));
+		}
+//var_dump($tree);
+		// define as colunas
+		$columns = array(
+			new PDFReportColumn('det0', '<b><i>Código</i></b>', 'center', false, 10, true),
+			new PDFReportColumn('det1', '<b><i>Classificador</i></b>', 'left', false, 50, true),
+			new PDFReportColumn('det2', '<b><i>Quantos</i></b>', 'right', false, 10, true),
+		);
+
+		$sum2 = array(
+			new PDFReportColumn('texto0', 'texto0', 'right', false, 60, true),
+			new PDFReportColumn('texto1', 'texto1', 'right', false, 10, true),
+		);
+
+		$sum1 = array(
+			new PDFReportColumn('texto0', 'texto0', 'right', false, 60, true),
+			new PDFReportColumn('texto1', 'texto1', 'right', false, 10, true),
+		);
+
+		// Largura do report, em %
+		$this->SetWidth(100);
+
+		// registra as colunas de detalhes e summary
+		$this->SetColumns($columns);
+		$colDetail = $this->columns;
+		$this->SetColumns($sum2);
+		$colSum2 = $this->columns;
+		$this->SetColumns($sum1);
+		$colSum1 = $this->columns;
+
+		// gera o report
+		$i = 0;
+		foreach ($tree as $this->level[1] => $node1)
+		{
+			$this->SetOption('showHeadings', 1);
+			$this->SetOption('showLines', 0);
+			$this->columns = $colDetail;
+			$this->GenerateGroupHeader(1, $this->level);
+			$this->GenerateData($node1);
+			$this->SetOption('showHeadings', 0);
+			$this->SetOption('showLines', 1);
+
+			$this->columns = $colSum2;
+			$this->GenerateData($summary2[$i++]);
+		}
+		$this->columns = $colSum1;
+		$this->GenerateData($summary1);
+	}
+
+	function GenerateGroupHeader($level, $array)
+	{
+		$this->pdf->SetStrokeColor(0, 0, 0);
+		$x0 = $this->pdf->left;
+
+		if ($level == 1)
+		{
+			$this->pdf->ezSetDy(-45, 'makeSpace');
+			$y = $this->pdf->y;
+			$this->pdf->addText($x0, $y + 19, 10, 'Rubrica: ' . $array[1]);
+			$this->pdf->line($x0, $y + 15, 300, $y + 15);
+			$this->pdf->ezSetDy(+15);
+		}
+	}
+
+	function GeneratePageHeader()
+	{
+		$x0 = $this->pdf->left;
+		$x1 = $this->pdf->right;
+		$h = $this->pdf->getFontHeight(12);
+		$header = $this->pdf->openObject();
+		$this->pdf->saveState();
+//		$this->pdf->addPngFromFile($this->img, $x0, 780, 50, 25);
+
+
+		$x0=$this->pdf->left;	
+		$this->pdf->addText($x0, 800, 12, $this->manager->getConf('instituicao.sigla')." - ".$this->manager->getConf('instituicao.nome'));
+		$this->pdf->addText($x0, 800 - $h, 12, $this->manager->getConf('theme.system'));
+
+/*
+		$this->pdf->addText($x0 + 60, 800, 12, 'UFJF - Universidade Federal de Juiz de Fora');
+		$this->pdf->addText($x0 + 60, 800 - $h, 12, 'Patrimônio da Universidade Federal de Juiz de Fora');
+		$this->pdf->addText($x0 + 60, 800 - $h - $h, 12, 'SIGA - Sistema Integrado de Gestão Acadêmica');
+
+*/
+
+		$this->pdf->SetStrokeColor(0, 0, 0);
+		$y = 800 - $h - $h - 5;
+		$this->pdf->line($x0, $y, $x1, $y);
+		$this->pdf->addText($x0, $y - 13, 12, "Relatório de Classificadores por Elemento de Despesa");
+		$this->pdf->line($x0, $y - 15, $x1, $y - 15);
+		$this->pdf->restoreState();
+		$this->pdf->closeObject();
+		$this->pdf->addObject($header, 'all');
+		$this->pdf->ezSetDy(+15);
+	}
+
+	function GeneratePageFooter()
+	{
+		$x0 = $this->pdf->left;
+		$x1 = $this->pdf->right;
+		$footer = $this->pdf->openObject();
+		$this->pdf->saveState();
+		$this->pdf->SetStrokeColor(0, 0, 0);
+		$this->pdf->line($x0, 28, $x1, 28);
+		$this->pdf->addText($x0, 19, 9, $this->timestamp . ' - CGCO/DSI');
+		$this->pdf->restoreState();
+		$this->pdf->closeObject();
+		$this->pdf->addObject($footer, 'all');
+	}
+
+	function GenerateData($data)
+	{
+		$this->pdf->ezSetDy(-5);
+		$this->SetData($data);
+		$this->rawdata = $this->GenerateTableData();
+		$this->GenerateBody($this->rawdata);
+	}
+
+	function Generate()
+	{
+		$this->SetOutput();
+		$this->Execute();
+	}
+
+}
+?>

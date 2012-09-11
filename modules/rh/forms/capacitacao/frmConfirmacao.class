@@ -1,0 +1,174 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmConfirmacao extends MFormAJAX
+{
+    public $idauth;
+    public $idvinculo;
+    public $grid; 
+    public $modulo;
+    public $idmoduloinsc;
+    public $anosem;
+    public $candidatos;
+
+	function __construct($idauth)
+    {   global $MIOLO, $action, $modulo;
+
+        $this->modulo = $MIOLO->getBusiness('rh','capacitacaomodulo');
+        parent::__construct('Inscrições em Eventos de Capacitação - Confirmação pela PRORH');
+        $this->box->AddStyle('padding',"10px");
+        $this->idauth = $idauth; 
+	    $this->eventHandler();
+	}
+
+    function CreateFields()
+	{  
+        $this->idmoduloinsc = $this->getFormValue('idmodulo');
+        $this->anosem = $this->getFormValue('anosemestre');
+        if ($this->idmoduloinsc == '')
+        {
+            if ($this->anosem == '')
+            {
+                $this->createFieldsFase0();
+            }
+            else
+            {
+                $this->createFieldsFase1();
+            }
+        }
+        else
+        {
+            $this->createFieldsFase2();
+        }
+    }
+
+    function CreateFieldsFase0()
+    {
+        global $MIOLO, $action;
+
+        $modulo = $MIOLO->GetBusiness('rh','capacitacaomodulo');
+        $anosemestre = $modulo->getListOfAnoSemestre();
+        $anosemestre[' '] = 'TODOS';
+
+        $fields = array(
+            new MLabel('Atenção: Este formulário permite que você confirme a participação de servidores em modulos/Eventos de Capacitação.','#990000',true),
+            new MSpacer('15px'),
+            new MSelection('anosemestre','','Ano.Semestre',$anosemestre),
+        );
+        $this->SetFields($fields);
+
+        $buttons = Array(
+            new MButton('btnAnoSemestre', 'Continuar'),
+        );
+	    $this->SetButtons($buttons);
+    }
+
+    function CreateFieldsFase1()
+    {
+        $anosemestre = $this->modulo->getListOfAnoSemestre();
+        $anosemestre[' '] = 'TODOS';
+        $aTurno = array("M"=>"Manhã","T"=>"Tarde","N"=>"Noite");	
+        $query = $this->modulo->listAll('','',trim($this->anosem));
+        $aModulos = $query->treeResult("1","3,5,0"); 
+
+		foreach($aModulos as $n=>$c)
+		{
+			$opt = array(); 
+			foreach($c as $c1)
+			{
+               $opt[] = new MOption( $c1[2], $c1[2], $c1[0].'&nbsp;-&nbsp;'.$aTurno[$c1[1]], false);
+			}
+             $optGroup[] = new MOptionGroup($c[2],'Curso: '.$n,$opt);
+		}
+        if(!$optGroup)
+        {
+            $this->AddError("Não há nenhum módulo cadastrado no Ano.Semestre escolhido.");
+            $buttons = Array(
+                new MButton('btnmodulo', 'Voltar'),
+            );
+    	    $this->SetButtons($buttons);
+        }
+        else
+        {
+            $fmodulo = new MSelection('idmodulo',$this->idmoduloinsc,'Curso/Módulo',$optGroup);
+
+            $fields = array(
+               new MLabel('Atenção: Este formulário permite que você confirme a participação de servidores em modulos/Eventos de Capacitação.','#990000',true),
+               new MSpacer('15px'),
+               new MSelection('anosemestre','','Ano.Semestre',$anosemestre),
+               $fmodulo
+            );
+	        $this->SetFields($fields);
+    	    $this->SetFieldAttr('anosemestre', 'readonly', true);
+
+            $buttons = Array(
+                new MButton('btnmodulo', 'Continuar'),
+            );
+    	    $this->SetButtons($buttons);
+            $this->setLabelWidth('20'); 
+        }
+    }
+
+    function CreateFieldsFase2()
+    {
+// grid com os candidatos
+        $this->modulo->getById($this->idmoduloinsc); 
+        $this->grid = $this->manager->getUI()->getGrid('rh','gridCapacitacaoInsc',$this->modulo);
+
+        $turno = array("M"=>"Manhã","T"=>"Tarde","N"=>"Noite");
+
+        
+        $fields = array(
+            new MHiddenField('idmodulo',$this->idmodulo),
+            new MHiddenField('anosemestre',$this->anosem),
+//            new MLabel("moduloServidor: " . $this->candidato->dadosPessoais->nome,'black',true),
+//            new MLabel("SIAPE: " . $this->candidato->idvinculo,'black',true),
+//            new MTextLabel('lblId',$this->modulo->idmodulo,'Código'), 
+            new MTextLabel('lblCurso',$this->modulo->curso->idcurso . ' - ' . $this->modulo->curso->nome,'Curso'), 
+            new MTextLabel('lblModulo',$this->modulo->modulo . ' - ' . $this->modulo->nome,'Módulo'), 
+            new MTextLabel('lblTurno',$turno[$this->modulo->turno],'Turno'), 
+            new MSpacer('10px'),
+            new MLabel("Marque as inscrições que você deseja confirmar e clique no botão no fim do formulário.",'#990000',true),
+            $this->grid
+        );
+
+	    $this->SetFields($fields);
+        $this->defaultButton = false;
+
+    }
+
+    function ajax_detail($id)
+    {
+        // this method is called by CPAINT at doDetail execution
+        global $MIOLO;
+        $inscricao = $MIOLO->GetBusiness('rh','capacitacaoinsc',$id);
+        $data = array();
+        $data[] = "Unidade: " . $inscricao->dadosFuncionais->unidade;    
+        $data[] = "Cargo: " . $inscricao->dadosFuncionais->cargo;    
+        if (($inscricao->status == "C") || ($inscricao->status == "A") || ($inscricao->status == "X"))
+        {
+            $data[] = 'Autorizado por: [' . $inscricao->dadosAuth->siape . '] ' . $inscricao->dadosAuth->nome;
+        }
+        $control = new MTableRaw('',$data);
+        $control->setAlternate(true);
+        // response_type = TEXT : set the content area of theme with the control
+        $MIOLO->getTheme()->setAjaxContent($control);
+    }
+}
+?>

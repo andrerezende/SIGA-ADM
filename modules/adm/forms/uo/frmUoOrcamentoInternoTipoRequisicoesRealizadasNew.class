@@ -1,0 +1,85 @@
+<?php
+class frmUoOrcamentoInternoTipoRequisicoesRealizadasNew extends Form
+{
+    
+    protected $objUo;
+	
+    function __construct($objUo)
+    {
+       $this->objUo = $objUo;
+       $this->Form('Permissão de requisição');
+       $this->EventHandler();
+    }
+
+	function CreateFields()
+    {
+        $idRubrica = $this->getFormValue('idRubrica');
+
+        $tipoReq = $this->manager->GetBusiness('adm','tiporeq');
+        $reqRubrica = $this->manager->GetBusiness('adm','reqrubrica');
+        
+	$orcamentoInt = $this->manager->GetBusiness('adm','orcamentointerno');
+        $tipos = $reqRubrica->ListByRubrica($idRubrica)->result;
+
+        if ($tipos)
+        {
+            foreach ($tipos as $tipo) 
+            {
+                $tipoRequisicoesDisponiveis[$tipo[0]] = $tipo[1];
+            }
+
+            $tipoRequisicoesOcupadas = $this->objUo->getTipoReqsAutorizadasByAno($this->getFormValue('ano'));
+
+            if ($tipoRequisicoesOcupadas)
+            {
+                foreach ($tipoRequisicoesDisponiveis as $key=>$value)
+                {
+                    foreach ($tipoRequisicoesOcupadas as $tipoRequisicaoOcupada)
+                    {
+                        if ($key == $tipoRequisicaoOcupada->idTipoReq) unset($tipoRequisicoesDisponiveis[$key]);
+                    }
+                }
+            }
+        }
+
+        
+        if (!$tipoRequisicoesDisponiveis)
+        {
+            $action = $this->manager->getActionURL('adm','main:uo',$this->objUo->idUo,array("form"=>"orcamentointerno","subform"=>"tipoRequisicoesRealizadas","idRubrica"=>$this->getFormValue('idRubrica'),"ano"=>$this->getFormValue('ano')));
+            $this->manager->Error('Não há tipos de requisição disponíveis para esta rubrica.',$action);
+        }
+        else
+        {        
+            $fields = array(
+                new MHiddenField('idRubrica',$idRubrica),
+                new MHiddenField('ano',$this->getFormValue('ano')),
+                new MSelection('idTipoReq','','Tipo de Requisição',$tipoRequisicoesDisponiveis),
+            );
+            $this->SetFields($fields);
+           
+            $buttons = array
+            (
+                new MButton('btnIncluir', 'Enviar'),
+            );
+            $this->SetButtons($buttons);
+        }
+    }
+
+    function btnIncluir_click()
+    {
+        $data = $this->getData();
+        $orcamento = $this->objUo->getOrcamento($data->idRubrica,$data->ano);
+        $requisita = $orcamento->getTipoReqPermitida($data->idTipoReq);
+        try
+        {
+			$requisita->ativo = "S";
+            $requisita->save();
+            $action = $this->manager->getActionURL('adm','main:uo',$this->objUo->idUo,array("form"=>"orcamentointerno","subform"=>"tipoRequisicoesRealizadasSetAtiva","idRubrica"=>$orcamento->idRubrica,"ano"=>$orcamento->ano));
+            $this->manager->Information("Permissão criada com sucesso.",$action);
+        }
+        catch (Exception $e) {$this->addError($e->getMessage());}
+    }
+
+} 
+?>
+

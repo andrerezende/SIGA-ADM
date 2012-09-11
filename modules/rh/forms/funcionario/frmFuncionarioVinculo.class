@@ -1,0 +1,835 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+MIOLO::Import('modules::rh::controls::selectionref');
+class frmFuncionarioVinculo extends MFormAjax
+{
+
+    protected $vinculo;
+    protected $grupoOcorrencia;
+
+    function __construct($objVinculo)
+    {
+        $this->vinculo = $objVinculo;
+        parent::__construct('Incluir Novo Vínculo');
+        $this->page->AddJsCode(file_get_contents(dirname(__FILE__) . '/js/frmFuncionarioVinculo.js'));
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+    	global $MIOLO;
+    	
+    	$grupoCargo = $this->manager->getBusiness('rh','grupocargo');
+       	$cargos = $grupoCargo->listWithVagas();
+       	// Aqui serão construidas condições para evitar mensagens de erro para o usuário
+       	$cargosResult = $cargos->result;
+	   	if (!$cargosResult)
+	   	{
+		   $url = $this->manager->GetActionURL('rh','main:funcionario:find');
+		   $MIOLO->information("Não há vaga vinculada a nenhum cargo, por favor entre em contato com o administrador do sistema",$url);
+	   	}
+	   	$jornada = $this->manager->GetBusiness('rh','jornada');
+	   	$jornadaResult = $jornada->listAll()->result;
+	   	if (!$jornadaResult)
+	   	{
+	   		$url = $this->manager->GetActionURL('rh','main:funcionario:find');
+		   	$MIOLO->information("Não há jornada cadastrada no sistema, por favor entre em contato com o administrador do sistema",$url);
+	   	}
+	   	$this->grupoOcorrencia = $this->manager->GetBusiness('rh','grupoocorrencia','01');
+	   	$ocorrenciasResult = $this->grupoOcorrencia->ListOcorrencias()->result;
+	   	if (!$ocorrenciasResult)
+		{
+			$url = $this->manager->GetActionURL('rh','main:funcionario:find');
+		   	$MIOLO->information("Não há ocorrência cadastrada no sistema, por favor entre em contato com o administrador do sistema",$url);
+	   	} 
+	
+       	$lotacao = array("N"=>"Não","S"=>"Sim");
+       	$fields = array(
+        	//new MSelection('idOcorrencia','','Ocorrência',$this->grupoOcorrencia->ListOcorrencias()->result),
+        	new MSelection('idOcorrencia','','Ocorrência',$ocorrenciasResult),
+            new MSelection('idSituacao','','Situação Funcional'),
+            array(
+                //new MSelection('idGrupoCargo','','Grupo Cargo',$cargos->result),
+                new MSelection('idGrupoCargo','','Grupo Cargo',$cargosResult),
+                new MDiv('divSelCargo'),
+                new MTextField('cargo','','Cargo',30),
+                //new MLookupField('lkpCargo','&nbsp;','&nbsp;'),
+            ),
+            new MSelection('excedeLotacao','','Excede Lotação',$lotacao),
+            new MSelection('numeroVaga','','Número Vaga'),
+            array(
+                new MTextField('idVinculo','','Matrícula*','10'),
+                new MTextField('dvIdVinculo','','DV*','1'),
+            ),
+            new MText('txtRedigite', 'Redigite o campo Matrícula do servidor!','red'),
+            array(
+                new MTextField('idVinculo2','','Matrícula*','10'),
+                new MTextField('dvIdVinculo2','','DV*','1'),
+            ),
+            new MCalendarField('dataConcurso','','Data concurso','15'),
+            new MTextField('classificacaoConcurso','','Classificação concurso','3'),
+            new MCalendarField('dataPosse','','Data posse','15'),
+            new MCalendarField('dataExercicio','','Data exercício*','15'),
+            new MCalendarField('dataFimContrato','','Data fim contrato','15'),
+            new SelectionRef('refClass','','Referência'),
+            //new MSelection('idJornada','','Jornada',$jornada->listAll()->result),
+            new MSelection('idJornada','','Jornada',$jornadaResult),
+            new MHiddenField('idPublicacao'),
+            new MLookupFieldValue('numero','','Publicação'),
+            //new MHiddenField('idCargo'),
+            new MLookupFieldValue('lkpSetorAtivo','','Setor*',50),
+            new MHiddenField('idSetor'),
+            new MHiddenField('idGrupoCargoValor'),
+            new MHiddenField('idCargoValor'),
+            new MHiddenField('excedeLotacaoValor'),
+            new MHiddenField('idSituacaoValor'),
+            new MHiddenField('numVaga'),
+            new MultiLineField('obs','','Observação',25,5,40,'Max. 500'),
+            new MSpacer('3'),
+            new MLabel('<b>Os campos com * são de preenchimento obrigatório.</b>')
+        );
+		$this->SetFields($fields);
+
+        $aguarde = $this->manager->getUI()->getImage('miolo','aguarde.gif');
+        $urlAjaxHandler = $this->manager->getActionURL('rh','ajaxhandler');
+        $this->idGrupoCargo->addAttribute('onChange',"doSelCargo('$urlAjaxHandler','$aguarde');");
+
+        $this->SetFieldAttr('lkpSetorAtivo','module','common');
+        $this->SetFieldAttr('lkpSetorAtivo','item','setorativo');
+        $this->SetFieldAttr('lkpSetorAtivo','event', 'filler');
+        $this->SetFieldAttr('lkpSetorAtivo','related', 'idSetor,lkpSetorAtivo');
+
+        $this->setFieldAttr('idSituacao','visible',false);
+        $this->setFieldAttr('excedeLotacao','visible',false);
+        $this->setFieldAttr('numeroVaga','visible',false);
+        $this->setFieldAttr('idVinculo','visible',false);
+        $this->setFieldAttr('dvIdVinculo','visible',false);
+        $this->setFieldAttr('idVinculo2','visible',false);
+        $this->setFieldAttr('dvIdVinculo2','visible',false);
+        $this->setFieldAttr('dataPosse','visible',false);
+        $this->setFieldAttr('dataExercicio','visible',false);
+        $this->setFieldAttr('dataConcurso','visible',false);
+        $this->setFieldAttr('dataFimContrato','visible',false);
+        $this->setFieldAttr('classificacaoConcurso','visible',false);
+        $this->setFieldAttr('refClass','visible',false);
+        $this->setFieldAttr('idJornada','visible',false);
+        $this->setFieldAttr('idGrupoCargo','visible',false);
+        $this->setFieldAttr('cargo','visible',false);
+        //$this->setFieldAttr('lkpCargo','visible',false);
+        $this->setFieldAttr('numero','visible',false);
+        $this->setFieldAttr('lkpSetorAtivo','visible',false);
+        $this->setFieldAttr('obs','visible',false);
+        $this->setFieldAttr('txtRedigite','visible',false);
+        //$this->setFieldAttr('cargo','readonly',true);
+
+        /*
+        $this->SetFieldAttr('lkpCargo','module','rh');
+        $this->SetFieldAttr('lkpCargo','item','cargo');
+        $this->SetFieldAttr('lkpCargo','event','filler');
+        $this->SetFieldAttr('lkpCargo','related','idCargo,cargo');
+        $this->SetFieldAttr('lkpCargo','filter','idGrupoCargo,cargo');
+        */
+
+        $this->SetFieldAttr('numero','module','rh');
+        $this->SetFieldAttr('numero','item','publicacao');
+        $this->SetFieldAttr('numero','event','filler');
+        $this->SetFieldAttr('numero','related','idPublicacao,null,numero');
+
+        $buttons = array(
+            new MButton('btnPost1', 'Enviar'), //envia a ocorrencia
+            new MButton('btnPost2', 'Enviar'), //exibe as situacoes baseado na ocorrencia
+            new MButton('btnPost3', 'Enviar'), //exibe o grupo de cargo e cargo
+            new MButton('btnPost4', 'Enviar'), //exibe o excede lotacao baseado no cargo e situacao
+            new MButton('btnPost5', 'Enviar'), //
+            new MButton('btnNew', 'Incluir Vínculo')
+        );
+
+        $this->SetButtons($buttons);
+
+        $this->setButtonAttr('btnPost2','visible',false);
+        $this->setButtonAttr('btnPost3','visible',false);
+        $this->setButtonAttr('btnPost4','visible',false);
+        $this->setButtonAttr('btnPost5','visible',false);
+        $this->setButtonAttr('btnNew','visible',false);
+
+        $this->idVinculo->AddAttribute('maxlength','7');
+        $this->dvIdVinculo->AddAttribute('maxlength','1');
+        $this->idVinculo2->AddAttribute('maxlength','7');
+        $this->dvIdVinculo2->AddAttribute('maxlength','1');
+        
+        
+        $validators = array(
+                new MRangeValidator('dataExercicio','','01/01/1950',date("d/m/Y"),'d','required')
+        );
+        $this->SetValidators($validators);
+        
+        
+        
+    }
+
+    function btnPost1_click()
+    {
+        $idOcorrencia = $this->getFormValue('idOcorrencia');
+
+        // Alteração para MEDICO RESIDENTE e CARGO COMISSIONADO
+        if ($idOcorrencia == 122  || $idOcorrencia == 101)   // 122 => no caso de MÉDICO RESIDENTE, 101 => no caso de CARGO COMISSIONADO
+        {
+
+            $this->btnPost4_click();
+
+        }
+        else
+        {
+
+            $this->grupoOcorrencia->getOcorrencias();
+            $ocorrencia = $this->grupoOcorrencia->getOcorrencia($idOcorrencia);
+            $ocorrencia->getSituacaoFuncional();
+            foreach ( $ocorrencia->situacaoFuncional as $s )
+            {
+                $situacoes[$s->idSituacao] = $s->descricao;
+            }
+            asort($situacoes);
+            $this->setFieldAttr('idSituacao','visible',true);
+            $this->setFieldAttr('idSituacao','options',$situacoes);
+            $this->setFieldAttr('idOcorrencia','readonly',true);
+
+            $this->setButtonAttr('btnPost1','visible',false);
+            $this->setButtonAttr('btnPost3','visible',false);
+            $this->setButtonAttr('btnPost5','visible',false);
+            $this->setButtonAttr('btnPost2','visible',true);
+
+        }
+
+    }
+
+    function btnPost2_click()
+    {
+        $idOcorrencia = $this->getFormValue('idOcorrencia');
+        $idSituacao = $this->getFormValue('idSituacao');
+
+        $funcionario = $this->manager->getBusiness('rh','funcionario',$this->vinculo->idFuncionario);
+        $errVinculo = ( $idSituacao == 1 ) ? $funcionario->hasOutroVinculoAtivoEst() : FALSE;
+        if ( ! $errVinculo )
+        {
+            $this->grupoOcorrencia->getOcorrencias();
+            $ocorrencia = $this->grupoOcorrencia->getOcorrencia($idOcorrencia);
+            $ocorrencia->getSituacaoFuncional();
+            foreach ( $ocorrencia->situacaoFuncional as $s )
+            {
+                $situacoes[$s->idSituacao] = $s->descricao;
+            }
+            asort($situacoes);
+            $this->setFieldAttr('idSituacao','visible',true);
+            $this->setFieldAttr('idSituacao','options',$situacoes);
+            $this->setFieldAttr('idOcorrencia','readonly',true);
+            $this->setFieldAttr('idSituacao','readonly',true);
+            $this->setFieldAttr('idGrupoCargo','visible',true);
+
+            //$this->setFieldAttr('cargo','visible',true);
+            //$this->setFieldAttr('lkpCargo','visible',true);
+
+            $this->setButtonAttr('btnPost1','visible',false);
+            $this->setButtonAttr('btnPost2','visible',false);
+            $this->setButtonAttr('btnPost5','visible',false);
+            $this->setButtonAttr('btnPost3','visible',true);
+
+            //$this->addValidator(new MRequiredValidator('cargo'));
+
+            //no caso de CONTRATADO TEMPORARIO
+            if ( $idOcorrencia == 123 )
+            {
+                $this->setFieldAttr('idGrupoCargo','visible',FALSE);
+               // $this->setFieldAttr('cargo','visible',FALSE);
+               // $this->setFieldAttr('lkpCargo','visible',FALSE);
+
+                $grupoCargo = $this->manager->getBusiness('rh','grupocargo',60);
+                $cargos = $grupoCargo->listCargos();
+
+                $newFields = array(
+                    new MTextField('txtGrupoCargo',$grupoCargo->descricao,'Grupo Cargo',60),
+                    new MSelection('cargoT','','Cargo',$cargos->result),
+                );
+
+
+                $this->addFields($newFields);
+                $this->setFieldAttr('txtGrupoCargo','readonly',TRUE);
+
+                $this->setFieldValue('idGrupoCargoValor',60);
+            }
+        }
+        else
+        {
+            $this->addError('Não é permitida a acumulação de mais de 2 (dois) vínculos como Ativo Permanente.');
+        }
+
+    }
+
+    function btnPost3_click()
+    {
+        $idOcorrencia = $this->getFormValue('idOcorrencia');
+        $this->grupoOcorrencia->getOcorrencias();
+        $ocorrencia = $this->grupoOcorrencia->getOcorrencia($idOcorrencia);
+        $ocorrencia->getSituacaoFuncional();
+        foreach ( $ocorrencia->situacaoFuncional as $s )
+        {
+            $situacoes[$s->idSituacao] = $s->descricao;
+        }
+        asort($situacoes);
+        $this->setFieldAttr('idSituacao','visible',true);
+        $this->setFieldAttr('idSituacao','options',$situacoes);
+        $this->setFieldAttr('idOcorrencia','readonly',true);
+        $this->setFieldAttr('idSituacao','readonly',true);
+        $this->setFieldAttr('idGrupoCargo','visible',true);
+        $this->setFieldAttr('cargo','visible',true);
+//        $this->setFieldAttr('lkpCargo','visible',false);
+        $this->setFieldAttr('idGrupoCargo','readonly',true);
+        $this->setFieldAttr('idCargo','readonly',true);
+        $this->setFieldAttr('cargo','readonly',true);
+
+        $this->setButtonAttr('btnPost1','visible',false);
+        $this->setButtonAttr('btnPost2','visible',false);
+        $this->setButtonAttr('btnPost3','visible',false);
+        $this->setButtonAttr('btnPost5','visible',false);
+        $this->setButtonAttr('btnPost4','visible',true);
+
+        $idGrupoCargo = $this->getFormValue('idGrupoCargo');
+        if ( ! $idGrupoCargo )
+        {
+            $idGrupoCargo = $this->getFormValue('idGrupoCargoValor');
+            $this->setFieldValue('idGrupoCargo',$idGrupoCargo);
+        }
+        $this->setFieldValue('idGrupoCargoValor',$idGrupoCargo);
+
+        $this->setFieldAttr('excedeLotacao','visible',true);
+        $idSituacao = $this->getFormValue('idSituacao');
+        $idCargo = $this->getFormValue('idCargo');
+        if ( ! $idCargo )
+        {
+            $idCargo = $this->getFormValue('cargoT');
+        }
+        $this->setFieldValue('idCargoValor',$idCargo);
+        $grupoCargo = $this->manager->getBusiness('rh','grupocargo',$idGrupoCargo);
+        $grupoCargo->getCargos();
+        $objCargo = $grupoCargo->getCargo($idCargo);
+        $this->setFieldValue('cargo',$objCargo->descricao);
+
+        $situacao = $this->manager->getBusiness('rh','situacaofuncional',$idSituacao);
+
+        if ( ( $situacao->idSituacao == 11 && $situacao->regimeJuridico == 'EST' ) ||
+             ( ( $idGrupoCargo == 60 )  &&  ( $idCargo == 3 || $idCargo == 13 )  ) )
+        {
+            $this->setFormValue('excedeLotacao','S');
+            $this->setFormValue('idGrupoCargoValor',$idGrupoCargo);
+            $this->setFormValue('idCargoValor',$idCargo);
+            $this->btnPost4_click();
+        }
+        if ( $idOcorrencia == 100 ) //Nomeacao carater efetivo
+        {
+            $this->setFormValue('excedeLotacao','N');
+            $this->setFormValue('idGrupoCargoValor',$idGrupoCargo);
+//            var_dump($idGrupoCargo);
+            $this->setFormValue('idCargoValor',$idCargo);
+            //$this->btnPost4_click();
+        }
+
+
+    }
+
+    function btnPost4_click()
+    {
+        $idOcorrencia = $this->getFormValue('idOcorrencia');
+        //$idGrupoCargo = $this->getFormValue('idGrupoCargo');
+        //var_dump($idGrupoCargo);
+        $this->grupoOcorrencia->getOcorrencias();
+        $ocorrencia = $this->grupoOcorrencia->getOcorrencia($idOcorrencia);
+        $ocorrencia->getSituacaoFuncional();
+        foreach ( $ocorrencia->situacaoFuncional as $s )
+        {
+            $situacoes[$s->idSituacao] = $s->descricao;
+        }
+        asort($situacoes);
+
+        $this->setFieldAttr('idSituacao','visible',true);
+        $this->setFieldAttr('idSituacao','options',$situacoes);
+        $this->setFieldAttr('idOcorrencia','readonly',true);
+        $this->setFieldAttr('idSituacao','readonly',true);
+        $this->setFieldAttr('idGrupoCargo','visible',true);
+        $this->setFieldAttr('cargo','visible',true);
+        //$this->setFieldAttr('lkpCargo','visible',false);
+        $this->setFieldAttr('idGrupoCargo','readonly',true);
+        $this->setFieldAttr('cargo','readonly',true);
+
+
+        $this->setButtonAttr('btnPost1','visible',false);
+        $this->setButtonAttr('btnPost2','visible',false);
+        $this->setButtonAttr('btnPost3','visible',false);
+        $this->setButtonAttr('btnPost4','visible',false);
+        $this->setButtonAttr('btnPost5','visible',false);
+        
+
+
+        // Alteração para MEDICO RESIDENTE
+        if ( $idOcorrencia == 122 )
+        {
+
+            $idSituacao = '5';
+            $idGrupoCargo = '0';
+            $idCargo = '0';
+            $excedeLotacao = "S";
+            $grupoCargo = $this->manager->getBusiness('rh','grupocargo');
+            $arrCargos = $grupoCargo->listAll();
+            $this->setFieldAttr('idGrupoCargo','options',$arrCargos->result);
+            $this->setFieldAttr('idGrupoCargo','readonly',true);
+            $this->setFieldAttr('idGrupoCargo','value',0);
+            $this->setFieldAttr('idCargo','value',"0");
+            $this->setFieldAttr('cargo','value',"NAO SE APLICA");
+
+
+            $situacoes = Array ('5' => "SEM VINCULO");
+            $this->setFieldAttr('idSituacao','visible',true);
+            $this->setFieldAttr('idSituacao','options',$situacoes);
+            $this->setFieldAttr('idSituacao','readonly',true);
+            $this->setFieldAttr('idSituacao','value',5);
+
+        }
+        // Alteração para CARGO COMISSIONADO
+        elseif ( $idOcorrencia == 101 )
+        {
+
+            $idSituacao = '4';
+            $idGrupoCargo = '0';
+            $idCargo = '0';
+            $excedeLotacao = "S";
+            $grupoCargo = $this->manager->getBusiness('rh','grupocargo');
+            $arrCargos = $grupoCargo->listAll();
+            $this->setFieldAttr('idGrupoCargo','options',$arrCargos->result);
+            $this->setFieldAttr('idGrupoCargo','readonly',true);
+            $this->setFieldAttr('idGrupoCargo','value',0);
+            $this->setFieldAttr('idCargo','value',"NAO SE APLICA");
+            $this->setFieldAttr('cargo','value',"NAO SE APLICA");
+
+            $this->setFieldAttr('idSituacao','visible',true);
+            $this->setFieldAttr('idSituacao','readonly',true);
+            $this->setFieldValue('idSituacao',4);
+
+        }
+        else
+        {
+// 0677984
+            $idSituacao = $this->getFormValue('idSituacao');
+            $idGrupoCargo = $this->getFormValue('idGrupoCargoValor');
+            $idCargo = $this->getFormValue('idCargoValor');
+            $excedeLotacao = $this->getFormValue('excedeLotacao');
+
+        }
+
+
+
+        $situacao = $this->manager->getBusiness('rh','situacaofuncional',$idSituacao);
+
+        $this->setFieldValue('idCargoValor',$idCargo);
+        $this->setFieldValue('idGrupoCargoValor',$idGrupoCargo);
+        $this->setFieldValue('idGrupoCargo',$idGrupoCargo);
+        $this->setFieldValue('excedeLotacao',$excedeLotacao);
+        $this->setFieldValue('excedeLotacaoValor',$excedeLotacao);
+        $this->setFieldValue('idSituacaoValor',$idSituacao);
+        
+        $this->setFieldAttr('excedeLotacao','visible',true);
+        $this->setFieldAttr('excedeLotacao','readonly',true);
+
+
+
+        if ( $excedeLotacao == 'N' )
+        {
+            $vaga = $this->manager->getBusiness('rh','vaga');
+
+            //alteracao para professor substituto: ocupara as vagas disponiveis de professor efetivo
+            if ( $idGrupoCargo == 60 )
+            {
+                if ( $idCargo == 2 )
+                {
+                    $idCargo = 1; //faz a mudanca para cargo de professor efetivo de 3 grau
+                }
+
+                if ( $idCargo == 12 )
+                {   
+                    $idCargo = 11; //faz a mudanca para cargo de professor efetivo de 2 grau
+                }
+            }
+            $queryVaga = $vaga->listByGrupoCargoAndCargo($idGrupoCargo,$idCargo);
+            if ( count($queryVaga->result) > 0 )
+            {
+                foreach ( $queryVaga->result as $result )
+                {
+                    $vagas[$result[0]] = $result[0];
+                }
+                $this->setFieldAttr('numeroVaga','options',$vagas);
+                $this->setFieldAttr('numeroVaga','visible',true);
+            }
+            else
+            {
+                $errVaga = true;
+            }
+        }
+
+        if ( ! $errVaga )
+        {
+            $this->addInfo('Por favor, verifique atenciosamente o preenchimento da Matrícula do servidor.');
+            
+            $this->setFieldAttr('idVinculo','visible',true);
+            $this->setFieldAttr('dvIdVinculo','visible',true);
+            $this->setFieldAttr('txtRedigite','visible',true);
+            $this->setFieldAttr('idVinculo2','visible',true);
+            $this->setFieldAttr('dvIdVinculo2','visible',true);
+            $this->setButtonAttr('btnPost5','visible',true);
+        }
+        else
+        {
+            $this->addError("Não há vagas disponíveis para o cargo!");
+            $this->setFieldAttr('cargo','visible',false);
+            //$this->setFieldAttr('lkpCargo','visible',true);
+            $this->setFieldAttr('idGrupoCargo','readonly',false);
+            //$this->setFieldAttr('cargo','readonly',false);
+            $this->setFieldAttr('excedeLotacao','visible',false);
+            $this->setButtonAttr('btnPost4','visible',false);
+            $this->setButtonAttr('btnPost5','visible',false);
+            $this->setButtonAttr('btnPost3','visible',true);
+            $this->setButtonAttr('btnNew','visible',false);
+        }
+
+     }
+     
+    function btnPost5_click()
+    {
+    
+        $idvinculo1 = $this->getFormValue('idVinculo');
+        $dvIdVinculo1 = $this->getFormValue('dvIdVinculo');
+        $idvinculo2 = $this->getFormValue('idVinculo2');
+        $dvIdVinculo2 = $this->getFormValue('dvIdVinculo2');
+        $numeroVaga = $this->getFormValue('numeroVaga');
+        $this->setFieldValue('numVaga',$numeroVaga);
+        
+        
+        
+        //Verifica se as duas matriculas digitadas são iguais
+        if (($idvinculo1 != $idvinculo2) || ($dvIdVinculo1 != $dvIdVinculo2)) {
+            
+            $this->addError('As matrículas digitadas não conferem.');
+            $erro = true;
+        
+        } elseif (strlen($idvinculo1) != 7) {
+        
+            $this->addError('O campo Matrícula deve conter exatamente sete algarismos.');
+            $erro = true;
+        
+        } else {
+        
+        
+        $situacoes = $this->getSituacoes();
+        $this->setFieldAttr('idSituacao','visible',true);
+        $this->setFieldAttr('idSituacao','options',$situacoes);
+        $this->setFieldAttr('idOcorrencia','readonly',true);
+        $this->setFieldAttr('idSituacao','readonly',true);
+        $this->setFieldAttr('idGrupoCargo','visible',true);
+        $this->setFieldAttr('cargo','visible',true);
+        $this->setFieldAttr('idGrupoCargo','readonly',true);
+        $this->setFieldAttr('cargo','readonly',true);
+        $this->setFieldAttr('excedeLotacao','visible',true);
+        $this->setFieldAttr('excedeLotacao','readonly',true);
+        $this->setButtonAttr('btnPost1','visible',false);
+        $this->setButtonAttr('btnPost2','visible',false);
+        $this->setButtonAttr('btnPost3','visible',false);
+        $this->setButtonAttr('btnPost4','visible',false);
+        $this->setButtonAttr('btnPost5','visible',false);
+        
+        $this->setFieldAttr('idVinculo','visible',true);
+        $this->setFieldAttr('dvIdVinculo','visible',true);
+        $this->setFieldAttr('txtRedigite','visible',false);
+        $this->setFieldAttr('idVinculo2','visible',false);
+        $this->setFieldAttr('dvIdVinculo2','visible',false);
+        
+        $this->setFieldAttr('idVinculo','readonly',true);
+        $this->setFieldAttr('dvIdVinculo','readonly',true);
+        $this->setFieldAttr('txtRedigite','readonly',true);
+        $this->setFieldAttr('idVinculo2','readonly',true);
+        $this->setFieldAttr('dvIdVinculo2','readonly',true);
+        $this->setButtonAttr('btnPost5','readonly',true);
+        
+        
+                   
+        
+        $idGrupoCargo = $this->getFormValue('idGrupoCargoValor');
+        $idSituacao = $this->getFormValue('idSituacaoValor');
+        $situacao = $this->manager->getBusiness('rh','situacaofuncional',$idSituacao);
+    
+        
+        $this->setFieldAttr('dvIdVinculo2','visible',false);
+        $this->setButtonAttr('btnNew','visible',true);
+        $this->setFieldAttr('dataPosse','visible',$situacao->regimeJuridico == 'EST');
+        $this->setFieldAttr('dataExercicio','visible',true);
+        $this->setFieldAttr('dataConcurso','visible',true);
+        $this->setFieldAttr('dataFimContrato','visible',$situacao->regimeJuridico == 'CDT');
+        $this->setFieldAttr('classificacaoConcurso','visible',true);
+        $this->setFieldAttr('refClass','visible',true);
+        $this->refClass->setReferencias($idGrupoCargo);
+        $this->setFieldAttr('idJornada','visible',true);
+        $this->setFieldAttr('numero','visible',true);
+        $this->setFieldAttr('lkpSetorAtivo','visible',true);
+        $this->setFieldAttr('obs','visible',true);
+        
+       }
+       
+       if ($erro) $this->btnPost4_click();
+    
+    }
+
+    function getDadosVinculo()
+    {
+        $data = $this->getData();
+        $dadosVinculo = new FormData();
+        $dadosVinculo->idVinculo = $data->idVinculo;
+        $dadosVinculo->dvIdVinculo = $data->dvIdVinculo;
+        $dadosVinculo->dataConcurso = $data->dataConcurso;
+        $dadosVinculo->dataPosse = $data->dataPosse;
+        $dadosVinculo->dataExercicio = $data->dataExercicio;
+        $dadosVinculo->dataFimContrato = $data->dataFimContrato;
+        $dadosVinculo->dataExercicio = $data->dataExercicio;
+        $dadosVinculo->classificacaoConcurso = $data->classificacaoConcurso;
+        $dadosVinculo->idPublicacao = $data->idPublicacao;
+        $dadosVinculo->idGrupoOcorrencia = 1;
+        $dadosVinculo->idOcorrencia = $data->idOcorrencia;
+        return $dadosVinculo;
+    }
+
+    function getDadosProvimento()
+    {
+        $data = $this->getData();
+        $refClass = explode('_',$data->refClass);
+        $dadosProvimento->idClasse = $refClass[0];
+        $dadosProvimento->idReferencia = $refClass[1];
+        $dadosProvimento->idJornada = $data->idJornada;
+        $dadosProvimento->idGrupoCargo = $data->idGrupoCargoValor;
+        $dadosProvimento->idCargo = $data->idCargoValor;
+        $dadosProvimento->idSetor = $data->idSetor;
+        $dadosProvimento->idPublicacao = $data->idPublicacao;
+        $dadosProvimento->idGrupoOcorrencia = 1;
+        $dadosProvimento->idOcorrencia = $data->idOcorrencia;
+        $dadosProvimento->obs = $data->obs;
+        $dadosProvimento->excedeLotacao = $data->excedeLotacaoValor;
+        $dadosProvimento->idSituacao = $data->idSituacaoValor;
+
+        $situacao = $this->manager->getBusiness('rh','situacaofuncional',$dadosProvimento->idSituacao);
+
+        $dadosProvimento->regimeJuridico = $situacao->regimeJuridico;
+        return $dadosProvimento;
+
+    }
+    
+    function getSituacoes() {
+    
+        $idOcorrencia = $this->getFormValue('idOcorrencia');
+        $this->grupoOcorrencia->getOcorrencias();
+        $ocorrencia = $this->grupoOcorrencia->getOcorrencia($idOcorrencia);
+        $ocorrencia->getSituacaoFuncional();
+        foreach ( $ocorrencia->situacaoFuncional as $s )
+        {
+            $situacoes[$s->idSituacao] = $s->descricao;
+        }
+        asort($situacoes);
+        
+        return $situacoes;
+    
+    }
+
+    function btnNew_click()
+    {
+        $dadosVinculo = $this->getDadosVinculo();
+        $dadosProvimento = $this->getDadosProvimento();
+        $numVaga = $this->getFormValue('numVaga');
+
+        
+        $krono = new MKrono();
+        if ( $krono->compareDate($dadosVinculo->dataExercicio,'>',date("d/m/Y")) )
+            {
+                $this->addError('Data da exercício não pode ser maior que hoje.');
+                $this->btnPost4_click();
+                $err = TRUE;
+            }
+        
+            if ( $krono->compareDate($dadosVinculo->dataPosse,'>',date("d/m/Y")) )
+            {
+                $this->addError('Data da posse não pode ser maior que hoje.');
+                $this->btnPost4_click();
+                $err = TRUE;
+            }
+              
+        
+        $err = FALSE;
+        if ( $dadosProvimento->excedeLotacao == 'N' )
+        {
+            $vaga = $this->manager->getBusiness('rh','vaga',$numeroVaga);
+            if  ( $dadosProvimento->regimeJuridico == 'EST' )
+            {
+                if ( $vaga->isOcupada() )
+                {
+                    $this->addError("A vaga já está ocupada!");
+                    $this->btnPost4_click();
+                    $err = TRUE;
+                }
+            }
+            if ( $dadosProvimento->regimeJuridico == 'CDT' )
+            {
+                if ( $vaga->isOcupada() )
+                {
+                    //TODO
+                }
+            }
+        }
+            
+        
+        
+        
+        
+        if  ( $dadosProvimento->regimeJuridico == 'EST' )
+        {
+            $krono = new MKrono();
+            if ( $krono->compareDate($dadosVinculo->dataPosse,'<',$dadosVinculo->dataConcurso) )
+            {
+                $this->addError('Data da posse não pode ser menor que a data do Concurso.');
+                $this->btnPost4_click();
+                $err = TRUE;
+            }
+            if ( $krono->compareDate($dadosVinculo->dataPosse,'>',$dadosVinculo->dataExercicio) )
+            {
+                $this->addError('Data da posse não pode ser maior que a data do Exercício.');
+                $this->btnPost4_click();
+                $err = TRUE;
+            }
+        }
+        if ( ! $err )
+        {
+            $this->vinculo->SetData($dadosVinculo);
+            if ( is_null($this->vinculo->dvIdVinculo) )
+            {
+                $this->vinculo->dvIdVinculo = '0';
+            }
+            $provimento = $this->vinculo->getProvimento($this->vinculo->dataExercicio);
+            $ocupacaoVaga = $this->vinculo->getOcupacaoVaga($this->vinculo->dataExercicio);
+            $provimento->setData($dadosProvimento);
+            if($provimento->idCargo == null) $provimento->setIdCargo($dadosProvimento->idCargo);
+            if($provimento->idGrupoCargo == null) $provimento->setIdGrupoCargo($dadosProvimento->idGrupoCargo);
+                        
+            
+            $this->vinculo->addProvimento($provimento);
+
+            if ( $dadosProvimento->excedeLotacao == 'N' )
+            {
+                
+                $ocupacaoVaga->numeroVaga = $numVaga;
+                $this->vinculo->addOcupacaoVaga($ocupacaoVaga);
+            }
+
+            try
+            {
+                $usuario = $this->manager->getBusiness('common','usuario');
+                $usuario->getByLogin($this->vinculo->idVinculo);
+
+                $this->vinculo->save();
+                $this->vinculo->saveAssociation('provimentos');
+                $funcionario = $this->manager->getBusiness('rh','funcionario',$this->vinculo->idFuncionario);
+                if (! $usuario->idUsuario )
+                {
+                    //Criará também o usuário ligado ao vinculo do funcionario para acesso ao sistema SIGA
+                    //dados Usuario
+
+                    $data->idPessoa = $funcionario->idPessoa;
+                    $data->idSetor = $provimento->idSetor;
+                    $data->login = $this->vinculo->idVinculo;
+                    list($dia,$mes,$ano) = explode('/',$funcionario->pessoa->datanasc);
+                    if ( !$dia || !$mes || !$ano )
+                    {
+                        $data->password = '-';
+                        $data->passMD5 = md5('010101');
+                    }
+                    else
+                    {
+                        $data->password = '-';
+                        $data->passMD5 = md5($dia.$mes.substr($ano,-2));
+                    }
+
+                    if ( $provimento->idGrupoCargo == 60 )
+                    {
+                        //docente
+                        if ( $provimento->idCargo == 11 || $provimento->idCargo == 12 || $provimento->idCargo == 13 )
+                        {
+                            $data->grupos = array(400,300);
+                        }
+                        else
+                        {
+                            $data->grupos = array(120,300);
+                        }
+                        $idGrupo = 2;
+                    }
+                    else
+                    {
+                        //ta
+                        $data->grupos = array(300);
+                        $idGrupo = 3;
+                    }
+                    $usuario->setData($data);
+                    $usuario->setArrayGroups($data->grupos);
+                    $usuario->save();
+
+                    //vinculo da biblioteca
+                    $usuarioBt = $this->manager->getBusiness('biblioteca','usuario');
+                    $usuarioBt->insertVinculo($usuario->idUsuario,$idGrupo);
+                }
+                
+                if ( $provimento->idGrupoCargo == 60 )
+                {
+                    //docente: incluir registro na tabela ga_docente
+                    $data->idpessoa = $funcionario->idPessoa;
+                    $data->idsetor = $provimento->idSetor;
+                    $data->idvinc = $this->vinculo->idVinculo;
+                    $data->situacao = 'Ativo';
+
+                    $setor = $this->manager->getBusiness('common','setor');
+                    $setor->getById($provimento->idSetor);
+                    $departamento = $this->manager->getBusiness('ensino','departamento');
+                    $departamento->getBySiglaSetor($setor->sigla);
+                    $data->iddepto = $departamento->iddepto;
+                    
+                    $docente = $this->manager->getBusiness('ensino','docente');
+                    $docente->setData($data);
+                    $docente->save();
+                }
+
+                $go = $this->manager->GetActionURL('rh','main:vinculo',$this->vinculo->idVinculo);
+                $this->page->Redirect($go);
+            }
+            catch ( Exception $e )
+            {
+                $this->addError($e->getMessage());
+            }
+        }
+    }
+
+ }
+?>

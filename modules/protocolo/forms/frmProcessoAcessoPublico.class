@@ -1,0 +1,101 @@
+<?
+class frmProcessoAcessoPublico extends MForm
+{
+	protected $processo;
+
+	function __construct()
+	{
+		global $MIOLO;
+		parent::__construct('Consulta de processos');
+		$this->EventHandler();
+	}
+
+	function CreateFields()
+	{
+		$findButton = new MButtonFind('');
+		$findButton->SetName('btnFind');
+
+		$fields = array(
+			array(
+				new MLabel('&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'),
+				new MTextField('numero','','Nº do Processo/Protocolado',25,''),
+				new MButton('btnVer', 'Ver'),
+			),
+			new MSpacer(2),
+			new MLabel('<b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Informe o número do processo/protocolado que você recebeu<br> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;no formato: XXXXXX/XXXX-XX. <i>Ex: 000001/2010-10.</i></b>')
+		);
+		$this->SetFields($fields);
+
+		$this->defaultButton = false;
+		$this->page->onLoad("MIOLO_GetElementById('numero').focus();");
+	}
+
+
+	function btnVer_click()
+	{
+		global $MIOLO, $module;
+		
+		$num = Form::GetFormValue('numero');
+
+		if( (strlen($num)!= 14) || (!preg_match("/\d{6}\/\d{4}\-\d{2}/", $num)) )
+		{
+			$MIOLO->Error('Número incorreto, informe um número válido!');    
+		}
+		else
+		{
+			$p=explode("/",$num);$n=$p[0];$pt=explode("-",$p[1]);$y= $pt[0];$dv = $pt[1];
+			$numpro = $y.$n.$dv;
+
+			$this->processo = $MIOLO->GetBusiness('protocolo','processo');
+			$this->processo->GetByNumero($numpro);
+
+			//verifica se o processo existe
+			if($this->processo->isPersistent())
+			{
+				$this->clearFields();
+
+				$btn1 = new MButton('btnGerarFolha', 'Imprimir Processo','pdf');
+				$btn2 = new MButton('btnImprimirTramite', 'Imprimir Tramite','pdf');
+				$hf = new MHiddenField('numProcesso', $numpro);
+
+ 				$this->addField($hf);
+				$this->addButton($btn1);
+				$this->addButton($btn2);
+	   
+			}else{
+				$MIOLO->Error('Processo inexistente!');
+			}
+		}
+	}
+
+	function btnGerarFolha_click()
+	{
+		global $MIOLO;
+		$parameters['pNumProcesso'] = Form::GetFormValue('numProcesso');
+		$parameters['pURL']         = $MIOLO->GetConf('home.url');
+		$report = new MJasperReport('sigaept');
+		$report->Execute('protocolo','ProcessoCapa',$parameters);
+	}
+
+	function btnImprimirTramite_click()
+	{
+		global $MIOLO;
+		$this->processo = $MIOLO->GetBusiness('protocolo','processo');
+		$this->processo->GetByNumero(Form::GetFormValue('numProcesso'));
+		if ( $this->processo->andamento )
+		{
+			$report = new MJasperReport('sigaept');
+			$parameters['SUBREPORT_DIR'] = $MIOLO->GetConf('home.modules');
+			$parameters['pNumProcesso']  = $this->processo->numprocesso();
+			$parameters['pURL']          = $MIOLO->GetConf('home.url');
+			$parameters['int_pUser']     = 1;
+			$parameters['int_andamento']     = 0;
+			$report->Execute('protocolo', 'ProcessoTramite', $parameters);
+		}
+		else
+		{
+			$MIOLO->Error('Não há andamentos');
+		}
+	}
+}
+?>

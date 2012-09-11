@@ -1,0 +1,212 @@
+<?
+class frmUoAlmoxarifadoEntradaMaterialRequisicoes2 extends MForm
+{
+    protected $itemNota;
+    function __construct($objItemNota)
+    {
+		global $MIOLO, $module;
+        $this->itemNota = $objItemNota;
+        parent::__construct('Entrada e Saída de Material');
+		$this->SetClose($MIOLO->GetActionURL($module,'main'));
+        $this->EventHandler();
+    }
+    function CreateFields()
+    {
+		$cf = new MCurrencyFormatter();
+        $grid = $this->manager->getUI()->getGrid('adm','gridUoAlmoxarifadoEntradaMaterialRequisicoes',$this->itemNota);
+        if (Form::getFormValue('idRequisicao') && Form::getFormValue('idMaterial'))
+        {
+            $tipomovimento = array(1=>"Estoque de material",5=>"Entrada e Saída de Material");
+            $this->itemNota->getItensReq();
+            if ($this->itemNota->empenhado->itemreq)
+            {
+                foreach ($this->itemNota->empenhado->itemreq as $itemRequisicao)
+                {
+                    if ($itemRequisicao->idRequisicao == Form::getFormValue('idRequisicao') && $itemRequisicao->idMaterial == Form::getFormValue('idMaterial'))
+                    {
+                        $itemRequisicao->retrieveAssociation('movimento');
+                        if ($itemRequisicao->movimento)
+                        {
+                            foreach ($itemRequisicao->movimento as $movimento)
+                            {
+                                $movimentos[] = array($tipomovimento[$movimento->tipoMovimento],$movimento->dataMovimento,$cf->toDecimal($movimento->quantidade),$cf->formatWithSymbol($cf->toDecimal($movimento->valorTotal)));
+                            }
+                        }
+                    }
+                }
+            }
+            $table = new MTableRaw('Movimentos',$movimentos,array('Tipo','Data','Quantidade','Valor Total'));
+        }
+        $this->itemNota->empenhado->retrieveAssociation('itemreq');
+        $fields = array(
+            new MTextLabel('codigo',$this->itemNota->empenhado->itemreq[0]->material->codmaterial,'Código'),
+            new MTextLabel('quantidade',$cf->toDecimal($this->itemNota->quantidade),'Quantidade'),
+			$grid,
+            $table,
+		);
+        $this->setFields($fields);
+        $this->itemNota->retrieveAssociation('empenhado');
+        if (!$this->itemNota->isContabilizado())
+        {
+            $buttons = array(
+                new MButton('btnSaida','Dar Saída'),
+            );
+            $this->setButtons($buttons);
+        }
+        $this->defaultButton = false;
+    }
+    function btnSaida_click()
+    {
+        $cf = new MCurrencyFormatter();
+        $this->itemNota->retrieveAssociation('empenhado');
+        $quantAutorizada = Form::getFormValue('quantAutorizada');
+        foreach ($quantAutorizada as $q)
+        {
+            $quantAutorizadaTotal = $cf->toDecimal($quantAutorizadaTotal) + $cf->toDecimal($q);
+        }
+        switch (true)
+        {
+            case (round($cf->toDecimal($this->itemNota->quantidade,2) != round($cf->toDecimal($quantAutorizadaTotal,2)))):
+                $this->addError('As quantidades distribuídas não conferem com a quantidade da nota.');
+                return;
+            case ($this->itemNota->isContabilizado()):
+                $this->addError('O item já foi contabilizado.');
+                return;
+        }
+        $this->itemNota->retrieveAssociation('empenhado');
+        $this->itemNota->empenhado->retrieveAssociation('itemreq');
+        foreach ($this->itemNota->empenhado->itemreq as $itemRequisicao)
+        {
+            foreach ($quantAutorizada as $idRequisicao=>$quantidade)
+            {
+                if ($itemRequisicao->idRequisicao == $idRequisicao)
+                {
+                    if (round($cf->toDecimal($quantidade),2) > round($cf->toDecimal($itemRequisicao->quantEmpenhada) - $cf->toDecimal($itemRequisicao->quantAutorizada),2))
+                    {
+                        $this->addError('Quantidade entregue superior à permitida.');
+                        return;
+                    }
+                }
+            }
+        }
+        foreach ($this->itemNota->empenhado->itemreq as $itemRequisicao)
+        {
+            foreach ($quantAutorizada as $idRequisicao=>$quantidade)
+            {
+                if ($itemRequisicao->idRequisicao == $idRequisicao)
+                {
+                    $this->itemNota->empenhado->getAtributos();
+                    try 
+                    {
+                        if ($cf->toDecimal($quantidade))
+                        {
+                            $itemRequisicao->beginTransaction();
+                            $itemRequisicao->retrieveAssociation('requisicao');
+                            $itemRequisicao->requisicao->retrieveAssociation('uoRequisitante');
+                            $itemRequisicao->requisicao->retrieveAssociation('uoExecutante');
+                            $this->itemNota->empenhado->retrieveAssociation('empenho');
+                            if ($this->itemNota->empenhado->empenho->idUoEntrega == $itemRequisicao->requisicao->idUoRequisitante)
+                            {
+                                $movimento = $this->manager->getBusiness('adm','movimento');
+                                $movimento->idMaterial = $itemRequisicao->idMaterial;
+                                $movimento->idRequisicao = $itemRequisicao->idRequisicao;
+                                $movimento->tipoMovimento = 1;
+                                $movimento->dataMovimento = date("d/m/Y");                
+                                $movimento->quantidade = $cf->toDecimal($quantidade);        
+                                $movimento->valorTotal = $cf->toDecimal($quantidade) * $cf->toDecimal($this->itemNota->valor);
+                                $movimento->idItemNota = $this->itemNota->idItemNota;
+                                $movimento->idUoAlmoxarifado = $this->itemNota->empenhado->empenho->idUoEntrega;
+                                $movimento->setTransaction($itemRequisicao->getTransaction());
+                                $movimento->save();
+                                $estoque = $this->manager->getBusiness('adm','estoque');
+                                $estoque->getById($this->itemNota->empenhado->empenho->idUoEntrega,$itemRequisicao->idMaterial);
+                                $estoque->estoque = $cf->toDecimal($estoque->estoque) + $cf->toDecimal($quantidade);
+                                $estoque->valorTotal = $cf->toDecimal($estoque->valorTotal) + $cf->toDecimal($quantidade) * $cf->toDecimal($this->itemNota->valor);
+                                $estoque->setTransaction($itemRequisicao->getTransaction());
+                                $estoque->save();
+                            }
+                            else
+                            {
+                                $ordem = $this->manager->getBusiness('adm','ordementrega');
+                                $ordem->data = date('d/m/Y');
+                                $ordem->numero = $ordem->getUltimoNumeroByUo($this->itemNota->empenhado->empenho->idUoEntrega);
+                                $ordem->numero++;
+                                $ordem->idUoExecutante = $this->uoalmoxarifado->idUo;
+                                $ordem->impresso = 0;
+                                $ordem->setTransaction($itemRequisicao->getTransaction());
+                                $ordem->save();
+                                $movimento = $this->manager->getBusiness('adm','movimento');
+                                $movimento->idMaterial = $itemRequisicao->idMaterial;
+                                $movimento->idRequisicao = $itemRequisicao->idRequisicao;
+                                $movimento->tipoMovimento = 5;
+                                $movimento->dataMovimento = date("d/m/Y");                
+                                $movimento->quantidade = $cf->toDecimal($quantidade);        
+                                $movimento->valorTotal = $cf->toDecimal($quantidade) * $cf->toDecimal($this->itemNota->valor);
+                                $movimento->idItemNota = $this->itemNota->idItemNota;
+                                $movimento->idUoAlmoxarifado = $this->itemNota->empenhado->empenho->idUoEntrega;
+                                $movimento->idOrdemEntrega = $ordem->idOrdemEntrega;
+                                $movimento->setTransaction($itemRequisicao->getTransaction());
+                                $movimento->save();
+                            }
+                            $itemRequisicao->quantAutorizada = $cf->toDecimal($itemRequisicao->quantAutorizada) + $cf->toDecimal($quantidade);
+                            switch ($itemRequisicao->status)
+                            {
+                                case 6:
+                                    switch (true)
+                                    {
+                                        case ($cf->toDecimal($itemRequisicao->quantAutorizada) == $cf->toDecimal($itemRequisicao->quantEmpenhada)):
+                                            $itemRequisicao->status = 9;
+                                        case ($cf->toDecimal($itemRequisicao->quantAutorizada) >= $cf->toDecimal($itemRequisicao->quantPedida)):
+                                            $itemRequisicao->status = 7;
+                                        case ($cf->toDecimal($itemRequisicao->quantAutorizada) < $cf->toDecimal($itemRequisicao->quantEmpenhada)):
+                                            $itemRequisicao->status = 8;
+                                        break;
+                                    }
+                                break;
+                                case 'A':
+                                    switch (true)
+                                    {
+                                        case ($cf->toDecimal($itemRequisicao->quantAutorizada) >= $cf->toDecimal($itemRequisicao->quantPedida)):
+                                            $itemRequisicao->status = 7;
+                                        break;
+                                    }
+                                break;
+                                case '8':
+                                    switch (true)
+                                    {
+                                        case ($cf->toDecimal($itemRequisicao->quantAutorizada) == $cf->toDecimal($itemRequisicao->quantEmpenhada)):
+                                            $itemRequisicao->status = 9;
+                                        case ($cf->toDecimal($itemRequisicao->quantAutorizada) >= $cf->toDecimal($itemRequisicao->quantPedida)):
+                                            $itemRequisicao->status = 7;
+                                        break;
+                                    }
+                                break;
+                            }
+                            $itemRequisicao->save();
+                            $itemRequisicao->requisicao->retrieveAssociation('materialCompra');
+                            if ($itemRequisicao->requisicao->materialCompra && $itemRequisicao->status == 7)
+                            {
+                                $itemRequisicao->requisicao->status = 9;
+                                foreach ($itemRequisicao->requisicao->materialCompra as $material)
+                                {
+                                    if ($material->idMaterial != $itemRequisicao->idMaterial && $material->status != 7) $itemRequisicao->requisicao->status = 8; 
+                                }
+                            }
+                            else
+                            {
+                                $itemRequisicao->requisicao->status = 8;
+                            }
+                            $itemRequisicao->requisicao->setTransaction($itemRequisicao->getTransaction());
+                            $itemRequisicao->requisicao->save();
+                            $itemRequisicao->endTransaction();
+                        }
+                    }
+                    catch(Exception $e) {$this->manager->Error($e->getMessage());}
+                }
+            }
+        }
+        $go = $this->manager->GetActionURL('adm','main:uoalmoxarifado:main',$this->itemNota->empenhado->empenho->idUoEntrega,array('form'=>'entradamaterial','idEmpenho'=>Form::getFormValue('idEmpenho'),'idNotaFiscal'=>$this->itemNota->idNotaFiscal));
+        $this->manager->Information('Entrada e saída de material realizada com sucesso.',$go);
+    }
+ }
+?>

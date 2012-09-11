@@ -1,0 +1,246 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+MIOLO::Import('modules::common::controls::selectionpais');
+MIOLO::Import('modules::common::controls::selectionuf');
+MIOLO::Import('modules::common::controls::selectionsexo');
+MIOLO::Import('modules::common::controls::selectiongruposanguineo');
+MIOLO::Import('modules::common::controls::selectionestadocivil');
+MIOLO::Import('modules::common::controls::selectionnacionalidade');
+
+/**
+ * Formulário de edição de dados pessoais
+ */
+class frmPessoaDadosPessoais extends MFormAJAX
+{
+	/**
+	 * Objeto pessoa
+	 * @access protected
+	 * @var BusinessRhPessoa
+	 */
+	protected $pessoa;
+	
+	public function __construct($pessoa)
+	{
+        $this->pessoa = $pessoa;
+		parent::__construct('Dados Pessoais');
+        $this->EventHandler();
+    }
+
+    public function CreateFields()
+    {
+		global $MIOLO, $action;
+		
+        $ui = $this->manager->getUi();
+        $url = $this->manager->getActionURL('rh','modules:forms:pessoa:js:frmPessoaDadosPessoais.js'); 
+        $this->page->addScriptURL($url);
+        $urlAjaxHandler = $this->manager->getActionURL('rh','ajaxhandler');
+        
+        $db = $this->manager->getDatabase('ufjf');
+        $idPessoa=$this->pessoa->idpessoa;
+        /*$s = new MSQL('idfoto','cm_foto',"idpessoa=$idPessoa");
+        $q = $db->getQuery($s);
+        if (!$q->eof)
+        {
+            $idFoto = $q->result[0][0];
+            $url = $this->manager->getActionURL('common','_fotodown',$idFoto); 
+            $image = new MImageFormLabel('foto', '', $url, "height=\"200\" width=\"147\""); 
+        }
+        else
+        {
+            $image = new MLabel("<center><br><b>ATENÇÃO:</b> Foto não foi encontrada.</center>"); 
+        }*/
+		
+		$perms = $MIOLO->getPerms();
+	    $tabelaGeral = $MIOLO->GetBusiness('common','tabelageral');
+	    $etnias = $tabelaGeral->ListByTabela('RH_ETNIA');		
+		$et = $etnias->chunkResult();
+		asort($et);
+		reset($et);
+		
+	    $titulacao = $tabelaGeral->ListByTabela('RH_TITULACAO');		
+		$tit = $titulacao->chunkResult();
+		asort($tit);
+		reset($tit);		
+
+		$fields = array(
+			$image,
+			new MSpacer('2'),
+			new MTextField('nome','','Nome',50),
+			array(    
+			    new SelectionSexo('sexo','','Sexo'),
+				new MCalendarField('datanasc','','Data de Nascimento','15'),
+			    new SelectionGrupoSanguineo('gruposanguineo','','Grupo Sangüíneo'),
+            ),
+			new MHiddenField('idmunicipionascimento',''),	
+            new MLookupFieldValue('lkpNaturalidade','','Naturalidade',47),
+ 			//new LookupTextField('lkpNaturalidade','','Naturalidade',60),
+			new MTextField('nomepai','','Nome do Pai',50),
+			new MTextField('nomemae','','Nome da Mãe',50),
+			new SelectionEstadoCivil('idestadocivil','','Estado Civil'),
+			new MSelection('etnia','','Etnia', $et),
+			new SelectionPais('idpaisnascimento','','País de Nascimento'),
+			new SelectionNacionalidade('idpaisnacionalidade','','Nacionalidade'),
+			//new MButton('btnAnoChegada','Enviar','doAnoChegada();'),			
+			//new MTextField('anochegbrasil','','Ano de chegada ao Brasil',4),
+			//new MTextField('escolaridade','','Escolaridade',60),
+			//new MTextField('titulacao','','Titulação', 60),	
+			
+		);
+			
+		$this->SetFields($fields);
+		
+		//$this->idpaisnascimento->addAttribute('onChange','doAnoChegada();');
+		$this->idpaisnascimento->addAttribute('onChange',"ajaxSelection.call()");
+		
+		//$aguarde = $this->manager->getUI()->getImage('miolo','aguarde.gif');
+        
+
+		/*
+		if ( trim($this->pessoa->idpaisnascimento) != "024" )
+			$this->setFieldAttr('anochegbrasil','visible',true);
+		else 
+			$this->setFieldAttr('anochegbrasil','visible',false);   
+		*/			     
+		//$this->anochegbrasil->AddAttribute('maxlength','4');
+		$this->SetFieldAttr('escolaridade','readonly',TRUE);
+		$this->SetFieldAttr('titulacao','readonly',TRUE);
+		$this->SetFieldAttr('lkpNaturalidade','module','rh');
+	    $this->SetFieldAttr('lkpNaturalidade','item','municipio');
+	    $this->SetFieldAttr('lkpNaturalidade','event', 'filler');
+   	    $this->SetFieldAttr('lkpNaturalidade','related', 'idmunicipionascimento,lkpNaturalidade');
+
+		$buttons = array(
+			new MButton('btnSalvar','Enviar')
+		);
+		$this->SetButtons($buttons);
+
+        $this->setButtonAttr('btnSalvar','visible',$perms->checkAccess('rh_pessoas',A_ACCESS));
+		
+
+		$this->SetData();
+	}
+		
+	function SetData()  
+	{
+        global $MIOLO;
+		$this->pessoa->retrieveAssociation('municipio');
+        $data = $this->pessoa;
+        
+        //Escolhe automaticamente nacionalidade a partir do país de nascimento
+        
+        $this->SetFieldValue('nome', $data->nome);
+        $this->SetFieldValue('sexo', $data->sexo);
+        $this->SetFieldValue('nomepai', $data->nomepai);
+        $this->SetFieldValue('nomemae', $data->nomemae);
+        $this->SetFieldValue('datanasc', $data->datanasc);
+        $this->SetFieldValue('gruposanguineo', $data->gruposanguineo);
+        $this->SetFieldValue('idpaisnascimento', $data->idpaisnascimento);
+        $this->SetFieldValue('idpaisnacionalidade', $data->idpaisnacionalidade);
+        
+		//$this->SetFieldValue('anochegbrasil', $data->anochegbrasil);
+        $this->SetFieldValue('idestadocivil', $data->idestadocivil);
+// $this->SetFieldValue('estadocivil', $data->estadocivil);//acrescentado
+
+        $this->SetFieldValue('idmunicipionascimento', $data->idmunicipionascimento);
+        if ( $data->idmunicipionascimento )
+        {
+            $municipio = $MIOLO->GetBusiness('common','municipio');
+            $municipio->GetById($data->idmunicipionascimento);
+	    	$this->SetFieldValue('lkpNaturalidade', $municipio->municipio . ' ['. trim($municipio->idUF) . ']');
+        }
+
+		$this->SetFieldValue('etnia', $data->raca);
+	
+		$objFuncionario = $this->manager->GetBusiness('rh','funcionario');
+		$objFuncionario = $objFuncionario->GetFuncionarioByPessoa($this->pessoa->idpessoa);	}
+
+	function GetData()  
+	{
+        $data = $this->pessoa;
+		$data->nome                  = $this->GetFormValue('nome');
+		$data->sexo                  = $this->GetFormValue('sexo');
+		$data->gruposanguineo        = $this->GetFormValue('gruposanguineo');
+		$data->datanasc              = $this->GetFormValue('datanasc');
+        $data->idmunicipionascimento = $this->GetFormValue('idmunicipionascimento');
+		$data->nomepai               = $this->GetFormValue('nomepai');
+		$data->nomemae               = $this->GetFormValue('nomemae');
+		$data->idestadocivil         = $this->GetFormValue('idestadocivil');
+$data->estadocivil = $this->GetFieldValue('estadocivil'); //acrescentado
+        $data->idpaisnascimento      = $this->GetFormValue('idpaisnascimento');
+        $data->idpaisnacionalidade   = $this->GetFormValue('idpaisnacionalidade');
+        //$data->anochegbrasil         = $this->GetFormValue('anochegbrasil');
+		$data->raca			         = $this->GetFormValue('etnia');
+		return $data;
+	}
+
+	
+    function Validate()
+    {
+        if ($this->GetFormValue('gruposanguineo') == '-')
+        {
+            $this->AddError('Informar Grupo Sanguineo');
+            return FALSE;
+        }
+        return TRUE;
+    }
+
+    
+	public function btnSalvar_click()
+	{
+        if ($this->validate())
+        {
+            try
+            {
+	            $data = $this->GetData();
+	        		$this->pessoa->SetData($data);        		
+					
+						  $operacao  = OP_UPD;  
+							$descricao = "Atualização dos dados pessoais. Id pessoa: " .
+														$this->pessoa->idpessoa." Via rh";
+						  
+							$this->pessoa->beginTransaction();
+						  $this->pessoa->save();
+						  $this->pessoa->log($operacao, $descricao);
+						  $this->AddInfo('Dados atualizados');
+						  $this->pessoa->endTransaction();
+
+			        //$go = $this->manager->getActionURL('rh','main:vinculo',$this->pessoa);
+	      	    	//$this->manager->information('Dados Atualizados', $go );	    	
+		    	    
+            }
+            catch ( Exception $e )
+            {
+                $this->addError($e->getMessage());
+            }
+        }
+	}
+	
+/*	function ajax_selPaisNascimento($args)
+	{   
+	    global $MIOLO;
+	    // $args is a object with the named parameters
+	    $value = $args->value;
+	    $option = $args->option;
+	    //echo "xxx";
+	}	*/
+	
+	
+}
+?>

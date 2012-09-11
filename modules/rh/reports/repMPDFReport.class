@@ -1,0 +1,344 @@
+<?PHP
+
+
+/*__________________________________________________________________________________________________________
+|Objetivo: construção de relatórios simples, através de impressão de matrizes.
+|
+|_________________________________
+|Forma de uso, em relatório-filho:
+|
+|  1.   chame parent::__construct()
+|-----------------------------------------------------------------------------------------------------------
+|  2.   opcionalmente altere algumas opções de relatório (SetOption())
+|-----------------------------------------------------------------------------------------------------------
+|  3.   crie a matriz ou matrizes a imprimir
+|-----------------------------------------------------------------------------------------------------------
+|  4.a  chame  $this->Grade() para cada matriz a imprimir
+|  4.b  chame  $this->GenerateDetail() para texto comum sem alinhamento de colunas
+|_________________________________
+|Sintaxe:
+|
+|  1. parent::__construct( $head       ,  //matriz com sub-títulos: descrição do relatório, de filtro, etc
+|                          $orientation); //opcional, assume 'portrait'
+|-----------------------------------------------------------------------------------------------------------
+|  4.a  $this->Grade(
+|         'Título da Grade', //pode ser ''
+|         $Matriz_a_Imprimir                ,  //matriz bidimensional (linhas) de matrizes simples (conteúdos)
+|         $Matriz_Titulos_das_Colunas       ,
+|         $Matriz_Tamanhos_das_Colunas      ,  //opcional, revel o tamanho dos títulos de colunas
+|         $Matriz_de_Alinhamento_das_Colunas,  //opcional, revel 'left'
+|         $margem_esquerda                  ); //opcional, revel 15
+|
+| NOTA: a impressão das colunas é definida por $Matriz_Titulos_das_Colunas,
+|   portanto as matrizes simples em $Matriz_a_Imprimir podem ter tamanhos diferentes
+|   (preenchidos só os elementos que interessam), mas a impressão será de tantas colunas
+|   quantos títulos em $Matriz_Titulos_das_Colunas.
+|
+| EXEMPLO: 
+|   $Matriz_a_Imprimir, $horarios1:
+|
+|     $horarios1[0] => array(   //linha do horário '07:10' (não tem nenhuma aula neste horário)
+|                            [0] => 07:10 //coluna 'Hora'
+|                      );
+|     $horarios1[1] => array(   //linha do horário '08:00' (não tem aula Sexta e Sábado neste horário)
+|                            [0] => 10:50 //coluna 'HORA'
+|                            [1] => J2322010             1A J2324150             1A  //coluna 'Segunda'
+|                            [2] => J2322670             1A J2322680             1A  //coluna 'Terça'
+|                            [3] => J2324200             1A                          //coluna 'Quarta' 
+|                            [4] => J2324040             1A                          //coluna 'Quinta'
+|                      );
+|   $Matriz_Titulos_das_Colunas: 'HORA','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'
+|
+| CHAMADA:
+|   $this->Grade( '1º Trimestre', $horarios1, $Matriz_Titulos_das_Colunas );
+|
+| GRADE IMPRESSA:
+|   .-------.-------------.-------------.-------------.-------------.-------.--------.
+|   | HORA  |   Segunda   |    Terça    |   Quarta    |   Quinta    | Sexta | Sábado |
+|   |-------|-------------|-------------|-------------|-------------|-------|--------|
+|   | 07:10 |             |             |             |             |       |        |
+|   |-------|-------------|-------------|-------------|-------------|-------|--------|
+|   | 10:50 | J2322010 1A | J2322670 1A | J2324200 1A | J2324040 1A |       |        |
+|   |       | J2324150 1A | J2322680 1A |             |             |       |        |
+|   '-------'-------------'-------------'-------------'-------------'-------'--------Ž
+|
+|_________________________________
+|Exemplos:
+|
+|  1.a  parent::__construct( array("Servidores cedidos" , "Ordem de nome"),
+|                            800                                          ,
+|                            540                                          ,
+|                            'landscape'                                  );
+|...........................................................................................................
+|  1.b  parent::__construct( array("Projeto: $objprojeto->idprojeto"     ));
+|-----------------------------------------------------------------------------------------------------------
+|  2.   $this->SetOption('fontSize'    ,8);
+|       $this->SetOption('shaded'      ,1); //alterna sombreado
+|       $this->SetOption('showHeadings',1); //mostra título da grade
+|       $this->SetOption('showLines'   ,0); //0: sem borda, sem horizontais, sem verticais; NÃO separa títulos
+|                                           //1: COM borda, sem horizontais, COM verticais;     separa títulos
+|                                           //2: COM borda, COM horizontais, COM verticais;     separa títulos
+|-----------------------------------------------------------------------------------------------------------
+|  3.a  imprimindo informações gerais (texto livre, porém impresso com Grade afim de alinhar os valores, MAS):
+|
+|       $values[] = array( 'Identificador: ' , $objprojeto->identificador);
+|       $values[] = array( 'Ano          : ' , $objprojeto->ano          );
+|       $values[] = array( 'Número       : ' , $objprojeto->numero       );
+|
+|       $this->SetOption('shaded'      ,0);             //MAS sem sombrear
+|       $this->SetOption('showHeadings',0);             //e sem título de grade
+|       $this->SetOption('showLines'   ,0);             //e sem borda, sem horizontais, sem verticais
+|-----------------------------------------------------------------------------------------------------------
+|  3.b  
+|        //CONSULTA DE QUEBRA POR PÁGINA: lista departamentos com projetos no período
+|        $qydepartamentos = $objdepartamento->listaDepartamentosnoPeriodo($data['ano'])->result;
+|
+|        foreach ($qydepartamentos as $ind => $conteudo )
+|        {
+|            //CONSULTA DE DETALHE: para cada departamento do período: lista os orientadores
+|            $objprojeto = $MIOLO->GetBusiness($module,'projeto');
+|            $qyprojetos = $objprojeto->listOrientadoresbyAnoIddepto($data['ano'],$conteudo[0]);
+|
+|            $this->Grade('Departamento:' . $conteudo[1], //título da grade
+|                         $qyprojetos->result,  //matriz a imprimir
+|                         array('Orientador'),  //títulos das colunas
+|                         array(60)             //tamanhos das colunas
+|                   );
+|            if ($ind < count($qydepartamentos)-1)
+|            {
+|                $this->pdf->ezNewPage();
+|            }
+|        } // foreach
+|-----------------------------------------------------------------------------------------------------------
+|  4.a  $this->Grade(''                        ,  //título da grade
+|                    $query->result            ,  //matriz a imprimir
+|                    array(''        , ''     ),  //títulos das colunas
+|                    array(15        , 60     ),  //tamanhos das colunas
+|                    array('left'    , 'right'),  //alinhamentos das colunas
+|                    0                         ); //margem
+|...........................................................................................................
+|  4.a  $this->Grade('Orientadores:'                             ,
+|                    $query->result                              );
+|                    array('Vínculo   ' , 'Nome                ' ),
+|
+|...........................................................................................................
+|  4.b  sem alinhamento de colunas; os índices associativos servem como rótulos das linhas
+|       $txt = array(   ''              => ''                      ,  //uma linha em branco
+|                       'E-MAIL:'       => $obj->email             ,
+|                       'DEPARTAMENTO:' => $obj->departamento->nome
+|                );
+|       $this->GenerateDetail($txt);
+| TEXTO IMPRESSO:
+|
+|   E-MAIL: xxxxx@ufjf.edu.br
+|   TELEFONE : 2102-3990
+|
+|  4.b  com alinhamento de colunas
+|       $txt[] = array( 'E-Mail:'       ,  $obj->email             );
+|       $txt[] = array( 'Departamento:' ,  $obj->departamento->nome);
+|
+|        $this->SetOption('shaded'      ,0);
+|        $this->SetOption('showHeadings',0);
+|        $this->SetOption('showLines'   ,0); //0: sem borda, sem horizontais, sem verticais; NÃO separa títulos
+|
+|        $this->Grade(NULL,  //título da grade
+|                    $txt        ,   //matriz a imprimir
+|                    array('',''),   //títulos das colunas
+|                    array(15,60),   //tamanhos das colunas
+|                    0      //margem
+|              );
+| GRADE IMPRESSA:
+|   E-Mail:   xxxxx@ufjf.edu.br
+|   Telefone: 2102-3990
+|_________________________________________________________________________________________________________*/
+
+
+class repMPDFReport extends MPDFReport
+{
+    protected $setor, $imgufjf, $timestamp;
+    protected $ezStartPageNumbersX, $ezStartPageNumbersY;
+
+    function __construct(
+               $head              ,  //matriz com sub-títulos: descrição do relatório, filtro, etc
+               $orientation = NULL)
+    {
+        global $module, $page, $context, $self, $action, $perms;
+
+        $MIOLO = MIOLO::getInstance();
+        $this->imgufjf = $MIOLO->GetUI()->GetImageSrc('logo_siga.png',$module);
+
+        if ($orientation == 'landscape')
+        {
+            $this->ezStartPageNumbersX = 800; //coordenada X
+            $this->ezStartPageNumbersY = 540; //coordenada Y
+        }
+        else
+        {
+            $this->ezStartPageNumbersX = 520;
+            $this->ezStartPageNumbersY = 800;
+        }
+
+        //cria o relatório com nulo para posterior criação e inclusão de cada grade
+        parent::__construct(NULL,NULL,55,NULL,$orientation,'a4'); //55: detalhes por página
+
+        $this->timestamp = date('d/m/Y G:i');
+
+        $this->SetWidth(100);  //100%
+
+        $this->SetOption('fontSize'      ,8);
+        $this->SetOption('rowGap'        ,0);
+
+        $this->pdf->ezStartPageNumbers($this->ezStartPageNumbersX, $this->ezStartPageNumbersY,10,'rigth','Página: {PAGENUM}/{TOTALPAGENUM}');
+
+        $this->pdf->ezSetMargins(100, 30, 20, 20); //100,30,30,30
+        $this->GeneratePageHeader($head);
+        $this->GeneratePageFooter();
+    } // __construct
+
+
+    function GeneratePageHeader($head)
+    {
+        $x0 = $this->pdf->left;
+        $y = $this->ezStartPageNumbersY;
+        $h = $this->pdf->getFontHeight(12);
+        $header = $this->pdf->openObject();
+        $this->pdf->saveState();
+        $this->pdf->addPngFromFile($this->imgufjf, $x0, $y , 235, 54);   //imagem, X, Y, largura, altura
+        $this->pdf->addText($x0+60, $y      , 12, 'IF - Instituto Federal');
+        $this->pdf->addText($x0+60, $y-$h   , 12, 'SIGA - Sistema Integrado de Gestão Acadêmica');
+        $y = $y - $h - $h - 4;
+        $height = 14;
+        foreach ($head as $ind => $line)  //para cada linha de cabeçalho
+        {
+            if ($ind == 0)
+            {
+                //se primeira linha de cabeçalho imprime em negrito ou fundo preto
+                $this->pdf->addText($x0, $y, $height, '<b>'.$line.'</b>');
+            }
+            else
+            {
+                $this->pdf->addText($x0, $y, $height, $line);
+            }
+            $y = $y - 12; //desce para cada linha de cabeçalho
+            $height = 10;
+        }
+        $this->pdf->ezSetDy($ind * -8); //cria espaço abaixo
+        $this->pdf->restoreState();
+        $this->pdf->closeObject();
+        $this->pdf->addObject($header, 'all');
+    } // GeneratePageHeader
+
+    function GenerateGrid($data,$margin=15,$showLines_shaded=1)
+    {
+        $this->SetOption('xPos'        ,$this->pdf->left+$margin);
+        $this->SetOption('xOrientation','right');
+        $this->SetData($data);
+        $this->rawdata = $this->GenerateTableData();
+        $this->GenerateBody($this->rawdata);
+    }  // GenerateGrid
+
+    function GenerateGroupHeader($title)
+    {
+        if ($title)
+        {
+            $this->pdf->SetStrokeColor(0, 0, 0);
+            $x0 = $this->pdf->left;
+            $this->pdf->ezSetDy(-22); //cria espaço abaixo, 'makeSpace');
+            $y = $this->pdf->y;
+            $this->pdf->addText($x0, $y, 10, $title);
+        }
+    } // GenerateGroupHeader
+
+    function GeneratePageFooter()
+    { 
+        $x0 = $this->pdf->left;
+        $x1 = $this->pdf->right;
+        $footer = $this->pdf->openObject();
+        $this->pdf->saveState();
+        $this->pdf->SetStrokeColor(0, 0, 0);
+        $this->pdf->line($x0, 28, $x1, 28);
+        $this->pdf->addText($x0, 19, 9, $this->timestamp);
+        $this->pdf->restoreState();
+        $this->pdf->closeObject();
+        $this->pdf->addObject($footer, 'all');
+    } // GeneratePageFooter    
+
+    function Generate()
+    {
+        $this->SetOutput();
+        $this->Execute();
+    } // Generate
+
+    function Grade($title                , //pode ser ''
+                   $values               , //matriz bidimensional (linhas) de matrizes simples (conteúdos)
+                   $labels = NULL        , //títulos das colunas
+                   $widths = NULL        , //opcional, revel 0 (o Miolo adequa o tamanho)//o tamanho dos títulos de colunas
+                   $aligns = NULL        , //opcional, revel 'left' TVZ testar tipo para Numerico=right
+                   $margin = 15          ) //opcional, revel 15
+    {
+        
+        if ($title)
+        {
+            $this->GenerateGroupHeader($title);  //título que precede agrupamento
+            $this->pdf->ezSetDy(-5); //cria espaço abaixo
+        }
+        if ($values)
+        {
+            //foreach ($values[0] as $ind => $conteudo )  //índice associativo (para o nome de campo) => conteúdo
+            foreach ($labels as $ind => $conteudo )  //índice associativo (para o nome de campo) => conteúdo
+            //foreach ($labels as       $conteudo)
+            {
+                if ($aligns[$ind]) //($aligns)
+                {
+                    $align = $aligns[$ind];
+                }
+                else
+                {
+                    $align = 'left';
+                }
+                if ($widths[$ind])
+                {
+                    $width = $widths[$ind];
+                }
+                else
+                {
+                    $width = 0;  //revel 0 (o Miolo adequa o tamanho)
+                }
+                //títulos de colunas
+                $columns[] = new MPDFReportColumn('a'.$ind                 , //NAME
+                                                  "<b><i>$conteudo</i></b>", //TITLE=''
+                                                  $align                   , //ALIGN
+                                                  TRUE                     , //NOWRAP
+                                                  $width                   , //WIDTH
+                                                  true                     , //VISI
+                                                  null                     , //OPTIONS
+                                                  true                     );//ORDER,FILTER
+            }
+            $this->SetColumns($columns);          //registra a grade
+            $colDetail = $this->columns;
+            $this->columns = $colDetail;          //gera o relatório para a grade
+            $this->GenerateGrid($values,$margin); //grade geral
+        } //if
+    } // Grade
+
+    //imprime texto comum, sem alinhamento de colunas
+      //se desejado imprimir com alinhamento um texto comum
+      //use Grade(), com SetOption('showLines',0)
+    function GenerateDetail($values)
+    {
+        $this->pdf->ezSetDy(-10); //cria espaço abaixo
+        $y = $this->pdf->y;
+        foreach ($values as $ind => $conteudo )  //índice associativo (para o nome de campo) => conteúdo
+        {
+            $this->pdf->addText($this->pdf->left, $y, 10, $ind . ' ' . $conteudo);
+            $y = $y - 10; //-$h
+        }
+        $this->pdf->ezSetY($y-10);   //reposiciona para a futura grade (cria espaço abaixo)
+    }  // GenerateDetail
+
+    function espacoAbaixo($espaco=10)
+    {
+        $this->pdf->ezSetDy(-$espaco);
+    } // espacoAbaixo
+}
+?>

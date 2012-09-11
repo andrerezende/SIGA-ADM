@@ -1,0 +1,404 @@
+<?
+MIOLO::Import('extensions::class.phpmailer.php','PHPMailer'); 
+class frmCarteiraServidor extends MFormAjax
+{
+    var $idPessoa;
+    var $idVinculo;
+
+    //atributo para armazenar os dados antes da atualizacao, usado para identificar as modificacoes
+    var $dadosOriginais; 
+    var $msg;
+
+	function __construct($data)
+    {   
+        $MIOLO = MIOLO::getInstance();
+        $user = $MIOLO->GetBusinessMAD('user');
+        $this->idVinculo = $data[0];
+        $this->idPessoa = $data[1];
+        $user->GetByLogin($this->idVinculo);
+
+        parent::__construct('Carteira do Servidor');
+	    $this->EventHandler();
+	}
+
+    function CreateFields()
+	{  
+        $url = $this->manager->getActionURL('common','modules:forms:frmCarteiraServidor.js'); 
+        $this->page->addScriptURL($url);
+
+        $ui = $this->manager->getUi();
+        
+        $db = $this->manager->getDatabase('sigaept');
+        $s = new MSQL('idfoto','cm_foto',"idpessoa={$this->idPessoa}");
+        $q = $db->getQuery($s);
+        if (!$q->eof)
+        {
+            $idFoto = $q->result[0][0];
+            $url = $this->manager->getActionURL('common','_fotodown',$idFoto); 
+            $image = new MImageFormLabel('foto', 'Foto', $url, "height=\"200\" width=\"147\""); 
+        }
+        else
+        {
+            $image = new MImageFormLabel('foto', '<b>ATEN&Ccedil;&Atilde;O:</b>Foto n&atilde;o encontrada.', $ui->getImage('common','nophoto.gif')); 
+        }
+
+        $pessoa = $this->manager->getBusiness('common','pessoa');
+        $pessoa->getById($this->idPessoa);
+        
+        
+        $pessoa->retrieveAssociation('municipioNascimento');
+        $pessoa->retrieveAssociation('municipio');
+
+        $this->setDadosOriginais($pessoa);
+        
+        $pais = $this->manager->getBusiness('common','pais');
+        $pais->getById($pessoa->idpaisnacionalidade);
+
+        $estadoCivil = $this->manager->getBusiness('common','estadocivil');
+        $estadoCivil->getById($pessoa->idestadocivil);
+
+        $vinculo = $this->manager->getBusiness('rh','vinculo');
+        $vinculo->getById($this->idVinculo);
+
+        $vinculo->getProvimentos();
+        $provimento = $vinculo->getProvimentoAtual();
+        $provimento->retrieveAssociation('setor');
+
+        $dadosServidor = $provimento->getDados();
+
+        $ufNascimento = $this->manager->getBusiness('common','uf');
+        $queryUf = $ufNascimento->listAll();
+
+        $ufNascimento->getById(trim($pessoa->municipioNascimento->idUF));
+        $queryMunicipioNascimento = $ufNascimento->listMunicipios();
+
+        if ( $queryMunicipioNascimento->eof() )
+        {
+            $queryMunicipioNascimento->result = array();
+        }
+
+        $uf = $this->manager->getBusiness('common','uf');
+        $uf->getById(trim($pessoa->municipio->idUF));
+        $queryMunicipio = $uf->listMunicipios();
+        
+        $options = array(
+                new MOption('1','Caso V. Sa. n&atilde;o tenha feito a foto, favor providenciar uma foto 3x4 (digital) e enviar por email, juntamente com seu nome completo e SIAPE, para a Diretoria de Comunica&ccedil;&atilde;o (email: carteira.identificacao@sigaept.edu.br)'),
+                new MOption('2','Os <b>dados da carteira</b> ou <b>de contato</b> que estiverem incorretos devem ser alterados por V. Sa. no respectivo campo.'),
+                new MOption('3','As incorre&ccedil;&otilde;es em campos que n&atilde;o s&atilde;o poss&iacute;veis de serem alterados dever&atilde;o ser corrigidas pela Ger&ecirc;ncia de Cadastro/PRORH.'),
+        );
+
+        $optionsFinal = array(
+                new MOption('1','Clique em CONFIRMAR para autorizar a confec&ccedil;&atilde;o da Carteira do Servidor com os dados acima.'),
+                new MOption('2','Se houver alguma informa&ccedil;&atilde;o que V. Sa. n&atilde;o conseguiu alterar, <b>n&atilde;o confirme</b> e procure a Ger&ecirc;ncia de Cadastro/PRORH.'),
+                //new MOption('2','Clique em N&Atilde;O CONFIRMAR caso algum dado necessite ser alterado.'),
+        );
+
+        $tiposSanguineo = array(
+            "A+"=>"A+",
+            "A-"=>"A-",
+            "B+"=>"B+",
+            "B-"=>"B-",
+            "AB+"=>"AB+",
+            "AB-"=>"AB-",
+            "O+"=>"O+",
+            "O-"=>"O-"
+        );
+        $fields = array(
+                new MTextHeader('hdr',1,'Aten&ccedil;&atilde;o'),
+                new MLabel('A UFJF est&aacute; confeccionando uma nova carteira para os servidores e solicita que voc&ecirc; confira os dados abaixo:'),
+                new MSeparator(),
+                new MLabel("<b>Observa&ccedil;&otilde;es Importantes</b>"),
+                new MUnorderedList('ul',$options),
+                $image,
+                new MSeparator(),
+                new MTextHeader('hdr',1,'Dados da carteira'),
+                new MTextField('nome',$pessoa->nome,'Nome',55),
+                new MTextField('cargo',$dadosServidor[5],'Cargo',55),
+                new MTextField('setor',$provimento->setor->sigla . ' - ' . $provimento->setor->nome,'Lota&ccedil;&atilde;o',55),
+                new MTextField('matricula',$this->idVinculo,'Matr&iacute;cula SIAPE',55),
+                new MTextField('cpf',$this->formatCPF($pessoa->cpf),'CPF',14),
+                new MSelection('gruposanguineo',trim($pessoa->gruposanguineo),'Grupo Sangu&iacute;neo',$tiposSanguineo),
+                new MTextField('numrg',$pessoa->numrg,'Identidade',55),
+                new MTextField('orgaorg',$pessoa->orgaorg,"&Oacute;rg&atilde;o Exp.",55),
+                new MSelection('ufrg',$pessoa->ufrg,"UF do RG",$queryUf->result),
+                new MCalendarField('datarg',$pessoa->datarg,"Data Exp. RG"),
+                new MTextField('nomepai',$pessoa->nomepai,'Nome Pai',55),
+                new MTextField('nomemae',$pessoa->nomemae,'Nome M&atilde;e',55),
+                array(
+                    new MSelection('idUfNascimento',trim($pessoa->municipioNascimento->idUF),'Estado Nascimento',$queryUf->result),
+                    new MSelection('idmunicipionascimento',$pessoa->municipioNascimento->idMunicipio,'Municipio Nascimento',$queryMunicipioNascimento->result)
+                ),
+                new MSelection('idpaisnacionalidade',$pessoa->idpaisnacionalidade,'Nacionalidade',$pais->listNacionalidade()->result),
+                new MTextField('datanasc',$pessoa->datanasc,'Data Nasc.',55),
+                new MTextField('estadocivil',$estadoCivil->estadocivil,'Estado Civil',55),
+                new MTextField('tituloeleitor',$pessoa->tituloeleitor,'Titulo Eleitor',55),
+                new MTextField('pispasep',$pessoa->pispasep,'Pasep',55),
+                new MSeparator(),
+                new MTextHeader('hdr','1','Contato'),
+                new MTextField('endereco',$pessoa->endereco,'Endere&ccedil;o',55),
+                new MTextField('bairro',$pessoa->bairro,'Bairro',55),
+                array(
+                    new MSelection('idUf',trim($pessoa->municipio->idUF),'Estado',$queryUf->result),
+                    new MSelection('idmunicipio',$pessoa->idmunicipio,'Municipio',$queryMunicipio->result)
+                ),
+                new MTextField('cep',$pessoa->cep,'CEP',8),
+                new MTextField('email',$pessoa->email,'E-mail',50),
+                new MTextField('telefone',$pessoa->telefone,'Telefone',20),
+                new MTextField('celular',$pessoa->celular,'Celular',20),
+                new MSeparator(),
+                new MUnorderedList('ul',$optionsFinal),
+       );
+        $this->SetFields($fields);
+        $this->idUfNascimento->addAttribute('onChange',"ajaxSelection.call()");
+        $this->idUf->addAttribute('onChange',"ajaxSelection2.call()");
+        $this->setFieldAttr('nome','readonly',TRUE);
+        $this->setFieldAttr('cargo','readonly',TRUE);
+        $this->setFieldAttr('setor','readonly',TRUE);
+        $this->setFieldAttr('matricula','readonly',TRUE);
+        $this->setFieldAttr('cpf','readonly',TRUE);
+        $this->setFieldAttr('nomepai','readonly',TRUE);
+        $this->setFieldAttr('nomemae','readonly',TRUE);
+        $this->setFieldAttr('datanasc','readonly',TRUE);
+        $this->setFieldAttr('estadocivil','readonly',TRUE);
+
+        $buttons = array(
+            new MButton('btnConfirma','CONFIRMAR'),
+            new MButton('btnContinua','N&Atilde;O CONFIRMAR')
+        );
+        $this->setButtons($buttons);
+	}
+
+    function ajax_MunicipioNascimento($args)
+    {
+        global $MIOLO;
+        // $args is a object with the named parameters
+        $value = $args->value;
+        $option = $args->option;
+        // this method is called by CPAINT at btnSel onclick event
+        if ($value !== '')
+        {
+            $uf = $MIOLO->getBusiness('common','uf');
+            $uf->getById($value);
+            $query = $uf->listMunicipios();
+
+            $selMunicipio = new MSelection("idmunicipionascimento","","Municipio Nascimento",$query->result);
+            $selMunicipio->formMode = MControl::FORM_MODE_SHOW_ABOVE;
+            // response_type = TEXT : set the ajax area of theme 
+            $this->manager->getTheme()->setAjaxContent($selMunicipio);
+        }
+    }
+
+    function ajax_Municipio($args)
+    {
+        global $MIOLO;
+        // $args is a object with the named parameters
+        $value = $args->value;
+        $option = $args->option;
+        // this method is called by CPAINT at btnSel onclick event
+        if ($value !== '')
+        {
+            $uf = $MIOLO->getBusiness('common','uf');
+            $uf->getById($value);
+            $query = $uf->listMunicipios();
+
+            $selMunicipio = new MSelection("idmunicipio","","Municipio",$query->result);
+            $selMunicipio->formMode = MControl::FORM_MODE_SHOW_ABOVE;
+            // response_type = TEXT : set the ajax area of theme 
+            $this->manager->getTheme()->setAjaxContent($selMunicipio);
+        }
+    }
+
+    function btnConfirma_click()
+    {
+        $pessoa = $this->manager->getBusiness('common','pessoa');
+        $pessoa->getById($this->idPessoa);
+        
+        $data = $this->getData();
+        $this->verificaDiferenca($data);
+        try
+        {
+            $pessoa->setData($data);
+		    $pessoa->cpf = str_replace(".","", str_replace("-","", $pessoa->cpf));
+            $pessoa->datacartest = date('d/m/Y H:i:s');
+            $pessoa->save();
+            $this->gravaArquivo();
+            $this->enviaEmail();
+            $this->manager->Information("Dados confirmados!");
+        }
+        catch ( Exception $e )
+        {
+            $this->addError($e->getMessage());
+        }
+    }
+
+    function btnContinua_click()
+    {
+        $session = $this->manager->session;
+        $session->register("naoConfirma");
+        $session->setValue("naoConfirma",1);
+        $this->page->Redirect($this->manager->getActionURL('common','main'));
+    }
+
+    function formatCPF($cpf)
+    {
+        if ($cpf != '')
+        {
+           return substr($cpf,0,3) . '.' . substr($cpf,3,3) . '.' . substr($cpf,6,3) . '-' . substr($cpf,9,2);
+        }
+    }
+
+    function setDadosOriginais($pessoa)
+    {
+        $this->dadosOriginais->gruposanguineo = $pessoa->gruposanguineo;
+        $this->dadosOriginais->numrg = $pessoa->numrg;
+        $this->dadosOriginais->orgaorg = $pessoa->orgaorg;
+        $this->dadosOriginais->datarg = $pessoa->datarg;
+        $this->dadosOriginais->ufrg = $pessoa->ufrg;
+        $this->dadosOriginais->idmunicipionascimento = $pessoa->idmunicipionascimento ;
+        $this->dadosOriginais->idpaisnacionalidade = $pessoa->idpaisnacionalidade;
+        $this->dadosOriginais->tituloeleitor = $pessoa->tituloeleitor;
+        $this->dadosOriginais->pispasep = $pessoa->pispasep;
+        $this->dadosOriginais->endereco = $pessoa->endereco;
+        $this->dadosOriginais->bairro = $pessoa->bairro;
+        $this->dadosOriginais->idmunicipio = $pessoa->idmunicipio;
+        $this->dadosOriginais->cep = $pessoa->cep;
+        $this->dadosOriginais->email = $pessoa->email;
+        $this->dadosOriginais->telefone = $pessoa->telefone;
+        $this->dadosOriginais->celular = $pessoa->celular;
+    }
+
+    function verificaDiferenca($data)
+    {
+        if ( trim($data->gruposanguineo) != trim($this->dadosOriginais->gruposanguineo) )
+        {
+            $this->msg[] = "Grupo sanguineo alterado: de {$this->dadosOriginais->gruposanguineo} para {$data->gruposanguineo}";
+        }
+        if ( trim($data->numrg) != trim($this->dadosOriginais->numrg) )
+        {
+            $this->msg[] = "Numero do RG alterado: de {$this->dadosOriginais->numrg} para {$data->numrg}";
+        }
+        if ( trim($data->orgaorg) != trim($this->dadosOriginais->orgaorg) )
+        {
+            $this->msg[] = "Orgao do RG alterado: de {$this->dadosOriginais->orgaorg} para {$data->orgaorg}";
+        }
+        if ( trim($data->datarg) != trim($this->dadosOriginais->datarg) )
+        {
+            $this->msg[] = "Data do RG alterada: de {$this->dadosOriginais->datarg} para {$data->datarg}";
+        }
+        if ( trim($data->ufrg) != trim($this->dadosOriginais->ufrg) )
+        {
+            $this->msg[] = "UF do RG alterado: de {$this->dadosOriginais->ufrg} para {$data->ufrg}";
+        }
+        if ( trim($data->idmunicipionascimento) != trim($this->dadosOriginais->idmunicipionascimento) )
+        {
+            $municipioAlterado = $this->manager->getBusiness('common','municipio');
+            $municipioAlterado->getById($data->idmunicipionascimento);
+            $municipioOriginal = $this->manager->getBusiness('common','municipio');
+            $municipioOriginal->getById($this->dadosOriginais->idmunicipionascimento);
+            $this->msg[] = "Municipio de nascimento alterado: de {$municipioOriginal->municipio}-{$municipioOriginal->idUF} para {$municipioAlterado->municipio}-{$municipioAlterado->idUF}";
+        }
+        if ( trim($data->idpaisnacionalidade) != trim($this->dadosOriginais->idpaisnacionalidade) )
+        {
+            $paisAlterado = $this->manager->getBusiness('common','pais');
+            $paisAlterado->getById($data->idpaisnacionalidade);
+            $paisOriginal = $this->manager->getBusiness('common','pais');
+            $paisOriginal->getById($this->dadosOriginais->idpaisnacionalidade);
+            $this->msg[] = "Nacionalidade alterada: de {$paisOriginal->pais} para {$paisAlterado->pais}";
+        }
+        if ( trim($data->tituloeleitor) != trim($this->dadosOriginais->tituloeleitor) )
+        {
+            $this->msg[] = "Titulo de eleitor alterado: de {$this->dadosOriginais->tituloeleitor} para {$data->tituloeleitor}";
+        }
+        if ( trim($data->pispasep) != trim($this->dadosOriginais->pispasep) )
+        {
+            $this->msg[] = "Pasep alterado: de {$this->dadosOriginais->pispasep} para {$data->pispasep}";
+        }
+        if ( trim($data->endereco) != trim($this->dadosOriginais->endereco) )
+        {
+            $this->msg[] = "Endereco alterado: de {$this->dadosOriginais->endereco} para {$data->endereco}";
+        }
+        if ( trim($data->bairro) != trim($this->dadosOriginais->bairro) )
+        {
+            $this->msg[] = "Bairro alterado: de {$this->dadosOriginais->bairro} para {$data->bairro}";
+        }
+        if ( trim($data->idmunicipio) != trim($this->dadosOriginais->idmunicipio) )
+        {
+            $municipioAlterado = $this->manager->getBusiness('common','municipio');
+            $municipioAlterado->getById($data->idmunicipio);
+            $municipioOriginal = $this->manager->getBusiness('common','municipio');
+            $municipioOriginal->getById($this->dadosOriginais->idmunicipio);
+            $this->msg[] = "Municipio alterado: de {$municipioOriginal->municipio}-{$municipioOriginal->idUF} para {$municipioAlterado->municipio}-{$municipioAlterado->idUF}";
+        }
+        if ( trim($data->cep) != trim($this->dadosOriginais->cep) )
+        {
+            $this->msg[] = "CEP alterado: de {$this->dadosOriginais->cep} para {$data->cep}";
+        }
+        if ( trim($data->email) != trim($this->dadosOriginais->email) )
+        {
+            $this->msg[] = "Email alterado: de {$this->dadosOriginais->email} para {$data->email}";
+        }
+        if ( trim($data->telefone) != trim($this->dadosOriginais->telefone) )
+        {
+            $this->msg[] = "Telefone alterado: de {$this->dadosOriginais->telefone} para {$data->telefone}";
+        }
+        if ( trim($data->celular) != trim($this->dadosOriginais->celular) )
+        {
+            $this->msg[] = "Celular alterado: de {$this->dadosOriginais->celular} para {$data->celular}";
+        }
+    }
+
+    function enviaEmail()
+    {
+        if ( count($this->msg) > 0 )
+        {
+            $pessoa = $this->manager->getBusiness('common','pessoa');
+            $pessoa->getById($this->idPessoa);
+
+            $mail = new PHPMailer();
+            $mail->IsSMTP(); // telling the class to use SMTP
+            $mail->Host = "smtp.sigaept.br"; // SMTP server
+            $mail->From = 'siga@sigaept.edu.br';
+            $mail->FromName = 'SIGA - Sistema Integrado de Gestão Acadêmica';
+            $mail->Subject = "Dados alterados no SIGA";
+            $mensagem = "Servidor: $pessoa->nome. SIAPE: $this->idVinculo alterou seus dados no SIGA.\n"; 
+            $time = $this->manager->getSysTime(); 
+            $ipaddress = $_SERVER['REMOTE_ADDR'];
+            $mensagem .= "A alteração foi feita em [{$time}] a partir da máquina [{$ipaddress}].\n";
+            foreach ( $this->msg as $msg )
+            {
+                $mensagem .= $msg ."\n";
+            }
+            $body =
+<<< HERE
+            $mensagem
+HERE;
+            $mail->Body = $body;
+
+            $mail->AddAddress("marcus.lima@sigaept.edu.br");
+            $mail->Send();
+        }
+    }
+
+    function gravaArquivo()
+    {
+        if ( count($this->msg) > 0 )
+        {
+            $pessoa = $this->manager->getBusiness('common','pessoa');
+            $pessoa->getById($this->idPessoa);
+            $fname = $this->manager->GetModulePath('common','tmp/') . trim($this->idVinculo) . '.txt';
+            $fp = fopen($fname,'w+');
+            $mensagem = "Servidor: $pessoa->nome. SIAPE: $this->idVinculo alterou seus dados no SIGA.\n"; 
+            $time = $this->manager->getSysTime(); 
+            $ipaddress = $_SERVER['REMOTE_ADDR'];
+            $mensagem .= "A alteração foi feita em [{$time}] a partir da máquina [{$ipaddress}].\n";
+            fwrite($fp, $mensagem);
+            foreach($this->msg as $t)
+            {
+                $t .= "\n";
+                fwrite($fp, $t);
+            }
+            fclose($fp);
+        }
+    }
+}
+?>

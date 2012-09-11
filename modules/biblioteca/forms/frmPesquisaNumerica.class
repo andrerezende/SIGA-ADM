@@ -1,0 +1,377 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?
+/*
+   Uma imagem vale por mil palavras...
+
+   hierarquia de classes:
+
+                                  FORM
+                                    |
+                                    |
+                                 PESQUISA  (frmPesquisa.class)
+                                    |
+                                    |
+   -----------------------------------------------------------------------------
+           |                    |                    |                  |
+           |                    |                    |                  |
+    Pesquisa Simples    Pesquisa Multicampo  Percorrer indices  Pesquisa Numérica
+
+
+ Para configurar os campos da Pesquisa Simples, acesse etc/pesquisa.xml
+*/
+
+MIOLO::IMPORT('modules::biblioteca::forms::frmPesquisa');
+
+class frmPesquisaNumerica extends frmPesquisa 
+{
+	var $objNumerica;
+	var $objSimples;
+	var $objExemplar;
+	var $objObra;
+
+
+    function frmPesquisaNumerica()  // construtor da Classe
+    {
+		global $MIOLO,$module;
+
+		// Título do Formulário
+		$this->Form('Pesquisa Numérica');
+
+		//Chama o CreateFileds, etc.
+		$this->EventHandler();
+
+		//Botão "enviar" não aparece
+		$this->defaultButton = false;
+		
+		// Botão 'fechar', direcionando para o handler biblioteca/main/
+		$this->SetClose($this->manager->GetActionURL($module, 'main'));
+	}
+
+   
+    function CreateFields()
+    {
+		global $MIOLO, $module, $action;
+
+        $busca = $this->GetFormValue('busca');
+		$tiponum = $this->GetFormValue('tiponum');
+		//monta as opções de acordo com o perfil do usuário
+		$Options = array(
+	        array('Número da Obra','no'),
+		    array('Código do Exemplar','ce'),
+			array('ISBN','isbn'),
+			array('ISSN','issn'),
+			array('Número de Chamada','ch')
+        );
+		$perms = $this->manager->getPerms();
+		if ( $perms->checkAccess('bib_pesqinvent',A_ACCESS) )
+		{
+			$Options[] = array('Número do Inventário','ni');
+		}
+
+		if (!$tiponum)
+		{
+			$radioGroup = new MRadioButtonGroup('radioGroup', ' Consultar por ', $Options, 'no', '', 'vertical', 'css');
+		}
+		else
+		{
+			$radioGroup = new MRadioButtonGroup('radioGroup', ' Consultar por ', $Options, $tiponum, '', 'vertical', 'css');
+		}
+
+		// Campos que aparecem no formulário
+		$fields = Array (
+			new TextField('edtBusca','','Busca',30),
+			$radioGroup			
+		);
+
+		// Insere os campos
+		$this->SetFields($fields);
+
+		if ($busca)
+		{
+			$this->SetFieldValue('edtBusca',$busca);
+		}
+
+	    // Botões que aparecem no formulário
+		$buttons = Array(
+			new FormButton('btnConsultar', 'Consultar'),
+			new FormButton('btnNovaPesq', 'Nova Pesquisa', $MIOLO->GetActionURL($module, $action)),
+   		);
+
+		//Insere os Botões
+		$this->SetButtons($buttons);
+		$this->SetButtonAttr('btnNovaPesq','visible',false);
+
+   		//Definindo o foco
+		if (!($this->page->isPostBack()))
+		{
+			$this->page->onLoad("MIOLO_GetElementById('edtBusca').focus();");
+		}
+	}
+
+
+    // pega os dados que estão no formulário   
+    function GetData()
+    {
+        $data = new FormData();
+        $busca = trim($this->GetFormValue('edtBusca'));
+		$busca = str_replace(chr(39),chr(39).chr(39),$busca);
+		$busca = str_replace(chr(92),'',$busca);
+		$data->busca = $busca;
+        $data->tiponum = $this->GetFormValue('radioGroup');
+		return $data;
+    }
+
+
+	function btnConsultar_click($sender,$tipo=null)
+	{
+		global $MIOLO, $module, $self, $theme, $action, $page;
+
+		//esconde botoes e campos
+		$this->SetFieldAttr('edtBusca','readonly',true);
+		$this->SetFieldAttr('radioGroup','readonly',true);
+		$this->SetButtonAttr('btnConsultar','visible',false);
+
+		// mostra botao de nova pesquisa
+		$this->SetButtonAttr('btnNovaPesq','visible',true);
+
+		$camposPesquisa = $this->GetCamposPesquisa();
+
+		$tipo = $this->GetFormValue('tipo');
+		if($tipo == 'outros') //se for passado o parametro, usuario clicou no botão voltar
+		{
+	        $busca = $this->GetFormValue('busca');
+	        $tiponum = $this->GetFormValue('tiponum');
+
+			$data = new FormData();
+			$data->busca = $busca;
+			$data->tiponum = $tiponum;
+		}
+		else
+		{
+			$data = $this->GetData();
+		}
+
+		if (trim($data->busca)<>'')  // nao usei validators
+		{
+			if ($data->tiponum == 'no')
+			{
+				$termo = is_Numeric($data->busca);
+				if (!$termo)
+				{
+					$MIOLO->Prompt(Prompt::Error("Para pesquisa pelo número da obra, o termo de busca deve ser numérico.", $MIOLO->GetActionURL($module,$action)));
+				}
+			}
+
+			$this->objNumerica = $MIOLO->GetBusiness($module,'pesquisanumerica');
+			
+			$ok = false;
+			if (($data->tiponum == 'no') OR ($data->tiponum == 'ce') OR ($data->tiponum == 'ni'))
+			{
+				$query = $this->objNumerica->Listar($data);
+
+				if ($query->result[0][0])
+				{
+					$ok = true;
+					if (($data->tiponum == 'no') OR ($data->tiponum == 'ce'))
+					{
+						$this->btnDetalhesObra_click($query->result[0][0]);
+					}
+					elseif ($data->tiponum == 'ni') //Pesquisa por inventário
+					{
+						$this->PesquisaInventario($query->result);		
+					}
+				}
+			}
+			elseif (($data->tiponum == 'isbn') OR ($data->tiponum == 'issn') OR ($data->tiponum == 'ch'))
+			{
+				$camposPesquisa = $this->GetCamposPesquisa();
+				$query = $this->objNumerica->ListarOutros($data, $camposPesquisa);
+
+				if ($query)
+				{
+					$ok = true;
+					$this->MontaDataGrid($camposPesquisa,$query,'outros',$data);		
+				}
+			}
+
+			if (!$ok)
+			{
+				$MIOLO->Prompt(Prompt::Error('Sua pesquisa por "' . $data->busca . '" não retornou nenhum resultado.<br><br>
+				Em caso de dúvida, consulte a pessoa responsável pelo atendimento na sua biblioteca.<br>', $MIOLO->GetActionURL($module,$action)));
+			}
+		}
+		else
+		{
+			$MIOLO->Prompt(Prompt::Error("Por favor, preencha o campo Busca", $MIOLO->GetActionURL($module,$action)));		
+		}
+	}
+
+
+	function btnDetalhesObra_click($idobra)
+	{
+		global $MIOLO, $module, $self, $theme, $action, $page, $item;
+
+		if ($idobra != null)
+		{
+			$item=$idobra;
+		}
+
+		// Primeiro, montar um grid com os exemplares
+		$columns = array(
+			new DataGridColumn('obra','Obra','center',true, '10%',true, null, true,true),
+			new DataGridColumn('exemplar','Exemplar','center',true, '16%',true, null, true,true),
+			new DataGridColumn('tipo','Tipo','center',true, '20%',true, null, true,true),
+			new DataGridColumn('estado','Estado','center',true, '14%',true, null, true,true),
+			new DataGridColumn('prevdev','Previsão Devolução','center',true, '17%',true, null, true,true),
+			new DataGridColumn('unidade','Unidade','center',true, '15%',true, null, true,true),
+			new DataGridColumn('volume','Volume','center',true, '8%',true, null, true,true)
+		);
+
+		$href_datagrid = $MIOLO->GetActionURL($module,$self,$item, Array('event'=>'btnDetalhesObra_click'));
+
+		 //Instancia o objeto pesquisa simples
+	    $this->objSimples = $MIOLO->GetBusiness($module,'pesquisasimples');
+
+		$query = $this->objSimples->ListExemplaresByIdObra($item);
+
+		$tituloObra = $this->objSimples->GetTitulo($item);
+		
+		$href_reserva= $MIOLO->GetActionURL($module,'main:reservar','%0%',Array('event'=>'btnVerificar:click'));	
+		$datagrid = new DataGrid2($query, $columns, $href_datagrid,20);
+		$datagrid->SetTitle('Exemplares de: ' . $tituloObra->result[0][0]);
+		$datagrid->AddActionText('alt','Reservar',$href_reserva);
+		$datagrid->SetWidth('99%');
+		$datagrid->setClose(null);
+
+		$theme->ClearContent();
+		$theme->InsertContent($datagrid);
+
+		// Agora vamos inserir informações da Obra
+		$this->SetTitle('Ficha Detalhada');
+		$this->defaultButton = false;
+	
+		$this->objObra = $MIOLO->GetBusiness($module, 'obra');
+		$data = $this->objObra->getFichaDetalhada($item);
+		$linhas = array();
+		if($data[0])
+			$linhas[] = array('Número da Obra', $data[0]);
+		if($data[1])
+			$linhas[] = array('Título', $data[1]);
+		if($data[2])
+			$linhas[] = array('Subtítulo', $data[2]);
+		if($data[3])
+			$linhas[] = array('Autor', $data[3]);
+		if($data[4])
+			$linhas[] = array('Edição', $data[4]);
+		if($data[5])
+			$linhas[] = array('Classificação', $data[5]);
+		if($data[6])
+			$linhas[] = array('Notação de Autor', $data[6]);
+		if($data[7])
+			$linhas[] = array('Notação de Título', $data[7]);
+		if($data[8])
+			$linhas[] = array('Local de Publicação', $data[8]);
+		if($data[9])
+			$linhas[] = array('Editora', $data[9]);
+		if($data[10])
+			$linhas[] = array('Data de Publicação', $data[10]);
+		if($data[11])
+			$linhas[] = array('Descrição Física', $data[11]);
+		if($data[12])
+			$linhas[] = array('Material Complementar', $data[12]);
+		if($data[13])
+			$linhas[] = array('Série', $data[13]);
+		if($data[14])
+			$linhas[] = array('Número de Volume', $data[14]);
+		if($data[15])
+			$linhas[] = array('Assunto', $data[15]);
+		if($data[16])
+			$linhas[] = array('Entrada Secundária', $data[16]);
+		if($data[17])
+			$linhas[] = array('Acesso Eletrônico', $data[17]);
+
+		$tabela = new MTableRaw('', $linhas);
+
+		//define atributos do tableraw, como fundo cinza (mesmo do form)
+		$this->page->addStyleCode(".m-tableraw-row{ background-color: threedface; font: message-box; color: #000; font-weight: normal; font-size: 11px; text-decoration: none}");
+
+		$fields = Array(
+			$tabela
+		);
+		// Insere os campos
+		$this->SetFields($fields);
+
+		$this->SetButtonAttr('btnConsultar','visible',false);
+		$this->SetButtonAttr('btnNovaPesq','visible',false);
+		$this->AddButton( new MButton('btnVoltar', 'Voltar', $MIOLO->GetActionURL($module = $module, $action = $action)) );
+		$this->AddButton( new MButtonWindow('btnMarc', 'MARC', $MIOLO->GetActionURL($module = $module, $action = 'marc', $item)) );
+	}
+
+
+	function PesquisaDetalhada()
+	{
+		global $MIOLO, $module, $self, $theme, $action, $page;
+
+		$filtro = $_GET["item"];
+		$campos = $_GET["campo"];
+
+		$this->btnConsultar_click($sender,$filtro,$campo);
+	}
+
+
+	function PesquisaInventario($idexemplares)
+	{
+		global $MIOLO, $module, $self, $theme, $action, $page;
+
+		//monta uma string com todos os ids para ser usada na cláusula in
+		$stringIdExemplar = '(';
+		foreach($idexemplares as $id)
+		{
+			$stringIdExemplar .= $id[0] .',';
+		}
+		$stringIdExemplar = substr($stringIdExemplar,0,-1) . ')';
+
+		$this->SetButtonAttr('btnConsultar','visible',false);
+		$this->SetButtonAttr('btnVoltar','visible',true);
+
+		$columns = array(
+			new DataGridColumn('numerodotombo','Nº Tombo','center',true, '15%',true, null, false,true),
+			new DataGridColumn('titulo','Título','left',false, '52%',true, null, false,true),
+			new DataGridColumn('numinventario','Nº Inventário','center',true, '10%',true, null, false,true),
+			new DataGridColumn('descricao','Unidade','center',true, '15%',true, null, false,true),
+			new DataGridColumn('numerodaobra','Nº Obra','center',true, '8%',true, null, false,true),
+		);
+
+
+		 //Instancia o objeto exemplar
+	    $this->objExemplar = $MIOLO->GetBusiness($module,'exemplar');
+		$query = $this->objExemplar->PesquisaInventario($stringIdExemplar);
+
+		$href_alterar= $MIOLO->GetActionURL($module, 'main:catalogacao:exemplar', '%0%', array('event'=>'btnConsulta2:click', 'edtNumerodaObra'=>'%1%'));
+		$datagrid = new DataGrid2($query, $columns, '', 0);
+		$this->SetTitle('Pesquisa Numérica');
+		$datagrid->AddActionText('alt','Alterar',$href_alterar);
+		$datagrid->SetWidth('99%');
+
+		$this->SetFields($datagrid);
+	}
+}
+?>

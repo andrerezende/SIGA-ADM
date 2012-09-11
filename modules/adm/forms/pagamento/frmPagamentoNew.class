@@ -1,0 +1,112 @@
+<?
+class frmLiquidacaoNew extends Form
+{
+    function __construct()
+    {
+        $this->Form('Nova Liquidação');
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+		$fields = array(
+			new Selection('tipoReq','','Tipo Requisição'),
+			new LookupTextField('lkpNumeroEmpenho','','Número Empenho',20),
+			new CalendarField('dataLiquidacao','','Data Inclusão',15),
+			new MultiLineField('obs','','Observação',25,5,40,'Máx. 200'),
+			new HiddenField('hdnIdEmpenho','')
+        );
+		
+       	$this->SetFields($fields);
+
+		//$this->obs->AddAttribute('maxlength','30');
+		
+	    $this->SetFieldAttr('lkpNumeroEmpenho','module','adm');
+	    $this->SetFieldAttr('lkpNumeroEmpenho','item','numeroempenho');
+	    $this->SetFieldAttr('lkpNumeroEmpenho','event','btnReadOnly:click');
+
+	   	$tiposRequisicao = Array(
+			'hotel'=>'Hotel',
+			'passagem'=>'Passagem',
+			'restaurante'=>'Restaurante'
+		);
+		
+	   	$this->setFieldAttr('tipoReq','options',$tiposRequisicao);
+		
+		$buttons = array(
+            new FormButton('btnNew', 'Incluir Nova Liquidação'),
+        );
+
+		$this->SetButtons($buttons);
+
+		$this->SetButtonAttr('btnNew','visible',false);
+
+		$validators = array(			
+			new RequiredValidator('dataLiquidacao')
+		);
+
+		$this->SetValidators($validators);
+    }
+
+    function btnNew_click()
+    {
+        $data = $this->GetData();
+
+		if( $data->tipoReq == 'hotel' )
+			$data->tipoReq = 'itemhotel';
+		elseif( $data->tipoReq == 'passagem' )
+			$data->tipoReq = 'itempassagem';
+		elseif( $data->tipoReq == 'restaurante' )
+			$data->tipoReq = 'itemrestaurante';
+
+		$objItemReq = $this->manager->GetBusiness('adm',$data->tipoReq);
+		$itensParaLiquidar = $objItemReq->GetItensParaLiquidar($data->hdnIdEmpenho);
+
+		if( $itensParaLiquidar == null )
+		{
+			$this->AddError('Não existem itens para liquidação no empenho: '.$data->lkpNumeroEmpenho);
+		}
+		else
+		{		
+	        $liquidacao = $this->manager->GetBusiness('adm','liquidacao');
+			$liquidacao->SetData($data);
+			$liquidacao->valor = $objItemReq->GetValorTotalPorEmpenho($data->hdnIdEmpenho);
+        	$liquidacao->save();
+
+
+			foreach($itensParaLiquidar as $itemReq)
+			{
+				$objItemReq->GetById($itemReq[0]);
+				$objItemReq->idLiquidacao = $liquidacao->idLiquidacao;
+	    	    $objItemReq->save();
+	
+				if ( $objItemReq->CheckError() )
+				{
+					foreach( $objItemReq->GetErrors() as $e )
+					{
+						$this->AddError("Informe o seguinte erro a equipe do CGCO: ".$e);
+					}
+				}
+			}
+			
+			if( ! $objItemReq->CheckError() )
+			{
+        		$go = $this->manager->GetActionURL('adm','main:liquidacao',$liquidacao->idLiquidacao);
+	        	$this->page->Redirect($go);
+			}
+		}
+	}
+
+	function btnReadOnly_click($sender=null,$key=null)
+	{
+		list($id,$numero) = explode("_",$key);
+		
+		$this->SetFormValue('lkpNumeroEmpenho',$numero);
+		$this->SetFormValue('hdnIdEmpenho',$id);
+		$this->SetFieldAttr('lkpNumeroEmpenho','readonly',true);
+
+		$this->SetButtonAttr('btnNew','visible',true);
+
+	}
+ }
+?>

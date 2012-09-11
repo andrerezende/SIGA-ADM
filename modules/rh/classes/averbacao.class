@@ -1,0 +1,273 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class BusinessRhAverbacao extends MBusiness
+{
+    public $idAverbacao;
+    public $processo;
+    public $dataInicio;
+    public $dataFim;
+    public $totalDias;
+    public $tipoTempo;
+    public $instituicao;
+    public $idVinculo;
+
+    public $finalidades;
+    public $desaverbacoes;
+    public $k;
+
+    public $totalDiasDesaverbados;
+
+    function __construct($data=null)
+    {
+        $this->k = new MKrono();
+        parent::__construct('sigaept',$data);
+    }
+
+    function getFinalidades()
+    {
+        $this->retrieveAssociation('finalidades');
+        if ($this->finalidades != NULL)
+        {
+            if ( is_array($this->finalidades ) )
+            {
+                global $MIOLO;
+                $tabelaGeral = $MIOLO->getBusiness('common','tabelageral');
+                foreach ( $this->finalidades as $f )
+                {
+                    $tabelaGeral->getByItem('RH_FINALIDADECONTAGEM',trim($f->idFinalidade));  
+                    $f->finalidade = $tabelaGeral->item2;
+                    $finalidadesAux[] = $f;               
+                }
+                $this->finalidades = $finalidadesAux;
+            }
+            else
+            {
+                $this->finalidades = array($this->finalidades);  
+            }   
+        }
+    }
+    
+    function getFinalidade($id)
+    {
+        global $MIOLO;
+        if ( $this->finalidades != NULL )
+        {
+            foreach ( $this->finalidades as $f )
+            {
+                if ( $f->idAverbFinalidade == $id )
+                    return $f;
+            }
+        }
+        $f = $MIOLO->GetBusiness('rh','averbfinalidade');
+        $f->idAverbacao = $this->idAverbacao;
+        $f->processo = $this->processo;
+        return $f;
+    }
+
+    function getDesaverbacoes()
+    {
+        $this->retrieveAssociation('desaverbacoes');
+        if ($this->desaverbacoes != NULL)
+        {
+            if (!is_array($this->desaverbacoes))
+            {
+                $this->desaverbacoes = array($this->desaverbacoes);  
+            }
+        }
+    }
+    
+    function getDesaverbacao($id)
+    {
+        global $MIOLO;
+        if ( $this->desaverbacoes != NULL )
+        {
+            foreach ( $this->desaverbacoes as $d )
+            {
+                if ( $d->idDesaverbacao == $id )
+                    return $d;
+            }
+        }
+        $d = $MIOLO->GetBusiness('rh','desaverbacao');
+        $d->idAverbacao = $this->idAverbacao;
+        $d->processo = $this->processo;
+        return $d;
+    }
+
+    function addFinalidade($finalidade)
+    {
+        $this->finalidades[] = $finalidade;
+    }
+
+    function addDesaverbacao($desaverbacao)
+    {
+        $this->desaverbacoes[] = $desaverbacao;
+    }
+
+    function setTotalDias($dias=NULL)
+    {
+        $this->totalDias = ( $dias ) ? $dias : $this->getDaysDiff();
+    }
+
+    function listFinalidades()
+    {
+        global $MIOLO;
+        $finalidade = $MIOLO->GetBusiness('rh','averbfinalidade');
+        $finalidade->idAverbacao = $this->idAverbacao;
+        $criteria = $finalidade->getCriteria();
+        $criteria->addCriteria('tabelaGeral.tabela','=',"'RH_FINALIDADECONTAGEM'");
+        $criteria->addCriteria('idAverbacao','=',$this->idAverbacao);
+        return $criteria->retrieveAsQuery();
+        
+    }
+
+    function getDaysDiff()
+    {
+        $difDias = $this->k->daysDiff($this->dataInicio,$this->dataFim);
+        $difDias = $difDias + 1;
+        return $difDias;
+    }
+
+    function deleteFinalidade($id)
+    {
+        $finalidade = $this->getFinalidade($id);
+        $finalidade->delete();
+        $finalidade->log(OP_DEL," id averbacao ".$finalidade->idAverbacao." id finalidade: ".$finalidade->idFinalidade." total dias: ".$finalidade->totalDias );
+
+    }
+    
+    function deleteDesaverbacoes()
+    {
+        $this->retrieveAssociation('desaverbacoes');
+        if ( $this->desaverbacoes != NULL )
+        {
+            foreach ( $this->desaverbacoes as $d )
+            {
+                $d->delete();
+            }
+        }
+    }
+
+    function checkFinalidade($idFinalidade)
+    {
+        if ( $this->finalidades == NULL )
+        {
+            $this->getFinalidades();
+        }
+        else
+        {
+            if ( is_array($this->finalidades) )
+            {
+                foreach ( $this->finalidades as $f )
+                {   
+                    if ( trim($f->idFinalidade) == trim($idFinalidade))
+                        return TRUE;
+                }
+            }
+        }
+        return false;
+    }
+
+    function temAssociacoes()
+    {
+        $this->getFinalidades();
+        $this->getDesaverbacoes();
+ //       var_dump(count($this->finalidades));
+ //       var_dump(count($this->averbacoes));
+        return ( count($this->finalidades) + count($this->desaverbacoes) > 0 );
+         
+    }
+
+    function temDesaverbacoes()
+    {
+        $this->getDesaverbacoes();
+        return ( count($this->desaverbacoes) > 0 );
+    }
+
+    function desaverba($totalDias)
+    {
+        $this->totalDias -= $totalDias;
+        $this->getFinalidades();
+        if ( count($this->finalidades) > 0 )
+        {
+            foreach ( $this->finalidades as $f )
+            {
+                $f->totalDias -= $totalDias;
+                $f->totalDias = ( $f->totalDias > 0 ) ? $f->totalDias : 0;
+            }
+            $this->saveAssociation('finalidades');
+        }
+        $this->save();
+    }
+    
+    function averba($totalDias)
+    {
+        $this->totalDias += $totalDias;
+        $this->save();
+    }
+    
+    function listDesaverbacoes()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('desaverbacoes.idDesaverbacao');
+        $criteria->addColumnAttribute('desaverbacoes.dataInicio','dataInicio');
+        $criteria->addColumnAttribute('desaverbacoes.dataFim','dataFim');
+        $criteria->addColumnAttribute('desaverbacoes.totalDias');
+        $criteria->addCriteria('desaverbacoes.idAverbacao','=',$this->idAverbacao);
+        return $criteria->retrieveAsQuery();
+    }
+
+    function getDiasDesaverbados()
+    {
+        $this->retrieveAssociation('desaverbacoes');
+        if ($this->desaverbacoes != NULL)
+        {
+            if ( is_array($this->desaverbacoes) )
+            {
+                $dias = 0;
+                foreach ( $this->desaverbacoes as $d )
+                {
+                    $dias += $d->totalDias;
+                }
+                $this->totalDiasDesaverbados = $dias;
+                return $dias;
+            }
+        }
+        return 0;
+    }
+
+    function getMinDataInicio($idVinculo)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('MAX(dataInicio)','dataInicio');
+        $criteria->addCriteria('idVinculo','=',"'$idVinculo'");
+        $query = $criteria->retrieveAsQuery();
+        return $query->fields('dataInicio');
+    }
+    
+    function getMaxDataFim($idVinculo)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('MAX(dataFim)','dataFim');
+        $criteria->addCriteria('idVinculo','=',"'$idVinculo'");
+        $query = $criteria->retrieveAsQuery();
+        return $query->fields('dataFim');
+    }
+}
+?>

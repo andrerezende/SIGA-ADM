@@ -1,0 +1,160 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+$MIOLO->Uses('ui/controls/lkppublicacao.class','rh');
+
+
+class frmOcupacaoFuncaoIncluir extends MForm
+{
+
+    
+    protected $idvinculo, $objocupacaofuncao, $setoratual;
+
+
+    function __construct($idvinculo)
+    {
+        $this->idvinculo = $idvinculo;
+        parent::__construct('Nova Ocupação de Função para o Servidor');
+        $this->EventHandler();
+    } // __construct
+
+
+    function CreateFields()
+    {
+        global $MIOLO, $module;
+
+        $objprovimento = $this->manager->GetBusiness($module,'provimento');
+        $objprovimento->getUltimoProvimento($this->idvinculo);
+
+        $objfuncao = $MIOLO->GetBusiness($module,'funcao');
+
+        $vinculo = $MIOLO->GetBusiness($module,'vinculo',$this->idvinculo);
+        if ($vinculo->isTA())
+        {
+            $this->setoratual = $objprovimento->idSetor;
+        }
+        else
+        {
+            $this->setoratual = false;
+        }
+        $funcoesdisponiveis = $objfuncao->listDisponiveisnoSetor($this->setoratual);
+
+        $this->defaultButton = false;  //aqui para que um possível addError não faça mostrar o botão padrão do Miolo
+
+        /*if ( ! in_array($objprovimento->idSituacao , array(1,9,20,32) ) )  //8: não do quadro futuro
+        {
+            echo ' so aviso $this->addError('.'Situação Funcional do servidor não permite ocupação';//);
+            //return;
+        }
+        if ( in_array($objprovimento->idGrupoOcorrencia , array(2,3) ) ) //licenciado: futuro
+        {
+            echo ' so aviso $this->addError('.'Grupo de Ocorrência do servidor não permite ocupação';//);
+            //return;
+        }*/
+
+        if ($funcoesdisponiveis)
+        {
+            $fields[] = new MSelection('idfuncao','','Funções disponíveis no setor',$funcoesdisponiveis);
+        }
+        else
+        {
+            $this->addError('Não há função disponível no setor onde o servidor está lotado');
+            return;
+        }
+
+        $fields[] = new MSpacer(1);
+        $fields[] = new MCalendarField('datainicio','','Início','10');
+
+        lkppublicacao($fields,'idpublicacaoinicio','Publicação');
+
+        $this->SetFields($fields);
+
+        $validators[] = new MRequiredValidator('idfuncao','',8);
+        $validators[] = new MRequiredValidator('datainicio');
+        $this->SetValidators($validators);
+
+        $buttons = array( new MButton('btnSalvar', 'Incluir Ocupação') );
+        $this->SetButtons($buttons);
+    } // CreateFields
+
+
+    function Verifica($data,$funcaodatainicio)
+    {
+        $dataidpublicacaoinicio = $this->GetFieldValue('dataidpublicacaoinicio'); //campo não editável, que não é recuperado em GetData()
+        $erros = $this->objocupacaofuncao->VerificaInicio($data,                    //dados digitados
+                                                          $dataidpublicacaoinicio,  //dado obtido na escolha da publicação
+                                                          $this->setoratual,   //para comparar nos últimos provimentos
+                                                          $funcaodatainicio);  //data de início da função
+        
+        if ( count($erros) > 0 )
+        {
+            foreach ( $erros as $e )
+            {
+                $this->addError($e);
+            }
+            return false;
+        }
+
+        return TRUE;
+    } // Verifica
+
+
+    function btnSalvar_click()
+    {
+        global $module, $self;
+        $data = $this->GetData(); //recupera somente os editáveis
+        $data->idvinculo = $this->idvinculo;
+
+        $funcao = $this->manager->getBusiness($module,'funcao',$data->idfuncao);
+        if ($funcao->mandato > 0)   //define automaticamente a finalização quando a função tem mandato pré-definido
+        {
+            $k = new MKrono();
+            $data->datafim = $k->operation('+',$data->datainicio,$funcao->mandato.'%Y');
+            $data->datafim = $k->operation('-',$data->datafim   ,'1%D');
+            $mandato = ' Data de término (' . $data->datafim . ') desde já definida pelo mandato: ' . $funcao->mandato;
+        }
+
+        $this->objocupacaofuncao = $this->manager->getBusiness($module,'ocupacaofuncao');
+        if (! $this->Verifica($data, $funcao->datainicio)) //dados digitados e data de início da função
+        {
+            RETURN;
+        }
+
+        $this->objocupacaofuncao->SetData($data);
+
+        $this->objocupacaofuncao->BeginTransaction();
+        TRY
+        {
+            $this->objocupacaofuncao->save();
+
+            $msg = $this->objocupacaofuncao->idpublicacaoinicio . ' Ocupação incluída, vínculo: ' .    $this->objocupacaofuncao->idvinculo . $mandato;
+            $this->objocupacaofuncao->Log(OP_INS,       $this->objocupacaofuncao->idocupacaofuncao
+                                      . ' idfuncao: ' . $this->objocupacaofuncao->idfuncao . $msg);
+            $this->objocupacaofuncao->EndTransaction();
+            $go = $this->manager->GetActionURL($module,$self, $data->idvinculo);
+            $this->manager->Information($msg,$go);
+        }
+        CATCH (Exception $e)
+        {
+            $this->AddError($e->GetMessage());
+        }
+    } // btnSalvar_click
+
+}
+?>

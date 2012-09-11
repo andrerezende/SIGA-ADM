@@ -1,0 +1,177 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+class frmAlterarPrevisaoDevolucao extends MForm
+{
+    protected $objEmprestimo;
+	protected $objExemplar;
+    
+	function __construct()
+    {
+	    global $MIOLO, $action, $module, $item;
+	    
+	    $this->objExemplar = $MIOLO->GetBusiness($module,'exemplar');
+	    $this->objEmprestimo = $MIOLO->GetBusiness($module,'emprestimo');
+
+		parent::__construct("Alterar Previsão de Devolução");
+		$this->EventHandler();
+  		$this->defaultButton = false;
+  		
+		// Botão 'fechar', direcionando para o handler biblioteca/main/circulacao/emprestimo
+		$this->SetClose($this->manager->GetActionURL($module, 'main:circulacao:emprestimo'));
+	}
+
+	function CreateFields()
+	{
+		global $MIOLO, $action, $module, $item, $page;
+
+		$optUnidade = $this->objExemplar->ListUnidade();
+
+		//adiciona o TODAS AS UNIDADES
+		array_unshift($optUnidade,array('todas',"Todas as Unidades"));
+		
+		
+		//cria o array de acervo
+		$optAcervo = array();
+		
+		array_push($optAcervo,array('circula',"Circula"));
+		array_push($optAcervo,array('naocircula',"Não Circula"));
+		
+
+		if (! $this->page->IsPostBack()){
+			$fields = Array (
+				Array(
+					new MCalendarField('dataIni','','Alterar de:',20),
+					new MCalendarField('dataFim','','até:',20),
+				),
+				
+				Array(
+					new MSelection('selUnidade','','Unidade:',$optUnidade)
+				),
+				
+				Array(
+					new MSelection('selAcervo','','Acervo:',$optAcervo)
+				),
+				Array(
+					new MCalendarField('dataNova','','Nova Data:',20),
+				)
+			);
+			$this->SetFields($fields);
+
+			$buttons = Array(
+				new MButton('btnExecutar', 'Executar'),
+				new MButton('btnVoltar','Voltar',$MIOLO->GetActionURL($module,'main:circulacao:emprestimo')),
+			);
+			$this->SetButtons($buttons);
+
+			// validators
+			$this->AddValidator(new MRequiredValidator('dataIni'));
+			$this->AddValidator(new MRequiredValidator('dataFim'));
+			$this->AddValidator(new MRequiredValidator('dataNova'));
+			
+			if ($this->page->IsPostBack()){
+				$this->page->onLoad("MIOLO_GetElementById('dataIni').focus();");
+			}
+			
+		}
+		
+	}
+
+	function btnExecutar_click()
+	{
+		global $MIOLO, $module, $self, $theme, $action, $page, $item;
+		
+		$data = $this->getData();
+
+		$ok = $this->objEmprestimo->getPrevisaoDevolucaoEntreDuasDatas($data);
+		if(!$ok)
+		{
+			$MIOLO->Error('Não existem empréstimos pendentes no período.', $MIOLO->GetActionURL($module,$action));
+			return;
+		}
+		$ok = $this->objEmprestimo->alteraPrevisaoDevolucao($data);
+		
+		if ($ok)	
+		{
+			// novo:  informa os exemplares alterados e armazena no GRID
+			// 5 dias antes e 5 dias depois
+			$k = new MKrono();
+			$dataInicio = $k->Operation('-',$data->dataini,5 . '%D');
+			$dataFim = $k->Operation('+',$data->datanova,5 . '%D');
+			
+			$emprestimosAlterados = $this->objEmprestimo->obtemEmprestimosPendentesEntreDuasDatas($dataInicio,$dataFim);
+			array_unshift($emprestimosAlterados, array('(...)'));
+
+			//verifica se existe emprestimo apos o periodo anterior. se houver, inclui (...) no final
+			$emprestimosPendentesAposData = $this->objEmprestimo->obtemEmprestimosPendentesEntreDuasDatas($dataFim,null);
+			if($emprestimosPendentesAposData)
+			{
+				array_push($emprestimosAlterados, array('(...)'));
+			}
+
+			//Grid
+			$columns = array(
+				new MGridColumn('Data Hora Previsão Devolução','center', false, '100%'),
+			);
+			
+			$grid = new MGrid($emprestimosAlterados, $columns, null,0);
+			$grid->SetTitle('Novas datas de devolução dos empréstimos');
+			$grid->SetWidth('99%');
+			$grid->SetButtons( new MButton('btnVoltar','Voltar',$MIOLO->GetActionURL($module,$action)) );
+				
+			$theme->clearContent();		
+								
+			$this->addInfo("Previsão de devolução alterada com sucesso.");
+			
+			$theme->AppendContent($grid);
+		}
+	}
+
+	
+
+	function getData()
+	{
+		$data = new FormData();
+			$data->dataini = $this->GetFormValue('dataIni');
+			$data->datafim = $this->GetFormValue('dataFim');
+			$data->datanova = $this->GetFormValue('dataNova');
+			$data->selunidade = $this->GetFormValue('selUnidade');
+			$data->selacervo = $this->GetFormValue('selAcervo');
+		return $data;
+	}
+
+	function setData($data)
+	{
+		$this->SetFieldValue('dataIni',$data->dataini);
+		$this->SetFieldValue('dataFim',$data->datafim);
+		$this->SetFieldValue('dataNova',$data->dataNova);
+		$this->SetFieldValue('selUnidade',$data->selunidade);
+		$this->SetFieldValue('selAcervo',$data->selacervo);
+	}
+
+	
+}
+?>

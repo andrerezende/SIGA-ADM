@@ -1,0 +1,128 @@
+<?
+class BusinessAdmItemDiaria extends Business
+{
+	public $idRequisicao;
+	public $idVinculo;
+    public $categoriaFunc;
+	public $situacaoFunc;
+    public $motivo;
+	public $dataSaida;
+	public $dataRetorno;
+    public $meioTransporteDiaria;
+    public $justDiaNaoUtil;
+	public $valorEstimado;
+	public $valorReal;
+	public $ocorrencias;
+	public $conceito;
+	public $obs;
+    public $tipoReqDiaria;
+    public $idRequisicaoOriginal;
+    public $ordemBancaria;
+    public $dataOrdemBancaria;
+    public $idVinculoProp;
+    public $idVinculoChefe;
+ 	public $numProcesso;
+  	public $passagemAerea;
+	public $bilhete;
+	public $idRequisicaoVeiculo;
+    public $nacional;
+
+    public $requisicaoOriginal;   
+    public $requisicao;
+	public $vinculo;
+    public $vinculoProp;
+    public $vinculoChefe;
+    public $processo;
+   
+
+	function __construct($data = null)
+	{
+		parent::__construct('sigaept', $data);
+	}
+
+    function OnCreate($data)
+    {
+        if (empty($data))
+        {
+//            $this->initialize();
+        }
+        else
+        {
+            $this->GetById($data);
+        }
+    }
+
+	function GetById($id)
+	{
+		$this->idRequisicao = $id;
+		$this->retrieve();
+		return $this;
+	}
+
+	function setValorEstimado($valor)
+	{
+		$this->valorEstimado = $valor;
+	}
+
+	function setValorReal($valor)
+	{
+		$this->valorReal = $valor;
+	}
+
+	function setNumProcesso($numero)
+	{
+		$this->numProcesso = $numero;
+	}
+
+	function repFechamentoDiaria($dataInicial, $dataFinal)
+	{
+		$k = new MKrono();
+		$dataInicial = $k->invertDate($dataInicial);
+		$dataFinal = $k->invertDate($dataFinal);
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('idRequisicao');
+		$criteria->addColumnAttribute('dataSaida');
+		$criteria->addColumnAttribute('dataRetorno');
+		$criteria->addColumnAttribute('vinculo.funcionario.pessoa.nome');
+		$criteria->addColumnAttribute('null', 'municipio');
+		$criteria->addColumnAttribute('0','diariasConcedidas');
+		$criteria->addColumnAttribute('valorReal');
+		$criteria->addColumnAttribute('numProcesso');
+		$criteria->addColumnAttribute('motivo');
+		$criteria->addCriteria("dataSaida", '>=', "'$dataInicial'");
+		$criteria->addCriteria("dataSaida", '<=', "'$dataFinal'");
+		$criteria->addCriteria("requisicao.status", 'IN', "('8','9','C','D','E','G')");
+        $criteria->addOrderAttribute('dataSaida');
+        $query = $criteria->retrieveAsQuery();
+		if($query->result)
+		{
+			$objFeriado = $this->_miolo->GetBusiness('common', 'feriado');
+			$data = array();
+			foreach($query->result as $r)
+			{
+				//se data for sexta, sábado ou feriado, diária será impressa
+				$dataEUA = substr($r[1],3,2).'/'.substr($r[1],0,2).'/'.substr($r[1],6,4);
+				$diaSemana = date('D',strtotime($dataEUA));
+				if ( ($diaSemana == 'Fri') or ($diaSemana == 'Sex') or ($diaSemana == 'Sat') or ($diaSemana == 'Sáb') or ($objFeriado->isFeriadoByAbrangencia($r[1], array('2','3','4','5'))) )
+				{
+					$data[] = $r;
+				}
+			}
+		}
+		return $data;
+	}
+
+	function GetLocalidades($idRequisicao=null)
+	{
+		if(!$idRequisicao)
+		{
+			$idRequisicao = $this->idRequisicao;
+		}
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('localidadesDiaria.municipio.municipio');
+		$criteria->addColumnAttribute('localidadesDiaria.quantDiarias');
+		$criteria->addCriteria('idRequisicao', '=', $idRequisicao);
+        return $criteria->retrieveAsQuery();
+	}
+}
+?>

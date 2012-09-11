@@ -1,0 +1,156 @@
+<?
+class frmVencedores extends Form
+{
+
+	function __construct()
+	{   
+		parent::__construct('Definir Vencedores');
+		$this->EventHandler();
+	}
+	
+	Function CreateFields()
+	{
+		global $MIOLO,$module,$item,$self;
+		
+		$objLicitacao = $MIOLO->GetBusiness($module,'licitacao');
+		$list = $objLicitacao->ListByStatus("3");
+		if (!$list)
+			$list = array('Nenhuma Licitação Disponível');
+		
+		$fields = Array(
+//			new Separator('<b>Informe a Licitação:</b>'),
+			new LookupTextField('lkpLicitacao','','Número',15),
+			new HiddenField('status','3') //Propostas incluídas
+		);
+
+		$this->SetFields($fields);
+		$this->SetFieldAttr('lkpLicitacao','module',$module);
+		$this->SetFieldAttr('lkpLicitacao','item','Licitacao');
+		$this->SetFieldAttr('lkpLicitacao','event','btnListItens:click');
+		$this->SetFieldAttr('lkpLicitacao','filter','status,lkpLicitacao');
+
+		$buttons = Array(
+        	new FormButton('btnListItens','Listar Itens'),
+        	new FormButton('btnDefineVencedor','Gravar Alterações'),
+			new FormButton('btnFinaliza','Finalizar Definição de Vencedores'),
+			new FormButton('btnVoltar','Voltar',$MIOLO->GetActionURL($module,'sectionsCompras'))
+		);
+		$this->SetButtons($buttons);
+		$this->SetButtonAttr('btnListItens','visible',false);
+		$this->SetButtonAttr('btnDefineVencedor','visible',false);
+		$this->SetButtonAttr('btnFinaliza','visible',false);
+	}
+	
+	/*------------------------------------------------
+
+	Método btnListItens_click()
+
+	Exibe um DataGrid contendo os itens da licitação 
+	informada 
+
+	------------------------------------------------*/
+	function btnListItens_click($sender='',$key='')
+	{
+		global $MIOLO,$module,$page,$self,$item, $theme;
+
+		$objLicitacao = $MIOLO->GetBusiness($module,'licitacao');
+
+		$item = ($key != '') ? $key : $item;
+		$idLicitacao = $item;
+		$list = $objLicitacao->ListItensByIdLicitacao($idLicitacao);
+
+		//Se o usuário gravou as alterações, mostra o botão para Finalizar o processo
+		$okFinaliza = $this->GetFormValue('okFinaliza');
+		if ($okFinaliza)
+			$this->SetButtonAttr('btnFinaliza','visible',true);
+
+		// Pega o vencedor ou o menor participante de menor preço em cada item
+		foreach ($list as $ls)
+		{
+			$idParticipante = $objLicitacao->GetParticipanteVencedor($idLicitacao,$ls[0]);
+			if (!$idParticipante)
+				$idParticipante = $objLicitacao->GetParticipanteComMenorPreco($idLicitacao,$ls[0]);
+				
+			$dataItem[] = $ls[0];
+			$dataDescricao[] = $ls[1];
+			$dataIdParticipante[] = $idParticipante;
+		}
+
+		// Monta o array para o Grid
+		$quantidade = count($dataItem);
+		for($i=0;$i<$quantidade;$i++)
+		{
+			$list2[] = array($dataItem[$i],$dataDescricao[$i],$dataIdParticipante[$i]);
+		}
+
+		$queryParticipante = $objLicitacao->ListParticipantesByLicitacao($idLicitacao);
+		$selParticipante = new Selection('selParticipante','%2%','Participante',$queryParticipante);
+                
+		$columns = array(
+			   new GridColumn('Ítem','center',true,'5%',true),
+			   new GridColumn('Especificação','left',false,'65%',true),
+			   new GridControl($selParticipante,'Vencedor','center',true,'30%')
+                );
+        $grid = new Grid($list2, $columns, $this->listURL,15,0);
+
+		$objLicitacao->GetById($idLicitacao);		
+        $grid->SetTitle('Relação de Partipantes que fizeram proposta para a Licitação n&ordm;: '.$objLicitacao->idLicitacao);
+
+		$fields = Array(
+			$grid,
+			new Separator('<b>OBSERVAÇÕES</b>'),
+			new Text('','A primeira opção da caixa de seleção se refere ao vencedor da licitação, caso este já tenha sido definido, ou ao participante que fez proposta com menor preço.'),
+			new Hiddenfield('idLicitacao',$idLicitacao)
+		);
+		$this->SetFields($fields);
+		
+		$this->SetButtonAttr('btnDefineVencedor', 'visible', true);
+		$this->SetButtonAttr('btnListItens','visible',false);
+
+	}
+
+	function btnDefineVencedor_click($sender='',$key='')
+	{
+		global $MIOLO,$module,$item;
+
+        $item = ($key != '') ? $key : $item;
+        
+		$idLicitacao = $this->GetFormValue('idLicitacao');
+		$selParticipante = $this->GetFormValue('selParticipante');
+		$objLicitacao = $MIOLO->GetBusiness('adm','licitacao');
+		
+		//var_dump($selFornecedor);
+	
+		$queryLicitacao = $objLicitacao->ListItensByIdLicitacao($idLicitacao);
+	
+		$i = 0;	
+		foreach ($queryLicitacao as $rs)
+		{
+			$item = $rs[0];
+			//var_dump($item);
+			//var_dump($selFornecedor[$i]);
+			
+			if ($objLicitacao->SetVencedor($idLicitacao,$item,$selParticipante[$i]))
+			{
+				$action = $MIOLO->GetActionURL($module, 'vencedores', '',array('event'=>'btnListItens:click','item'=>$idLicitacao,'okFinaliza'=>true));
+			        $MIOLO->Information('Vencedores cadastrados com sucesso. Para concluir, clique em "Finalizar definição de Vencedores"',$action);
+			}
+			$i++;
+		}		
+	}
+
+	function btnFinaliza_click()
+	{
+		global $MIOLO,$module,$item;
+
+		$idLicitacao = $item;    
+		$objLicitacao = $MIOLO->GetBusiness('adm','licitacao');
+		$objLicitacao->GetById($idLicitacao);
+		if ($objLicitacao->SetStatus("4"))
+		{	
+			$action = $MIOLO->GetActionURL($module, 'sectionsCompras', '','');
+			$MIOLO->Information('Vencedores cadastrados com sucesso.',$action);	
+		}	
+	 }	
+}
+?>

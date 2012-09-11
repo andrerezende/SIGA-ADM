@@ -1,0 +1,226 @@
+<?
+// 20-10-2011 - Daniel Bonfim
+MIOLO::Import('extensions::class.phpmailer.php','PHPMailer');
+
+class frmProcessoSaida extends MFormAjax
+{
+	protected $processo;
+	protected $setor;
+	protected $setoracesso;
+	protected $perms;
+
+	function __construct($objProcesso)
+	{
+		//      construct
+		global $MIOLO;
+		$this->processo = $objProcesso;
+		$this->setor = $MIOLO->getBusiness('protocolo','setor');
+		$this->setoracesso = $MIOLO->getBusiness('protocolo','setoracesso');
+		$this->perms  = $MIOLO->getPerms();
+		parent::__construct('Saída de processo');
+		$this->SetClose($MIOLO->GetActionURL('protocolo','main'));
+		$this->page->addJsCode(file_get_contents(dirname(__FILE__).'/js/frmProcessoSaida.js'));
+		$this->eventHandler();
+	}
+
+	function CreateFields()
+	{
+		/* IFRO - Controle de segurança de acesso */
+		$setores = ($this->perms->checkAccess('PROT_ADMIN', A_ACCESS)) ? $this->setor->selAll() : $this->setoracesso->selSetoresAcesso($this->processo->getSetorUsuario());
+		if (
+		    $this->processo->retencao->setor
+		    && in_array($this->processo->retencao->setor,$setores) 
+		    && $this->processo->retencao->status == 'N' 
+		  )
+		{
+			//      setor destino
+			if ($this->perms->checkAccess('PROT_ADMIN', A_ACCESS))
+			{
+				$url = $this->manager->getActionUrl('protocolo','ajaxhandler');
+				$externo  = new MCheckBox( 'externo','value','&nbsp;',false, _M('externo') );
+				$externo->addAttribute("onchange","doText('$url');");
+			}
+			$setorDestino = new MComboBox('setorDestino',$this->processo->retencao->setorDestino,'Setor:',$this->setor->selAll(),'','',15);
+			$setorDestino->addAttribute('maxlength','15');
+			$setorDestino->addAttribute("onkeyup","toUpperCase('setorDestino')");
+			$setorDestino->addAttribute('style','text-transform:uppercase');
+			$groupDestino = new MBaseGroup( 'groupDestino', 'Saída do processo',array($setorDestino,$externo),'horizontal','css');
+			$groupDestino->addAttribute('style','padding:10px');
+			//      fields
+			$fields = array(
+				array(
+					$groupDestino,
+				)
+			);
+			$this->setFields($fields);
+			  
+			//      buttons
+			$buttons = array(
+				new MButton('btnEnviar', 'Executar')
+			);
+			$this->SetButtons($buttons);
+
+		}else {
+			$msg = 'Este usuário não tem permissão para acessar este Processo/Protocolo';
+			$this->manager->Information($msg,$this->manager->GetActionURL('protocolo','main:processos',$this->processo->numProcesso));
+		}
+	}
+    
+	public function btnEnviar_click()
+	{
+		global $MIOLO;
+		/* IFRO - Controle de segurança de acesso */
+		$setores = ($this->perms->checkAccess('PROT_ADMIN', A_ACCESS)) ? $this->setor->selAll() : $this->setoracesso->selSetoresAcesso($this->processo->getSetorUsuario());
+		if(
+			//var_dump('estou aki');exit;
+			$this->processo->retencao->setor
+			&& in_array($this->processo->retencao->setor,$setores) 
+			&& $this->processo->retencao->status == 'N' 
+		)
+		{			
+			//data
+			$data = $this->getData();
+			$data->dataSaida = date("YmdHi");
+
+			//30/03/2012 Tiago Macedo
+			$data->userSaida = $MIOLO->login->id;
+
+			//      set and save
+			$setorSaida = $data->setorDestino;
+			try 
+			{
+				$this->processo->beginTransaction();
+				$andamento = $this->processo->getAndamento($this->processo->retencao->numAndamento);
+				$andamento->setData($data);
+				$this->processo->addAndamento($andamento);				
+				$this->processo->retencao->setData($andamento);
+				if ($data->setorDestino == 'A DEFINIR')
+				{
+					$data->setorDestino = '';
+					$data->dataSaida = null;
+					$this->processo->retencao->dataSaida = null;
+					$this->processo->retencao->setorDestino = '';
+				}
+				$this->processo->save();
+				$msg = 'O processo '.$this->processo->numProcessoFormatado().' deu saída para o setor '.$setorSaida/*$this->processo->retencao->setorDestino*/.' com sucesso.';
+				$this->processo->Log(OP_UPD,$msg);
+				$this->processo->endTransaction();
+                                // 20-10-2011 - Daniel Bonfim
+                                $this->SendMailSaida();
+				$this->manager->Information($msg,$this->manager->GetActionURL('protocolo','main:processos',$this->processo->numProcesso));
+			}
+			catch(Exception $e) {$this->addError($e->getMessage());}
+		}else{
+			$msg = 'Este usuário não tem permissão para acessar este Processo/Protocolo';
+			$this->manager->Information($msg,$this->manager->GetActionURL('protocolo','main:processos',$this->processo->numProcesso));
+		}
+	}
+        
+                        // 20-10-2011 - Daniel Bonfim
+        // envia um email informando a cada observador que o processo deu saida
+        private function SendMailSaida() {
+            global $MIOLO;
+                        
+            $bussObservador = $MIOLO->getBusiness('common','observador');
+            $bussProcesso = $MIOLO->getBusiness('protocolo','processo');
+            
+            $numProcesso = $this->processo->numProcesso;
+            
+            // lista os observadores deste processo
+            $arrIds = $bussObservador->listIdUserObservadoresByProcesso($numProcesso);
+            if($arrIds) {
+                foreach($arrIds as $id) {
+                    $arrIdsUserObservadores[] = $id[0];
+                }
+            }
+             
+        // se houverem observadores
+        if($arrIdsUserObservadores) {
+            
+            // array com os ids dos observadores
+            foreach($arrIdsUserObservadores as $idUserObservador) {
+                
+                $bussUsuario = $MIOLO->getBusiness('common','usuario');
+                // no objPessoa já tem todas as informacoes de que preciso
+                $objUsuario = $bussUsuario->GetById($idUserObservador); 
+                                
+                $email = $objUsuario->pessoa->email;
+                
+                $mail = new PHPMailer();
+		$mail->IsSMTP(); // telling the class to use SMTP
+		$mail->Host = "smtp.ifbaiano.edu.br"; // SMTP server
+		$mail->From = 'sigaadm@ifbaiano.edu.br';
+		$mail->FromName = 'SIGA - Sistema Integrado de Gestão Acadêmica';                
+		//$mail->Subject = "[SIGA] Monitoramento do processo ".$bussProcesso->numProcessoFormatado($this->processo->numProcesso);
+                $mail->Subject = "[SIGA] Processo ".$bussProcesso->numProcessoFormatado($this->processo->numProcesso).": saída para {$this->processo->retencao->setorDestino}";
+		$mail->WordWrap = 150;
+                
+                // 24-10-2011 - Daniel Bonfim
+                // informaçoes do processo para inserir no email
+                $tipo = $this->processo->tipo;
+                if($tipo == 'A')
+                    $tipo = "PROTOCOLADO";
+                else if($tipo == 'P')
+                    $tipo = "PROCESSO";
+                
+                $numFormatado = $this->processo->instituicao.".".$this->processo->numProcessoFormatado($this->processo->numProcesso);
+                $dataAbertura = $this->processo->dataFormatada($this->processo->dataAbertura);
+                $setor = $this->processo->setorOrigem;
+                
+                $status = $this->processo->retencao->status;
+                if($status == "N") {
+                    // 04-20-2011 - Daniel Bonfim
+                    if ($this->processo->retencao->setorDestino)
+                        $status = 'AGUARDANDO ENTRADA - '.$this->processo->retencao->setorDestino;
+                    else 
+                        $status = "NORMAL";
+                }
+                else if($status == "A")
+                    $status = "ARQUIVADO";
+                else if($status == "J")
+                    $status = "ANEXADO";
+                
+                $interessado = $this->processo->solicitante;
+                $titulo = $this->processo->titulo;
+                $assunto = $this->processo->assunto;
+                $arquivo = $this->processo->arquivo;
+                
+                // usuario
+                $auth = $this->manager->auth;
+                $usuario = $auth->login->id;
+                
+		$body =
+<<< HERE
+O sistema SIGA-ADM informa que o processo {$bussProcesso->numProcessoFormatado($this->processo->numProcesso)} deu saída para o setor {$this->processo->retencao->setorDestino} com sucesso.
+
+Tipo: {$tipo}
+Número: {$numFormatado}
+Data Abertura: {$dataAbertura}
+Setor: {$setor}
+Status: {$status}
+Interessado: {$interessado}
+Titulo: {$titulo}
+Assunto: {$assunto}
+Caixa: {$arquivo}
+Usuário: {$usuario}
+
+Atenciosamente,
+SIGA - Sistema Integrado de Gestão Acadêmica
+sigaadm@ifbaiano.edu.br
+
+HERE;
+
+		$mail->Body = $body;
+                $mail->AddAddress($email);
+                
+                $mail->Send();
+            }
+                
+        } else {
+            unset($bussObservador); 
+            unset($bussProcesso);
+        }   
+    }
+        
+ }
+?>

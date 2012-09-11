@@ -1,0 +1,164 @@
+<?
+class frmRepPagBolsa extends Form
+{
+	var $objBolsa;
+
+	function frmRepPagBolsa()
+	{
+		global $MIOLO, $module, $self, $page;
+
+		$this->objBolsa = $MIOLO->GetBusiness($module,'bolsa');
+
+		$this->Form('Folha de Pagamento de Bolsa');
+		$this->EventHandler();
+	}
+
+	function CreateFields()
+	{
+		global $MIOLO, $module, $action;
+
+		$fields = Array(
+			new Selection('selBolsa','','Bolsa'),
+			
+			//modificacao em funcao de tipo de bolsa normal ou suplementar
+			new Selection('selTipo','','Tipo de Bolsa'),
+			
+			new TextField('txtMesAno','','Mes/Ano',10,'Ex: 08/2004'),
+			new TextLabel('lblInfo','','Qtde Registros'),
+			new HiddenField('hidGera','')
+		);
+
+		$this->SetFields($fields);
+		
+		$login = $MIOLO->auth->GetLogin();
+		
+		$bolsa = $MIOLO->GetBusiness($module,'cadastrobolsa');
+		$objQuery = $bolsa->ListAll($login->idkey,'paga');
+		
+		
+		//modificacao em funcao de tipo de bolsa
+		$tipo = array('1'=>'Normal','2'=>'Suplementar');
+		$this->SetFieldAttr('selTipo','options', $tipo);
+
+					
+		$this->SetFieldAttr('selBolsa','options', $objQuery->result);
+
+		$buttons = Array
+		(
+			new FormButton('btnPost', 'Confirmar'),
+			new FormButton('btnGerarRelatorio', 'Gerar Relatório','PDF')
+		);
+
+		$this->SetButtons($buttons);
+
+		$this->SetFieldAttr('lblInfo','visible',false);
+		$this->SetButtonAttr('btnGerarRelatorio','visible',false);
+
+		$this->SetClose($MIOLO->GetActionURL($module,'main:sispag'));
+	}
+
+	function btnPost_click()
+	{
+		global $MIOLO,$module,$self;
+		
+		$is_back = ($this->GetFieldValue('hidGera')=='gerar')?true:false;
+		
+		if( !$is_back )
+		{
+			$bolsa = $this->GetFieldValue('selBolsa');
+			$mesano = $this->GetFieldValue('txtMesAno');
+			
+			//modificacao 
+			$folha = $this->GetFieldValue('selTipo');
+			
+			
+			// modificacao
+			if( ($bolsa!='') && ($mesano!='') && ($folha!='') )
+			{
+				$msgError = $this->FormatMesAno($mesano);
+				
+				if( $msgError == 'ok' )
+				{
+					$this->SetFieldAttr('txtMesAno','readonly',true);
+					$this->SetFieldAttr('selBolsa','readonly',true);	
+					
+					//modificacoes
+					$this->SetFieldAttr('selTipo','readonly',true);	
+					
+					$this->SetFieldAttr('lblInfo','visible',true);
+					$this->SetButtonAttr('btnPost','label','Voltar');
+					$this->SetFieldValue('hidGera','gerar');
+					$objPagBolsa = $MIOLO->GetBusiness($module,'pagbolsa');
+
+					// modificacoes
+					$numReg = $objPagBolsa->GetNumReg($bolsa,$mesano,$folha);
+					
+					
+					if( $numReg!=0 )
+					{
+						$this->SetFieldValue('lblInfo',$numReg);
+						$this->SetButtonAttr('btnGerarRelatorio','visible',true);
+					}
+					else
+					{
+						$this->SetFieldValue('lblInfo','Não existem registros para esta bolsa nesta data.');
+					}
+				}
+				else
+				{
+					$MIOLO->Information($msgError, $action );
+				}
+			}
+		}
+		else
+		{
+			$this->SetFieldValue('hidGera','voltar');
+		}
+
+		$this->SetClose($MIOLO->GetActionURL($module,$self));
+	}
+
+	function btnGerarRelatorio_click()
+	{
+		global $MIOLO,$module;
+		
+		if( $this->GetFieldValue('hidGera')=='gerar' )
+		{
+			$bolsa = $this->GetFieldValue('selBolsa');
+			$mesano = $this->GetFieldValue('txtMesAno');
+			
+			//modificacoes
+			$folha = $this->GetFieldValue('selTipo');
+			
+			
+			$ui = $MIOLO->GetUI();
+			
+			//modificacoes
+  		    $report = $ui->GetReport($module,'repPagamentoBolsa',array('idbolsa'=>$bolsa,'bolsa'=>$this->objBolsa->GetById($bolsa)->result[0][0],'mesano'=>$mesano,'folha'=>$folha));
+
+  		    $report->Generate();	
+		}
+	}
+	
+	function FormatMesAno($mesano) // private
+	{
+		$msg = 'ok';
+
+		$vet = explode('/',$mesano);
+		
+		if( strlen($mesano)!=7 )
+		{
+			$msg = 'O campo Mes/Ano deve ter exatamente 7 caracteres';
+		}
+		elseif( (count($vet)!=2) || (!is_numeric($vet[0]) || !is_numeric($vet[1])) )
+		{
+			$msg = 'o campo mês/ano deve ter o seguinte formato: mm/yyyy';
+		}
+		elseif( ( $vet[0]>12 ) || ($vet[0]<1) )
+		{
+			$msg = 'Mês inválido!';
+		}	
+		return $msg;
+	}
+}
+?>

@@ -1,0 +1,120 @@
+<?
+class frmNotaFiscalNew extends MForm
+{
+    public function __construct()
+    {
+        global $MIOLO;
+        parent::__construct('Nota Fiscal');
+        $this->SetClose($MIOLO->GetActionURL('adm','main'));
+        $this->EventHandler();
+    }    
+    public function CreateFields()
+    {
+
+		$opcoes = array (
+						"1"=>"NAO",
+						"2"=>"SIM"					
+						);
+		$fields = array(
+			new MHiddenField('placa','','Veiculo'),
+			new LookupTextField('lkpVeiculo','','Veículo','15'),
+			new MHiddenField('idPrevRevisao'),
+			new MHiddenField('idEmpresa','','Empresa'),
+			new LookupTextField('lkpEmpresa','','Empresa','30'),
+			new MCalendarField('data','','Data',10),
+			new LookupTextField('lkpPrevRevisao','','Previsão de Revisão','15'),
+			new MTextField('valorTotal','','Total','9'),
+					);
+
+		$buttons = array(
+					new MButton('btnEnviar','Continuar'),
+					new MButton('btnEnviar2'),
+					new MButton('btnEnviar3','Previsao')
+						);
+		$this->SetFields($fields);
+		$this->SetButtons($buttons);
+	
+		$this->SetFieldAttr('lkpVeiculo','module','adm');
+		$this->SetFieldAttr('lkpVeiculo','item','veiculo');
+		$this->SetFieldAttr('lkpVeiculo','event','filler');
+//		$this->SetFieldAttr('lkpVeiculo','related','placa,NULL,lkpVeiculo');
+		$this->SetFieldAttr('lkpVeiculo','related','null,placa,lkpVeiculo,null');
+
+		$this->SetFieldAttr('lkpEmpresa','module','adm');
+		$this->SetFieldAttr('lkpEmpresa','item','empresamanutencaoveiculo');
+		$this->SetFieldAttr('lkpEmpresa','event','filler');
+		$this->SetFieldAttr('lkpEmpresa','related','idEmpresa,lkpEmpresa');
+		
+		$this->SetFieldAttr('lkpPrevRevisao','module','adm');
+		$this->SetFieldAttr('lkpPrevRevisao','item','prevrevisao');
+		$this->SetFieldAttr('lkpPrevRevisao','event','filler');
+		$this->SetFieldAttr('lkpPrevRevisao','related','idPrevRevisao,NULL,lkpPrevRevisao');
+
+		$this->SetFieldAttr('valorTotal','readonly',true);
+	
+        $validators = array (
+            new MRequiredValidator('placa'),
+            new MRequiredValidator('idEmpresa'),
+           		    );
+        $this->SetValidators($validators);
+        
+        $this->SetFieldAttr('lkpPrevRevisao','visible',false);
+        $this->SetButtonAttr('btnEnviar','visible',false);
+        $this->SetButtonAttr('btnEnviar3','visible',false);
+
+    }
+    function btnEnviar2_click()
+    {
+    	global $MIOLO;
+  	
+    	$this->SetFieldAttr('lkpEmpresa','readonly',true);
+        $this->SetFieldAttr('lkpVeiculo','readonly',true);
+        $this->SetFieldAttr('data','readonly',true);
+        $this->SetButtonAttr('btnEnviar','visible',true);
+        $this->SetButtonAttr('btnEnviar3','visible',true);
+        $this->SetButtonAttr('btnEnviar2','visible',false);
+    }
+    function btnEnviar3_click()
+    {
+    	global $MIOLO;
+    	
+    	$session = $MIOLO->getSession();
+    	$data = $this->getData();
+    	$placa = $data->placa;
+    	$session->set('varplaca',$placa);
+    	$this->SetFieldAttr('lkpEmpresa','readonly',true);
+        $this->SetFieldAttr('lkpVeiculo','readonly',true);
+        $this->SetFieldAttr('data','readonly',true);
+    	$this->SetFieldAttr('lkpPrevRevisao','visible',true);
+    	$this->SetButtonAttr('btnEnviar3','visible',false);
+    	$this->SetButtonAttr('btnEnviar2','visible',false);
+    	$this->SetButtonAttr('btnEnviar','visible',true);
+    }
+    function btnEnviar_click()
+    {
+		global $MIOLO;
+	
+		$data = $this->getData();
+		$prev = $data->idPrevRevisao;
+		$objNotaFiscal = $MIOLO->GetBusiness('adm','notafiscalmanutencaoveiculo');
+		$objNotaFiscal->setData($data);
+		try
+		{
+			$objNotaFiscal->Save();
+			if($prev)
+			{
+				$objPrevRevisao = $MIOLO->GetBusiness('adm','prevrevisao');
+				$objPrevRevisao->GetByid($prev);
+				$objPrevRevisao->situacao = 2;
+				$objPrevRevisao->Save();
+			}
+			$msg = "Nota Fiscal Cadastrada com sucesso, favor continue o cadastro das manutenções";
+			$MIOLO->Information($msg,$MIOLO->GetActionURL('adm','main:notafiscalmanutencaoveiculo:notamanutencao',$objNotaFiscal->idNotaFiscal));
+		}
+		catch(Exception $e)
+		{
+			$this->manager->Error($e->getMessage());
+		}
+   }    
+}
+?>

@@ -1,0 +1,325 @@
+<?
+// 17-10-2011 - Daniel Bonfim
+class frmProcessoObservadores extends MFormAjax
+{
+        protected $objProcesso;
+	protected $numProcesso;
+        // usuario
+	protected $objUsuario;
+        protected $idUserLogado;
+        protected $userLogado;
+        protected $allUsers;    // array de id=>login
+        // observadores
+        protected $observadoresFromBanco;    // array de id=>nome
+        protected $idObservadores;  //array de id
+        // responsavel
+        protected $responsavel;
+        
+
+	function __construct($objProcesso)
+	{
+		//      construct
+		global $MIOLO;
+                $this->objProcesso = $objProcesso;
+		$this->numProcesso = $objProcesso->numProcesso;
+		$this->objUsuario = $MIOLO->GetBusiness('common','usuario');
+		//$this->perms  = $MIOLO->getPerms();
+                
+		parent::__construct('Observadores');
+		$this->SetClose($MIOLO->GetActionURL('protocolo','main'));
+		$this->eventHandler();
+	}
+
+	function CreateFields()
+	{
+            
+            global $MIOLO;
+            $this->allUsers = $this->objUsuario->ListAllLogins();
+            $mtField = array(array('mtusuario','Usuarios','',$this->allUsers));	
+            
+            $mtfUsuarios = new MMultiTextField2('mtfUsuarios',NULL,'Usuarios',$mtField,300,true,'vertical');
+                
+            $auth = $this->manager->auth;
+            $this->idUserLogado = $auth->login->idkey;            
+            $this->userLogado = $auth->login->id;
+            
+            // recuperar todos os observadores da tabela cm_observador que tenham o numero do processo
+            // que chegou como item e coloca-lo em SetCodeValue.                                    
+            $bussObservador = $MIOLO->getBusiness('common','observador');
+            $idObservadores = $bussObservador->listIdUserObservadoresByProcesso($this->numProcesso);
+            $this->responsavel = $bussObservador->getResponsavelByProcesso($this->numProcesso);
+            //print_r($this->responsavel);exit;
+            
+            $this->observadoresFromBanco = null;            
+            $this->idObservadores = null;   // array contendo apenas os ids
+            for($i=0; $i<count($idObservadores); $i++) {
+                foreach($this->allUsers as $chave=>$valor) {                
+                    if($idObservadores[$i][0] == $chave) {
+                        $this->observadoresFromBanco[$chave] = $valor;                        
+                        $this->idObservadores[] = $chave;   // array contendo apenas os ids
+                        break;
+                    }
+                }
+            }
+            
+            $mtfUsuarios->SetCodeValue($this->idObservadores);              
+
+            //$groupLoginResponsavel = new MBaseGroup('groupLoginResponsavel', 'Observadores',array($idUsuarioResponsavel,$loginResponsavel,new MSpacer()),'horizontal','css');
+            $groupObservadores = new MBaseGroup('groupObservadores', 'Observadores',array($mtfUsuarios,new MSpacer()),'horizontal','css');
+            $groupObservadores->addAttribute('style','padding:10px');
+            
+            $fields = array(			
+                    array($groupObservadores),
+                );
+            $this->SetFields($fields);
+            
+            //      buttons
+            $buttons = array(
+                    new MButton('btnSalvar','Salvar'),
+            );
+            $this->SetButtons($buttons);
+	}
+    
+	public function btnSalvar_click()
+	{
+		global $MIOLO;
+                                
+                // Bug no MultipleTextField não permite que todos os elementos sejam removidos.
+                // eles reaparecem todos com um espaço no final. um trim() foi usado mais abaixo para que 
+                // essa informaçao com espaço nao causasse erro no fluxo.
+                // Uma alternativa à contornar este erro é adicionar um checkbox para que o usuário marque
+                // se quiser remover todos os observadores incluindo o responsável. Se o checkbox 
+                // estiver checado, a lista de observadores será totalmente esvaziáda.
+                
+                // observadores vindos do MultipleFieldText
+                $observadoresFromMTF = $this->GetFieldValue('mtfUsuarios');
+                $observadoresFromBanco = $this->observadoresFromBanco;
+                                                
+                // tirando os colchetes
+                for($i=0; $i<count($observadoresFromMTF); $i++) {
+                    // 27-10-2011 - Daniel Bonfim
+                    if($observadoresFromMTF[$i] == "[--Selecione--]") {
+                        $this->addError("Por favor, retire o elemento '[--Selecione--]' da lista de observadores.");
+                        return;
+                    }
+                    $observadoresFromMTF[$i] = str_replace("[", "", $observadoresFromMTF[$i]);
+                    $observadoresFromMTF[$i] = str_replace("]", "", $observadoresFromMTF[$i]);                    
+                } 
+                
+                // colocando em um array apenas de ids
+                $idObservadoresMTF = null;
+                $idObservadoresFromBanco = null;
+                foreach($observadoresFromMTF as $chave=>$valor) {
+                    $idObservadoresMTF[] = $this->getIdUserByLogin(trim($valor));
+                }                                
+                foreach($observadoresFromBanco as $chave=>$valor) {
+                    $idObservadoresFromBanco[] = $chave;
+                }
+                
+                $idUsuariosAdicionados = null;
+                $idUsuariosRemovidos = null;
+                    
+                // descobrir quem foi adicionado
+                // se ja houverem dados no banco, compare para descobrir
+                if($idObservadoresFromBanco) {
+                    for($i=0; $i<count($idObservadoresMTF); $i++) {                    
+                        if(!in_array($idObservadoresMTF[$i], $idObservadoresFromBanco)) {
+                            $idUsuariosAdicionados[] = $idObservadoresMTF[$i];
+                        }
+                    }  
+                } else {    // se nao, apenas adicione o que estiver no multipleTextField
+                    for($i=0; $i<count($idObservadoresMTF); $i++) {    
+                        $idUsuariosAdicionados[] = $idObservadoresMTF[$i];
+                    } 
+                }
+                
+                //print_r($idUsuariosAdicionados);exit;
+                
+                // descobrir quem foi removido
+                for($i=0; $i<count($idObservadoresFromBanco); $i++) {                    
+                    if(!in_array($idObservadoresFromBanco[$i], $idObservadoresMTF)) {
+                        $idUsuariosRemovidos[] = $idObservadoresFromBanco[$i];
+                    }
+                }
+                             
+                
+                // Se houve alguma alteraçao na lista
+                if($idUsuariosAdicionados || $idUsuariosRemovidos) {
+                    
+                    // se ele ainda está logado. checa se ele nao foi deslogado por timeout
+                    if($this->idUserLogado) {
+                            
+                        // se o usuario que esta logado for o responsável deste processo,
+                        // ele pode adicionar ou remover qualquer pessoa
+                        if($this->idUserLogado == $this->responsavel["id"]) {
+                            
+                            // adicionando observadores
+                            if($idUsuariosAdicionados) {
+
+                                $msg = "Usuário(s): <br/>";
+
+                                foreach($idUsuariosAdicionados as $idUserAdd) {
+                                    // 26-10-2011 - Daniel Bonfim
+                                    $bussUsuario = $MIOLO->getBusiness('common','usuario');
+                                    $objUsuario = $bussUsuario->getById($idUserAdd);
+                                    if(!$objUsuario->pessoa->email) {
+                                        $this->addError("$objUsuario->login não pode ser adicionado(a) como observador(a) 
+                                                porque não possui email.");
+                                        return false;
+                                    }
+                                    try {
+                                        $bussObservador = $MIOLO->getBusiness('common','observador');
+
+                                        $bussObservador->idObservador = $bussObservador->getNextId();
+                                        $bussObservador->idUserResponsavel = $this->idUserLogado;
+                                        $bussObservador->processo = $this->numProcesso;
+                                        $bussObservador->idUserObservador = $idUserAdd;
+
+                                        $bussObservador->save();                                    
+
+                                    } catch(Exception $e) {
+                                        $this->manager->Error($e->getMessage());
+                                    }
+
+                                    $msg .= "[".$this->getLoginByIdUser($idUserAdd)."]<br/>";                                
+                                }
+
+                                $msg .= "adicionado(s) com sucesso.";
+                            }
+
+                            // removendo observadores
+                            if($idUsuariosRemovidos) {
+
+                                $msg = "Usuário(s): <br/>";
+
+                                foreach($idUsuariosRemovidos as $idUserRm) {
+                                    try {
+                                        $bussObservador = $MIOLO->getBusiness('common','observador');
+                                        $bussObservador->deleteObservadorByIdUserAndProcesso($idUserRm, $this->numProcesso);
+
+                                    } catch (Exception $e) {
+                                        $this->manager->Error($e->getMessage());
+                                    }
+
+                                    $msg .= "[".$this->getLoginByIdUser($idUserRm)."]<br/>";
+                                }
+
+                                $msg .= "removido(s) com sucesso.";
+                            }
+
+                            $this->manager->Information($msg,$this->manager->GetActionURL('protocolo','main:processos',$this->numProcesso));
+                            //$this->page->redirect($this->manager->GetActionURL('protocolo','main:processos',$this->processo->numProcesso));
+
+                        } else {
+                        // se o usuario nao é o responsavel, ele só pode adicionar ou remover ele mesmo.
+
+                            // adicionando
+                            if($idUsuariosAdicionados) {
+                                if(count($idUsuariosAdicionados) > 1) {
+                                    $this->addError('Você não tem premissão para adicionar outros usuários.');
+                                    return false;
+                                } 
+                                
+                            // se o usuario for igual ao unico que esta na lista
+                            if($this->idUserLogado == $idUsuariosAdicionados[0]) {
+                                // 26-10-2011 - Daniel Bonfim
+                                $bussUsuario = $MIOLO->getBusiness('common','usuario');
+                                $objUsuario = $bussUsuario->getById($this->idUserLogado);
+                                if(!$objUsuario->pessoa->email) {
+                                    $this->addError("$objUsuario->login não pode ser adicionado(a) como observador(a) 
+                                            porque não possui email.");
+                                    return false;
+                                }
+
+                                $msg = "Usuário: <br/>";
+
+                                try {
+                                    $bussObservador = $MIOLO->getBusiness('common','observador');
+
+                                    $bussObservador->idObservador = $bussObservador->getNextId();
+                                    // responsavel = null
+                                    $bussObservador->processo = $this->numProcesso;
+                                    $bussObservador->idUserObservador = $this->idUserLogado;
+
+                                    $bussObservador->save();                                    
+
+                                } catch(Exception $e) {
+                                    $this->manager->Error($e->getMessage());
+                                }
+
+                                $msg .= "[".$this->getLoginByIdUser($this->idUserLogado)."]<br/>"; 
+                                $msg .= "adicionado com sucesso.";
+
+                                $this->manager->Information($msg,$this->manager->GetActionURL('protocolo','main:processos',$this->numProcesso));
+
+                            } else {
+                                $this->addError('Você não tem premissão para adicionar outros usuários.');
+                                return false;
+                            }
+
+
+                        }
+
+
+                            // removendo
+                            if($idUsuariosRemovidos) {
+                                if(count($idUsuariosRemovidos) > 1) {
+                                    $this->addError('Você não tem premissão para remover outros usuários.');
+                                    return false;
+                                } else {
+                                    // se o usuario for igual ao unico que esta na lista
+                                    if ($this->idUserLogado == $idUsuariosAdicionados[0]) {
+
+                                        $msg = "Usuário: <br/>";
+
+                                        try {
+                                            $bussObservador = $MIOLO->getBusiness('common','observador');
+                                            $bussObservador->deleteObservadorByIdUserAndProcesso($this->idUserLogado, $this->numProcesso);
+
+                                        } catch (Exception $e) {
+                                            $this->manager->Error($e->getMessage());
+                                        }
+
+                                        $msg .= "[".$this->getLoginByIdUser($this->idUserLogado)."]<br/>"; 
+                                        $msg .= "removido com sucesso.";
+
+                                        $this->manager->Information($msg,$this->manager->GetActionURL('protocolo','main:processos',$this->numProcesso));
+
+                                    } else {
+                                        $this->addError('Você não tem premissão para remover outros usuários.');
+                                        return false;
+                                    }
+                                }
+
+                            }
+                        }
+                    } else {
+                        $this->addError('Desconectado por timeout. Por favor, faça o login novamente.');
+                        return false;
+                    }
+                } else {
+                    $this->addError('Não houveram alterações na lista de observadores.');
+                    return;
+                }
+                
+	}
+        
+        
+        private function getIdUserByLogin($login) {            
+            $allUsers = $this->allUsers;
+            foreach($allUsers as $chave=>$valor) {
+                if($login == $valor) {
+                    return $chave;    
+                } 
+            }
+        }
+        
+        private function getLoginByIdUser($idUser) {            
+            $allUsers = $this->allUsers;
+            foreach($allUsers as $chave=>$valor) {
+                if($idUser == $chave) {
+                    return $valor;    
+                } 
+            }
+        }
+}

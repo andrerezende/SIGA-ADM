@@ -1,0 +1,218 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+MIOLO::Import('modules::rh::controls::linkpessoa');
+MIOLO::Import('modules::common::controls::selectionsexo');
+
+class frmFuncionarioNew extends Form
+{
+    var $pessoa;
+
+    function frmFuncionarioNew()
+    {
+    
+        $this->Form('Incluir Novo Servidor');
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+        $cpf = new MTextField('cpf', '', 'CPF', '15');
+        $cpf->addMask('###.###.###-##');
+
+        $fields = array(
+            new MTextField    ('nome'    ,'','Nome'           ,55),
+            new MCalendarField('datanasc','','Data de Nascimento'),
+            $cpf                  //new MTextField('cpf','','CPF',15,'No formato: 999.999.999-99')
+        );
+            
+        $validators = array(
+            new MCpfValidator('cpf','','required'),
+            new MRequiredValidator('nome','','required'),
+            new MRequiredValidator('datanasc','','required'),
+
+        );
+            
+        $buttons = array(
+            new MButton('btnPost','Enviar'),
+            new MButton('btnNew', 'Incluir Servidor'),
+        );
+        
+        $this->SetFields($fields);
+        $this->SetValidators($validators);
+        $this->SetButtons($buttons);
+
+        $this->setButtonAttr('btnNew','visible',FALSE);
+    }
+    
+    function btnPost_click()
+    {
+        $newFields = array(
+            new SelectionSexo('sexo','','Sexo'),
+            new MTextField('idFuncionario','','Id. Única'),
+            new MHiddenField('idpessoa'),
+        );
+        
+        $this->addFields($newFields);
+        $this->setFieldAttr('sexo','visible',FALSE);
+        $this->idFuncionario->AddAttribute('maxlength','9');
+
+        $data = $this->getData();
+        $cpf = str_replace('-','',str_replace('.','',$data->cpf));
+        $pessoa = $this->manager->GetBusiness('common','pessoa');
+        $pessoa = $pessoa->getByCpf($cpf);
+        if ( $pessoa->idpessoa )
+        {
+            $this->addInfo("Uma pessoa com esse CPF foi encontrada em nosso banco de dados. Confira se as informações estão corretas.<br>Caso esteja, informe a Id. Única e clique no botão Incluir Servidor.");
+            
+            $this->setFieldValue('nome',$pessoa->nome);
+            $this->setFieldValue('datanasc',$pessoa->datanasc);
+            $this->setFieldValue('idpessoa',$pessoa->idpessoa);
+            
+            $this->setFieldAttr('nome','readonly',TRUE);
+            $this->setFieldAttr('datanasc','readonly',TRUE);
+
+        }
+        else
+        {
+            $pessoa = $this->manager->GetBusiness('common','pessoa');  
+            $pessoa = $pessoa->GetByNomeDataNasc($data->nome, $data->datanasc);
+            if ( $pessoa->idpessoa )
+            {
+                $this->addInfo("Uma pessoa com esse nome e data de nascimento foi encontrada em nosso banco de dados. Confira se as informações estão corretas.<br>Caso esteja, informe a Id. Única e clique no botão Incluir Servidor.");
+                
+                $this->setFieldValue('nome',$pessoa->nome);
+                $this->setFieldValue('datanasc',$pessoa->datanasc);
+                $this->setFieldValue('idpessoa',$pessoa->idpessoa);
+                
+                $this->setFieldAttr('nome','readonly',TRUE);
+                $this->setFieldAttr('datanasc','readonly',TRUE);
+            }
+            else
+            {
+                $this->setFieldAttr('sexo','visible',TRUE);
+                $validators = array(
+                    new MRequiredValidator('nome'),
+                    new MRequiredValidator('datanasc'),
+                );
+            }
+        }
+        
+        $this->setFieldAttr('cpf','readonly',TRUE);
+        $validators[] = new MMaskValidator('idFuncionario','','999999999','required');
+        $this->SetValidators($validators);
+
+        $this->setButtonAttr('btnPost','visible',FALSE);
+        $this->setButtonAttr('btnNew','visible',TRUE);
+        
+    }
+    function getData()
+    {
+        $data->cpf = $this->getFormValue('cpf');
+        $data->nome = $this->getFormValue('nome');
+        $data->idpessoa = $this->getFormValue('idpessoa');
+        $data->datanasc = $this->getFormValue('datanasc');
+        return $data;
+    }
+    function btnNew_click()
+    {   
+        $idFuncionario = Form::GetFormValue('idFuncionario');
+        $funcionario = $this->manager->GetBusiness('rh','funcionario');
+        $funcionario->idFuncionario = $idFuncionario;
+        $funcionario->idPessoa = Form::GetFormValue('idpessoa');
+        $errPessoa = FALSE;
+        $msg = "Servidor incluído com sucesso!";
+        if ( ! $funcionario->idPessoa )
+        {
+            $data = $this->getData();
+            $pessoa = $this->manager->GetBusiness('common','pessoa');
+            try 
+            {
+                $pessoa->createNew($data);
+                $funcionario->idPessoa = $pessoa->idpessoa;
+                $msg = $msg." Por favor, lembre-se de completar os dados pessoais do servidor após a inclusão do vínculo.";
+            }
+            catch ( Exception $e )
+            {
+                $this->addError($e->getMessage());
+				$errPessoa = TRUE;
+            }
+        }
+        if ( ! $errPessoa )
+        {
+		$idFuncionario = Form::GetFormValue('idFuncionario');
+		$novoFuncionario = $this->manager->GetBusiness('rh','funcionario');
+		$novoFuncionario = $novoFuncionario->GetById($idFuncionario);
+		if ( ($novoFuncionario->idPessoa) && ($funcionario->idPessoa <> $novoFuncionario->idPessoa) ) {
+			$this->addError("Já existe outro servidor cadastrado com essa Id. Única, por favor, cheque as informações.");
+			$this->btnPost_click();
+		}
+		else {
+			try
+            		{
+				
+				if (!$novoFuncionario->idPessoa) $funcionario->save();
+				$go = $this->manager->GetActionURL('rh','main:funcionario',$idFuncionario,array("form"=>"vinculos","id"=>"new"));
+				$this->manager->information($msg,$go);
+            		}
+            		catch ( Exception $e )
+            		{
+                		$this->addError($e->getMessage());
+			}
+			
+
+		}
+		/*try
+            {
+                $funcionario->save();
+                $go = $this->manager->GetActionURL('rh','main:funcionario',$idFuncionario,array("form"=>"vinculos","id"=>"new"));
+                $this->manager->information($msg,$go);
+            }
+            catch ( Exception $e )
+            {
+                //$this->addError($e->getMessage());
+		
+		
+			
+		}
+		else {
+			
+			$this->addError("Já existe outro servidor cadastrado com essa Id. Única, por favor, cheque as informações.");
+			$this->setFieldAttr('idFuncionario','visible',TRUE);
+			//echo $this->addInfo('Esta pessoa já possui vinculo como servidor.<br> Para incluir novo vínculo, escolha a opção "Vínculos" em sua tela de dados pessoais e clique no botão "Incluir Vínculo"');		
+	
+		}
+                //
+            }
+			
+
+			
+
+			/*var_dump($funcionario->ListVinculos()->chunkResult());
+			var_dump($funcionario->idVinculo);*/
+			
+			
+			
+			
+			
+        }
+    }
+
+ }
+?>

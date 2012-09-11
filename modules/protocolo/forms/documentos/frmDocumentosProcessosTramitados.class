@@ -1,0 +1,83 @@
+<?php
+class frmDocumentosProcessosTramitados extends MForm
+{
+	protected $setor;
+
+	function __construct()
+	{
+		global $MIOLO;
+		$this->setor = $MIOLO->getBusiness('protocolo','setor');
+		parent::__construct('Imprimir Relação de Processos Tramitados');
+		$this->SetClose($MIOLO->GetActionURL('protocolo','main'));
+		$this->eventHandler();
+	}
+
+	function CreateFields()
+	{
+		$fields = array(
+			//new MComboBox('setorDestino','','Setor de Destino:',$this->setor->selAll(),'','',15);
+			//new MComboBox('pSetor', '', 'Setor', $this->setor->selAllById()),
+			new MSelection('pSetorOrigem', '','Setor Origem',$this->setor->selAllById()),
+			new MSelection('pSetorDestino', '','Setor Destino',$this->setor->selAllById()),
+			new MTextLabel('','Período de entrada a pesquisar'),
+			array(
+				new MLabel('Inícial:'),	new MCalendarField('dataInicio',$dataInicio,'',10),
+				new MLabel('Final:'),new MCalendarField('dataFim',$dataFim,'',10)
+				),
+			new MCheckBox('todosSetor', 'todosSetor', 'Mostrar todos')
+			);
+		$buttons = Array(
+			new FormButton('btnGerar', 'Imprimir Relatório','PDF')
+		);
+		$this->SetFields($fields);
+		$this->SetButtons($buttons);
+	}
+	function btnGerar_click()
+	{
+		global $MIOLO;
+		$report = new MJasperReport('sigaept');
+		$parameters['SUBREPORT_DIR']  = $MIOLO->GetConf('home.modules');
+		$parameters['pURL']           = $MIOLO->GetConf('home.url');
+		$parameters['int_pIdUsuario'] = $MIOLO->login->idkey;
+		$parameters['pTitulo']        = "PROCESSOS TRAMITADOS";
+
+		$setororigem = Form::GetFormValue('pSetorOrigem');
+		$setordestino = Form::GetFormValue('pSetorDestino');
+		$periodo1 = Form::GetFormValue('dataInicio');
+		$periodo2 = Form::GetFormValue('dataFim');
+		$todos = Form::GetFormValue('todosSetor');
+
+		if ($todos == true){
+			//datas com valores de ano 1500 e 3000 para retornar todos os dados do banco
+			$periodo1 = '15000101';
+			$periodo2 = '30000101';
+		}else{
+			//formatar a data para o formato no banco
+			$periodo1 = substr($periodo1, 6,4).substr($periodo1, 3,2).substr($periodo1, 0,2);
+			$periodo2 = substr($periodo2, 6,4).substr($periodo2, 3,2).substr($periodo2, 0,2);
+		}
+
+		if ($setororigem == '') {
+			echo "<script language=javascript> alert(\" Escolha o Setor Origem desejado.\"); </script> " ;
+            return false;
+		} elseif ($setordestino == '') {
+			echo "<script language=javascript> alert(\" Escolha o Setor Destino desejado.\"); </script> " ;
+            return false;
+        } elseif (empty($periodo1)) {
+            echo "<script language=javascript> alert(\" Escolha o periodo inicial ou clique para mostrar todos.\"); </script> " ;
+            return false;
+		} elseif (empty($periodo2)) {
+            echo "<script language=javascript> alert(\" Escolha o periodo final ou clique para mostrar todos.\"); </script> " ;
+            return false;
+		}
+
+		$parameters['int_setor1']        = $setororigem;
+		$parameters['int_setor2']        = $setordestino;
+		$parameters['periodo1']         = $periodo1;
+		$parameters['periodo2']         = $periodo2;
+
+		$report->Execute('protocolo', 'ProcessosTramitados', $parameters);
+	}
+
+}
+?>

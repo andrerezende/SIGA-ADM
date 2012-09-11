@@ -1,0 +1,145 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmProadesReuniaoAusentes extends MForm
+{
+    private $reuniao;
+    
+	function __construct($reuniao)
+	{
+        $this->reuniao = $reuniao; 
+        
+		parent::__construct('Informar Aus&ecirc;ncias');
+		$this->EventHandler();
+	}
+    
+	function CreateFields()
+	{
+        $setor = $this->manager->getBusiness('common','setor');
+        $session = $this->manager->session;
+        $idSetor = $setor->getSetoresFilhos($session->getValue('idSetor'));
+
+        if ( $session->getValue('idSetor') == 1337 )
+        {
+            //se for a chefia de gabinete entao tem que juntar com a secretaria geral
+            $idSetor[] = 1346;
+            $idSetor[] = 1306;
+        }
+
+        $funcionario = $this->manager->getBusiness('rh','funcionario');
+        $qryServidores = $funcionario->listBySetor($idSetor);
+        $qryAusentes = $this->reuniao->listAusentes();
+        if ( ! $qryAusentes->eof() )
+        {
+            foreach ( $qryAusentes->result as $rs )
+            {
+                $total[] = $rs[1];
+            }
+
+        }
+        else
+        {
+            $total = array();
+        }
+        foreach ( $qryServidores->result as $rs )
+        {
+            $idVinculo = $rs[0];
+            $nome = $rs[1];
+            $vinculo = $this->manager->getBusiness('rh','vinculo');
+            $vinculo->getById($idVinculo);
+            if ( $vinculo->isAtivo() && (! $vinculo->isDocente() ) && (!in_array($vinculo->idVinculo,$total)) )
+            {
+                $result[] = array($idVinculo,$nome);
+            }
+        }
+        $qryServidores->result = $result;
+
+        if ( count($qryServidores->result) > 0 )
+        {
+            $fields = array(
+                    new MSeparator('Informar aus&ecirc;ncias dos TAES. Os TAES n&atilde;o informados como ausentes ser&atilde;o AUTOMATICAMENTE considerados como presentes.'),
+                    new MSelection('idVinculo','','TAE',$qryServidores->result),
+                    new MSelection('justificado','','Justificada?',array('S'=>'Sim','N'=>'N&atilde;o'))
+                );
+        }
+        else
+        {
+            $fields = array(
+                    new MLabel('Todos os servidores j&aacute; foram informados.')
+                    );
+        }
+        
+        $this->SetFields($fields);		
+
+        $buttons = array(
+            new MButton('btnSalvar','Enviar')
+        );
+
+        $this->setButtons($buttons);
+        $this->setButtonAccess();
+	}
+
+	function btnSalvar_click()
+	{
+        $data = $this->getData();
+        $ausente = $this->manager->getBusiness('rh','ausente'); 
+        $ausente->setData($data);
+        $ausente->idReuniao = $this->reuniao->idReuniao;
+
+        try
+        {
+            $ausente->save();
+            $go = $this->manager->getActionUrl('rh','main:proades:reuniao',$this->reuniao->idReuniao,array('form'=>'ausentes'));
+            $this->page->redirect($go);
+
+        }
+        catch ( Exception $e )
+        {
+            $this->addError($e->getMessage());
+        }
+	}
+
+    function btnExcluir_click()
+    {
+        $idAusente = $this->getFormValue('idAusente');
+        $ausente = $this->manager->getBusiness('rh','ausente');
+        $ausente->getById($idAusente);
+
+        try
+        {
+            $ausente->delete();            
+            $go = $this->manager->getActionUrl('rh','main:proades:reuniao',$this->reuniao->idReuniao,array('form'=>'ausentes'));
+            $this->page->redirect($go);
+        }
+		catch (Exception $e)
+		{
+			$this->AddError($e->GetMessage());
+		}
+    }
+
+    function setButtonAccess()
+    {
+        $perms = $this->manager->getPerms();
+        foreach ( $this->buttons as $button )
+        {
+            $this->setButtonAttr($button->name,'visible',$perms->checkAccess('rh_proadesexecutefase2',A_ACCESS));
+        }
+    }
+}
+?>

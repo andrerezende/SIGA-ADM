@@ -1,0 +1,85 @@
+<?php
+
+
+
+class frmUoAlmoxarifadoBloqueio extends Form {
+    
+    protected $objEstoque;
+    
+    function __construct() {		
+		parent::__construct("Bloqueio de UO por período");	
+		$this->EventHandler();
+    }
+    
+    public function CreateFields() {           
+                global $item, $MIOLO, $module;
+                
+                $objuo = $MIOLO->GetBusiness($module, 'uo', $item);
+                if ($objuo->dataBloqueio){
+                    $dataFormat = substr($objuo->dataBloqueio, 8, 2).'/'. substr($objuo->dataBloqueio, 5, 2).'/'.substr($objuo->dataBloqueio, 0, 4);                
+                    $bloqueio = new MTextLabel('', $dataFormat, 'Bloqueio Atual');
+                }
+                
+		$fields = array(
+                    new MTextLabel('','Período que deseja bloquear'),
+                    array(			
+			new MLabel('Data final:'),new MCalendarField('dataFim',$dataFim,'',10)
+                        
+			),
+                   $bloqueio
+		);
+
+		$this->SetFields($fields);
+		
+		$buttons = array(
+			new FormButton('btnPost', 'Enviar'),
+		);
+		$this->SetButtons($buttons);
+	}
+        
+        public function btnPost_click() {
+            global $item, $MIOLO, $module;            
+            
+            $datafim = Form::GetFormValue('dataFim');
+            $dataAtual = date('Y/m/d');
+            
+            $flag = $this->ValidaData($datafim);  
+            $dataFormatada = substr($datafim, 6,4).'/'.substr($datafim, 3,2).'/'.substr($datafim, 0,2);            
+            
+            $go = $this->manager->GetActionURL($module, 'main:uoalmoxarifado', $item);
+            
+            if (!$datafim) {
+                $this->AddError('Data final deve ser escolhida.');
+            } elseif (!$flag)  {
+                $this->AddError('Escreva uma data válida no formato dd/mm/yyyy ou escolha uma no ícone.');                            
+            } elseif (strtotime($dataFormatada) >= strtotime($dataAtual)){
+                $this->AddError('Data final deve ser anterior ao dia de hoje.');
+            } else{           
+                $objUo = $MIOLO->GetBusiness($module, 'uo');               
+                $objUo->idUo = $item;                
+                $objUo->dataBloqueio = $datafim;
+                $objUo->updateBloqueio();
+                $this->manager->Information('Bloqueio salvo com sucesso.', $go);
+            }
+        }
+                
+        public function ValidaData($dat){       
+            
+            $data = explode("/","$dat"); // fatia a string $dat em pedados, usando / como referência
+            $d = $data[0];
+            $m = $data[1];
+            $y = $data[2];
+            
+            if ($d && $m && $y){
+                $res = checkdate($m,$d,$y);
+                if ($res == 1){
+                    $flag = true;
+                } else {
+                    $flag = false;
+                }
+            }else $flag = false;    
+            return $flag;
+        }
+}
+
+?>

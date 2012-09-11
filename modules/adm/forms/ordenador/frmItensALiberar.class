@@ -1,0 +1,325 @@
+<?
+class frmItensALiberar extends Form
+{
+    protected $requisicao;
+
+	function __construct($objRequisicao)	
+	{
+	    $this->requisicao = $objRequisicao;    
+	    $this->Form('Liberar itens para licitação');
+		$this->EventHandler();
+	}
+
+	function CreateFields()
+	{
+		global $MIOLO, $module, $action;
+        
+        if ($this->requisicao->idTipoReq == '7')
+        {
+    		$objItem = $MIOLO->GetBusiness('adm','itemreq');    
+	    	$query = $objItem->ListItens($this->requisicao->idRequisicao);
+ 
+            $optPrioridade = array("1"=>"ALTA","2"=>"MÉDIA","3"=>"BAIXA");
+            $prioridade = new Selection('prioridade','3','Prior',$optPrioridade);
+          
+            $columns = array(
+                new DataGridColumn('sigla','UO Req.','center','','15%'),
+                new DataGridColumn('descricao','Material','left','','75%'),
+                new DataGridColumn('quantpedida','Qtde.','center','','5%'),
+                new DataGridColumn('valortotal','Total','center','','10%'),
+                new DataGridColumn('unidade','UN','center','','5%'),
+                new DataGridControl($prioridade,'prioridade','Prioridade',true,'30%')
+            );
+
+            $datagrid = new MDataGrid($query,$columns,$action,20);
+            $datagrid->SetIndex(6);
+            $datagrid->AddActionSelect();
+            $datagrid->SetTitle(NULL);
+            $datagrid->defaultButton = false;	
+           
+            $fields = Array(
+                        $datagrid,
+                        new Separator('<b>SE RECUSAR A REQUISIÇÃO, INFORME O MOTIVO</b>'),
+                        new MultiLineField('motivoRejeicao','','Motivo da Recusa','',3,50)
+                        );
+        
+            $this->SetFields($fields);           
+        }
+        else
+        {
+            $this->requisicao->retrieveAssociation('uoRequisitante');
+       	    $itemRequisicao = $this->requisicao->getItem();
+       	    //$itemRequisicao->retrieveAssociation('servico');
+
+            $optPrioridade = array("1"=>"ALTA","2"=>"MÉDIA","3"=>"BAIXA");
+
+            $fields = Array(
+                        new TextField('uoRequisitante',$this->requisicao->uoRequisitante->nome,'UO Req.',52),
+                        new TextField('servico',$itemRequisicao->servext->descricao,'Seviço',52),
+                        new TextField('quantidade',$itemRequisicao->quantidade,'Qtde.'),
+                        new CurrencyField('valorEst',$itemRequisicao->valorEst,'Valor Estimado'),
+                        new MultiLineField('complemento',$itemRequisicao->complemento,'Complemento','',3,50),
+                        new Selection('prioridade','3','Prioridade',$optPrioridade),
+                        new Separator('<b>SE RECUSAR A REQUISIÇÃO, INFORME O MOTIVO</b>'),
+                        new MultiLineField('motivoRejeicao','','Motivo da Recusa','',3,50)
+                        );
+		
+            $this->SetFields($fields);
+            $this->SetFieldAttr('uoRequisitante','readonly',TRUE);
+            $this->SetFieldAttr('quantidade','readonly',TRUE);
+            $this->SetFieldAttr('valorEst','readonly',TRUE);
+            $this->SetFieldAttr('complemento','readonly',TRUE);
+            $this->SetFieldAttr('servico','readonly',TRUE);
+         
+          
+            $columns = array(
+                new DataGridColumn('sigla','UO Req.','center','','20%'),
+                new DataGridColumn('descricao','Material','left','','75%'),
+                new DataGridColumn('quantidade','Qtde.','center','','5%'),
+                new DataGridColumn('valorEst','Total','center','','10%'),
+                new DataGridControl($prioridade,'prioridade','Prioridade',true,'30%')
+            ); 
+        }        
+       
+        if ($this->requisicao->idTipoReq == '7')
+        {
+            $buttons = Array(
+                new FormButton('btnGrava','Liberar Item(ns)'),
+                new FormButton('btnCancela','Cancelar Itens Selecionados'),
+                new FormButton('btnRecusarRequisicao','Recusar a Requisição'),
+            );
+        }
+        else
+        {
+            $buttons = Array(
+                new FormButton('btnGrava','Liberar Itens Selecionados'),
+                new FormButton('btnRecusarRequisicao','Recusar a Requisição'),
+            );
+        }
+
+		$this->SetButtons($buttons);
+	}
+
+	
+	/*------------------------------------------------
+
+	btnGrava_click()
+	
+    Libera os itens marcados.
+
+	------------------------------------------------*/
+	function btnGrava_click()	
+	{
+		global $MIOLO, $module,$item, $page, $theme, $action;
+
+        $prioridade = $this->GetFormValue('prioridade');
+        $sel = $page->Request('select');   
+
+        if ($this->requisicao->idTipoReq == '7')
+        {
+    		$objItem = $MIOLO->GetBusiness('adm','itemreq');
+            $ok = true;
+
+            // Se algum item do datagrid foi selecionado
+            if ($sel)
+            {
+                //Testa se todos os materiais selecionados são iguais
+                $i = 0;
+                foreach ($sel as $rs)
+                {
+                    $idMaterialAtual = $rs;
+                    $objItem->GetById($this->requisicao->idRequisicao,$idMaterialAtual);
+                    $objItem->setStatus(8);
+                    $objItem->setPrioridade($prioridade[$i]);
+                    $objItem->save();
+                    $idMaterialAnterior = $idMaterialAtual;
+                    $i++;
+                }
+                
+                // Se todos os itens estiverem liberados, muda o status da requisição 
+                // para LIBERADA PARA EXECUCAO senao muda para LIBERADA PARCIALMENTE
+                if ($this->requisicao->countItensALiberar() > 0)
+                    $this->requisicao->setStatus("J");        
+                else
+                    $this->requisicao->setStatus("7");
+               
+                $this->requisicao->save();
+
+                $action = $this->manager->getActionURL('adm','main:ordenador','');
+                $this->manager->Information("Itens liberados com sucesso.",$action);
+            }
+            else
+            {
+                $show[] = new Spacer('10px');
+                $show[] = new Text('',"Nenhuma linha foi selecionada. Você precisa marcar os itens que deseja liberar");
+                $show[] = new LinkBack('Voltar', $action);
+                $theme->InsertContent($show);	
+            }
+        }     
+        else
+        {
+       	    $itemRequisicao = $this->requisicao->getItem();
+            $itemRequisicao->setStatus(8);
+            $itemRequisicao->setPrioridade($prioridade);
+            $itemRequisicao->save();
+            
+            $this->requisicao->setStatus("7");               
+            $this->requisicao->save();
+
+            $action = $this->manager->getActionURL('adm','main:ordenador','');
+            $this->manager->Information("Itens liberados com sucesso.",$action);
+        }       
+	}
+
+	/*------------------------------------------------
+
+	btnCancela_click()
+	
+    Cancela os itens selecionados.
+
+	------------------------------------------------*/
+	function btnCancela_click()	
+	{
+		global $MIOLO, $module,$item, $page, $theme, $action;
+		
+		$objItem = $MIOLO->GetBusiness('adm','itemreq');
+        $requisita = $this->manager->getBusiness('adm','requisita');
+        $requisita->GetById($this->requisicao->idTipoReq,388);
+        $objUoOrdenadora = $this->manager->GetBusiness('adm','uo',388);
+
+        $sel = $page->Request('select');   
+        $ok = true;
+
+        if ($this->requisicao->countItens() == 1)
+        {
+            $this->manager->Error("Esta requisição possui apenas um item. Se quiser cancelá-lo clique em 'Recusar Requisição'.",'');
+        }
+		else if ($sel)
+   		{
+			//Testa se todos os materiais selecionados são iguais
+            $i = 0;
+            $this->requisicao->beginTransaction();
+			foreach ($sel as $rs)
+			{
+				$idMaterialAtual = $rs;
+                $objItem->GetById($this->requisicao->idRequisicao,$idMaterialAtual);
+                $objItem->setValorTotalPedido();
+                $objItem->setStatus(3);
+                $objItem->save();
+
+                $objUoOrdenadora->setTransaction($this->requisicao->getTransaction());
+                $objUoOrdenadora->removePrevisaoDebito($requisita->idRubrica,$objItem->valorTotalPedido);            
+                $this->requisicao->Log(OP_UPD,"Requisicao ".$this->requisicao->idRequisicao.": remocao da previsao de ".$objItem->valorTotalPedido." na UO 388");
+
+                // Lançamento interno de retorno da previsão de débito
+                $lancamentoInt = $this->manager->getBusiness('adm','lancamentoint');
+                $lancamentoInt->setTransaction($this->requisicao->getTransaction());
+                $lancamentoInt->tipoLancamento = '7';
+                $lancamentoInt->data = date("d/m/Y");                
+                $lancamentoInt->valor = $objItem->valorTotalPedido;
+                $lancamentoInt->ano = date("Y");
+                $lancamentoInt->idUoRequisitante = $this->requisicao->idUoRequisitante;       
+                $lancamentoInt->idUoExecutante = $this->requisicao->idUoExecutante;
+                $lancamentoInt->idRubrica = $requisita->idRubrica;           
+                $lancamentoInt->idRequisicao = $this->requisicao->idRequisicao;
+                $lancamentoInt->save();
+                $lancamentoInt->Log(OP_INS,"Lançamento Interno numero ".$lancamentoInt->idLancamento." gerado com sucesso.");
+
+				$idMaterialAnterior = $idMaterialAtual;
+                $i++;
+			}
+
+            $action = $this->manager->getActionURL('adm','main:ordenador','');            
+
+            // Se todos os itens estiverem liberados, muda o status da requisição 
+            // para LIBERADA PARA EXECUCAO senao muda para LIBERADA PARCIALMENTE
+            if ($this->requisicao->countItensALiberar() > 0)
+            {
+                $this->requisicao->setStatus("J");        
+            }
+            else
+            {
+                $this->requisicao->setStatus("7");
+            }
+            $this->requisicao->save();
+            $this->requisicao->endTransaction();
+            $this->manager->Information('Itens cancelados com sucesso',$action);
+	    }
+	    else
+	    {
+			$show[] = new Spacer('10px');
+			$show[] = new Text('',"Nenhuma linha foi selecionada. Você precisa marcar os itens que deseja cancelar");
+    	    $show[] = new LinkBack('Voltar', $action);
+    	    $theme->InsertContent($show);	
+	    }
+	}
+    
+    public function btnRecusarRequisicao_click()
+	{
+        $data = $this->getData();
+        $data->valorEstimado = $this->requisicao->getItemValorEstimado();
+
+        if ($data->motivoRejeicao == '')
+        {
+            $this->manager->Error("Para recusar toda a requisição você precisa informar o motivo.",'');
+        }
+        else if ($this->requisicao->countItensLiberados() > 0 && $this->requisicao->idTipoReq == '7')
+        {
+            $this->manager->Error("Existem itens desta requisição que já foram liberados. Esta requisição não pode mais ser recusada.",'');
+        }       
+        else
+        {
+            $this->requisicao->beginTransaction();
+
+            // Voltar a parte comentada quando o teste do prof. Ronaldo acabar
+            /*
+            $requisita = $this->manager->getBusiness('adm','requisita');
+            $requisita->GetById($this->requisicao->idTipoReq,388);
+
+            $objUoOrdenadora = $this->manager->GetBusiness('adm','uo',388);
+            $objUoOrdenadora->setTransaction($this->requisicao->getTransaction());
+            $objUoOrdenadora->removePrevisaoDebito($requisita->idRubrica,$data->valorEstimado);            
+            $this->requisicao->Log(OP_UPD,"Requisicao ".$this->requisicao->idRequisicao.": adicao da previsao de ".$data->valorEstimado." na UO 388");
+            */
+            
+            $requisita = $this->manager->getBusiness('adm','requisita');
+            $requisita->GetById($this->requisicao->idTipoReq,$this->requisicao->idUoRequisitante);
+
+            // Remove a previsão de débito no orçamento da Uo requisitante
+            $this->requisicao->getUoRequisitante();
+            $this->requisicao->uoRequisitante->setTransaction($this->requisicao->getTransaction());
+            $this->requisicao->uoRequisitante->removePrevisaoDebito($requisita->idRubrica,$data->valorEstimado);
+            $this->requisicao->Log(OP_UPD,"Requisicao ".$this->requisicao->idRequisicao.": remocao da previsao de ".$data->valorEstimado." na UO ".$this->requisicao->uoRequisitante->idUo);
+
+            $this->requisicao->setMotivoRejeicao($data->motivoRejeicao);
+            $this->requisicao->setStatus('A');
+            
+            // Lançamento interno de retorno da previsão de débito
+            $lancamentoInt = $this->manager->getBusiness('adm','lancamentoint');
+            $lancamentoInt->setTransaction($this->requisicao->getTransaction());            
+            $lancamentoInt->tipoLancamento = '7';
+            $lancamentoInt->data = date("d/m/Y");                
+            $lancamentoInt->valor = $data->valorEstimado;
+            $lancamentoInt->ano = date("Y");
+            $lancamentoInt->idUoRequisitante = $this->requisicao->idUoRequisitante;       
+            $lancamentoInt->idUoExecutante = $this->requisicao->idUoExecutante;
+            $lancamentoInt->idRubrica = $requisita->idRubrica;           
+            $lancamentoInt->idRequisicao = $this->requisicao->idRequisicao;
+            $lancamentoInt->save();
+            $lancamentoInt->Log(OP_INS,"Lançamento Interno numero ".$lancamentoInt->idLancamento." gerado com sucesso.");
+            
+            try
+            {
+                $this->requisicao->save();
+                $this->requisicao->endTransaction();
+                $this->requisicao->Log(OP_UPD,"Requisicao ".$this->requisicao->idRequisicao.": recusada com sucesso.");
+                $this->manager->information("Requisição recusada.",$this->manager->getActionUrl('adm','main:ordenador'));
+            }
+            catch (Exception $e)
+            {
+                $this->addError($e->getMessage());
+            }
+        }
+	}
+}
+?>

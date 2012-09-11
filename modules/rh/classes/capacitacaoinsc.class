@@ -1,0 +1,213 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class BusinessRhCapacitacaoInsc extends MBusiness
+{
+    public $inscricao; 		
+    public $idvinculo;		
+    public $idmodulo;		
+    public $turno;		
+    public $email;
+    public $telefone;
+    public $ambiente;		
+    public $justificativa;	
+    public $ts;		
+    public $status;// ""=>"Pendente","E"=>"Excedente","P"=>"Pendente","A"=>"Autorizado","C"=>"Confirmado","X"=>"Autoriz-Exc", "F"=>"Concluido"
+    public $idauth;
+    public $tsauth;
+    public $dadosPessoais;
+    public $dadosFuncionais;
+    public $dadosAuth;
+    public $vinculo;
+    public $pessoa;
+    public $modulo;	
+
+	function __construct($data=null)
+	{   	
+		parent::__construct('sigaept',$data);
+	}
+
+	function GetById($id)
+	{
+    	$this->inscricao = $id;    
+		$this->retrieve();
+        $this->getDadosPessoais();
+        $this->getDadosFuncionais();
+        $this->getDadosAuth();
+		return $this;
+	}
+
+    function getPessoa()
+    {
+        $this->vinculo = $this->_miolo->getBusiness('rh','vinculo',$this->idvinculo);
+        $this->func = $this->_miolo->getBusiness('rh','funcionario',$this->vinculo->idFuncionario);
+        $this->pessoa = $this->_miolo->getBusiness('common','pessoa',$this->func->idPessoa);
+        return $this->pessoa;
+    }
+
+   function getDadosPessoais()
+   {
+        $pessoa = $this->getPessoa();
+        $data = new StdClass();
+        $data->siape = $this->vinculo->idVinculo;
+        $data->nome = $pessoa->nome; 
+        $data->endereco = $pessoa->endereco; 
+        $data->email = $pessoa->email; 
+        $data->cpf = $pessoa->cpf; 
+        $this->dadosPessoais = $data;
+        return $data;
+   }
+
+   function getDadosAuth()
+   {
+        $vinculo = $this->_miolo->getBusiness('rh','vinculo',$this->idauth);
+        $func = $this->_miolo->getBusiness('rh','funcionario',$vinculo->idFuncionario);
+        $pessoa = $this->_miolo->getBusiness('common','pessoa',$func->idPessoa);
+        $data = new StdClass();
+        $data->siape = $vinculo->idVinculo;
+        $data->nome = $pessoa->nome; 
+        $data->endereco = $pessoa->endereco; 
+        $data->email = $pessoa->email; 
+        $data->cpf = $pessoa->cpf; 
+        $this->dadosAuth = $data;
+        return $data;
+   }
+
+   function setStatus($status)
+   {
+        $this->status = $status;
+        $this->save();  
+   }
+
+   function getDadosFuncionais()
+   {
+        $provimento = $this->_miolo->getBusiness('rh','provimento',$this->idvinculo);
+        $last = $provimento->getUltimoProvimento($this->idvinculo);
+        $dataProv = $provimento->getDados();
+        $provimento->getClasse();
+        $provimento->getAmbiente();
+        $data = new StdClass();
+        $data->categoria = $provimento->classe->categoria;
+        $data->cargo = $dataProv[5]; 
+        $data->unidade = $dataProv[4]; 
+        $data->ambiente = $provimento->ambiente->descricao;
+        $this->dadosFuncionais = $data;
+        return $data;
+   }
+
+   function listModulos()
+   {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('modulo.curso.nome','curso'); 
+        $criteria->addColumnAttribute('modulo.nome','modulo'); 
+        $criteria->addColumnAttribute('modulo.turno','turno'); 
+        $criteria->addColumnAttribute('modulo.datainicio','datainicio'); 
+        $criteria->addColumnAttribute('status'); 
+        $criteria->addCriteria('idvinculo','=',$this->idvinculo);
+        $query = $criteria->retrieveAsQuery();
+        return $query;
+   }
+
+   function listCursosTree()
+   {
+		$criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('modulo.idmodulo','idmodulo'); 
+        $criteria->addColumnAttribute('modulo.curso.nome','nome'); 
+        $criteria->addColumnAttribute('modulo.nome','modulo'); 
+        $criteria->addColumnAttribute('modulo.turno','turno'); 
+		$criteria->addOrderAttribute('modulo.curso.nome');
+		$criteria->addOrderAttribute('modulo.nome');
+        $criteria->addCriteria('idvinculo','=',$this->idvinculo);
+//        $criteria->addCriteria('curso.status','=',"'A'");
+		$query = $criteria->retrieveAsQuery();
+        $result = $query->treeResult("1","2,3,0"); 
+        return $result;
+   }
+
+
+   function getBySiapeCurso($idvinculo,$idmodulo)
+   {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('inscricao'); 
+        $criteria->addCriteria('idvinculo','=',"'{$idvinculo}'");
+        $criteria->addCriteria('idmodulo','=',"'{$idmodulo}'");
+        $query = $criteria->retrieveAsQuery();
+        $id = $query->result[0][0];
+        $this->getById($id);
+   }
+
+   function listCursosNaoAutorizados()
+   {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('inscricao'); 
+        $criteria->addColumnAttribute('modulo.curso.nome','curso'); 
+        $criteria->addColumnAttribute('modulo.nome','modulo'); 
+        $criteria->addColumnAttribute('modulo.turno','turno'); 
+        $criteria->addColumnAttribute('modulo.datainicio','datainicio'); 
+        $criteria->addColumnAttribute('status'); 
+        $criteria->addCriteria('idvinculo','=',$this->idvinculo);
+        $criteria->addCriteria('status','IN',"('P','E')");
+//        $criteria->addOrCriteria('status','=',"'E'");
+//        $criteria->addCriteria('idauth','is',"null");
+        $query = $criteria->retrieveAsQuery();
+        return $query;
+   }
+
+   function autorizadoPor($idauth)
+   {
+        $this->idauth = $idauth;
+        $this->tsauth = $this->_miolo->getSysTime();
+        if (($this->status == 'E') || ($this->status == 'X'))
+        {
+            $this->setStatus('X');
+        }
+        else if ($this->status == 'P')
+        {
+            $this->setStatus('A');
+        }
+   }
+
+   function podeMatricular()
+   {
+/*
+        $coinc = $this->_miolo->getBusiness('rh','capacitacaocoinc');
+        $criteria = $coinc->getCriteria();
+        $criteria->setAlias('C');
+        $criteria->addCriteria('C.idcurso1','=', "'{$this->idcurso}'");
+        $criteria2 = $this->getCriteria();
+        $criteria2->setAlias('I');
+        $criteria2->addColumnAttribute('count(*)','cnt');
+        $criteria2->addJoinCriteria($criteria);
+        $criteria2->addCriteria('C.idcurso2', '=', 'I.idcurso');
+        $criteria2->addCriteria('I.idvinculo','=',$this->idvinculo);
+        $query = $criteria2->retrieveAsQuery();
+        return ($query->fields('cnt') == '0');
+*/
+        // após o fechamento dos cursos, prorh pode matricular
+        return true;
+   }
+
+  function save()
+   {
+        $this->pessoa->email = $this->dadosPessoais->email;
+        $this->pessoa->save();
+        parent::save();
+   }
+
+}

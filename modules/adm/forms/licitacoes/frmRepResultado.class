@@ -1,0 +1,155 @@
+<?
+class frmRepResultado extends Form
+{
+    protected $objLicitacao;
+
+	function __construct($licitacao)
+	{   
+        $this->objLicitacao = $licitacao;
+        $this->Form('Relatório de Vencedores');
+        $this->EventHandler();
+	}
+		
+	Function CreateFields()
+	{
+		global $MIOLO,$module,$item,$self;
+
+		$list = $this->objLicitacao->ListAbertas();
+
+		$buttons = Array(
+	        	//new FormButton('btnReport','Gerar Relatório','pdf'),
+	        	new FormButton('btnReportJasper','Gerar Relatório','pdf')
+	 	);
+		$this->SetButtons($buttons);
+	}
+	
+	function btnReportJasper_click()
+	{
+	
+		global $MIOLO;
+		$report = new MJasperReport('sigaept');
+		$parameters['int_idlicitacao']   = $this->objLicitacao->idLicitacao;
+		$parameters['SUBREPORT_DIR'] = $MIOLO->GetConf('home.modules');
+		$parameters['pURL']          = $MIOLO->GetConf('home.url');
+		$parameters['int_pIdUsuario']    = $MIOLO->login->idkey;
+
+
+	         /*
+		$report = new MJasperReport('sigaept');
+		$parameters['int_IDLICITACAO'] = $this->objLicitacao->idLicitacao;
+		$parameters['str_SUBREPORT_DIR_LOCAL'] = $this->manager->getConf('home.modules') . "/common/reports/";
+		$parameters['str_SUBREPORT_DIR'] = $this->manager->getConf('home.modules') . "/adm/reports/";
+		*/
+		switch($this->objLicitacao->idTipoLicitacao)
+		{
+			case 1:
+			case 4:
+				$report->Execute('adm','LicitacoesVencedoresCompra',$parameters);
+				break;
+			case 3:
+				$report->Execute('adm','LicitacoesVencedoresBiblioteca',$parameters);
+				break;
+			case 2:
+				$report->Execute('adm','LicitacoesVencedoresServExt',$parameters);
+				break;
+		}
+	}	
+	
+	function btnReport_click()
+	{
+		global $MIOLO,$module,$item;	
+
+		if($this->objLicitacao->status < 4)
+		{
+			$MIOLO->Error('Vencedores ainda não definidos para essa licitação!');
+		}
+		else
+		{
+			$cf = new MCurrencyFormatter();			
+			$report = new MEzPDFReport('2','portrait');
+			$h  = $report->pdf->getFontHeight(10);
+			$ui = $this->manager->GetUI();
+			$report->pdf->ezImage($ui->GetImage('','logonet.png'),5,50,'none','left',0);
+			$report->pdf->addText(110,810       ,10,'UFJF - UNIVERSIDADE FEDERAL DE JUIZ DE FORA');
+			$report->pdf->addText(110,810-$h    ,10,'CGCO - CENTRO DE GESTÃO DO CONHECIMENTO ORGANIZACIONAL');
+			$report->pdf->addText(110,810-(2*$h),10,'SIGA - SISTEMA INTEGRADO DE GESTÃO ACADÊMICA');
+            $report->pdf->addText(110,810-(3*$h),10,'COSUP - COORDENADORIA DE SUPRIMENTOS');
+
+			$report->pdf->ezText('<b>VENCEDORES</b>',16,array('justification'=>'center'));
+			$report->pdf->ezText('<b>LICITAÇÃO NÚMERO '.$this->objLicitacao->numero.'</b>',10,array('justification'=>'center'));		$report->pdf->ezText('',20);			
+			$options['textCol']      = array(0,0,0);
+			$options['shaded']       = 1;
+			$options['showLines']    = 1;		
+			$options['fontSize']     = 10;
+			$options['width']        = 540;
+			$options['xPos']         = 'left';
+			$options['xOrientation'] = 'right';		
+			
+			$descricao = $this->objLicitacao->ListItensByVencedores();
+			//var_dump($descricao);
+			$vencedores = $this->objLicitacao->ListVencedoresByLicitacao();
+			//var_dump($vencedores);
+			$descItens = $this->objLicitacao->getDescricaoItens();
+			//var_dump($descItens);
+
+			if ($vencedores)
+			{				
+				foreach ($vencedores as $venc)
+				{						
+					$nomeEmp = $venc[1];
+                    $cnpj = str_replace(".","",$venc[3]);
+                    $cnpj = str_replace("/","",$cnpj);
+                    $cnpj = str_replace("-","",$cnpj);
+                    $cnpj = trim($cnpj);
+
+                    $cnpjEmp = substr($cnpj,0,2).".".substr($cnpj,2,3).".".substr($cnpj,5,3)."/".substr($cnpj,8,4)."-".substr($cnpj,12,2);
+                    
+					$report->pdf->ezText('<b>EMPRESA: "'.$nomeEmp.'"</b>',10,array('justification'=>'left'));
+					$report->pdf->ezText('<b>CNPJ: '.$cnpjEmp.'</b>',10,array('justification'=>'left'));
+
+					$report->pdf->ezText('',3);					
+					foreach ($descricao as $desc)
+					{						
+						if ($venc[0] == $desc[0])
+						{					
+							foreach ($descItens as $di) 
+							{							
+								if($di[0] == $desc[1])
+								{									
+									$valorItem = $cf->formatWithSymbol($cf->toDecimal($desc[3])); //transforma os valores unitarios em R$                                    
+									$subtotal = ($cf->toDecimal($desc[3]))*($cf->toDecimal($desc[4])); //calculo do subtotal onde val[2] é o valor e val2[2] é a quantidade
+									$total = ($cf->toDecimal($total));
+									$total += $subtotal;	
+									$subtotal = $cf->formatWithSymbol($cf->toDecimal($subtotal));							
+									$dataRel[] = array($desc[1],$di[2],$di[1],$desc[5],$desc[4],$valorItem,$subtotal);					
+								}							
+						    }
+					    }				
+						
+									
+						$cols = array('<b>ITENS</b>','<b>COD</b>','<b>DESCRIÇÃO</b>','<b>Marca</b>','<b>QTD</b>','<b>VALOR UNIT</b>','<b>SUBTOTAL</b>');														
+				    }
+					$totalTodosVencedores +=$total;
+					$total = $cf->formatWithSymbol($cf->toDecimal($total));		
+					$dataRel[] = array(null,null,null,null,null,"<b>TOTAL:</b> ",$total);
+					$report->pdf->ezTable($dataRel,$cols,'',$options);					
+					$report->pdf->ezText('',10);
+					unset($total);
+					unset($dataRel);		
+			   }				
+		      }//if				
+				
+				/*$report->pdf->ezNewPage();
+				$report->pdf->ezImage($ui->GetImage('','logonet.png'),5,50,'none','left',0);
+				$report->pdf->addText(110,810       ,10,'UFJF - UNIVERSIDADE FEDERAL DE JUIZ DE FORA');
+				$report->pdf->addText(110,810-$h    ,10,'CGCO - CENTRO DE GESTÃO DO CONHECIMENTO ORGANIZACIONAL');
+				$report->pdf->addText(110,810-(2*$h),10,'SIGA - SISTEMA INTEGRADO DE GESTÃO ACADÊMICA');
+				$report->pdf->addText(110,810-(3*$h),10,'COSUP - COORDENADORIA DE SUPRIMENTOS');
+				**/
+				$report->pdf->ezText("<b>Total:</b> ".$cf->formatWithSymbol($cf->toDecimal($totalTodosVencedores)) ,16,array('justification'=>'left'));
+
+				$report->Execute();
+		}//else
+	}//function btnReport_click()	
+}//class frmRepResultado extends Form
+?>

@@ -1,0 +1,262 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmJTemporarios extends MFormAjax
+{
+    function __construct()
+    {
+		parent::__construct('Contratos Temporários');
+        $this->EventHandler();
+	}
+
+
+	function createFields()
+	{
+	global $MIOLO;
+	$url = $MIOLO->getActionURL('rh','modules:forms:relatorios:temporarios:frmJTemporarios.js');
+	$this->page->addScriptURL($url);
+	
+		$abrangencia = array (
+			'1'=>'ATIVOS',
+			'2'=>'EXCLUÍDOS',
+			'3'=>'ATIVOS E EXCLUÍDOS' ,
+			'4'=>'VINCENDOS NO MÊS'
+		);
+
+		$fields = array(
+			new MSelection('abrangencia','','Abrangência',$abrangencia,false),
+			new MDiv("divSample"),
+/*            new MText('texto', 'Relatórios por período (com Data Início e/ou Data Fim) só poderão ser gerados usando abrangência de Ativos.', 'red', true),
+            new MCalendarField('dataInicio','','Data Início'),
+            new MCalendarField('dataFim','','Data Fim'),*/
+		);
+        $this->SetFields($fields);
+        $this->abrangencia->addAttribute('onChange',"ajaxSelectMonth.call();");
+		$buttons = Array
+		(
+			new FormButton('btnPost','Enviar','PDF')
+		);
+		$this->SetButtons($buttons);
+
+	}
+
+    function ajax_fields($arg){
+     // private $k;
+     if($arg == '4'){
+        $k = new MKrono();
+         $campos = array(
+            new MSpacer('8px'),
+            new MLabel('Mes'),
+            new MSelection('mes','','Mês',$k->months,true),
+            new MSpacer('8px'),
+            new MLabel('Ano'),
+            new MTextField('ano','','Ano','4','use 4 dígitos'),
+            new MDiv("divSample")
+         );
+         $this->addFields($campos);
+
+         $campos->formMode = MControl::FORM_MODE_SHOW_ABOVE;
+         $this->manager->getTheme()->setAjaxContent($campos);
+      }
+	}
+
+    function btnPost_click()
+    {
+    	$k = new MKrono();
+	    $abr = $this->GetFormValue('abrangencia');
+        $dataInicio = $this->GetFormValue('dataInicio');
+        $dataFim = $this->GetFormValue('dataFim');
+        $mes = $this->getFormValue('mes');
+        $ano = $this->getFormValue('ano');
+        //Erro Datas
+        if ( !(is_null($dataInicio) or empty($dataInicio)) and !(is_null($dataFim) or empty($dataFim)) )
+        {
+	        if ($k->CompareDate($dataInicio,'>',$dataFim))
+	        {
+	            $erro[] = "A Data Início não pode ser MAIOR que a Data Fim.";
+	        }
+	        
+        }
+        
+        //Erro relatório/período
+    	if (!($abr == '1') and (!(is_null($dataInicio) or empty($dataInicio)) or !(is_null($dataFim) or empty($dataFim))) )
+        {
+            $erro[] = "Relatórios por período de tempo devem ter abrangência de Ativos.";
+        }
+                
+        if ( count($erro) > 0 )
+        {
+            foreach ( $erro as $e )
+            {
+                $this->addError($e);
+            }
+        }
+        
+        //Erro Excluidos - Ativos Excluidos     	
+        else
+        {
+
+        	$campos =  "rh_vinculo.idvinculo as matricula,
+					    cm_pessoa.nome as nome,
+					    rh_provimento.idcargo as cargo,
+					    rh_provimento.datainicio as datainicio,
+					    rh_provimento.datafim as datafim,
+					    rh_prorrogacao.datafim as dataprorrogacao";
+
+        	$tabelas = "rh_provimento,
+						rh_prorrogacao,
+						cm_pessoa,
+						rh_vinculo,
+						rh_funcionario";
+
+        	$condicao = "((rh_provimento.idvinculo = rh_vinculo.idvinculo)
+						AND (rh_vinculo.idfuncionario = rh_funcionario.idfuncionario)
+						AND (rh_funcionario.idpessoa = cm_pessoa.idpessoa)
+						AND (rh_provimento.idsituacao ='12')
+						AND (rh_provimento.idvinculo = rh_prorrogacao.idvinculo) 
+						AND ((rh_prorrogacao.datafim =
+						  (SELECT MAX(rh_prorrogacao.datafim)
+						   FROM rh_prorrogacao
+						   WHERE((rh_prorrogacao.idvinculo = rh_vinculo.idvinculo))))
+						   )) ";
+        	
+        	//Verifica condições de filtragem sem data
+
+            //Ativos - Filtragem sem data início e data fim
+        	if ( ($abr == '1') and (is_null($dataInicio) or empty($dataInicio)) and (is_null($dataFim) or empty($dataFim))) 
+        	{               
+                $condicao .="AND (rh_provimento.datafim IS NULL)";
+
+        	}
+
+        	if ( ($abr == '2' ) and (is_null($dataInicio) or empty($dataInicio)) and (is_null($dataFim) or empty($dataFim)))  // excluídos
+        	{
+                $condicao .="AND (rh_provimento.datafim IS NOT NULL)";
+        	}
+
+            if(($abr == '4'))
+            {
+
+                     $lastDay = $this->getLastDayOfMonth($mes,$ano);
+                     
+                     $condicao = "((rh_provimento.idvinculo = rh_vinculo.idvinculo)
+						AND (rh_vinculo.idfuncionario = rh_funcionario.idfuncionario)
+						AND (rh_funcionario.idpessoa = cm_pessoa.idpessoa)
+						AND (rh_provimento.idsituacao ='12')
+						AND (rh_provimento.idvinculo = rh_prorrogacao.idvinculo)
+						AND ((rh_prorrogacao.datafim =
+						  (SELECT MAX(rh_prorrogacao.datafim)
+						   FROM rh_prorrogacao
+						   WHERE((rh_prorrogacao.idvinculo = rh_vinculo.idvinculo) AND ( (rh_prorrogacao.datafim IN('01/".$mes."/".$ano."','".$lastDay."/".$mes."/".$ano."'))
+						    OR ((rh_provimento.datafim IN('01/".$mes."/".$ano."','".$lastDay."/".$mes."/".$ano."')) AND rh_prorrogacao.datafim IS NULL  ))   )))
+						   )) ";
+                     
+                     
+                     
+                     
+                     
+                     /*$condicao = "((rh_provimento.idvinculo = rh_vinculo.idvinculo)
+						AND (rh_vinculo.idfuncionario = rh_funcionario.idfuncionario)
+						AND (rh_funcionario.idpessoa = cm_pessoa.idpessoa)
+						AND (rh_provimento.idsituacao ='12')
+						AND (rh_provimento.idvinculo = rh_prorrogacao.idvinculo)
+						AND ((rh_prorrogacao.datafim =
+						  (SELECT MAX(rh_prorrogacao.datafim)
+						   FROM rh_prorrogacao
+						   WHERE((rh_prorrogacao.idvinculo = rh_vinculo.idvinculo) AND ( (rh_prorrogacao.datafim IN('01/".$mes."/".$ano."','".$lastDay."/".$mes."/".$ano."'))
+						    OR (rh_provimento.datafim IN('01/".$mes."/".$ano."','".$lastDay."/".$mes."/".$ano."')))   )))
+						   )) ";     */
+
+
+  	        }
+  	
+/*            //Verifica condições de filtragem por data
+            
+            //Ativos - Filtragem com data início e data fim
+        	if (($abr == '1') and !(is_null($dataInicio) or empty($dataInicio)) and !(is_null($dataFim) or empty($dataFim)))
+        	{
+        		$di = $k->InvertDate($dataInicio);
+        		$df = $k->InvertDate($dataFim);
+        		//$condicoes .= "and ( TO_CHAR(RH_PROVTERCEIRIZADO.DATAINICIO,'YYYY/MM/DD') >= '$di' ) ";
+                $condicoes .= "and (rh_provterceirizado.datainicio=(select max(rh_provterceirizado.datainicio) from rh_provterceirizado where ((rh_provterceirizado.idterceirizado = rh_terceirizado.idterceirizado) and (((TO_CHAR(RH_PROVTERCEIRIZADO.DATAINICIO,'YYYY/MM/DD') <= '$df') and (TO_CHAR(RH_PROVTERCEIRIZADO.DATAFIM,'YYYY/MM/DD') >= '$di')) or ((TO_CHAR(RH_PROVTERCEIRIZADO.DATAINICIO,'YYYY/MM/DD') <= '$df') and (RH_PROVTERCEIRIZADO.DATAFIM is null))) ))) ";
+        	}
+        	
+            //Ativos - Filtragem com data início
+        	if (($abr == '1') and !(is_null($dataInicio) or empty($dataInicio)) and (is_null($dataFim) or empty($dataFim)))
+        	{
+        		$di = $k->InvertDate($dataInicio);
+                $condicoes .= "and (rh_provterceirizado.datainicio=(select max(rh_provterceirizado.datainicio) from rh_provterceirizado where ((rh_provterceirizado.idterceirizado = rh_terceirizado.idterceirizado) and ((TO_CHAR(RH_PROVTERCEIRIZADO.DATAFIM,'YYYY/MM/DD') >= '$di') or (RH_PROVTERCEIRIZADO.DATAFIM is null)) ))) ";
+        	}
+        	
+        	//Ativos - Filtragem com data fim
+        	if (($abr == '1') and (is_null($dataInicio) or empty($dataInicio)) and !(is_null($dataFim) or empty($dataFim)))
+        	{
+        		$df = $k->InvertDate($dataFim);
+                $condicoes .= "and (rh_provterceirizado.datainicio=(select min(rh_provterceirizado.datainicio) from rh_provterceirizado where ((rh_provterceirizado.idterceirizado = rh_terceirizado.idterceirizado) and (TO_CHAR(RH_PROVTERCEIRIZADO.DATAINICIO,'YYYY/MM/DD') <= '$df')) )) ";
+        	}*/
+        
+      
+        	$ordenacao = "cm_pessoa.nome, rh_provimento.datainicio DESC";
+
+        	$sql = "SELECT ". $campos ." FROM " . $tabelas . " WHERE " . $condicao . " ORDER BY " . $ordenacao;
+            // var_dump($sql);
+        	$report = new MJasperReport('ufjf');
+
+        	$parameters['str_SUBREPORT_DIR'] = $this->manager->getConf('home.modules') . "/common/reports/";
+	        $parameters['str_SQL'] =  $sql;
+        	
+
+			$report->Execute('rh','RH_ContratosTemporarios',$parameters);
+
+        }
+
+    }
+    
+    function getLastDayOfMonth($month,$year=NULL)
+    {
+		if ($year == NULL) $year = $this->KDate('%Y');
+
+        switch ($month)
+        {
+            case "01": case '1':
+            case "03": case '3':
+            case "05": case '5':
+            case "07": case '7':
+            case "08": case '8':
+            case "10":
+            case "12":
+                 return "31";
+            break;
+            case "02": case '2':
+                 //verifica o ano bissexto
+                 if (date("L",mktime(0, 0, 0, $month, 1, $year)))
+                     return "29";
+                 else
+                     return "28";
+            break;
+            case "04": case '4':
+            case "06": case '6':
+            case "09": case '9':
+            case "11":
+                 return "30";
+            break;
+         }
+    }
+}
+?>

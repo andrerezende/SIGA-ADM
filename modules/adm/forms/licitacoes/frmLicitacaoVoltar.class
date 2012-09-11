@@ -1,0 +1,103 @@
+<?
+class frmLicitacaoVoltar extends form
+{
+	protected $licitacao;
+	
+    function __construct($licitacao)
+    {
+		$this->licitacao = $licitacao;
+		$this->Form('Voltar Licitação');
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+        global $MIOLO;
+
+        $buttons = array
+		(
+        	  new FormButton("btnVoltarStatus","Voltar para 'PROPOSTAS CADASTRADAS'")
+        );
+        $this->SetButtons($buttons);
+    }
+
+    function btnVoltarStatus_click()
+	{
+		global $MIOLO, $module, $item, $action;
+
+		$conf = $this->GetFormValue('conf');
+		$href = $MIOLO->GetActionURL($module,$action,$this->licitacao->idLicitacao,array('form'=>'item'));
+		if ( $conf == 'sim')
+		{
+			try
+			{
+				$this->licitacao->status = '3';
+				$this->licitacao->save();
+				if(($this->licitacao->idTipoLicitacao == '1') or ($this->licitacao->idTipoLicitacao == '4'))//COMPRA
+				{
+					$this->licitacao->getItens();
+					foreach($this->licitacao->itens as $i)
+					{
+						$i->getItemReq();
+						foreach($i->itemreq as $ir)
+						{
+							if($ir->status == '5')//LICITADO
+							{
+								$ir->status = '1';//EM LICITAÇÃO
+								$ir->save();
+							}
+						}
+					}
+				}
+				elseif($this->licitacao->idTipoLicitacao == '2')//SERVIÇO
+				{
+					$this->licitacao->getItens();
+					foreach($this->licitacao->itens as $i)
+					{
+						$i->getItemServExt();
+						foreach($i->itemservext as $is)
+						{
+							if($is->status == '5')//LICITADO
+							{
+								$is->status = '1';//EM LICITAÇÃO
+								$is->save();
+							}
+						}
+					}
+				}
+				elseif($this->licitacao->idTipoLicitacao == '3')//LIVRO
+				{
+					$this->licitacao->getItens();
+					foreach($this->licitacao->itens as $i)
+					{
+						$i->getItemReqBib();
+						foreach($i->itemreqbib as $ir)
+						{
+							if($ir->status == '5')//LICITADO
+							{
+								$ir->status = '1';//EM LICITAÇÃO
+								$ir->save();
+							}
+						}
+					}
+				}
+				$MIOLO->Information('Status alterado com sucesso.',$href);
+			}
+			catch (Exception $e)
+			{
+				$this->addError($e->getMessage());
+			}
+		}
+		elseif ( $conf == 'nao')
+		{
+			$MIOLO->Information('Alteração cancelada.',$href);
+		}
+		else
+		{
+			$action_sim = $MIOLO->GetActionURL($module,$action,$this->licitacao->idLicitacao,array('form'=>'voltar','event'=>'btnVoltarStatus_click','conf'=>'sim'));
+			$action_nao = $MIOLO->GetActionURL($module,$action,$this->licitacao->idLicitacao,array('form'=>'voltar','event'=>'btnVoltarStatus_click','conf'=>'nao'));
+			$MIOLO->Question("Confirma a mudança de status da licitação?",$action_sim, $action_nao);
+		}
+	}
+ }
+?>

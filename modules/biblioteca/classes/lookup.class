@@ -1,0 +1,843 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+//Teste para tratar acentos
+// header("Content-Type: text/html; charset=ISO-8859-1",true);
+
+class BusinessBibliotecaLookup
+{
+      
+    var $objAutor;
+    var $objSimples;
+
+        
+	//
+	// Politica
+	//
+	function LookupPolitica(&$lookup)
+	{
+	$filter = $lookup->GetFilterValue('filter');
+	if (!$filter) 
+		$filter = $lookup->GetFilterValue();
+	$lookup->AddFilterField( new TextField('filter', $filter,'Politica', 40));
+	$columns = array(
+			new DataGridColumn('politica','Política','center', true, '10%',true, null, true, true),
+			new DataGridColumn('diasdeemprestimo','Dias Emp','center', true, '10%',true, null, true,true),
+			new DataGridColumn('limitedeemprestimo','Limite Emp','center', true, '10%',true, null, true,true),
+			new DataGridColumn('valordamulta','Valor Multa','center', true, '10%',true, null, true,true),
+			new DataGridColumn('grupo','Grupo','center', true, '10%',true, null, true,true),
+			new DataGridColumn('regracirculacao','Regra Circulação','center', true, '10%',true, null, true,true),
+			new DataGridColumn('unidade','Unidade','center', true, '10%',true, null, true,true)
+		);
+
+	$sql = new sql('p.idpolitica as politica, p.diasdeemprestimo, p.limitedeemprestimo, p.valordamulta, g.descricao as grupo, r.descricao as regracirculacao, u.descricao as unidade','bt_politica p, bt_grupo g, bt_regracirculacao r, bt_unidade u','p.idgrupo=g.idgrupo and p.idregracirculacao=r.idregracirculacao and p.idunidade=u.idunidade','p.idpolitica');
+
+	if ( $filter )
+		$sql->where .= "( upper(idpolitica) like upper('%{$filter}%') )";
+
+	$lookup->SetGrid('sigaept',$sql,$columns,'Pesquisa Politicas',20,0);
+
+	}
+
+
+
+	//
+	// Numero do Tombo
+	//
+	function LookupNumerotombo(&$lookup)
+	{
+	$filter = $lookup->GetFilterValue('filter');
+	if (!$filter) 
+		$filter = $lookup->GetFilterValue();
+	$lookup->AddFilterField( new TextField('filter', $filter,'Número do Tombo', 40));
+	$columns = array(
+		new DataGridColumn('numerodotombo','Nº Tombo','center', true, '20%',true),
+		new DataGridColumn('titulo','Título','left', true, '80%',true)
+	);
+
+	$sql = new sql('e.numerodotombo, o.titulo,','bt_exemplar e, bt_obra o','e.idobra=o.idobra','e.numerodotombo');
+
+	if ( $filter )
+		$sql->where .= "( upper(numerodotombo) like upper('%{$filter}%') )";
+
+	$lookup->SetGrid('sigaept',$sql,$columns,'Pesquisa Exemplares',20,0);
+
+	}
+
+    //
+	// Obra
+	//
+	function LookupObra(&$lookup)
+   	{   
+		$filterTitulo = $lookup->GetFilterValue('filterTitulo');
+		if (!$filterTitulo) 
+			   $filterTitulo = $lookup->GetFilterValue();
+
+		$filterAutor = $lookup->GetFilterValue('filterAutor');
+
+		$clause = $lookup->GetFilterValue('clause');
+
+		$lookup->AddFilterField( new TextField('filterTitulo',$filterTitulo,'Título', 25));
+		$lookup->AddFilterField( new Selection('clause',$clause,'',array('OR' => '- ou -','AND'  => '- e -' )));
+		$lookup->AddFilterField( new TextField('filterAutor',$filterAutor,'Autor', 25));
+		$columns = array(
+				new DataGridColumn('idobra','','left',true, '0%',false),
+				new DataGridColumn('titulo','Título','left',true, '50%',true),
+				new DataGridColumn('prenome','Autor','left',true, '30%',true),
+				new DataGridColumn('numerodaobra','Número da Obra','left',true, '20%',true),
+			   	);
+                //   ESTAVA TRAZENDO IDAUTOR NA GRID DO LOOCKUP
+                //$sql = new sql("numerodaobra,titulo,idautor,idobra","bt_obra");
+
+
+
+            if ( $filterTitulo || $filterAutor)
+            {
+                    $sql = new sql("o.numerodaobra,o.titulo, a.sobrenome || ',' || a.prenome as prenome,o.idobra","bt_obra o,bt_autor a");
+
+                    $sql->where .= " (";
+                    if ( $filterTitulo )
+                    {
+                            $sql = new sql("o.numerodaobra,o.titulo, a.sobrenome || ',' || a.prenome as prenome,o.idobra","bt_obra o,bt_autor a");
+                            $sql->where .= "( upper(titulo) like upper('%{$filterTitulo}%') and a.idautor = o.idautor )";
+                    }
+                    if ( $filterAutor )
+                    {
+                            if ($filterTitulo)
+                            {
+                                    $sql->where .= $clause;
+                            }
+                            
+                            $sql = new Sql("o.numerodaobra,o.titulo,a.sobrenome || ',' || a.prenome as prenome, o.idobra", 'bt_autor a ,bt_obra o');
+                            $sql->where .= "( upper(prenome) like upper('%{$filterAutor}%') and a.idautor = o.idautor )";
+
+                     
+
+                            
+                    }
+                  //    // $sql->where .= " ) ";
+            }
+            else
+            {
+                    $sql = new sql("o.numerodaobra,o.titulo, a.sobrenome || ',' || a.prenome as prenome,o.idobra","bt_obra o,bt_autor a","a.idautor = o.idautor");
+            }
+                    
+            $sql->SetOrderBy('titulo');
+            $lookup->SetGrid('sigaept',$sql,$columns,'Pesquisa de Obras',10,0);
+        }
+    
+	
+
+        // Autor
+	//
+	function LookupAutor(&$lookup)
+        {   
+
+ 	        global $MIOLO, $module, $action;
+		        
+			$filterAutor = $lookup->GetFilterValue('filterAutor');
+			if (!$filterAutor) 
+			   $filterAutor = $lookup->GetFilterValue();
+
+			$lookup->AddFilterField( new TextField('filterAutor',$filterAutor,'Autor', 40));
+
+
+
+            $columns = array(
+				new DataGridColumn('idautor','','left',true, '10%',false),
+				new DataGridColumn('nome','SobrenomePrenome','left',true, '80%',true),
+				new DataGridColumn('cutter','Cutter','left',true, '10%',true),
+                new DataGridColumn('sobrenome','Sobrenome','left',true, '10%',true),
+    //
+                               
+                                   
+			   	);
+
+
+          // $lookup->AddButton( new MButtonWindow('btnAutor', 'Novo Autor', $MIOLO->GetActionURL("biblioteca", 'main:admin:autor', '')));
+           
+
+           //new FormButton('btnVoltar', 'Voltar', $MIOLO->GetActionURL($module = $module, $action = $action)),
+           
+			$sql = new sql("idautor,sobrenome || ', ' || prenome as nome,cutter,sobrenome","bt_autor");
+  
+		if ($filterAutor)
+		{      
+            $sql->where .= " (";
+            $sql->where .= "upper(sobrenome) like
+           upper('{$filterAutor}%') )";          
+
+       }
+
+       
+       //INSERIDO A ORDENAÇÃO POR NOME DO AUTOR dia 02/06/2010  AUTOR
+       $sql->SetOrderBy('nome');
+      	$lookup->SetGrid('sigaept',$sql,$columns,'Pesquisa por Autor',10,0);
+
+
+        // Botão 'Autor', direcionando para o handler biblioteca/main/autor :Botão que adiciona novo autor
+      //	$lookup->SetGrid('sigaept',$sql,$columns,$buttons,'Pesquisa de Obras',10,0);                  
+
+        
+      ?>
+              <b><li>Novo Autor</b><br>
+              <a href="/index.php?module=biblioteca&action=main:admin:autor"> Inserir Autor</a><br>
+              <?php
+      
+
+        }
+
+// Autor  SECUNDÁRIO
+                //
+        function LookupAutorsec(&$lookup)
+{
+
+        global $MIOLO, $module, $action;
+                        
+        $filterAutorsec = $lookup->GetFilterValue('filterAutorsec');
+        if (!$filterAutorsec)
+                $filterAutorsec = $lookup->GetFilterValue();
+
+        $lookup->AddFilterField( new TextField('filterAutorsec',$filterAutor,'Autor', 40));
+                   //$lookup->AddFilterField( new MButtonWindow('btnMarc', 'MARC', $MIOLO->GetActionURL($module = $module, 'marc', $this->idAutor)));
+                   $columns = array(
+                                    new DataGridColumn('idautor','','left',true, '0%',false),
+                                   new DataGridColumn('prenome','Prenome','left',true, '40%',true),
+                                    new DataGridColumn('sobrenome','Sobrenome','left',true, '40%',true),
+                                   new DataGridColumn('cutter','Cutter','left',true, '20%',true),
+                                   
+                                   );
+                   $sql = new sql("idautor,prenome ,sobrenome ,cutter","bt_autor");
+  
+
+                   if ($filterAutorsec)
+                   {
+                           $sql->where .= " (";
+                           $sql->where .= "upper(sobrenome) like
+                                           upper('{$filterAutorsec}%') )";
+
+                   }
+                                                
+
+                   $lookup->SetGrid('sigaept',$sql,$columns,'Pesquisa Autores Secundários',10,0);
+
+
+        // Botão 'Autor', direcionando para o handler biblioteca/main/autor :Botão que adiciona novo autor
+                
+                        $buttons = Array(
+                                         new MButton('btnAutor', 'Novo Autor'),
+                                //new MButtonWindow('btnMarc', 'MARC', $MIOLO->GetActionURL($module = $module, 'marc', $this->idAutor)),
+                                        );
+
+}
+
+
+        ///
+         //Periodicos
+         /// 
+        function LookupPeriodico(&$lookup){
+
+                global $MIOLO, $module, $action;
+                $filterTitulo = $lookup->GetFilterValue('filterTitulo');
+
+                if (!$filterTitulo)
+                        $filterTitulo = $lookup->GetFilterValue();
+
+                $lookup->AddFilterField( new TextField('filterTitulo',$filterTitulo,'Título', 40));
+                
+                $columns = array(
+                        new DataGridColumn(0),
+                        new DataGridColumn('conteudo','Título','left',true, '100%', true)
+                );
+
+                $etiqueta = $MIOLO->GetBusiness('biblioteca','etiqueta');
+                $etiqueta->GetByTag('022');
+                $idEtiquetaIssn   = $etiqueta->idEtiqueta;
+                $etiqueta->GetByTag('245');
+                $idEtiquetaTitulo = $etiqueta->idEtiqueta;
+
+                if ( $filterTitulo )//filter nao eh nulo
+                {                        
+                     $sql= new sql('idperiodico, conteudo','bt_materialperiodico'," (idetiqueta='".$idEtiquetaTitulo."') AND (upper(conteudo) LIKE upper('%".$filterTitulo."%')) AND (subcampo='a')"); //esses upper's servem para o like nao ser caseSensitive.
+
+                }else{//filter nulo, entao busca todos os titulos de periodicos
+                      $sql= new sql('idperiodico, conteudo','bt_materialperiodico'," (idetiqueta='".$idEtiquetaTitulo."')AND (subcampo='a')");
+                }
+                $sql->SetOrderBy('conteudo');
+                $lookup->SetGrid('sigaept',$sql,$columns,'Pesquisa de Periódicos',10,0);
+        }
+
+
+
+
+	//
+	// Regracirculacao
+	//
+	function LookupRegracirculacao(&$lookup)
+	{
+	$filter = $lookup->GetFilterValue('filter');
+	if (!$filter) 
+		$filter = $lookup->GetFilterValue();
+	$lookup->AddFilterField( new TextField('filter', $filter,'Descrição', 40));
+	$columns = array(
+		new DataGridColumn(null),
+		new DataGridColumn('descricao','Descrição','left', true, '80%',true)
+	);
+
+	$sql = new sql('idregracirculacao,descricao','bt_regracirculacao','','idregracirculacao');
+
+	if ( $filter )
+		$sql->where .= "( upper(descricao) like upper('%{$filter}%') )";
+
+	$lookup->SetGrid('sigaept',$sql,$columns,'Pesquisa Regracirculacaos',20,0);
+
+	}
+
+
+
+
+	//
+	// Infracao
+	//
+	function LookupInfracao(&$lookup)
+	{
+	$filter = $lookup->GetFilterValue('filter');
+	if (!$filter) 
+		$filter = $lookup->GetFilterValue();
+	$lookup->AddFilterField( new TextField('filter', $filter,'Descrição', 40));
+	$columns = array(
+		new DataGridColumn(null),
+		new DataGridColumn('descricao','Descrição','left', true, '100%',true)
+	);
+
+	$sql = new sql('idinfracao,descricao','bt_infracao','','idinfracao');
+
+	if ( $filter )
+		$sql->where .= "( upper(descricao) like upper('%{$filter}%') )";
+
+	$lookup->SetGrid('sigaept',$sql,$columns,'Pesquisa Infracões',20,0);
+
+	}
+
+
+	//
+	// Coleção
+	//
+	function LookupColecao(&$lookup)
+	{
+	
+	$filter = $lookup->GetFilterValue('filter');
+	if (!$filter) 
+		$filter = $lookup->GetFilterValue();
+	$lookup->AddFilterField( new TextField('filter', $filter,'Descrição', 40));
+
+	$columns = array(
+		new DataGridColumn(null),
+		new DataGridColumn('mnemonico','Mnemônico','center', true, '10%',true),
+		new DataGridColumn('descricao','Descrição','left', true, '80%',true)
+	);
+
+	$sql = new sql('idcolecao,descricao,mnemonico','bt_colecao','','idcolecao');
+
+	if ( $filter )
+		$sql->where .= "( upper(descricao) like upper('%{$filter}%') )";
+
+	$lookup->SetGrid('sigaept',$sql,$columns,'Pesquisa Colecaos',20,0);
+
+	}
+
+
+
+
+	//
+	// Genero
+	//
+	function LookupGenero(&$lookup)
+	{
+	$filter = $lookup->GetFilterValue('filter');
+	if (!$filter) 
+		$filter = $lookup->GetFilterValue();
+	$lookup->AddFilterField( new TextField('filter', $filter,'Descrição', 40));
+	$columns = array(
+		new DataGridColumn(null),
+		new DataGridColumn('descricao','Descrição','left', true, '90%',true),
+		new DataGridColumn('categoria','Categoria','center', true, '10%',true)
+	);
+
+	$sql = new sql('g.idgenero,g.descricao,f.categoria', 'bt_genero g,bt_ficha f', 'g.idficha=f.idficha', 'g.idgenero');
+
+	if ( $filter )
+		$sql->where .= " and ( upper(descricao) like upper('%{$filter}%') )";
+
+	$lookup->SetGrid('sigaept',$sql,$columns,'Pesquisa Generos',20,0);
+
+	}
+	
+	
+	//
+	// GRUPO
+	//
+	function LookupGrupo(&$lookup)
+	{
+    	$filter = $lookup->GetFilterValue('filter');
+	    if (!$filter) 
+		    $filter = $lookup->GetFilterValue();
+    	$lookup->AddFilterField( new TextField('filter', $filter,'Descrição', 40));
+    	$columns = array(
+	    	new DataGridColumn(0),
+		    new DataGridColumn('descricao','Descrição','left', true, '100%',true)
+    	);
+
+	    $sql = new sql('idgrupo,descricao','bt_grupo','','descricao');
+
+    	if ( $filter )
+	    	$sql->where .= "( upper(descricao) like upper('{$filter}%') )";
+
+    	$lookup->SetGrid('sigaept',$sql,$columns,'Pesquisa Grupos',20,0);
+    }
+
+
+    
+	//
+	// UNIDADE
+	//
+	function LookupUnidade(&$lookup)
+	{
+	
+                $filter = $lookup->GetFilterValue('filter');
+                if (!$filter)
+                        $filter = $lookup->GetFilterValue();
+                $lookup->AddFilterField( new TextField('filter', $filter,'Descrição', 40));
+
+                $columns = array(
+                        new DataGridColumn(0),
+                        new DataGridColumn('descricao','Descrição','left', true, '70%',true),
+                        new DataGridColumn('mnemonico','Mnemonico','center', true, '30%',true),
+                );
+
+                $sql = new sql('idunidade,descricao,mnemonico','bt_unidade','','idunidade');
+
+                if ( $filter )
+                        $sql->where .= "( upper(descricao) like upper('%{$filter}%') )";
+
+                $lookup->SetGrid('sigaept',$sql,$columns,'Pesquisa Unidades',20,0);
+
+	}
+
+	//
+	// EDITORA
+	//
+	function LookupEditora(&$lookup)
+	{
+        global $MIOLO, $module, $action;
+                
+        $filtereditora = $lookup->GetFilterValue('filtereditora');
+       if (!$filtereditora)
+           $filtereditora = $lookup->GetFilterValue();
+
+       $lookup->AddFilterField( new TextField('filtereditora',$filtereditora,'Descricao', 40));
+           //$lookup->AddFilterField( new MButtonWindow('btnMarc', 'MARC', $MIOLO->GetActionURL($module = $module, 'marc', $this->idAutor)));
+           
+           $columns = array(
+                            new DataGridColumn('ideditora','','left',false, '0%',true),
+                            new DataGridColumn('descricao','Descrição','left', true, '60%',true),
+                            new DataGridColumn('municipio','Município','center', true, '20%',true),
+                            new DataGridColumn('telefone','Telefone','center', true, '20%',true),
+                           );
+
+
+        $sql = new
+           sql('ideditora,descricao,municipio,endereco,cep,telefone,email','bt_editora','','descricao');
+  
+           if ($filtereditora)
+           {
+               $sql->where .= " (";
+               $sql->where .= "upper(descricao) like
+                       upper('{$filtereditora}%') )";
+           }
+           
+
+               //PERMITIR QUE SE CADASTRE UMA NOVA EDITORA    
+                ?>
+                   <b><li>Nova Editora</b><br>
+                   <a href="/index.php?module=biblioteca&action=main:admin:editora"> Inserir Editora</a><br>
+                   <?php
+
+
+                   
+            //INSERIDO A ORDENAÇÃO POR Descrição dia 02/06/2010  
+             $sql->SetOrderBy('descricao');
+              $lookup->SetGrid('sigaept',$sql,$columns,'Pesquisa Editoras',20,0);
+        
+
+        
+//           global $MIOLO, $module, $action;
+        /*
+        $filter = $lookup->GetFilterValue('filter');
+		
+        if (!$filter)
+            $filter = $lookup->GetFilterValue();
+	
+        $lookup->AddFilterField( new TextField('filter', $filter,'Descrição', 40));
+		$columns = array(
+	//	new DataGridColumn(0),
+		new DataGridColumn('descricao','Descrição','left', true, '60%',true),
+		new DataGridColumn('municipio','Município','center', true, '20%',true),
+		new DataGridColumn('telefone','Telefone','center', true, '20%',true),
+		);
+
+        $sql = new sql('ideditora,descricao,municipio,endereco,cep,telefone,email','bt_editora','','ideditora');
+        //sql('ideditora','bt_editora','','ideditora');
+
+        if ($filter){
+            $sql->where .= "( upper(descricao) like upper('%{$filter}%') )";
+    //    $sql->SetOrderBy('descricao');
+        //INSERIDO A ORDENAÇÃO POR NOME DA Editora dia 02/06/2010  Editor
+        }
+
+        
+        $sql->SetOrderBy('descricao');
+		$lookup->SetGrid('sigaept',$sql,$columns,'Pesquisa Editoras',20,0);
+*/
+}
+
+	//
+	// Situações da Reserva
+	//
+	function LookupSituacaoReserva(&$lookup)
+	{
+	
+		$filter = $lookup->GetFilterValue('filter');
+	
+		if (!$filter) 
+		$filter = $lookup->GetFilterValue();
+
+		$lookup->AddFilterField( new TextField('filter', $filter,'Código', 40));
+		$columns = array(
+		new DataGridColumn(null),
+		new DataGridColumn('descricao','Descrição','left', true, '80%',true),
+		new DataGridColumn('mnemonico','Mnemônico','center', true, '20%',true),
+		);
+
+		$sql = new sql('idsituacao,descricao,mnemonico','bt_situacao','','idsituacao');
+
+		if ( $filter )
+		$sql->where .= "( upper(descricao) like upper('%{$filter}%') )";
+
+		$lookup->SetGrid('sigaept',$sql,$columns,'Pesquisa Situações da Reserva',20,0);
+	}
+
+	//
+	// ESTADO
+	//
+	function LookupEstado(&$lookup)
+	{
+	
+		$filter = $lookup->GetFilterValue('filter');
+	
+		if (!$filter) 
+		$filter = $lookup->GetFilterValue();
+
+		$lookup->AddFilterField( new TextField('filter', $filter,'Descrição', 40));
+	
+		$columns = array(
+		new DataGridColumn(0),
+		new DataGridColumn('descricao','Descrição','left', true, '80%',true),
+		new DataGridColumn('mnemonico','Mnemonico','center', true, '10%',true)
+		);
+
+		$sql = new sql('idestado,descricao,mnemonico','bt_estado','','idestado');
+
+		if ( $filter )
+		$sql->where .= "( upper(descricao) like upper('%{$filter}%') )";
+
+		$lookup->SetGrid('sigaept',$sql,$columns,'Pesquisa Estados',20,0);
+	}
+
+	//
+	// OPERACAO
+	//
+	function LookupOperacao(&$lookup)
+	{
+	
+		$filter = $lookup->GetFilterValue('filter');
+		
+		if (!$filter) 
+		$filter = $lookup->GetFilterValue();
+
+		$lookup->AddFilterField( new TextField('filter', $filter,'Descricao', 40));
+
+		$columns = array(
+		new DataGridColumn(null),
+		new DataGridColumn('mnemonico','Mnemonico','center', true, '10%',true),
+		new DataGridColumn('descricao','Descrição','left', true, '80%',true)
+		);
+
+		$sql = new sql('idoperacao,descricao,mnemonico','bt_operacao','','idoperacao');
+
+		if ( $filter )
+		$sql->where .= "( upper(descricao) like upper('%{$filter}%') )";
+
+		$lookup->SetGrid('sigaept',$sql,$columns,'Pesquisa Operacões',20,0);
+	}
+
+	//
+	// USUARIO
+	//
+	function LookupUsuario(&$lookup)
+	{   
+		$filterLogin = $lookup->GetFilterValue('filterLogin');
+
+		if (!$filterLogin) 
+		$filterLogin = $lookup->GetFilterValue();
+		
+		$filterNome = $lookup->GetFilterValue('filterNome');
+		if (!$filterNome)
+		   if (!$filterLogin)
+			  $filterNome = 'NÃO INFORMADO';
+		  	
+	         $clause = $lookup->GetFilterValue('clause');
+
+		$lookup->AddFilterField( new TextField('filterLogin',
+   		$filterLogin,'Login', 20));
+		$lookup->AddFilterField( new Selection('clause',
+		$clause,'',array('OR' => '- ou -','AND'  => '- e -' )));
+		$lookup->AddFilterField( new TextField('filterNome',
+		$filterNome,'Nome', 40));
+		$columns = array(
+			   new DataGridColumn('login','Login','left',
+			   true, '20%',true),
+			   new DataGridColumn('nome','Nome','left',
+			   true, '80%',true),
+	                   );
+
+		$sql = new sql("u.login, p.nome, u.idusuario, u.idpessoa, p.idpessoa",
+		'cm_usuario u, cm_pessoa p', '(u.idpessoa = p.idpessoa)','p.nome');
+            
+	   if ( $filterLogin || $filterNome)
+	   {
+	            $sql->where .= " and (";
+        	    if ( $filterLogin )
+            	    {
+	               $sql->where .= "( upper(u.login) like
+        	       upper('{$filterLogin}%') )";
+           	    }	
+            
+           
+            	if ( $filterNome )
+            	{
+				   if ($filterLogin)
+				   {
+                 	 if($clause){					   
+                     $sql->where .=  $clause;
+                  }
+                  else{
+                     $clause = " or ";
+                     $sql ->where.= $clause;
+                  }
+				   }
+               $sql->where .= " ( upper(p.nome)
+               like upper('{$filterNome}%') )";
+            }
+            $sql->where .= " )";
+         }
+	
+			$lookup->SetGrid('common',$sql,$columns,'Pesquisa Usuários',10,0);
+		}
+
+		
+		
+	//
+	// Usuário Externo
+	//
+	function LookupUsuarioexterno(&$lookup)
+	{
+	
+		$filter = $lookup->GetFilterValue('filter');
+		if (!$filter)
+		$filter = $lookup->GetFilterValue();
+		$lookup->AddFilterField( new TextField('filter', $filter,'Nome', 40));
+
+		$columns = array(
+		new DataGridColumn(0),
+		new DataGridColumn('nome','Nome do usuário','left', true, '70%',true),
+		new DataGridColumn('datanasc','Data de Nascimento','left', true, '30%',true),
+		);
+
+		$sql = new sql("idusuario,nome,to_char(datanasc,'dd/mm/yyyy') as datanasc",'bt_usuarioexterno','','nome');
+
+		if ( $filter )
+		$sql->where .= "( upper(nome) like upper('%{$filter}%') )";
+
+		$lookup->SetGrid('sigaept',$sql,$columns,'Pesquisa de usuários',20,0);
+
+	}
+		
+		
+	//
+	// RG
+	//
+	function LookupRG(&$lookup)
+	{
+		$filterRG = $lookup->GetFilterValue('filterRG');
+		if (!$filterRG) 
+			$filterRG = $lookup->GetFilterValue();
+		$filterNome = $lookup->GetFilterValue('filterNome');
+		if (!$filterNome)
+			if (!$filterRG)
+				$filterRG = 'NÃO INFORMADO';
+
+		$clause = $lookup->GetFilterValue('clause');
+
+		$lookup->AddFilterField( new TextField('filterRG',$filterRG,'RG', 20));
+		$lookup->AddFilterField( new Selection('clause',$clause,'',array('OR' => '- ou -','AND'  => '- e -' )));
+		$lookup->AddFilterField( new TextField('filterNome',$filterNome,'Nome', 40));
+		$columns = array(
+			new DataGridColumn('numrg','RG','left', true, '30%',true),
+			new DataGridColumn('nome','Nome do usuário','left', true, '70%',true),
+		);
+		$sql = new sql("numrg,nome",'bt_usuarioexterno','','nome');
+		if ( $filterRG || $filterNome)
+		{
+			$sql->where .= " (";
+			if ( $filterRG )
+			{
+				$sql->where .= "( upper(numrg) like upper('{$filterRG}%') )";
+			}
+			if ( $filterNome )
+			{
+				if ($filterRG)
+				{
+               if($clause){					
+                  $sql->where .= $clause;
+               }else{
+                  $clause = " or ";
+                  $sql ->where.= $clause;
+               }
+				}
+				$sql->where .= " ( upper(nome) like upper('{$filterNome}%') )";
+			}
+			$sql->where .= " ) ";
+		}
+		$lookup->SetGrid('sigaept',$sql,$columns,'Pesquisa de Usuários',20,0);
+	}
+
+  	//
+	//Assunto
+	//
+
+	function LookupAssunto(&$lookup)
+	{
+		$filterAssunto = $lookup->GetFilterValue('filter0');
+		$filterNum = $lookup->GetFilterValue('filter1');
+
+		$lookup->AddFilterField(new MTextField('filter0',$filterAssunto,'Assunto ',50));
+		$lookup->AddFilterField(new MHiddenField('filter1',$filterNum));
+
+
+		$columns = array(
+			new DataGridColumn(0),
+			new DataGridColumn('conteudo','Descrição','left', true, '90%',true),
+		);
+
+
+		$sql = new sql('idassunto,conteudo,ocorrencia,idetiqueta','bt_assunto','','conteudo');
+
+		if ( $filterAssunto )
+			$sql->where .= "(upper(conteudo) like upper('%{$filterAssunto}%')) and subcampo='a' and (indicador is null) and idassunto not in (SELECT idassunto from bt_assuntoobra where idobra = $filterNum)";
+		else $sql->where .= "subcampo='a' and (indicador is null) and idassunto not in (SELECT idassunto from bt_assuntoobra where idobra = $filterNum)";
+
+	        $sql->SetOrderBy('conteudo');
+		$lookup->SetGrid('sigaept',$sql,$columns,'Pesquisa Assuntos',20,0);
+
+          
+        ?>
+                <b><li>Novo Assunto</b><br>
+                <a href="/index.php?module=biblioteca&action=main:admin:assunto"> Inserir Assunto</a><br>
+        <?php
+      
+
+	}
+
+  
+  	//
+	//Município
+	//
+
+  	function LookupMunicipio(&$lookup)
+	{
+		$filter = $lookup->GetFilterValue('filter');
+		if ( !$filter )
+		{
+			$filter = $lookup->GetFilterValue();
+			if (!$filter)
+			{
+				$filter= '';
+			}
+		}
+		$lookup->AddFilterField( new TextField('filter',$filter,'Municipio',20) );
+		$columns = array(
+			new DataGridColumn('idmunicipio','IdMunicipio','left',true,'10%',false),
+			new DataGridColumn('municipio','Nome','left',true,'50%',true),
+			new DataGridColumn('iduf','Estado','left','10%',true)		
+			);
+		$sql = new sql('m.idmunicipio,m.municipio,m.iduf,p.pais,p.idpais','cm_municipio m,cm_pais p','m.idpais = p.idpais');
+		if ($filter)
+		{
+	        $sql->where .= " and upper(m.municipio) LIKE upper('%$filter%')";
+		}
+	        $sql->SetOrderBy('m.municipio');
+       		$lookup->SetGrid('common',$sql,$columns,'Pesquisa Municipio',15,0);
+	}
+	
+	//
+	//País
+	//
+	function LookupPais(&$lookup)
+	{
+		$filter = $lookup->GetFilterValue('filter');
+		if ( !$filter )
+		{
+			$filter = $lookup->GetFilterValue();
+			if (!$filter)
+			{
+				$filter= 'A DEFINIR';
+			}
+		}
+		$lookup->AddFilterField( new TextField('filter',$filter,'Pais',20) );
+		$columns = array(
+			new DataGridColumn('idpais','IdPais','left',true,'10%',false),
+			new DataGridColumn('pais','País','left',true,'90%',true),			
+			);
+		$sql = new sql('p.idpais,p.pais','cm_pais p');
+		if ($filter)
+		{
+	        $sql->where .= "upper(p.pais) LIKE upper('%$filter%')";
+		}
+      $sql->SetOrderBy('p.pais');
+      $lookup->SetGrid('sigaept',$sql,$columns,'Pesquisa País',15,0);
+	}
+}
+?>

@@ -1,0 +1,490 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+//registro das ocupações das funções
+class BusinessRhOcupacaoFuncao extends MBusiness
+{
+
+    public $idocupacaofuncao,
+           $idfuncao,           $funcao,
+           $idvinculo,          $vinculo,
+           $substituicao,
+           $datainicio,         $datafim,
+           $idpublicacaoinicio, $idpublicacaofim,
+           $publicacaoinicio,   $publicacaofim,
+           $k;
+
+    function __construct($data = null)
+    {
+        parent::__construct('sigaept', $data);
+    } // __construct
+
+
+    //verifica se o servidor exerce função atualmente
+    function seServidortemOcupacao($idvinculo, $titularsubstituta='')
+                                               //procura por ocupação 'titular', 'substituta', ou qualquer
+    {
+        $hoje = date("Y/m/d");
+
+        $criteria = $this->getCriteria();
+        $criteria->addCriteria( 'idvinculo', '=', "$idvinculo" );
+        $cc = new CriteriaCondition;
+          $cc->addCriteria  ( $criteria->getCriteria('datafim', 'IS', 'NULL'   ) );
+          $cc->addORCriteria( $criteria->getCriteria('datafim', '>=', "'$hoje'") );
+        $criteria->addCriteria($cc);
+
+        if     ($titularsubstituta == 'titular')
+        {
+            $cc = new CriteriaCondition;
+              $cc->addCriteria  ( $criteria->getCriteria('substituicao', 'IS', 'NULL') );
+              $cc->addORCriteria( $criteria->getCriteria('substituicao', '=' , "'N'" ) );
+            $criteria->addCriteria($cc);
+            //$criteria->addCriteria('substituicao','=' , "'N'");
+        }
+        elseif ($titularsubstituta == 'substituta')
+        {
+            $criteria->addCriteria('substituicao','=' , "'S'");
+        }
+
+        return ! $criteria->retrieveAsQuery()->eof();
+    } // seServidortemOcupacao
+
+
+    //: critica dados digitados
+    function VerificaInicio($data , $datapubinicio, $setoratual, $funcaodatainicio, $naoveiodealteracao=TRUE)
+    {                                             //$setoratual: falso para docente ou substituição, verdadeiro para técnico
+        $this->k = new Mkrono();
+
+/*ERRado pois deveria verificar a penultima*/        //se veio de Alteração então não verifica última ocupação pois é justamente ela que se está alterando
+        if ($naoveiodealteracao)
+        {
+            //se for Substituição então ......
+            if ($data->substituicao == 'S')
+            {
+                $substituta = $this->seServidortemOcupacao($data->idvinculo, 'substituta');
+                if ($substituta)
+                {
+                    $erros[] = 'Já há uma substituição para este servidor';
+                }
+            }
+            else
+            {
+                $ultimafuncao = $this->ultimaOcupacaoporidVinculo($data->idvinculo);
+                if ( $this->k->compareDate($data->datainicio, '<=', $ultimafuncao[1]) )
+                {
+                    $erros[] = 'Data de início tem que ser além da última ocupação do servidor (' . $ultimafuncao[1] . ')';
+                }
+            }
+        }
+
+        if ( $this->k->compareDate($data->datainicio, '>', date('d/m/Y')) )
+        {
+            $erros[] = 'Data de início não pode ser além de hoje';
+        }
+        /*if ( $this->k->compareDate($data->datainicio, '<', $datapubinicio) )
+        {
+            $erros[] = 'Data de início não pode ser menor que a data de publicação';
+        }*/
+        if ( $this->k->compareDate($data->datainicio, '<', $funcaodatainicio) )
+        {
+            $erros[] = 'Data de início não pode ser antes da data de início da função';
+        }
+
+        //verifica coerência da data de início com a lotação, situação funcional e ocorrência de provimento
+        $erro = $this->VerificaUltimosProvimentos($data, $setoratual);
+        if ($erro)
+        {
+            $erros[] = $erro;
+        }
+
+        return $erros;
+    } // VerificaInicio
+
+
+    //verifica coerência da data de início com a lotação, situação funcional e ocorrência de provimento
+    function VerificaUltimosProvimentos($data, $setoratual=false, $idvinculoalternativo=false)
+    {                                        //$setoratual: falso para docente, verdadeiro para técnico
+
+        //nao está em uso        //$idvinculoalternativo = falso   : usa o idvinculo já em uso no formulário, trazido no parâmetro $data
+        //$idvinculoalternativo preenchido: usa um segundo ivinculo, para um segundo teste no mesmo formulário
+
+        global $MIOLO, $module;
+
+        if ($idvinculoalternativo)
+        {
+            $idvinculo = $idvinculoalternativo;
+        }
+        else
+        {
+            $idvinculo = $data->idvinculo;
+        }
+
+        $objprovimento = $MIOLO->GetBusiness($module,'provimento');
+
+        $criteria = $objprovimento->getCriteria();
+
+        $criteria->addCriteria('idVinculo','=', "'$idvinculo'");
+
+        $criteria->addColumnAttribute('idSetor'          );
+        $criteria->addColumnAttribute('idSituacao'       );
+        $criteria->addColumnAttribute('idGrupoOcorrencia');
+        $criteria->addColumnAttribute('dataInicio','dataInicio');
+
+        $criteria->addOrderAttribute('dataInicio',false);
+        $result = $criteria->retrieveAsQuery()->result;
+
+        //testa cada provimento (o provimento mais recente, o anterior, etc, até encontrar um acerto determinante ou um erro)
+        foreach ($result as $provimento)
+        {
+            if ( ($setoratual)  and  ($provimento[0] <> $setoratual) )  //verifica o setor do provimento em teste
+            {
+                //a data de início pretendida atingiu um provimento de setor diferente do atual do servidor
+                return 'Setor de lotação na data de início da ocupação não corresponde ao setor atual do servidor - ' . $idvinculo;
+            }
+            else
+            {
+                if ( ! in_array($provimento[1] , array(1,9,20,32) ) )   //verifica a situação funcional do provimento em teste//8: não do quadro futuro
+                {
+                    //o provimento atingido tem uma situação inválida
+                    return 'Situação Funcional do servidor não permite ocupação (verifique também a data de início) - ' . $idvinculo;
+                }
+                else
+                {
+                    if ( in_array($provimento[2] , array(2,3) ) )       //verifica a ocorrência do provimento em teste//licenciado: futuro
+                    {
+                        //o provimento atingido tem uma ocorrência inválida
+                        return 'Grupo de Ocorrência do servidor não permite ocupação (verifique também a data de início) - ' . $idvinculo;
+                    }
+                    else
+                    {
+                        //verifica a data de início do provimento em teste:
+                          //se houver acerto encerra; caso contrário continua para testar o próximo provimento anterior
+                        if ( $this->k->compareDate($provimento[3],'<=',$data->datainicio) )
+                        {
+                            //acerto: o provimento atingido tem o mesmo setor do atual e situação e ocorrência válidas
+                            return;
+                        }
+                    }
+                }
+            }
+        } // foreach
+        //não encontrado nenhum erro nos provimentos testados nem um acerto, então os provimentos foram esgotados
+        return 'Data de início da ocupação está antes do primeiro provimento - ' . $idvinculo;
+    } // VerificaUltimosProvimentos
+    
+//setor fim vinc
+    //usada em frmFuncaoFinalizar e frmFuncaoAlterar: critica dados digitados
+    function VerificaTermino($datainicio        ,     //gravada anteriormente ou alterada
+                             $datafim           ,     //gravada anteriormente ou alterada
+                             $idpublicacaoinicio,     //gravada anteriormente ou alterada
+                             $idpublicacaofim   )     //gravada anteriormente ou alterada
+    {
+        global $MIOLO, $module;
+        $k = new Mkrono();
+
+        if ( $k->compareDate($datafim, '>', date('d/m/Y')) )
+        {
+            $erros[] = 'Data de término não pode ser além de hoje';
+        }
+        if ( $k->compareDate($datafim, '<', $datainicio) )
+        {
+            $erros[] = 'Data de término não pode ser menor que a de início';
+        }
+
+        /*$pubfim = $MIOLO->GetBusiness($module,'publicacao',$idpublicacaofim);
+        if ( $k->compareDate($datafim, '<', $pubfim->data) )
+        {
+            $erros[] = 'Data de término não pode ser menor que a data de publicação de término';
+        }*/
+
+        $pubini = $MIOLO->GetBusiness($module,'publicacao',$idpublicacaoinicio);
+        if ( $k->compareDate($pubfim->data, '<', $pubini->data) )
+        {
+            $erros[] = 'Data de publicação de término não pode ser menor que a data de publicação de início';
+        }
+
+        if ($idpublicacaofim == $idpublicacaoinicio)
+        {
+            $erros[] = 'A publicação de término não pode ser a mesma da publicação de início';
+        }
+
+        return $erros;
+    } // VerificaTermino
+
+
+    //lista as ocupações para um determinado servidor, juntando a descrição das publicações
+    function listOcupacaopeloServidor($idvinculo)
+    {
+        global $MIOLO, $module;
+
+        $criteria = $this->getCriteria();
+        $criteria->addCriteria('idvinculo','=', "$idvinculo");
+
+        $criteria->addColumnAttribute('idocupacaofuncao'                       );
+
+        $criteria->addColumnAttribute('funcao.descricao'        ,'descricao'   );
+        $criteria->addColumnAttribute('funcao.nivelfuncao.sigla','sigla'       );
+        $criteria->addColumnAttribute('funcao.nivelfuncao.nivel','nivel'       );
+        $criteria->addColumnAttribute('funcao.setor.sigla'      ,'setor'       );
+        $criteria->addcolumnattribute('datainicio'              ,'datainicio'  );
+        $criteria->addcolumnattribute('datafim'                 ,'datafim'     );
+        $criteria->addColumnAttribute('idpublicacaoinicio'      ,'numeroinicio');
+        $criteria->addColumnAttribute('idpublicacaofim'         ,'numerofim'   );
+        $criteria->addColumnAttribute('substituicao'            ,'substituicao');
+
+        $criteria->addOrderAttribute('datafim',false);
+        $return = $criteria->retrieveAsQuery();
+
+        if ($return->result)
+        {
+            foreach ($return->result as $ind => $reg)
+            {
+                $obj = $MIOLO->GetBusiness($module,'publicacao');
+                $qy = $obj->GetById($reg[7]);           //                     idpublicacaoinicio em número
+                $return->result [$ind]  [7] = $qy->numero;  //modifica o conteúdo: chave              em descrição
+
+                $obj = $MIOLO->GetBusiness($module,'publicacao');
+                $qy = $obj->GetById($reg[8]);           //                     idpublicacaofim    em numero
+                $return->result [$ind]  [8] = $qy->numero;  //modifica o conteúdo: chave              em descrição
+            }
+        }
+
+         return $return;
+    } // listOcupacaopeloServidor
+
+
+    //a partir da lista de ocupações de um servidor retorna a ocupação mais recente (em aberto ou não)
+    function ultimaOcupacaoporidVinculo($idvinculo)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addCriteria('idvinculo','=', "$idvinculo");
+        $criteria->addColumnAttribute('idocupacaofuncao','idocupacaofuncao');
+        $criteria->addColumnAttribute('datafim'         ,'datafim'         );
+        $criteria->addOrderAttribute('datafim');
+        $result = $criteria->retrieveAsQuery()->result;
+        if ($result)
+        {
+            $end = end($result);
+            return $end;
+        }
+    } // ultimaOcupacaoporidVinculo
+
+
+/*###########################################################################################################    //lista as ocupações de uma função
+#    function listOcupantesemAberto($idfuncao)
+#    {
+#        $hoje = date("Y/m/d");
+#        $criteria = $this->getCriteria();
+#        $criteria->addColumnAttribute('idocupacaofuncao');
+#
+#        $criteria->addCriteria('idfuncao','=', "$idfuncao");
+#        $cc = new CriteriaCondition;
+#          $cc->addCriteria  ( $criteria->getCriteria('datafim','IS','NULL'   ) );
+#          //necessário este teste de data futura para o caso de definição automática de data fim quando a função tem mandato
+#          $cc->addORCriteria( $criteria->getCriteria('datafim','>=',"'$hoje'") );
+#        $criteria->addCriteria($cc);
+#
+#        return $criteria->retrieveAsQuery();
+#    } // listOcupantesemAberto
+#
+#*/
+
+    
+    //lista as ocupações de uma função, agregando os números de publicações correspondentes
+    function listUltimosOcupantes($idfuncao)
+    {
+        global $MIOLO, $module;
+
+        $criteria = $this->getCriteria();
+        $criteria->addCriteria('idfuncao','=', "$idfuncao");
+        $criteria->addColumnAttribute('idocupacaofuncao'                              );
+        $criteria->addColumnAttribute('idvinculo'                                     );
+        $criteria->addColumnAttribute('vinculo.funcionario.pessoa.nome','nome'        );
+        $criteria->addcolumnattribute('datainicio'                     ,'datainicio'  );
+        $criteria->addcolumnattribute('datafim'                        ,'datafim'     );
+
+        $criteria->addColumnAttribute('idpublicacaoinicio'             ,'numeroinicio');
+        $criteria->addColumnAttribute('idpublicacaofim'                ,'numerofim'   );
+        $criteria->addcolumnattribute('substituicao'                   ,'substituicao');
+
+        $criteria->addOrderAttribute('datafim',false);
+        $return = $criteria->retrieveAsQuery();
+
+        if ($return->result)
+        {
+            foreach ($return->result as $ind => $reg)
+            {
+                $obj = $MIOLO->GetBusiness($module,'publicacao');
+                $qy = $obj->GetById($reg[5]);                 //                     idpublicacaoinicio em número
+                $return->result [$ind]  [5] = $qy->numero;    //modifica o conteúdo: chave              em descrição
+
+                $obj = $MIOLO->GetBusiness($module,'publicacao');
+                $qy = $obj->GetById($reg[6]);                 //                     idpublicacaofim    em numero
+                $return->result [$ind]  [6] = $qy->numero;    //modifica o conteúdo: chave              em descrição
+
+                if ($return->result[$ind][7] == 'S')
+                {
+                    $return->result[$ind][7]= 'Substituição'; //modifica o conteúdo: 'S'                em descrição
+                }
+            }
+        }
+        return $return;
+    } // listUltimosOcupantes
+
+
+    function GetById($id)
+    {
+       $this->idocupacaofuncao = $id;
+       $this->retrieve();
+       return $this;
+    } // GetById
+
+
+    //a partir da lista de ocupações de uma função retorna a ocupação mais antiga
+    function PrimeiroOcupante($idfuncao)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addCriteria('idfuncao','=', "$idfuncao");
+        $criteria->addColumnAttribute('idvinculo'              );
+        $criteria->addColumnAttribute('datainicio','datainicio');
+        $criteria->addOrderAttribute('datainicio');
+
+        $result = $criteria->retrieveAsQuery()->result;
+        if ($result)
+        {
+            $reset = reset($result);
+            return $reset;
+        }
+    } // PrimeiroOcupante
+
+
+    //a partir da lista de ocupações de uma função retorna o registro mais recente (em aberto ou não)
+
+        //retorna a ocupação aberta de uma função, vale dizer: sem data fim ou com data fim no futuro
+    //em caso de haver uma substituição na função: 
+      //retorna a ocupação do titular, pois ela terá data de término acima (preenchida ou nula) da data de término da substituição
+
+//ESTA FUNCAO NECESSITA melhoria/amplicao PARA QUANDO 
+//COMECAREM A USAR E aparecerem varias ocupacoes para uma so funcao, e varias susbtituicoes para ua ocupacao
+    function getTitularSubstituto($idfuncao, $aberto=TRUE, $titular=TRUE)
+    {
+        //$aberto TRUE : retorna a ocupação aberta de uma função (se houver), vale dizer: sem data fim ou com data fim no futuro
+        //        false: retorna a última ocupação de uma função (qualquer), aberta ou encerrada
+
+        //$titular TRUE : retorna o titular da função
+        //         false: retorna o substituto (se houver)
+
+        $criteria = $this->getCriteria();
+        $criteria->addCriteria('idfuncao','=', "$idfuncao");
+        //$criteria->addOrderAttribute('datafim');
+
+        $criteria->addColumnAttribute('idvinculo'          );
+        $criteria->addColumnAttribute('datafim'  ,'datafim');
+        $criteria->addColumnAttribute('idocupacaofuncao'  );
+
+        if ($aberto)
+        {
+            $cc = new CriteriaCondition;
+              $cc->addCriteria  ( $criteria->getCriteria('datafim','IS','NULL'   ) );
+              $cc->addORCriteria( $criteria->getCriteria('datafim','>=',"'".date("Y/m/d")."'") );
+              //necessário este teste de data futura para o caso de definição automática de data fim quando a função tem mandato
+            $criteria->addCriteria($cc);
+        }
+
+        if (! $titular)
+        {
+            $criteria->addCriteria('substituicao','=', "'S'");
+        }
+        $criteria->addOrderAttribute('datainicio',false);
+
+        $result = $criteria->retrieveAsQuery()->result;
+        if ($result)
+        {
+            $end = end($result);
+            return $end;
+        }
+    } // getTitularSubstituto
+
+/*
+    function UltimoOcupante($idfuncao)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addCriteria('idfuncao','=', "$idfuncao");
+
+        $criteria->addColumnAttribute('idvinculo'          );
+        $criteria->addColumnAttribute('datafim'  ,'datafim');
+        $criteria->addColumnAttribute('idocupacaofuncao'  );
+        $criteria->addColumnAttribute('substituicao'  );
+
+        $criteria->addOrderAttribute('datafim');
+
+        $result = $criteria->retrieveAsQuery()->result;
+        if ($result)
+        {
+            $end = end($result);
+            return $end;
+        }
+    } // UltimoOcupante
+
+
+    function AtualOcupante($idfuncao)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addCriteria('idfuncao','=', "$idfuncao");
+        $cc = new CriteriaCondition;
+          $cc->addCriteria  ( $criteria->getCriteria('datafim','IS','NULL'   ) );
+          $cc->addORCriteria( $criteria->getCriteria('datafim','>=',"'".date("Y/m/d")."'") );
+          //necessário este teste de data futura para o caso de definição automática de data fim quando a função tem mandato
+        $criteria->addCriteria($cc);
+
+        $criteria->addColumnAttribute('idvinculo');
+        $criteria->addColumnAttribute('datafim'  );
+        //return $criteria->retrieveAsQuery()->result[0];
+        return end($criteria->retrieveAsQuery()->result);
+    } // AtualOcupante
+
+*/
+
+/*    function DataFimbyFuncao($idfuncao)
+    {
+        global $MIOLO, $module;
+
+        $criteria = $this->getCriteria();
+        $criteria->addCriteria('idfuncao','=', "$idfuncao");
+        $criteria->addColumnAttribute('idvinculo'          );
+        $criteria->addcolumnattribute('datafim'  ,'datafim');
+
+        $criteria->addOrderAttribute('datafim');
+        return $criteria->retrieveAsQuery()->result;
+    } // DataFimbyFuncao
+*/
+	/*function verificaseRepetindoFuncao($idsetor, $idnivel, $descricao)
+	{
+        //função nova: se repetir setor,nivel,dscricao somente se datafim NUULL
+        $criteria =  $this->getCriteria();
+        $criteria->addCriteria('idsetor'  ,'='  , "$idsetor"    );
+        $criteria->addCriteria('idnivel'  ,'='  , "$idnivel"    );
+        $criteria->addCriteria('descricao','='  , "'$descricao'");
+        $criteria->addCriteria('datafim'  ,'IS ','NULL'         );
+        return $criteria->retrieveAsQuery();
+	} // verificaseRepetindoFuncao
+*/
+
+}
+?>

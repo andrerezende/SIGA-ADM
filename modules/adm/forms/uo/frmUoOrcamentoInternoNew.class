@@ -1,0 +1,88 @@
+<?
+class frmUoOrcamentoInternoNew extends Form
+{
+    
+    protected $objUo;
+	
+    function __construct($objUo)
+    {
+       $this->objUo = $objUo;
+       $this->Form('Incluir Orçamento Interno');
+       $this->EventHandler();
+    }
+
+	function CreateFields()
+    {
+        $valor = new TextField('valor','','Valor');
+        $fields = array(
+            new HiddenField('idRubrica'),
+            new MLookupTextField('lkpRubrica','','Rubrica',50),
+            new Selection('ano','','Ano',array('2014'=>'2014','2013'=>'2013','2012'=>'2012','2011'=>'2011','2010'=>'2010','2009'=>'2009')),
+            new Selection('tipoLancamento','','Operação',array('8'=>'Suplementação de Crédito','2'=>'Anulação de Crédito','3'=>'Estorno de Crédito')),
+            $valor,
+        );
+		
+        $this->SetFields($fields);
+        
+        $this->SetFieldAttr('tipoLancamento','visible',false);
+       
+        $this->SetFieldAttr('lkpRubrica','module','adm');
+        $this->SetFieldAttr('lkpRubrica','item','rubrica');
+        $this->SetFieldAttr('lkpRubrica','event','filler');
+        $this->SetFieldAttr('lkpRubrica','related','idRubrica,lkpRubrica');
+        
+        $validators = array(
+			new MRequiredValidator('lkpRubrica'),
+			new MRequiredValidator('ano'),
+			new MRequiredValidator('valor'),
+		);
+	   
+        $buttons = array
+        (
+            new MButton('btnIncluir', 'Enviar'),
+        );
+        $this->SetButtons($buttons);
+	}
+
+	function btnIncluir_click()
+	{
+		$data = $this->getData();
+		$cf = new MCurrencyFormatter();
+		$data->valor = $cf->toDecimal($data->valor);
+
+		if ($data->valor > 999999999.99)
+		{
+			$this->addError('O valor adicionado é muito alto.');
+			return;
+		}
+		elseif($data->valor <= 0 )
+		{
+			$this->addError('Informe um valor válido.');
+			return;
+		}
+
+		$orcamento = $this->objUo->getOrcamento($data->idRubrica,$data->ano);
+
+		if (!$orcamento->isPersistent())
+		{
+			$orcamento->addCredito($data->valor);
+			try 
+			{
+				$orcamento->save();
+				$this->objUo->addLancamento(1,$data->idRubrica,$data->valor);
+				$action = $this->manager->getActionURL('adm','main:uo',$this->objUo->idUo,array("form"=>"orcamentointerno",'idRubrica'=>$orcamento->idRubrica,'ano'=>$orcamento->ano));
+				$this->manager->Information("Orçamento interno criado com sucesso.",$action);
+			}
+			catch(Exception $e)
+			{
+				$this->manager->Error("Informe o seguinte erro à equipe do CGCO: ",$e->getMessage());
+			}
+		}
+		else
+		{
+			$this->addError('Orçamento interno já existe.');
+		}
+	}
+} 
+?>
+

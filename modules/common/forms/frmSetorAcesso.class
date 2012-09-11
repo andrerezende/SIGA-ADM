@@ -1,0 +1,195 @@
+<?
+class FrmSetorAcesso extends Form
+{
+	var $listURL;
+    var $objSetorAcesso;
+
+	function FrmSetorAcesso()
+    {   global $MIOLO, $module, $page, $context, $self, $action;
+
+        $this->listURL = $MIOLO->GetActionURL($module,$self,'',Array('event'=>'btnList:click') );
+        $this->objSetorAcesso = $MIOLO->GetBusiness($module,'setoracesso');
+		$this->Form('Setor Acesso');
+	    $this->EventHandler();
+	}
+
+    function CreateFields()
+	{  global $action;
+
+       $fields = Array(
+           new HiddenField('hidIdSetorPai',''),
+		   new LookupTextField('lkpSiglaSetorPai','','Setor',15),
+           new HiddenField('hidIdSetorFilho',''),
+		   new LookupTextField('lkpSiglaSetorFilho','','Setor',15),
+           new Selection('selFinalidade','','Finalidade',20)
+       );
+	   $this->SetFields($fields);
+	   $this->SetFieldAttr('lkpSiglaSetorPai','module','sga');
+	   $this->SetFieldAttr('lpkSiglaSetorPai','item','setor');
+	   $this->SetFieldAttr('lpkSiglaSetorPai','event','filler');
+	   $this->SetFieldAttr('lpkSiglaSetorPai','related','hidIdSetorPai, lkpSiglaSetorPai');
+	   $this->SetFieldAttr('lkpSiglaSetorFilho','module','sga');
+	   $this->SetFieldAttr('lpkSiglaSetorFilho','item','setor');
+	   $this->SetFieldAttr('lpkSiglaSetorFilho','event','filler');
+	   $this->SetFieldAttr('lpkSiglaSetorFilho','related','hidIdSetorFilho, lkpSiglaSetorFilho');
+       $buttons = Array(
+           new FormButton('btnPost', 'Enviar'),
+		   new FormButton('btnNew', 'Novo', $action),
+	       new FormButton('btnList', 'Relação', $this->listURL)
+       );
+	   $this->SetButtons($buttons);
+	   $this->AddValidator(new RequiredValidator('lkpSiglaSetorPai'));
+	   $this->AddValidator(new RequiredValidator('lkpSiglaSetorFilho'));
+	}
+
+	function GetData()  // nome dos formfields != business fields
+	{
+        $data = new FormData();
+		$data->idsetorpai   = $this->GetFieldValue('hidIdSetorPai');
+		$data->siglasetorpai   = $this->GetFieldValue('lkpSiglaSetorPai');
+		$data->idsetorfilho   = $this->GetFieldValue('hidIdSetorFilho');
+		$data->siglasetorfilho  = $this->GetFieldValue('lkpSiglaSetorFilho');
+ 		$data->finalidade  = $this->GetFieldValue('edtFinalidade');
+        return $data;
+	}
+
+	function SetData($data)
+	{
+		$this->SetFieldValue('hidIdSetorPai',  $data->idsetorpai  );
+		$this->SetFieldValue('lkpSiglaSetorPai',  $data->siglasetorpai );
+		$this->SetFieldValue('hidIdSetorFilho',  $data->idsetorfilho  );
+		$this->SetFieldValue('lkpSiglaSetorFilho',  $data->siglasetorfilho );
+ 		$this->SetFieldValue('edtFinalidade',     $data->finalidade );
+	}
+
+	function btnPost_click()
+	{
+		global $MIOLO, $module, $self;
+        $objSetorAcesso = &$this->objSetorAcesso;
+	    if ( $objSetorAcesso )
+		{
+			$objSetorAcesso->SetData($this->GetData());
+			$is_update = ($this->GetFieldValue('hidIdSetorPai') != '') and ($this->GetFieldValue('hidIdSetorFilho') != '');
+		    if ( $is_update )
+			{
+				  $ok = $objSetorAcesso->Update();
+            }
+		    else
+			{
+				  $ok = $objSetorAcesso->Insert();
+            }
+            if ( $ok )
+            {
+                $MIOLO->Information('SetorAcesso atualizado com sucesso.', $this->listURL );
+                return true;
+            }
+            $this->AddError($objSetorAcesso->GetErrors());
+	    }
+	}
+
+	function btnList_click()
+	{   
+		global $MIOLO, $module, $self, $theme, $item;
+
+        $objSetorAcesso = &$this->objSetorAcesso;
+        $sql = $objSetorAcesso->sqlAllFields();
+		var_dump($sql->Select());
+		$href_setor = $MIOLO->GetActionURL($module,$self,'#?#', Array('event'=>'showSetorBySigla'));
+        $columns = array(
+           new DataGridColumn('idsetorpai','Id Pai', 'left', true, '10%',false),
+           new DataGridColumn('idsetorfilho','Id Filho', 'left', true, '10%',false),
+           new DataGridHyperlink('siglasetorpai','Setor Pai', $href_setor, '30%',true,null,true,true),
+           new DataGridHyperlink('siglasetorfilho','Setor Filho', $href_setor, '30%',true,null,true,true),
+           new DataGridColumn('finalidade','Finalidade', 'left', true, '20%',true)
+        );
+		$href_datagrid = $MIOLO->GetActionURL($module,$self,'', Array('event'=>'btnList_click'));
+        $datagrid = new DataGrid('common',$sql, $columns, $href_datagrid,15);
+        $datagrid->SetTitle('Relação de SetorAcesso');
+        $datagrid->SetLinkType('linkbutton');
+	    $datagrid->AddActionUpdate($MIOLO->GetActionURL($module,$self,'%0%_%1%_%3%', Array('event'=>'btnEdit:click')));
+        $datagrid->AddActionDelete($MIOLO->GetActionURL($module,$self,'%0%_%1%_%3%', Array('event'=>'btnDelete:click')));
+		$theme->InsertContent($datagrid);
+	}
+
+	function btnEdit_click()
+	{   
+		global $MIOLO, $module, $item, $self;
+
+        $fields = explode('_',$item);
+        $objSetorAcesso = &$this->objSetorAcesso;
+		if ($tobjSetor)
+        {
+		   $this->SetData($objSetorAcesso->GetById($fields[0], $fields[1], $fields[2]));
+		   $this->SetFieldAttr('lkpSiglaSetorPai','readonly',true);
+		   $this->SetFieldAttr('lkpSiglaSetorFilho','readonly',true);
+		   $this->SetButtonAttr('btnNew','label','Cancelar');
+	       $this->AddError( $objSetorAcesso->GetErrors() );
+        }
+	}
+
+	function btnInsert_click()
+	{
+	}
+
+	function btnDelete_click()
+	{   
+		global $MIOLO, $module, $item, $self, $action;
+        $fields = explode('_',$item);
+        $MIOLO->Assert( isset($fields[0]), 'Setor Pai não foi informado!', $action);
+        $MIOLO->Assert( isset($fields[1]), 'Setor Filho não foi informado!', $action);
+        $MIOLO->Assert( isset($fields[2]), 'Finalidade não foi informada!', $action);
+        $objSetorAcesso = &$this->objSetorAcesso;
+	    $objSetorAcesso->GetById($fields[0], $fields[1], $fields[2]);
+        $conf = $this->GetFormValue('conf');
+	    if ( $conf == 'sim')
+	    {
+            if ( $objSetorAcesso->Delete() )
+	        {
+			   $MIOLO->Prompt(Prompt::Information('Registro excluído com sucesso.',$this->listURL));
+	        }
+	        else
+	        {
+		       $MIOLO->Prompt(Prompt::Information( $objSetorAcesso->GetErrors(),$action));
+            }
+	    }
+	    elseif ( $conf == 'nao')
+        {
+	       $MIOLO->Prompt(Prompt::Information('Exclusão cancelada.',$this->listURL));
+        }
+	    else
+	    {
+		    $action_sim = $MIOLO->GetActionURL($module,$self,$idtrans, array('event'=>'btnDelete:click','conf'=>'sim'));
+		    $action_nao = $MIOLO->GetActionURL($module,$self,$idtrans, array('event'=>'btnDelete:click','conf'=>'nao'));
+	        $MIOLO->Prompt(Prompt::Question("Confirma a exclusão do SetorAcesso?", 
+				$action_sim, $action_nao));
+	    }
+	}
+
+    function chunkRs($rs, $key=0, $value=1, $showKeyVal=true)
+    {
+        foreach ($rs as $rs1)
+        {
+            if (is_array($rs1))
+            {
+                if ($showKeyVal)
+                {
+                    $rsNew[trim($rs1[$key])] = trim($rs1[$key])." - ".trim($rs1[$value]);
+                }
+                else
+                {
+                    $rsNew[trim($rs1[$key])] = trim($rs1[$value]);
+                }
+            }
+            else
+            {
+                return $rs;
+            }
+        }
+    
+        return $rsNew;
+    }
+
+
+}
+
+?>

@@ -1,0 +1,271 @@
+<?
+MIOLO::Import('extensions::class.phpmailer.php','PHPMailer'); 
+
+class frmEnviaEmail extends MForm
+{
+	function __construct()
+    {   
+		parent::__construct('Envio de Mensagens');
+	    $this->eventHandler();
+	}
+
+    function createFields()
+	{  
+        $opcoesEnvio = array(
+            new MCheckBox('docentes','docentes','Docentes',FALSE,'Docentes'),
+            new MCheckBox('tecnicos','tecnicos','Técnicos Administrativos',FALSE,'Técnicos Administrativos'),
+            new MCheckBox('alunos','alunos','Alunos',FALSE,'Aluno')
+        );
+
+        $mensagem = array(
+            new MMultiLineField('mensagem','','Mensagem',25,15,82)
+        );
+
+        $subject = array(
+            new MTextField('assunto','','Assunto',84)
+        );
+
+        $anexo = array(
+            new MFileField('anexo','','Anexo')
+        );
+
+        $fields = array(
+                new MTextField('remetente','Universidade Federal de Juiz de Fora <moderador.dircom@ufjf.edu.br>','Remetente',60),
+                new MCheckBoxGroup('destinatario','Destinatários',$opcoesEnvio,'','vertical','css'),
+                new MBaseGroup('subj','Assunto',$subject,'vertical','css'),
+                new MBaseGroup('attach','Anexo',$anexo,'vertical','css'),
+                new MBaseGroup('msg','Mensagem',$mensagem,'vertical','css'),
+
+       );
+	   $this->SetFields($fields);
+
+       $this->setFieldAttr('remetente','readonly',true);
+       $buttons = array(
+           new MButton('btnPost', 'Visualizar Mensagem'),
+           new MButton('btnSend', 'Enviar Mensagem'),
+           new MButton('btnCancel','Corrigir')
+       );
+	   $this->SetButtons($buttons);
+
+       $this->setButtonAttr('btnSend','visible',TRUE);
+       $this->setButtonAttr('btnPost','visible',FALSE);
+       $this->setButtonAttr('btnCancel','visible',FALSE);
+	}
+
+	function btnPost_click()
+	{
+        $data = $this->GetData();
+
+        if ($data->docentes)
+        {
+            $dest[] = "Docentes";
+            $this->addField(new MHiddenField('dest[]','docs'));
+        }
+        if ($data->tecnicos)
+        {
+            $dest[] = "Técnicos";
+            $this->addField(new MHiddenField('dest[]','tas'));
+        }
+        if ($data->alunos)
+        {
+            $dest[] = "Alunos";
+            $this->addField(new MHiddenField('dest[]','alunos'));
+        }
+        if ( count($dest) > 0 && $data->mensagem && $data->assunto )
+        {
+            $this->setFieldAttr('destinatario','visible',FALSE);
+            $this->setFieldAttr('msg','visible',FALSE);
+            $this->setFieldAttr('subj','visible',FALSE);
+
+            $this->addField(new MLabel("Confira os dados abaixo. Se estiverem corretos clique no botão Enviar Mensagem, caso contrário clique no botão Corrigir"));
+            foreach ( $dest as $d )
+            {
+                $options[] = new MOption('',$d);
+            }
+            $para = new MBox('A mensagem será enviada para:');
+            $para->addControl(new MUnorderedList('ul',$options));
+            $this->addField($para);
+
+            $subj = new MBox('Assunto:');
+            $subj->addControl(new MLabel($data->assunto));
+            $this->addField($subj);
+            $this->addField(new MHiddenField('assunto',$data->assunto));
+
+            $msg = new MBox('Conteúdo da mensagem:');
+            $cntMsg = new MMultiLineField('mensagem',$data->mensagem,'Mensagem',25,15,97);
+            $cntMsg->readonly = TRUE;
+            $msg->addControl($cntMsg);
+            $this->addField($msg);
+
+            //visibilidade dos botoes
+            $this->setButtonAttr('btnSend','visible',TRUE);
+            $this->setButtonAttr('btnCancel','visible',TRUE);
+            $this->setButtonAttr('btnPost','visible',FALSE);
+        }
+        else
+        {
+            if ( (!$data->docentes) && (!$data->alunos) && (!$data->tecnicos) )
+            {
+                $this->addError("Você deve selecionar ao menos um grupo para receber a mensagem");
+            }
+
+            if (! $data->assunto)
+            {
+                $this->addError("O assunto deve ser informado.");
+            }
+
+            if (! $data->mensagem)
+            {
+                $this->addError("A mensagem não pode ficar em branco.");
+            }
+        }
+	}
+
+    function btnCancel_click()
+    {
+
+        $mensagem = $this->getFormValue("mensagem");
+        $dest = $this->getFormValue("dest");
+        $assunto = $this->getFormValue('assunto');
+
+        $checked['docs'] = FALSE;
+        $checked['tas'] = FALSE;
+        $checked['alunos'] = FALSE;
+
+        if ( is_array($dest) )
+        {
+            foreach ( $dest as $d ){
+                $checked[$d] = TRUE;
+            }
+        }
+        $this->setFieldAttr('docentes','checked',$checked['docs']);
+        $this->setFieldAttr('tecnicos','checked',$checked['tas']);
+        $this->setFieldAttr('alunos','checked',$checked['alunos']);
+        $this->setFieldValue('mensagem',$mensagem);
+        $this->setFieldValue('assunto',$assunto);
+    }
+
+    function btnSend_click()
+    {
+        $data = $this->getData();
+        if ($data->docentes)
+        {
+            $dest[] = "Docentes";
+        }
+        if ($data->tecnicos)
+        {
+            $dest[] = "Tecnicos";
+        }
+        if ($data->alunos)
+        {
+            $dest[] = "Alunos";
+        }
+
+        if ( count($dest) > 0 && $data->assunto )
+        {
+            if ( $_FILES['anexo']['name'] )
+            {
+                $nome = $_FILES['anexo']['name'];
+                $path = '/tmp/'.$nome;
+                move_uploaded_file($_FILES['anexo']['tmp_name'],$path);
+            }
+
+            $mensagem = $this->getFormValue("mensagem");
+               $body =
+<<< HERE
+                $mensagem
+HERE;
+            $assunto = $this->getFormValue("assunto");
+
+            $pessoa = $this->manager->getBusiness('common','pessoa');
+            foreach ( $dest as $d )
+            {
+                if ( $d == 'Alunos' )
+                {
+                    $destAlunos = TRUE;
+                }
+                else
+                {
+                    $query = $pessoa->listEmails($d);
+                    if ( is_array($result) )
+                    {
+                        $result = array_merge($result,$query->result);
+                    }
+                    else
+                    {
+                        $result = $query->result;
+                    }
+                }
+            }
+
+            if ( $destAlunos )
+            {
+                $result[] = array('alunos-l@listserv.ufjf.br');
+            }
+           $time = $this->manager->getSysTime(); 
+           $ipaddress = $_SERVER['REMOTE_ADDR'];
+           $mail = new PHPMailer();
+           $mail->IsSMTP(); // telling the class to use SMTP
+           $mail->Host = "smtp.ufjf.br"; // SMTP server
+           $mail->From = 'moderador.dircom@ufjf.edu.br';
+           $mail->FromName = 'Universidade Federal de Juiz de Fora';
+           $mail->Subject = $assunto;
+           $mail->Body = $body;
+
+           
+           $mail->AddAddress("siga@ufjf.edu.br");
+           //$mail->AddAddress("thiago.nery@gmail.com");
+           if ( $path )
+           {
+               $mail->AddAttachment($path);
+           }
+           $ok = $mail->Send();
+           $mail->clearAllRecipients();
+           //adicionando destinatarios
+           $enviadas = 0;
+           $naoEnviadas = 0;
+           foreach ( $result as $rs )
+           {
+               $email = trim(strtolower($rs[0]));
+               if ($email) 
+               {
+                    $mail->addAddress($email);
+                    $ok = $mail->Send();
+                    if ( $ok )
+                    {
+                        $enviadas++;
+                    }
+                    else
+                    {
+                        $naoEnviadas++;
+                        $mail->setError("");
+                        $mail->error_count = 0;
+                    }
+                    $mail->clearAllRecipients();
+               }
+           }
+           if ( $path )
+           {
+               unlink($path);
+           }
+
+            $this->manager->information("Mensagem enviada com sucesso. Foram enviadas (".$enviadas.") mensagens.",$this->manager->getActionUrl('common','main:enviaemail'));
+        }
+        else
+        {
+            if ( (!$data->docentes) && (!$data->alunos) && (!$data->tecnicos) )
+            {
+                $this->addError("Você deve selecionar ao menos um grupo para receber a mensagem");
+            }
+
+            if (! $data->assunto)
+            {
+                $this->addError("O assunto deve ser informado.");
+            }
+        }
+
+
+    }
+}
+
+?>

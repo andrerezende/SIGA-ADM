@@ -1,0 +1,67 @@
+<?
+global $MIOLO;
+class gridFinanceiroEntradaServicoRequisicoes extends MGrid
+{
+    function __construct($itemNota)
+    {
+        global $MIOLO, $page, $action, $item;
+		$cf = new MCurrencyFormatter();
+        $itemNota->getItensReq();
+        $itemNota->retrieveAssociation('empenhado');
+        $itemNota->empenhado->retrieveAssociation('itemServExt');
+        $itemNota->empenhado->retrieveAssociation('itemNota');
+        foreach ($itemNota->empenhado->itemServExt as $itemRequisicao)
+        {
+            $itemRequisicao->retrieveAssociation('requisicao');
+            $itemRequisicao->requisicao->retrieveAssociation('uoRequisitante');
+            $dados[$itemRequisicao->idRequisicao][0] = $itemRequisicao->idRequisicao;
+            $dados[$itemRequisicao->idRequisicao][1] = $itemRequisicao->idMaterial;
+            $dados[$itemRequisicao->idRequisicao][2] = $itemRequisicao->requisicao->uoRequisitante->nome;
+            $dados[$itemRequisicao->idRequisicao][3] = $cf->toDecimal($itemRequisicao->quantidade);
+            $dados[$itemRequisicao->idRequisicao][4] = ($cf->toDecimal($itemRequisicao->quantEntregue)) ? $cf->toDecimal($itemRequisicao->quantEntregue) : 0; 
+        }
+        $href = $MIOLO->getActionUrl('adm',$self,$item,array("form"=>"entradamaterial","idEmpenho"=>Form::getFormValue('idEmpenho'),"idNotaFiscal"=>$itemNota->idNotaFiscal,"idItemNota"=>$itemNota->idItemNota,"idRequisicao"=>"#0#","idMaterial"=>"#1#"));
+        if ($itemNota->isContabilizado())
+        {
+            $columns = array(
+                new MGridColumn('Requisição','center',false,'12%',true),
+                new MGridColumn('idMaterial','left',false,'',false),
+                new MGridColumn('UO Requisitante','left','false','64%'),
+                new MGridColumn('Quantidade Pedida','center',true,'12%'),
+                new MGridColumn('Quantidade Entregue','center',true,'12%'),
+            );
+        }
+        else
+        {
+            $quantAutorizada = new MTextField('quantAutorizada[%0%]','','','4');
+            $columns = array(
+                new MGridColumn('Requisicao','center',false,'12%',true),
+                new MGridColumn('idMaterial','left',false,'',false),
+                new MGridcolumn('UO Requisitante','left',true,'52%'),
+                new MGridColumn('Quantidade Pedida','center',true,'12%'),
+                new MGridColumn('Quantidade Entregue','center',true,'12%'),
+                new MGridControl($quantAutorizada,'Quantidade Autorizada','center','12%'),
+            );
+        }
+        $this->SetFilter(false);
+        parent::__construct($dados,$columns,$action,25);
+        if (!$itemNota->isContabilizado()) $this->setRowMethod('gridFinanceiroEntradaServicoRequisicoes','rowMethod');
+        $this->SetLinkType('hyperlink');
+    }
+    function GenerateHeader()
+    {
+        return null;
+    }
+    function GenarateFooter()
+    {
+        return null;
+    }
+    function rowMethod($i,$row,$actions,$columns)
+    {
+        if ($row[3] == $row[4])
+        {
+            $columns[5]->control[$i]->setAttribute('readonly',true);
+        }
+    }
+}
+

@@ -1,0 +1,204 @@
+<?
+global $MIOLO;
+/**
+ * Use Module Control
+ */
+$MIOLO->Uses('controls/linkliquidacao.class','adm');
+
+/**
+ * Formulário básico para seleção de liquidacaos
+ * 
+ */
+class frmAlteraMaterialRequisicao extends Form
+{
+    function __construct()
+    {
+		global $MIOLO, $module;
+		
+        $this->Form('Alterar Material de Requisicao');
+		//$this->SetClose($MIOLO->GetActionURL($module,'main:manutencao'));
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+        global $MIOLO, $action;
+        $ui = $this->manager->getUi();
+
+        $fields = array(
+                new MTextField('idRequisicao','','Nº da Requisicao',7),
+                new MTextField('codMaterial','','Código do Material',7),
+
+                new MMultiLineField('descricao','','Descrição',600,4,80),
+                new MTextField('unidade','','Unidade',7),
+                new MTextField('quantPedida','','Quant. Pedida',7)
+            );
+        $buttons = array(new FormButton('btnExibir', 'Exibir'));
+        $this->setFields($fields);
+
+        $this->setFieldAttr('descricao','readonly',true);
+        $this->setFieldAttr('unidade','readonly',true);
+        $this->setFieldAttr('quantPedida','readonly',true);
+        $this->setFieldAttr('descNovoMaterial','readonly',true);
+        $this->setFieldAttr('unidadeNovoMaterial','readonly',true);
+        
+        $this->setButtons($buttons);
+        $this->setVisible(false);
+
+    }
+    
+	function btnExibir_click()
+	{
+		$itemReq = $this->manager->getBusiness('adm','itemreq');
+		$idRequisicao = $this->GetFormValue('idRequisicao');
+		$codMaterial = $this->GetFormValue('codMaterial');
+		if($idRequisicao=='')
+		{
+			$this->AddError('É necessário definir o número da requisição.');
+		}
+		elseif($codMaterial=='')
+		{
+			$this->AddError('Também é necessário definir o código do material.');
+		}
+		else
+		{
+			$objMaterial = $itemReq->getMaterialByCod($idRequisicao,$codMaterial)->result[0];
+			$status = $objMaterial[4];
+			if ($objMaterial == NULL)
+			{
+				$this->addError('Material não encontrado nesta requisição');
+			}
+			else if ($status != 1 and $status != 5)
+			{
+				$this->addError('Este Material não pode ser alterado');
+			}
+			else
+			{
+
+				$fields = array (
+				new MSeparator('<b>Dados do Novo Material</b>'),
+				new HiddenField('idMaterial',$objMaterial[0]),
+				new MHiddenField('idNovoMaterial',''),
+				new MLookupTextField('codNovoMaterial','','Cód. Novo Material')
+				);
+				$this->addFields($fields);
+
+				$this->SetFieldAttr('codNovoMaterial','module','adm');
+				$this->SetFieldAttr('codNovoMaterial','item','material');
+				$this->SetFieldAttr('codNovoMaterial','event','filler');
+				$this->SetFieldAttr('codNovoMaterial','filter','codNovoMaterial');
+				$this->SetFieldAttr('codNovoMaterial','related','idNovoMaterial,,codNovoMaterial');
+
+				$this->setFieldAttr('idRequisicao','readonly',true);
+				$this->setFieldAttr('codMaterial','readonly',true);
+				$this->setVisible(true);
+				$this->setFieldValue('descricao',"$objMaterial[1]");
+				$this->setFieldValue('unidade',"$objMaterial[3]");
+				$this->setFieldValue('quantPedida',"$objMaterial[2]");
+				$this->addButton(new MButton('btnAlterar','Alterar'));
+
+				$this->setButtonAttr('btnExibir','visible',false);
+			}
+		}
+	}
+    
+    function btnAlterar_click()
+	{
+        $data = $this->getData();
+        $objMaterial = $this->manager->getBusiness('adm','material');
+        $idMaterial = $this->getFormValue('idMaterial');
+        $idNovoMaterial = $this->getFormValue('idNovoMaterial');
+        $codNovoMaterial = $this->getFormValue('codNovoMaterial');
+
+        if ($idNovoMaterial == "")
+        {
+            $result = $objMaterial->listByCod(trim($codNovoMaterial))->result;
+
+            if (count($result)>1)
+            {
+              $this->addError('Existe mais de um material com este código, favor utilizar a lupa para pesquisa.');
+            }
+            elseif ($result[0][0] == "")
+            {
+              $this->addError('Material não encontrado, favor utilizar a lupa para pesquisa.');
+            }
+            else
+            {
+              $idNovoMaterial = $result[0][0];
+            }
+        }
+        if (!$this->hasErrors())
+        {
+        $objMaterial->getById($idNovoMaterial);
+        $action_sim = $this->manager->getActionUrl("adm","main:alteraMaterialRequisicao",'',array("idMaterial"=>$idMaterial,"idNovoMaterial"=>$idNovoMaterial,"idRequisicao"=>$data->idRequisicao,"event"=>"btnConfirmarAlteracao_click"));
+        $action_no = $this->manager->getActionUrl("adm","alteraMaterialRequisicao");
+        $this->manager->Question("Deseja alterar o material da Req. "."$data->idRequisicao"." para: <br><br>"."$objMaterial->codmaterial"." - ".
+                                 "$objMaterial->descricao"." ?",$action_sim,$action_no);
+        }
+
+    }
+    
+    function btnConfirmarAlteracao_click()
+	{
+       $idNovoMaterial = $this->getFormValue('idNovoMaterial');
+       $idMaterial = $this->getFormValue('idMaterial');
+       $data = $this->getData();
+       
+       $objRequisicao = $this->manager->getBusiness('adm','requisicao');
+       $objRequisicao->getById($data->idRequisicao);
+       $objRequisicao->getItem();
+
+       $itemAntigo = $objRequisicao->getItemMaterialCompra($idMaterial);
+       $itemNovo = $this->setData($itemAntigo,$idNovoMaterial);
+
+       $itemNovo->beginTransaction();
+       $itemAntigo->setTransaction($itemNovo->getTransaction());
+       $itemAntigo->delete();
+       $itemNovo->save();
+       $itemNovo->endTransaction();
+       
+       $this->manager->information("Material alterado com sucesso.",$this->manager->getActionUrl("adm","main:manutencao"));
+       
+       $this->SetFieldAttr('codMaterial','visible',false);
+       $this->SetFieldAttr('idRequisicao','visible',false);
+       $this->setButtonAttr('btnExibir','visible',false);
+
+	}
+        
+   function setVisible($boolean)
+   {
+        $this->SetFieldAttr('descricao','visible',$boolean);
+        $this->SetFieldAttr('unidade','visible',$boolean);
+        $this->SetFieldAttr('quantPedida','visible',$boolean);
+        $this->SetFieldAttr('lkpMaterial','visible',$boolean);
+        $this->SetFieldAttr('codNovoMaterial','visible',$boolean);
+        $this->SetFieldAttr('descNovoMaterial','visible',$boolean);
+        $this->SetFieldAttr('unidadeNovoMaterial','visible',$boolean);
+   }
+   
+   function setData($itemAntigo,$idNovoMaterial)
+   {
+        $itemNovo = $this->manager->getBusiness('adm','itemreq');
+
+        $itemNovo->idRequisicao = $itemAntigo->idRequisicao;
+        $itemNovo->idMaterial = $idNovoMaterial;
+        $itemNovo->quantPedida = $itemAntigo->quantPedida;
+        $itemNovo->precoEstimado = $itemAntigo->precoEstimado;
+        $itemNovo->status = $itemAntigo->status;
+        $itemNovo->idLicitacao = $itemAntigo->idLicitacao;
+        $itemNovo->item = $itemAntigo->item;
+        $itemNovo->prioridade = $itemAntigo->prioridade;
+        $itemNovo->descricaoDetalhada = $itemAntigo->descricaoDetalhada;
+        $itemNovo->valorReal = $itemAntigo->valorReal;
+        $itemNovo->motivoRejeicao = $itemAntigo->motivoRejeicao;
+        $itemNovo->quantEntregue = $itemAntigo->quantEntregue;
+        $itemNovo->quantEmpenhada = $itemAntigo->quantEmpenhada;
+        $itemNovo->suplementar = $itemAntigo->suplementar;
+        $itemNovo->quantDevolvida = $itemAntigo->quantDevolvida;
+
+        return $itemNovo;
+   }
+        
+        
+ }
+?>

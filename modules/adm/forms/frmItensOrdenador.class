@@ -1,0 +1,143 @@
+<?
+class frmItensOrdenador extends Form
+{
+	function frmItensOrdenador()  // construtor da Classe
+	{   
+		global $MIOLO, $module, $self, $page, $ui;
+
+		$this->Form('Ordenador de Despesa: Análise dos Itens da Requisição');
+		$this->EventHandler();
+	}
+   
+	Function CreateFields()
+	{
+	        global $MIOLO,$module,$perms,$auth,$page,$item;
+		$login = $MIOLO->GetLogin();
+		
+		$objRequisicao = $MIOLO->GetBusiness('adm','requisicao');
+		$objRequisicao->GetById($item);
+		
+		//Se a requisição nunca foi atendida, então muda o status da requisição pra "Em análise".	
+		if ($objRequisicao->status == '1')
+			$objRequisicao->SetStatus(2);
+
+	    	$fields = Array(
+			new Separator('Requisição n&ordm; '.$objRequisicao->numero.' - Aberta em '.$objRequisicao->datarequisicao),	
+			new LookupTextField('lkpOrcamento','','Orçamento',20,'Busque na lupa o orçamento para esta compra'),		    
+			new TextField('descricaomaterial','','Material',80),
+			new TextField('quantpedida','','Qtde. Pedida',10,'Quantidade Solicitada pelo requsisitante'),
+			new TextField('precoestimado','','Preço',10,'Preço estimado pelo requisitante'),
+			new TextField('quantautorizada','','Autorizado',10,'Quantidade que será autorizada a ser compra'),
+			new MultilineField('descricao','','Descrição',25,8,50),
+			new HiddenField('item',$item),
+			new HiddenField('HidIdorcamento')            
+	        );    
+		
+        	$this->SetFields($fields);
+      
+	        $this->SetFieldAttr('lkpOrcamento','module',$module);
+            	$this->SetFieldAttr('lkpOrcamento','item','Orcamento');
+	        $this->SetFieldAttr('lkpOrcamento','event', 'filler');
+ 	        $this->SetFieldAttr('lkpOrcamento','related', 'lkpOrcamento, HidIdorcamento');
+     		$this->SetFieldAttr('descricaomaterial','readonly', 'true');
+     		$this->SetFieldAttr('quantpedida','readonly', 'true');
+     		$this->SetFieldAttr('precoestimado','readonly', 'true');
+     		$this->SetFieldAttr('descricao','readonly', 'true');
+
+
+	        $buttons = Array(
+	            new FormButton('btnPost','Gravar Alterações'),
+	            new FormButton('btnRecusa','Recusar Requisição'),
+	        );
+    
+	        $this->SetButtons($buttons);
+
+	        $objItem = $MIOLO->GetBusiness('adm','item');
+		$aux = $objItem->GetByIdItemOrdenador($item);
+        	$this->SetData($aux[0]);
+   	}
+
+	function btnPost_click()
+	{
+		global $MIOLO, $module, $action, $item;
+		
+		$quant = $this->GetFormValue('quantautorizada');
+		$pedido = $this->GetFormValue('quantpedida');
+		$idorcamento = $this->GetFormValue('lkpOrcamento');
+		$item = $this->GetFormValue('item'); 
+		$objItem = $MIOLO->GetBusiness('adm','item');
+	
+		$ok_atend = true;
+		$atend_total = true;
+	
+		if ($quant  > $pedido)
+	        {
+			$action = $MIOLO->GetActionURL($module, 'itensOrdenador', $item,'');
+	        	$MIOLO->Information('A quantidade atendida não pode superar a quantidade pedida',$action);
+		}
+		elseif ($quant == 0)
+	        {
+			$action = $MIOLO->GetActionURL($module, 'itensOrdenador', $item,'');
+		        $MIOLO->Information('A quantidade atendida não pode ser zero',$action);
+		}
+		else
+		{	
+			if ($objItem->SetOrdenador($item,$quant,$idorcamento))
+				$ok_atend = true;
+
+			if ($quant < $pedido) 
+			{
+				//Atendimento Parcial
+				$atend_total = false;
+			}
+		}
+
+		if ($ok_atend)
+		{
+			$objRequisicao = $MIOLO->GetBusiness('adm','requisicao');
+			$objRequisicao->GetById($item);
+
+			//Se variavel aux. é true a requisicao foi atend. totalmente, senão foi parcialmente.
+			if ($atend_total == true)
+				$status = "4";
+			else
+				$status = "3";
+
+			//Muda o status da requisição para "Atend. Parcial/Total"			
+			if ($objRequisicao->SetStatus($status)) 
+			{
+				$action = $MIOLO->GetActionURL($module, 'ordenador', '','');
+				$MIOLO->Information('Requisiçao Atendida com sucesso',$action);
+			}	
+		}	
+	}
+
+	function btnRecusa_click()
+	{
+		global $MIOLO, $module, $action, $item;
+
+		$item = $this->GetFormValue('item'); 
+		$objRequisicao = $MIOLO->GetBusiness($module,'requisicao');
+		$objRequisicao->GetById($item);
+		
+		$status = "5";						
+		//Muda o status da requisição para "Não Atendida"
+		if ($objRequisicao->SetStatus($status)) 
+		{
+			$action = $MIOLO->GetActionURL($module, 'ordenador', '','');
+		        $MIOLO->Information('Requisiçao Recusada com sucesso',$action);
+			//var_dump($action);
+		}	
+	}
+
+	function SetData($data)
+	{
+		//var_dump($data);
+		$this->SetFieldValue('descricaomaterial',$data[1]);
+		$this->SetFieldValue('quantpedida',$data[2]);
+		$this->SetFieldValue('precoestimado','R$ '.number_format(str_replace(',','.',$data[4]),2,',',''));
+		$this->SetFieldValue('quantautorizada',$data[2]);
+		$this->SetFieldValue('descricao',$data[5]);
+	}
+}
+?>

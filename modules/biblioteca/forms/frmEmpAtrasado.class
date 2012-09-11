@@ -1,0 +1,249 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+class frmEmpAtrasado extends Form
+{
+    protected $objEmprestimo;
+
+	function frmEmpAtrasado()
+    {
+	    global $MIOLO, $action, $module, $item;
+
+		$this->Form("Empréstimos Atrasados");
+		$this->EventHandler();
+  		$this->defaultButton = false;
+ 		// Botão 'fechar', direcionando para o handler biblioteca/main/circulacao/emprestimo
+		$this->SetClose($this->manager->GetActionURL($module, 'main:circulacao:emprestimo'));
+	}
+
+	function CreateFields()
+	{
+		global $MIOLO, $action, $module, $item, $page;
+
+		if (! $this->page->IsPostBack()){
+			$fields = Array (
+				new CalendarField('dataIni','','Data Inicial',20),
+				new CalendarField('dataFim','','Data Final',20),
+			);
+			$this->SetFields($fields);
+
+			$buttons = Array(
+				new FormButton('btnProcurar', 'Procurar'),
+			);
+			$this->SetButtons($buttons);
+
+			// validators
+			$this->AddValidator(new RequiredValidator('dataIni'));
+			$this->AddValidator(new RequiredValidator('dataFim'));
+			
+//			if ($this->page->IsPostBack()){
+			if (!$item)
+			{
+				$this->page->onLoad("MIOLO_GetElementById('dataIni').focus();");
+			}
+			
+		}
+	}
+
+	function btnProcurar_click()
+	{
+		global $MIOLO, $module, $self, $theme, $action, $page, $item;
+		
+		if (!($_POST["empAtrasado_dataIni"] && $_POST["empAtrasado_dataFim"]))
+		{
+			
+			$dataIni = $this->GetFormValue('dataIni');
+			$dataFim = $this->GetFormValue('dataFim');
+			
+			/*
+			* Guarda no POST as informações de data
+			*/
+			
+			$_POST["empAtrasado_dataIni"] = $dataIni;
+			$_POST["empAtrasado_dataFim"] = $dataFim;
+
+		}	
+		else 
+		{
+			$dataIni = $_POST["empAtrasado_dataIni"];
+			$dataFim = $_POST["empAtrasado_dataFim"];
+		}
+
+        if($dataIni > $dataFim){ 
+            $MIOLO->Error("Data Iinicial escolhida maior que a Data Final.", $MIOLO->GetActionURL('biblioteca','main:circulacao:atrasado'));
+        }else{
+
+            $this->SetTitle('Empréstimos Atrasados de ' . $dataIni . ' até ' . $dataFim . ' - Ordenados por Nome');
+            //datagrid
+            $perms = $this->manager->getPerms();
+            if ( $perms->checkAccess('BIB_CIRCULACAO_TOT',A_ACCESS) )
+            {
+                $columns = array(
+                    new DataGridColumn('login','Usuário','center',true, '10%',true, null, false, false),
+                    new DataGridColumn('nome','Nome','left',false, '24%',true, null, false, false),
+                    new DataGridColumn('telefone','Telefone','center',true, '14%',true, null, false, false),
+                    new DataGridColumn('numerodotombo','Exemplar','center',true, '15%',true, null, false, false),
+                    new DataGridColumn('datahoradoemprestimo','Empréstimo','center',true, '12%',true, null, false, false),
+                    new DataGridColumn('datahoraprevisaodevolucao','Prev. Dev.','center',true, '11%',true, null, false, false),
+                    new DataGridColumn('emprhoras','Emp. Horas?','center', true,'6%'),
+                    );
+            }
+            else
+            {
+                $columns = array(
+                    new DataGridColumn('login','Usuário','center',true, '10%',true, null, false, false),
+                    new DataGridColumn('nome','Nome','left',false, '32%',true, null, false, false),
+                    new DataGridColumn('telefone','Telefone','center',true, '14%',true, null, false, false),
+                    new DataGridColumn('numerodotombo','Exemplar','center',true, '15%',true, null, false, false),
+                    new DataGridColumn('datahoradoemprestimo','Empréstimo','center',true, '12%',true, null, false, false),
+                    new DataGridColumn('datahoraprevisaodevolucao','Prev. Dev.','center',true, '11%',true, null, false, false),
+                    new DataGridColumn('emprhoras','Emp. Horas?','center', true,'6%'),
+                    );
+            }
+
+            //Instancia o objeto emprestimo
+            $this->objEmprestimo = $MIOLO->GetBusiness($module,'emprestimo');
+
+            $query = $this->objEmprestimo->SelectEmprestimoAtrasado($dataIni, $dataFim);
+
+            $href_datagrid = $MIOLO->GetActionURL($module,$action,$data,Array('event'=>'btnProcurar_click'));
+            $this->page->SetAction($href_datagrid);
+
+            $datagrid = new DataGrid2($query, $columns, $href_datagrid,25);
+            $datagrid->SetWidth('99%');
+
+            if ( $perms->checkAccess('BIB_CIRCULACAO_TOT',A_ACCESS) )
+            {
+                $href_edit = $MIOLO->GetActionURL($module, $action, '%6%', array('event'=>'btnEdit_click'));
+                $datagrid->AddActionIcon('Editar', 'edit', $href_edit);
+            }
+
+            $fields = array(
+                            $datagrid,
+                            new HiddenField('dataIni', $dataIni),
+                            new HiddenField('dataFim', $dataFim),
+                            );
+
+            $this->SetFields($fields);
+
+            $buttons = Array(
+                new FormButton('btnVoltar', 'Voltar', $MIOLO->GetActionURL($module = $module, $action = $action)),
+                new FormButton('btnRelatorio', 'Gerar Relatório', 'PDF'),
+            );
+            
+            $this->SetButtons($buttons);
+            $this->SetButtonAttr('btnProcurar','visible',false);
+
+        }
+	}
+
+	function btnRelatorio_click()
+	{
+		global $MIOLO,$module;
+		$ui = $MIOLO->GetUI();
+		$report = $ui->GetReport($module,'repAtrasado');
+		$report->Generate();
+	}
+
+	function btnEdit_click()
+	{
+		global $MIOLO, $module, $action, $item;
+
+		$fields = array(
+			new TextField('idemprestimo','','Código do Empréstimo',20),
+			new TextField('loginPessoa','','Login do Usuário',20),
+			new TextField('numerodotombo','','Número do Exemplar',20),
+			new TextField('datahoradoemprestimo','','Data/Hora do Empréstimo',20),
+			new TextField('datahoraprevisaodevolucao','','Data/Hora Previsão Devolução',20),
+		);
+		$this->SetFields($fields);
+
+		$this->setFieldAttr('idemprestimo','readonly',true);
+		$this->setFieldAttr('loginPessoa','readonly',true);
+		$this->setFieldAttr('numerodotombo','readonly',true);
+
+//		$go = $this->manager->GetActionURL($module, $action,null,array('event'=>'btnProcurar:click'));
+		$go = $this->manager->GetActionURL($module, $action);
+		
+		$buttons = Array(
+			new FormButton('btnSalvar', 'Salvar'),
+			new FormButton('btnVoltar', 'Voltar', $go)
+		);
+		$this->SetButtons($buttons);
+		$this->SetButtonAttr('btnProcurar','visible',false);
+
+		$this->objEmprestimo = $MIOLO->GetBusiness($module,'emprestimo');
+		$emprestimo = $this->objEmprestimo->GetEmprestimoById($item);
+		$this->setData($emprestimo);
+    }
+
+	function getData()
+	{
+		$data = new FormData();
+		$data->idemprestimo = $this->GetFormValue('idemprestimo');
+		$data->login = $this->GetFormValue('loginPessoa');
+		$data->numerodotombo = $this->GetFormValue('numerodotombo');
+		$data->datahoradoemprestimo = $this->GetFormValue('datahoradoemprestimo');
+		$data->datahoraprevisaodevolucao = $this->GetFormValue('datahoraprevisaodevolucao');
+		$data->datahoradadevolucao = null;
+		return $data;
+	}
+
+	function setData($data)
+	{
+		$this->SetFieldValue('idemprestimo',$data->idemprestimo);
+		$this->SetFieldValue('loginPessoa',$data->login);
+		$this->SetFieldValue('numerodotombo', $data->numerodotombo);
+		$this->SetFieldValue('datahoradoemprestimo',$data->datahoradoemprestimo);
+		$this->SetFieldValue('datahoraprevisaodevolucao',$data->datahoraprevisaodevolucao);
+	}
+
+	function btnSalvar_click()
+	{
+		global $MIOLO,$self,$item,$action,$module;
+		$this->objEmprestimo = $MIOLO->GetBusiness($module,'emprestimo');
+		$data = $this->getData();
+		try
+		{
+			$result = $this->objEmprestimo->saveEmprestimo($data);
+
+			if($result === true)
+			{
+				$go = $this->manager->GetActionURL($module, $action);
+				$MIOLO->Information("Empréstimo Modificado", $go );
+			}
+			else
+			{
+				$this->addError($result);
+			}
+		}
+		catch (Exception $e)
+		{
+			$this->addError($e->getMessage());
+		}
+	}
+}
+?>

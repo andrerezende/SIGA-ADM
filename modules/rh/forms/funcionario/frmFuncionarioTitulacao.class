@@ -1,0 +1,585 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmFuncionarioTitulacao extends MFormAjax
+{
+	var $titulacao;
+    var $objVinculo;
+   // var $objProvimento;
+	
+    function __construct($objTitulacao)
+    {
+	    global $MIOLO, $module, $page, $context, $self;
+		//var_dump($objTitulacao);
+        $this->titulacao = $objTitulacao;
+        
+        $funcionario = $MIOLO->getBusiness('rh','funcionario',$this->titulacao->idFuncionario);
+	$vinculoAtual = $funcionario->getVinculoAtivo(); 
+	if(!$vinculoAtual)
+	{
+		$idVinculo = $funcionario->GetVinculoByIdFuncionario($funcionario->idFuncionario);
+		$url = $MIOLO->GetActionURL('rh','main:vinculo',$idVinculo);
+		$MIOLO->information("Situação funcional não permite tal operação. Entre em contato com o administrador do sistema",$url);
+	}
+        $idVinculo = $vinculoAtual->idVinculo;
+        $this->objVinculo = $MIOLO->getBusiness('rh','vinculo',$idVinculo);
+        //$idVinculo = $this->GetFormValue('idvinculo');
+        //parent::__construct('Pós-Graduação para o vínculo: ' . $idVinculo);
+        parent::__construct('Inclusão de Pós-Graduação');
+        $this->SetClose($MIOLO->GetActionURL('rh','main:funcionario',$this->titulacao->idFuncionario));
+		//$this->page->AddJsCode(file_get_contents(dirname(__FILE__) . '/js/frmFuncionarioTitulacao.js'));
+        $this->EventHandler();
+	}
+
+    function CreateFields()	
+	{ 
+       global $MIOLO, $action,$item;
+
+       $url = $this->manager->getActionURL('rh','modules:forms:funcionario:js:frmFuncionarioTitulacao.js'); 
+       $this->page->addScriptURL($url);
+	   $urlAjaxHandler = $this->manager->getActionURL('rh','ajaxhandler');
+
+	// $funcionario = $MIOLO->getBusiness('rh','funcionario',$this->titulacao->idFuncionario);
+	//  $vinculoAtual = $funcionario->getVinculoAtivo(); 
+      	// $idVinculo = $this->GetFormValue('idvinculo');
+       	$funcionario = $MIOLO->getBusiness('rh','funcionario',$this->titulacao->idFuncionario);
+	$vinculoAtual = $funcionario->getVinculoAtivo(); 
+        
+	//obtendo provimentos relacionados
+	// $vinculoProvimento = $this->objVinculo->getById($idVinculo);
+
+	if ($vinculoAtual)
+	{
+		$idVinculo = $vinculoAtual->idVinculo;
+		$vinculoAtual->getProvimentos();
+	        $objProvimento = $vinculoAtual->getProvimentoAtual();
+		$objProvimento->getAmbiente();
+		$ambiente = $objProvimento->ambiente;
+	}
+	else
+	{
+		$url = $MIOLO->GetActionURL('rh','main:vinculo',$this->objVinculo->idVinculo);
+		$MIOLO->information("Situação funcional não permite tal operação. Entre em contato com o administrador do sistema",$url);
+	}
+  
+       $tabelaGeral = $MIOLO->GetBusiness('common','tabelageral');
+	   $query = $tabelaGeral->ListByTabela('RH_TITULACAO');
+	   $opTipoTrabalho = array('--Selecione--','Monografia','Dissertação','Tese','Outro');
+	   //$opTipoTrabalho = array('1','2','3');
+	   
+	   
+	   
+	   $fields = array(
+       	   		new MHiddenField('idvinculo',$idVinculo),
+           		new MSelection('selTitulacao','','Formação',$query->chunkResult(),'','',1),
+           		new MTextField('edtnomecurso','','Nome do Curso',38), //definir nome do campo com o BD
+           		new MCalendarField('edtDataFimTitulacao','Data Fim','Data Fim',15),
+           		new MTextField('edtentidade','','Instituição',30),
+           		new MTextField('edtTituloTrabalhoFinal','','Título do Trabalho Final',55),
+           		new MSelection('selTipoTrabalhoFinal','','Tipo de Trabalho Final',$opTipoTrabalho,'','',1),      
+              // set onclick to call ajaxhandler, after change the target url
+		   		new MDiv("divSample"),
+           		new MTextField('edtAreaConcentracao','','Área de Concentração',40),
+           		new MTextLabel('text1','Curso não utilizado para concessão de incentivo à qualificação.'),
+           		new MTextLabel('text2','Curso já utilizado para concessão de incentivo à qualificação.'),
+           		new MTextLabel('text3','Formação com relação direta com o ambiente organizacional: '.$ambiente->descricao),
+           		new MTextLabel('text4','Formação sem relação direta com o ambiente organizacional: '.$ambiente->descricao),
+           		new MTextLabel('text5',''),
+           	//	new MCheckBox('incentivo','S','','','Já foi utilizado para concessão de incentivo a qualificação?'),
+           		);
+	   
+        $options = array(
+                	new MOption('direta','o1','Relação Direta',false),
+                	new MOption('indireta','o2','Relação Indireta', false)
+                );   		
+           		
+        if (($objProvimento->idGrupoCargo != '060') && ($objProvimento->idSituacao == '01')){
+        	if (!$this->titulacao->isPersistent()){
+        		array_push($fields,new MRadioButtonGroup('relacao','Ambiente Organizacional: '.$ambiente->descricao, $options,'','','vertical','css'));
+        	}
+        	$isTA=true;
+        
+        		
+        }
+	  
+       $this->SetFields($fields);
+           		
+          
+/*	   if (($objProvimento->idGrupoCargo == '060') || ($objProvimento->idSituacao != '01')){
+	   */
+	   		$this->SetFieldAttr('text1','visible',false);
+	   		$this->SetFieldAttr('text2','visible',false);
+	   		$this->SetFieldAttr('text3','visible',false);
+	   		$this->SetFieldAttr('text4','visible',false);
+	   		$this->SetFieldAttr('text5','visible',false);
+       /*
+		} */
+	   
+	   
+	      
+	   
+//
+  	    
+
+	   $this->selTipoTrabalhoFinal->addAttribute('onChange',"ajaxHandlerSample.url = '$urlAjaxHandler'; ajaxHandlerSample.call();");
+
+       $this->SetData();
+       $buttons = Array(
+           new MButton('btnPost', 'Enviar'),
+			new MButton('btnExcluir', 'Excluir')
+	   );
+	   $this->SetButtons($buttons);
+	   
+	    
+
+    //var_dump(!$this->titulacao->isPersistent());
+	$this->SetFieldAttr('btnPost','visible',!$this->titulacao->isPersistent());
+	$this->SetFieldAttr('btnExcluir','visible',false);
+	
+
+		if ($this->titulacao->isPersistent())
+		{
+			$this->SetFieldAttr('selTitulacao','readonly',true);
+			$this->SetFieldAttr('edtnomecurso','readonly',true);
+			$this->SetFieldAttr('edtDataFimTitulacao','readonly',true);
+			$this->SetFieldAttr('edtentidade','readonly',true);
+			$this->SetFieldAttr('edtTituloTrabalhoFinal','readonly',true);
+			$this->SetFieldAttr('selTipoTrabalhoFinal','readonly',true);
+			//$this->SetFieldAttr('edtTipoTrabalhoFinal','readonly',true);
+			$this->SetFieldAttr('edtAreaConcentracao','readonly',true);
+		
+			if ($isTA){
+				if (($this->titulacao->dataincentivo == null)){
+					$this->setFieldAttr('text1','visible',true);
+					
+				} else {
+					$this->setFieldAttr('text2','visible',true);
+				}
+				
+				if(($this->titulacao->idEscolaridadePCCTAE==22) || ($this->titulacao->idEscolaridadePCCTAE==24) || ($this->titulacao->idEscolaridadePCCTAE==26)){
+					$this->setFieldAttr('text3','visible',true);	
+									
+				} elseif(($this->titulacao->idEscolaridadePCCTAE==21) || ($this->titulacao->idEscolaridadePCCTAE==23) || ($this->titulacao->idEscolaridadePCCTAE==25)) {
+					$this->setFieldAttr('text4','visible',true);
+				}
+			
+			
+				$pcctae = $MIOLO->getbusiness('rh','escolaridadepcctae');
+				$idEscolaridadePCCTAE = $this->titulacao->idEscolaridadePCCTAE;
+				$objPcctae = $pcctae->getEscolaridadePcctaeById($idEscolaridadePCCTAE);
+				//var_dump($idEscolaridadePCCTAE);
+				$this->SetFieldValue('text5',$objPcctae->descricao);
+				$this->SetFieldAttr('text5','visible',true);
+			}
+			/*if ($this->titulacao->incentivo == 'S'){
+       			$this->SetFieldAttr('incentivo','visible',true);
+       			$this->SetFieldAttr('incentivo','checked',true);
+       			$this->SetFieldAttr('incentivo','readonly',true);
+       			//$this->AddField(new Mlabel('OBS: Foi utilizado para concessão de incentivo a qualificação.'));
+       			
+       		}*/
+			
+			
+		}
+
+	}
+	
+	function SetData() 
+	{
+        $this->SetFieldValue('selTitulacao',			$this->titulacao->idTitulacao);
+        $this->SetFieldValue('edtnomecurso', 			$this->titulacao->nomecurso);
+        $this->SetFieldValue('edtDataFimTitulacao',		$this->titulacao->dataFim);
+        $this->SetFieldValue('edtentidade',				$this->titulacao->entidade);
+        $this->SetFieldValue('edtTituloTrabalhoFinal',	$this->titulacao->tituloTrabalhoFinal);
+        $this->SetFieldValue('selTipoTrabalhoFinal',	$this->titulacao->tipoTrabalhoFinal);
+		//$this->SetFieldValue('edtTipoTrabalhoFinal',	$this->titulacao->tipoTrabalhoFinal);
+        $this->SetFieldValue('edtAreaConcentracao',		$this->titulacao->areaConcentracao);
+       
+			
+       
+	}
+
+	function GetData()  
+	{
+		
+		$data = new FormData();
+        $data->idVinculo			= $this->GetFieldValue('idvinculo');
+        $data->idTitulacao			= $this->GetFieldValue('selTitulacao');
+        $data->nomecurso   		    = $this->GetFieldValue('edtnomecurso');
+        $data->dataFim				= $this->GetFieldValue('edtDataFimTitulacao');
+        $data->entidade				= $this->GetFieldValue('edtentidade');
+        $data->tituloTrabalhoFinal	= $this->GetFieldValue('edtTituloTrabalhoFinal');
+        $data->tipoTrabalhoFinal	= $this->GetFieldValue('selTipoTrabalhoFinal');
+		//$data->tipoTrabalhoFinal	= $this->GetFieldValue('edtTipoTrabalhoFinal');
+        $data->areaConcentracao		= $this->GetFieldValue('edtAreaConcentracao');
+        $id = $this->GetFieldValue('selTitulacao');
+        $opt = $this->GetFieldValue('relacao');
+       	
+        if ($this->objVinculo->isTA()){
+        	if ($id == '26') 
+        	{
+        		switch ($opt) {
+        
+        			case $opt == 'o1':
+        				$data->idEscolaridadePCCTAE = 24;
+        				break;
+        			
+        			case $opt == 'o2':
+        				$data->idEscolaridadePCCTAE = 23;
+        				break;	
+        			
+        		}
+        	 
+        	}
+        
+        	if ($id == '27') 
+        	{
+        		switch ($opt) {
+        
+        			case $opt == 'o1':
+        				$data->idEscolaridadePCCTAE = 26;
+        				break;
+        			
+        			case $opt == 'o2':
+        				$data->idEscolaridadePCCTAE = 25;
+        				break;	
+        			
+        		}
+        	 
+        	}
+        
+        	if ($id == '25') 
+        	{
+        		switch ($opt) {
+        
+        			case $opt == 'o1':
+        				$data->idEscolaridadePCCTAE = 22;
+        				break;
+        			
+        			case $opt == 'o2':
+        				$data->idEscolaridadePCCTAE = 21;
+        				break;	
+        			
+       	 		}
+        	 
+        	}
+        }
+        
+    
+		return $data;
+	}
+	
+	function btnExcluir_click()
+	{
+		global $MIOLO, $module, $action, $context, $self;
+		
+
+		$action_sim = $MIOLO->GetActionURL($module,$self,$this->titulacao->idFuncionario,array('form'=>'titulacoes','conf'=>'sim','id'=>$this->titulacao->idHistTitulacao,'event'=>'btnExcluir:click'));
+		$action_nao = $MIOLO->GetActionURL($module,$self,$this->titulacao->idFuncionario,array('form'=>'titulacoes','conf'=>'nao','id'=>$this->titulacao->idHistTitulacao));
+
+		$conf = $this->GetFormValue('conf');
+
+		if ($conf == 'sim')
+		{
+            $funcionario = $MIOLO->getBusiness('rh','funcionario',$this->titulacao->idFuncionario);
+            $funcionario->getTitulacoes();
+			try
+			{
+                if ( count($funcionario->titulacao) > 1 ) //Ainda restará uma titulacao após a exclusão
+                {                
+                    $escolaridade = 10;       
+                }
+                else
+                {
+                    $escolaridade = $funcionario->getFormacaoMaiorEscolaridade(0);
+                }
+                $this->titulacao->beginTransaction();
+				$this->titulacao->delete();
+                $this->titulacao->log(OP_DEL,"id funcionario: ".$this->titulacao->idFuncionario." id titulacao: ".$this->titulacao->idTitulacao." data fim: ".$this->titulacao->dataFim." entidade: ".$this->titulacao->entidade);
+                $funcionario->setTransaction($this->titulacao->getTransaction());   
+                $funcionario->setEscolaridade($escolaridade);
+                $funcionario->save();
+                $this->titulacao->endTransaction();
+
+				$MIOLO->Information('Pós-Graduação excluída com sucesso',$MIOLO->GetActionURL('rh','main:funcionario',$this->titulacao->idFuncionario, array('form'=>'titulacoes')));
+			
+			}
+			catch(Exception $e)
+			{
+				$this->manager->error("Informe o seguinte erro à equipe do CGCO: ".$e->getMessage());	
+			}
+									
+		}
+		else
+	   {
+            $tabelaGeral = $MIOLO->GetBusiness('common','tabelageral');
+            $tabelaGeral->getByItem('RH_TITULACAO',$this->titulacao->idTitulacao);
+			$MIOLO->Question("Tem certeza que deseja excluir a pós-graduação $tabelaGeral->item2 ?",$action_sim,$action_nao);
+		}
+					
+	}
+
+    function btnPost_click()
+    {
+        $data = $this->GetData();
+         $funcionario = $this->manager->getBusiness('rh','funcionario',$this->titulacao->idFuncionario);
+         $funcionario->getVinculos();
+         foreach ( $funcionario->vinculo as $vinculo )
+         {
+            if ( $vinculo->isAtivo() )
+            {
+                if ( $vinculo->isDocente() )
+                {
+                    $nivel = $vinculo->getNivelAtuacaoDocente();
+                    $provimento = $vinculo->getProvimentoAtual();
+                    
+
+                    switch ( $nivel )
+                    {
+                        case 'SUPERIOR':
+                            $classe = $this->manager->getBusiness('rh','classe',$provimento->idClasse);
+                            if ( $data->idTitulacao == 26) //Mestrado
+                            {
+                                if ( $dataProgressao = $provimento->progrideMestrado() ) //Apto para progressao
+                                {
+                                    $vinculo->novaClasse = $dataProgressao['idClasse'];
+                                    $vinculo->novaReferencia = $dataProgressao['idReferencia'];
+                                    $vinculos[] = $vinculo;
+                                }
+                            }
+                            if ( $data->idTitulacao == 27) //Doutorado
+                            {
+                                if ( $dataProgressao = $provimento->progrideDoutorado() ) //Apto para progressao
+                                {
+                                    $vinculo->novaClasse = $dataProgressao['idClasse'];
+                                    $vinculo->novaReferencia = $dataProgressao['idReferencia'];
+                                    $vinculos[] = $vinculo;
+                                }
+                            }
+                            break;
+                        case 'MEDIO':
+                            if ( $data->idTitulacao == 25) //Especialização
+                            {
+                                if ( $provimento->idClasse < 8 ) //Apto para progressao
+                                {
+                                    $vinculo->novaClasse = 8;
+                                    $vinculo->novaReferencia = 1181;
+                                    $vinculos[] = $vinculo;
+                                }
+                            }
+                            if ( $data->idTitulacao == 26 || $data->idTitulacao == 27) // Mestrado || Doutorado
+                            {
+                                if ( $provimento->idClasse < 9 ) //Apto para progressao
+                                {
+                                    $vinculo->novaClasse = 9;
+                                    $vinculo->novaReferencia = 1185;
+                                    $vinculos[] = $vinculo;
+                                }
+                            }
+                            break;
+                    }
+                }
+            }
+         }
+
+         if ( $vinculos ) 
+         {
+         	
+         	/**
+         	 * seleciona o vínculo ativo
+         	 */
+         	$vinculoAtivo = $data->idvinculo;
+         	$vinculoEscolhido = array();
+
+         	if ( count($vinculos) != 1 )
+         	{
+         		// descobre o vinculo ativo 
+         		foreach ($vinculos as $v)
+         		{
+         			if ($vinculoAtivo == $v)
+         			{
+         				array_push($vinculoEscolhido,$vinculoAtivo);
+         				break;
+         			}
+         		}
+         		$vinculos = $vinculoEscolhido;
+         	}
+         	
+         	
+            //if ( count($vinculos) == 1 )
+            //{
+                $vinculo = array_pop($vinculos);
+                $title = ($provimento->idCargo == 2 || $provimento->idCargo == 12) ? 'Acréscimo de Vencimento por Titulação' : 'Progressão por Titulação';
+                $this->setTitle($title);
+                $classe = $this->manager->getBusiness('rh','classe',$vinculo->novaClasse);
+                $classe->getReferencias();
+                $referencia = $classe->getReferencia($vinculo->novaReferencia);
+                $provimento->getClasse();
+                $provimento->getReferencia();
+
+                $infoClasse = new MHContainer('',
+                    array(
+                        new MLabel('Classe:'),
+                        new MTextLabel('txtIdClasse',$provimento->classe->nome,'Classe'),
+                    )
+                );
+                $infoRef = new MHContainer('',
+                    array(
+                        new MLabel('Nível Padrão:'),
+                        new MTextLabel('txtIdReferencia',$provimento->referencia->nivelPadrao,'Nível Padrão'),
+                    )
+                );
+
+                $infoClasseProgressao = new MHContainer('',
+                    array(
+                        new MLabel('Classe:'),
+                        new MTextLabel('txtIdClasseProgressao',$classe->nome,'Classe'),
+                    )
+                );
+                $infoRefProgressao = new MHContainer('',
+                    array(
+                        new MLabel('Nível Padrão:'),
+                        new MTextLabel('txtIdReferenciaProgressao',$referencia->nivelPadrao,'Nível Padrão'),
+                    )
+                );
+                
+                $fields = array(
+                        new MBaseGroup('info','Dados Atuais',array($infoClasse,$infoRef),'vertical','css'),
+                        new MBaseGroup('info','Progressão',array($infoClasseProgressao,$infoRefProgressao),'vertical','css'),
+                        new MCalendarField('dataProgressao',date('d/m/Y'),'Data da Progressão',15),
+                        new MLookupFieldValue('publicacao','','Publicação'),
+                        new MHiddenField('idPublicacao'),
+                        new MHiddenField('idClasse',$classe->idClasse),
+                        new MHiddenField('idReferencia',$referencia->idReferencia),
+                        new MHiddenField('idVinculo',$vinculo->idVinculo),
+                        new MHiddenField('idTitulacao',$data->idTitulacao),
+                        new MHiddenField('nomecurso',$data->nomecurso),
+                        new MHiddenField('dataFim',$data->dataFim),
+                        new MHiddenField('entidade',$data->entidade),
+                        new MHiddenField('tituloTrabalhoFinal',$data->tituloTrabalhoFinal),
+                        new MHiddenField('tipoTrabalhoFinal',$data->tipoTrabalhoFinal),
+                        new MHiddenField('areaConcentracao',$data->areaConcentracao),
+                     //   new MHiddenField('incentivo',$data->incentivo),
+                        
+                );
+                $this->SetFields($fields);
+                
+                $this->SetFieldAttr('publicacao','module','rh');
+                $this->SetFieldAttr('publicacao','item','publicacao');
+                $this->SetFieldAttr('publicacao','event','filler');
+                $this->SetFieldAttr('publicacao','related','idPublicacao,null,publicacao');
+                $buttons = array( new MButton('btnProgressao','Enviar') );
+                $this->SetButtons($buttons);
+                $this->setButtonAttr('btnPost','visible',FALSE);
+
+
+                $this->setValidators($validators);                
+                
+           // }
+            //else
+          //  {
+           //     $this->addInfo("Servidor com mais de um vínculo em condição de progressão");
+                //TODO
+           // }
+         }
+         else
+         { 
+             try 
+             {	
+                 $this->titulacao->SetData($data);
+                 $this->titulacao->beginTransaction();
+                 $this->titulacao->save();
+                 $this->titulacao->log(OP_INS,"id funcionario: ".$this->titulacao->idFuncionario." id titulacao: ".$this->titulacao->idTitulacao." data fim: ".$this->titulacao->dataFim." entidade: ".$this->titulacao->entidade);
+                 if ( $funcionario->escolaridade < 10 )
+                 {  
+                    $funcionario->setTransaction($this->titulacao->getTransaction());
+                    $funcionario->setEscolaridade(10);
+                    $funcionario->save();
+                 }
+                 $this->titulacao->endTransaction();
+                 $go = $this->manager->GetActionURL('rh','main:funcionario',$this->titulacao->idFuncionario, array('form'=>'titulacoes'));
+                 
+                 $this->manager->Information('Dados de Pós-Graduação atualizados com sucesso.', $go );				
+             
+			//var_dump($data);
+             }
+             catch (Exception $e)
+             {
+                 $this->AddError($e->getMessage());
+             } 
+        }
+	}
+
+
+    function btnProgressao_click()
+    {
+		$dataProgressao = $this->GetFormValue('dataProgressao');
+        $idClasse       = $this->getFormValue('idClasse');
+        $idReferencia   = $this->getFormValue('idReferencia');
+		$idPublicacao 	= $this->GetFormValue('idPublicacao');
+		$obs			= $this->GetFormValue('obs');
+		$idVinculo		= $this->GetFormValue('idVinculo');
+
+        $data->idTitulacao = $this->getFormValue('idTitulacao');
+        $data->dataFim = $this->getFormValue('dataFim');
+        $data->entidade = $this->getFormValue('entidade');
+        $data->tituloTrabalhoFinal = $this->getFormValue('tituloTrabalhoFinal');
+        $data->tipoTrabalhoFinal = $this->getFormValue('tipoTrabalhoFinal');
+        $data->areaConcentracao = $this->getFormValue('areaConcentracao');
+        $data->nomecurso = $this->getFormValue('nomecurso');
+       // $data->incentivo = $this->GetFormValue('incentivo');
+       
+        $tabelaGeral = $this->manager->GetBusiness('common','tabelageral');
+        $tabelaGeral->getByItem('RH_TITULACAO',$data->idTitulacao);
+
+        $obs = 'PROGRESSÃO FUNCIONAL POR TITULAÇÃO: '.$tabelaGeral->item2;
+        
+		try
+		{
+            $this->objVinculo->getById($idVinculo);
+            $this->objVinculo->beginTransaction();
+            $this->titulacao->setData($data);
+            $this->titulacao->setTransaction($this->objVinculo->getTransaction());
+            $this->titulacao->save();
+            $this->titulacao->log(OP_INS,"id funcionario: ".$this->titulacao->idFuncionario." id titulacao: ".$this->titulacao->idTitulacao." data fim: ".$this->titulacao->dataFim." entidade: ".$this->titulacao->entidade);
+            $funcionario = $this->manager->getBusiness('rh','funcionario',$this->titulacao->idFuncionario);
+            if ( $funcionario->escolaridade < 10 )
+            {  
+                $funcionario->setTransaction($this->objVinculo->getTransaction());
+                $funcionario->setEscolaridade(10);
+                $funcionario->save();
+            }
+            if ( $idClasse != 18 ) //18 é da classe ASSOCIADO, que já foi validada anteriormente
+            {
+			    $this->objVinculo->validaProgressao($dataProgressao,TRUE);
+            }
+			$this->objVinculo->progride($dataProgressao,$idPublicacao,$idClasse,$idReferencia,$obs);
+            $this->objVinculo->endTransaction();
+		    $go = $this->manager->getActionURL('rh','main:vinculo:progressao',$this->objVinculo->idVinculo);
+		    
+  	    	$this->manager->information('Progressão efetuada com sucesso!', $go);
+  	    	
+		}
+		catch ( Exception $e )
+		{
+			$this->AddError($e->getMessage());
+		}
+    }
+}
+?>

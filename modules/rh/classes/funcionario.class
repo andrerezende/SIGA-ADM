@@ -1,0 +1,887 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class BusinessRhFuncionario extends MBusiness
+{
+    public $idFuncionario;
+    public $escolaridade;
+    public $ufEmpregoAnterior;
+    public $dataPrimeiroEmprego;
+    public $idPessoa;
+
+    public $pessoa;
+    public $dependentes;
+    public $titulacao;
+    public $formacao;
+    public $vinculo;
+    public $capacitacao;
+    public $escolaridadeTabelaGeral;
+
+    public $k;
+
+    public $nome;
+
+    function __construct($data=NULL)
+    {
+       parent::__construct('sigaept',$data);
+       $this->k = new MKrono();
+    }
+
+    function OnCreate($data)
+    {
+        if (empty($data))
+        {
+//            $this->initialize();
+        }
+        else
+        {
+            $this->GetById($data);
+        }
+    }
+
+    function GetById($id)
+    {
+       $this->idFuncionario = $id;
+       $this->retrieve();
+       return $this;
+    }
+
+    function SetData($data)
+   
+    {
+       $this->idFuncionario = $data->idFuncionario;
+       $this->escolaridade = $data->escolaridade;
+       $this->ufEmpregoAnterior = $data->ufEmpregoAnterior;
+       $this->dataPrimeiroEmprego = $data->dataPrimeiroEmprego;
+       $this->idPessoa = $data->idPessoa;
+
+       $this->nome = $data->nome;
+
+    }
+
+  function Insert()
+    {   global $MIOLO;
+        $sql = new sql('idFuncionario,escolaridade,ufEmpregoAnterior,dataPrimeiroEmprego,idPessoa','rh_funcionario');
+
+        $args = array(
+            $this->idFuncionario,
+            strtoupper($this->escolaridade),
+            strtoupper($this->ufEmpregoAnterior),
+            strtoupper($this->dataPrimeiroEmprego),
+            strtoupper($this->idPessoa)
+        );
+        $ok = $this->Execute($sql->Insert($args));
+        if ($ok) {$this->Log(OP_INS,"idFuncionario = $this->idFuncionario");} 
+        return $ok;
+    }
+
+    function Update()
+    {
+        $sql = new sql('escolaridade,ufEmpregoAnterior,dataPrimeiroEmprego,idPessoa','rh_funcionario','idFuncionario = ?');
+        $args = array(
+            strtoupper($this->escolaridade),
+            strtoupper($this->ufEmpregoAnterior),
+            strtoupper($this->dataPrimeiroEmprego),
+            strtoupper($this->idPessoa),
+            $this->idFuncionario
+        );
+        $ok = $this->Execute($sql->Update($args));
+        if ($ok) {$this->Log(OP_UPD,"idFuncionario = $this->idFuncionario");} 
+        return $ok;
+    }
+    
+   function Delete()
+    {
+        $sql = new sql('','rh_funcionario', 'idFuncionario = ?');
+        $ok = $this->Execute( $sql->Delete($this->idFuncionario) );
+        if ($ok) {$this->Log(OP_DEL,"idFuncionario = $this->idFuncionario");} 
+        return $ok;
+    }
+
+    function ListRange($range=NULL)
+    {
+        $sql = new sql('p.nome,f.escolaridade,f.ufEmpregoAnterior,f.dataPrimeiroEmprego,f.idPessoa', '', '','idFuncionario');
+        $sql->SetJoin('cm_pessoa p ','rh_funcionario f','( f.idPessoa = p.idPessoa )');
+        $sql->SetRange($range); 
+        $query = $this->Query($sql);
+        return $query;
+    }
+
+    function ListAll()
+    {
+        return $this->ListRange();
+    }
+
+     function CountWhere($where='')
+    {
+        $sql = new sql('*','rh_funcionario',$where);
+        return $this->_db->Count($sql->Select());
+    }   
+
+    function ListByNome($nome)
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->addColumnAttribute('idFuncionario');
+        $criteria->addColumnAttribute('pessoa.nome');
+        $criteria->addCriteria('upper(pessoa.nome)','LIKE', "$nome");
+        $criteria->addOrderAttribute('pessoa.nome');
+        return $criteria->retrieveAsQuery();
+    }
+
+    function ListByNomeOrMatricula($nome, $matricula)
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->addColumnAttribute('idFuncionario');
+        $criteria->addColumnAttribute('vinculo.idVinculo');
+        $criteria->addColumnAttribute('pessoa.nome');
+        if ($matricula != '')
+        {
+           $criteria->addCriteria('vinculo.idVinculo','=', "'$matricula'");
+        }
+        else
+        {
+           $criteria->addCriteria('upper(pessoa.nome)','LIKE', "$nome");
+        }
+        $criteria->addOrderAttribute('pessoa.nome');
+        return $criteria->retrieveAsQuery();
+    }
+
+    function ListByNomeOrMatriculaSituacao($nome, $matricula, $idSetores=null)
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->addColumnAttribute('idFuncionario');
+        $criteria->addColumnAttribute('vinculo.idVinculo');
+        //$criteria->addColumnAttribute('vinculo.provimentos.situacaofuncional.descricao');
+        $criteria->addColumnAttribute('pessoa.nome');
+        $criteria->addColumnAttribute('max(vinculo.provimentos.dataInicio)');
+        //$criteria->addCriteria('vinculo.provimentos.dataFim','is', "NULL");
+        if ($matricula != '')
+        {
+           $criteria->addCriteria('vinculo.idVinculo','=', "'$matricula'");
+        }
+        else
+        {
+           $criteria->addCriteria('upper(pessoa.nome)','LIKE', "$nome");
+        }
+        
+        if ( ! is_null($idSetores) )
+        {
+            // somente os que não são excluídos aparecerão.
+            $criteria->addCriteria('vinculo.provimentos.dataFim','=', "'0001/01/01'");
+            $criteria->addCriteria('vinculo.provimentos.idSetor','IN', $idSetores);
+            // colocar para procurar no idsetor do usuario tambem (se realmente for necessário).
+        }
+        
+        $criteria->addGroupAttribute('idFuncionario');
+        $criteria->addGroupAttribute('vinculo.idVinculo');
+        //$criteria->addGroupAttribute('vinculo.provimentos.situacaofuncional.descricao');
+        $criteria->addGroupAttribute('pessoa.nome');
+        $criteria->addOrderAttribute('pessoa.nome');
+        return $criteria->retrieveAsQuery();
+    }
+
+    function getDependentes()
+    {
+        $this->retrieveAssociation('dependentes');
+        if ($this->dependentes != NULL)
+        {
+
+            if (!is_array($this->dependentes))
+            {
+                $this->dependentes = array($this->dependentes);
+            }
+        }
+    }
+
+    function getDependenteById($idDependente)
+    {   global $MIOLO;
+        if ($this->dependentes != NULL)
+        {
+            foreach($this->dependentes as $d)
+            {
+                if ($d->idDependente == $idDependente)
+                    return $d;
+            }
+        }
+        $d = $MIOLO->GetBusiness('rh','dependente');
+        $d->idFuncionario = $this->idFuncionario;
+        return $d;
+    }
+
+
+    function getVinculoAtivo()
+    {
+        $this->getVinculos();
+        if ( is_array($this->vinculo) )
+        {
+            foreach ( $this->vinculo as $v )
+            {
+                if ( $v->isAtivo() )
+                {
+                    return $v;
+                }
+            }
+        }
+    }    
+    
+    function getTitulacoes()
+    {
+        $this->retrieveAssociation('titulacao');
+        if ($this->titulacao != NULL)
+        {
+            if (!is_array($this->titulacao))
+            {
+                $this->titulacao = array($this->titulacao);  
+            }
+        }
+        return $this->titulacao;
+    }
+
+    function getTitulacao($idHistTitulacao)
+    {   global $MIOLO;
+        if ($this->titulacao != NULL)
+        {
+            foreach($this->titulacao as $t)
+            {
+                if ($t->idHistTitulacao == $idHistTitulacao)
+                    return $t;
+            }
+        }
+        $t = $MIOLO->GetBusiness('rh','histtitulacao');
+        $t->idFuncionario = $this->idFuncionario;
+        return $t;
+    }
+
+    function hasTitulacao()
+    {
+        if ( $this->titulacao == NULL )
+        {
+            $this->getTitulacoes();
+        }
+        return ( count($this->titulacao) > 0 );
+    }
+
+    function getCapacitacoes()
+    {
+        $this->retrieveAssociation('capacitacao');
+        if ($this->capacitacao != NULL)
+        {
+            if (!is_array($this->capacitacao))
+            {
+                $this->capacitacao = array($this->capacitacao);
+            }
+        }
+    }
+    
+    function getCapacitacao($idHistCapacitacao)
+    {   global $MIOLO;
+        if ($this->capacitacao != NULL)
+        {
+            foreach($this->capacitacao as $c)
+            {
+                if ($c->idHistCapacitacao == $idHistCapacitacao)
+                    return $c;
+            }
+        }
+        $c = $MIOLO->GetBusiness('rh','histcapacitacao');
+        $c->idFuncionario = $this->idFuncionario;
+        return $c;
+    }
+    
+    
+    function getFormacoes()
+    {
+        $this->retrieveAssociation('formacao');
+        if ($this->formacao != NULL)
+        {
+            if (!is_array($this->formacao))
+            {
+                $this->formacao = array($this->formacao);  
+            }
+        }
+        return $this->formacao;
+    }
+
+    function getFormacao($idHistFormacao)
+    {   global $MIOLO;
+        if ($this->formacao != NULL)
+        {
+            foreach($this->formacao as $f)
+            {
+                if ($f->idHistFormacao == $idHistFormacao)
+                    return $f;
+            }
+        }
+        $f = $MIOLO->GetBusiness('rh','histformacao');
+        $f->idFuncionario = $this->idFuncionario;
+        return $f;
+    }
+
+    function getFormacaoMaiorEscolaridade($idHistFormacao)
+    {
+        // exceto a indicada por idHistFormacao
+        if ( $this->formacao == NULL )
+        {
+            $this->getFormacoes();
+        }
+        if ( is_array($this->formacao) )
+        {
+            foreach ( $this->formacao as $f )
+            {
+                if ( $f->idHistFormacao != $idHistFormacao )
+                {
+                    $niveis[$f->formacao->escolaridade] = $f->idHistFormacao;
+                }
+                if ( is_array($niveis) )
+                {
+                    ksort($niveis);
+                    reset($niveis);
+                    $idMaior = array_pop($niveis);
+                    return $this->getFormacao($idMaior)->formacao->escolaridade;
+                }
+            }
+        }
+        return 0;
+    }
+
+    function getMaiorFormacaoByPCCTAE()
+    {
+    global $MIOLO;
+        $histFormacao = $MIOLO->getBusiness('rh', 'histformacao');
+        $criteria = $histFormacao->getCriteria();
+            $criteria->addColumnAttribute('idHistFormacao');
+            $criteria->addCriteria('idFuncionario', '=', $this->idFuncionario);
+            $criteria->addOrderAttribute('idEscolaridadePCCTAE', false);
+            $criteria->addOrderAttribute('dataFim', false);
+        $idHistFormacao = $criteria->retrieveAsQuery()->getRowValues();        
+        $histFormacao->idHistFormacao = $idHistFormacao[0];
+        $histFormacao->retrieve();
+        return $histFormacao;
+
+    }
+
+    function getVinculos()
+    {
+        $this->retrieveAssociation('vinculo');
+        if ($this->vinculo != NULL)
+        {
+            if (!is_array($this->vinculo))
+            {
+                $this->vinculo = array($this->vinculo);  
+            }
+        }
+    }
+
+    function getVinculo($idVinculo)
+    {   global $MIOLO;
+        if ($this->vinculo != NULL)
+        {
+            foreach($this->vinculo as $v)
+            {
+                if ($v->idVinculo == $idVinculo)
+                    return $f;
+            }
+        }
+        $v = $MIOLO->GetBusiness('rh','vinculo');
+        $v->idFuncionario = $this->idFuncionario;
+        return $v;
+    }
+    
+    function ListVinculos()
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->addColumnAttribute('idFuncionario');
+        $criteria->addColumnAttribute('vinculo.idVinculo');
+        $criteria->addColumnAttribute('vinculo.provimentos.situacaofuncional.descricao');
+        //$criteria->addColumnAttribute('pessoa.nome');
+        $criteria->addCriteria('vinculo.provimentos.dataFim','=', "'0001/01/01'");
+        $criteria->addCriteria('idFuncionario','=',"'$this->idFuncionario'");
+        //$criteria->addOrderAttribute('pessoa.nome');
+        return $criteria->retrieveAsQuery();
+    }
+
+    function listGeral($grouped=false)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('idFuncionario');
+        $criteria->addColumnAttribute('vinculo.idVinculo');
+        $criteria->addColumnAttribute('pessoa.nome');
+        $criteria->addColumnAttribute('vinculo.provimentos.regimeJuridico');
+        $criteria->addColumnAttribute('vinculo.provimentos.situacaofuncional.descricao','situacao');
+        $criteria->addColumnAttribute('vinculo.provimentos.cargo.descricao','cargo');
+        $criteria->addColumnAttribute('vinculo.provimentos.cargo.jornada.descricao','jornada');
+        $criteria->addColumnAttribute('vinculo.provimentos.setor.nome','setor');
+        $criteria->addCriteria('vinculo.provimentos.dataFim','=', "'0001/01/01'");
+        //$criteria->addCriteria('pessoa.nome','like', "'B%'");
+        if ( $grouped )
+        {
+            $criteria->addOrderAttribute('vinculo.provimentos.setor.nome');
+            $criteria->addOrderAttribute('pessoa.nome');
+        }
+        else
+        {
+            $criteria->addOrderAttribute('pessoa.nome');
+            $criteria->addOrderAttribute('vinculo.provimentos.setor.nome');
+        }
+        
+        return $criteria->retrieveAsQuery();
+    }
+
+    function listAniversariantes($mes, $ctg, $ordem=NULL, $dmy=NULL, $tadoc='A')
+    {
+        // $tadoc: 'A': 'Ambos', 'T': 'Técnico-Administrativos', 'D': 'Docentes'
+
+        $criteria = $this->getCriteria();
+
+        $criteria->addColumnAttribute('vinculo.idVinculo');
+        if (! $dmy)
+        {
+            $criteria->addColumnAttribute('pessoa.datanasc','dtnsc');
+        }
+
+        $criteria->addColumnAttribute('pessoa.nome');
+
+        if ($ctg==2) //APOSENTADO
+        {
+            $criteria->addColumnAttribute('pessoa.endereco');
+            $criteria->addColumnAttribute('pessoa.municipio.municipio');
+            $criteria->addColumnAttribute('pessoa.bairro');
+            $criteria->addColumnAttribute('pessoa.cep');
+        }
+        else
+        {
+            //$criteria->addColumnAttribute('vinculo.provimentos.setor.nome','setor');
+            if ($ordem == 'S')
+            {
+                //$criteria->addOrderAttribute('vinculo.provimentos.setor.nome');
+            }
+            //'E-MAIL';  //wm_usuario
+        }
+        $criteria->addColumnAttribute('pessoa.telefone');
+
+        $criteria->setDistinct(true);  
+
+        // critérios de consulta (filtro)
+        //$criteria->addCriteria('vinculo.provimentos.dataFim','is', "NULL");      
+        //$criteria->addCriteria('vinculo.provimentos.situacaofuncional.idSituacao','=',"$ctg");
+
+        if ($dmy)
+        {
+            $criteria->addCriteria("pessoa.datanasc",'LIKE',"'%/{$mes}/{$dmy}'");
+        }
+        else
+        {
+            $criteria->addCriteria("pessoa.datanasc",'LIKE',"'%/{$mes}/%'");
+        }
+        if ($tadoc == 'T')
+        {
+            $criteria->addCriteria('vinculo.provimentos.idGrupoCargo','<>','60');
+        }
+        else
+        {
+            if ($tadoc == 'D')
+            {
+                $criteria->addCriteria('vinculo.provimentos.idGrupoCargo','=',60);
+            }
+        }
+        $criteria->addOrderAttribute('pessoa.nome');
+        return $criteria->retrieveAsQuery();
+    }
+
+
+    function ColocaTitulaeEMail($result,$Titulos,$selCtg)
+    {
+        $resultAux[] = $Titulos;                    // 0
+
+        foreach ($result as $ind => $conteudo)
+        {
+            $resultAux[] = $conteudo;               // 1 , 2 , ..
+            if ($selCtg <> 2) //não APOSENTADO  //verifica se tem que buscar e-mail
+            {
+                $sql = new sql("wm_usuario.email", "wm_usuario", "wm_usuario.login = ?");
+                $c = $this->objQuery( $sql->Select($resultAux[$ind+1][0]) )->result;
+                $resultAux[$ind+1][] = $c[0][0];
+            }
+        }
+        return $resultAux;
+    } // ColocaTitulaeEMail
+
+
+    function listGeralParaRelatorio($idSetor=false,$docente=false)
+    {
+
+        $doisAnosAtras = $this->k->operation('-',date("d/m/Y"),'2%Y');
+        $doisAnosAtras = $this->k->invertDate($doisAnosAtras);
+
+
+        $criteria = $this->getCriteria();
+
+        $criteria->addColumnAttribute('idFuncionario');
+        $criteria->addColumnAttribute('vinculo.idVinculo');
+        $criteria->addColumnAttribute('pessoa.nome');
+        $criteria->addColumnAttribute('vinculo.provimentos.setor.nome','setor');
+
+        $criteria->addCriteria('vinculo.provimentos.dataFim','=', "'0001/01/01'");
+        $criteria->addCriteria('vinculo.provimentos.dataInicio','<=',"'$doisAnosAtras'");
+        if ($idSetor) 
+        {
+            $criteria->addCriteria('vinculo.provimentos.idSetor','=', $idSetor);;
+        }  
+        if ($docente) 
+        {
+            $criteria->addCriteria('vinculo.provimentos.idGrupoCargo','=',60);
+        }
+        $cc = new CriteriaCondition();
+        $cc->addCriteria($criteria->getCriteria('vinculo.provimentos.idSituacao','=',"1"));
+        $cc->addOrCriteria($criteria->getCriteria('vinculo.provimentos.idSituacao','=',"8"));
+        $criteria->addCriteria($cc);
+  
+        //$criteria->addCriteria('pessoa.nome','like', "'B%'");
+        $criteria->addOrderAttribute('pessoa.nome');
+        $criteria->addOrderAttribute('vinculo.provimentos.setor.nome');
+        return $criteria->retrieveAsQuery();
+    }
+
+
+
+
+    
+    function isFuncionario($idpessoa)
+    {
+       $sql = new sql('idpessoa','rh_funcionario','idpessoa = ?');
+       $ok = $this->ObjQuery($sql->Select($idpessoa));       
+       //$ok = $this->Execute($sql->Select($idpessoa));
+       return $ok->result;
+    }
+    
+    function isAluno($idpessoa)
+    {
+       $sql = new sql('idpessoa','ga_aluno','idpessoa = ?');
+       $ok = $this->ObjQuery($sql->Select($idpessoa));       
+       return $ok->result;
+    }
+
+    function listBySetor($idSetor,$dataRef=NULL)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('vinculo.idVinculo');
+        $criteria->addColumnAttribute('pessoa.nome');
+        if ( $dataRef )
+        {
+            $k = new MKrono();
+            $dataRef = $k->invertDate($dataRef);
+            $criteria->addCriteria('vinculo.provimentos.dataInicio','<', "'$dataRef'");
+            $cc = new CriteriaCondition();
+            $cc->addCriteria($criteria->getCriteria('vinculo.provimentos.dataFim','>', "'$dataRef'"));
+            $cc->addOrCriteria($criteria->getCriteria('vinculo.provimentos.dataFim','=', "'0001/01/01'"));
+            $criteria->addCriteria($cc);
+            
+        }
+        else
+        {
+            $criteria->addCriteria('vinculo.provimentos.dataFim','=', "'0001/01/01'");
+        }
+        $operador = (is_array($idSetor)) ? 'IN' : '=';
+        $criteria->addCriteria('vinculo.provimentos.idSetor',$operador, $idSetor);
+        $criteria->addOrderAttribute('pessoa.nome');
+        return $criteria->retrieveAsQuery();
+    }
+    
+    function listBySetorRelatorios($idSetor,$dataRef=NULL)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('vinculo.idVinculo');
+        $criteria->addColumnAttribute('pessoa.nome');
+        if ( $dataRef )
+        {
+            $k = new MKrono();
+            $dataRef = $k->invertDate($dataRef);
+            $criteria->addCriteria('vinculo.provimentos.dataInicio','<', "'$dataRef'");
+            $cc = new CriteriaCondition();
+            $cc->addCriteria($criteria->getCriteria('vinculo.provimentos.dataFim','>', "'$dataRef'"));
+            $cc->addOrCriteria($criteria->getCriteria('vinculo.provimentos.dataFim','=', "'0001/01/01'"));
+            $criteria->addCriteria($cc);
+
+        }
+        else
+        {
+            $criteria->addCriteria('vinculo.provimentos.dataFim','=', "'0001/01/01'");
+        }
+        $operador = (is_array($idSetor)) ? 'IN' : '=';
+        $criteria->addCriteria('vinculo.provimentos.idSetor',$operador, $idSetor);
+        $criteria->addCriteria('vinculo.provimentos.idSituacao','<>','2');
+        $criteria->addOrderAttribute('pessoa.nome');
+        return $criteria->retrieveAsQuery();
+    }
+
+    function listWithCargoBySetor($idSetor,$dataRef=NULL)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('vinculo.idVinculo');
+        $criteria->addColumnAttribute('pessoa.nome');
+        $criteria->addColumnAttribute('vinculo.provimentos.cargo.descricao','cargo');
+        if ( $dataRef )
+        {
+            $k = new MKrono();
+            $dataRef = $k->invertDate($dataRef);
+            $criteria->addCriteria('vinculo.provimentos.dataInicio','<', "'$dataRef'");
+            $cc = new CriteriaCondition();
+            $cc->addCriteria($criteria->getCriteria('vinculo.provimentos.dataFim','>', "'$dataRef'"));
+            $cc->addOrCriteria($criteria->getCriteria('vinculo.provimentos.dataFim','=', "'0001/01/01'"));
+            $criteria->addCriteria($cc);
+            
+        }
+        else
+        {
+            $criteria->addCriteria('vinculo.provimentos.dataFim','=', "'0001/01/01'");
+        }
+        $operador = (is_array($idSetor)) ? 'IN' : '=';
+        $criteria->addCriteria('vinculo.provimentos.idSetor',$operador, $idSetor);
+        $criteria->addOrderAttribute('pessoa.nome');
+        return $criteria->retrieveAsQuery();
+    }
+    function GetFuncionarioByPessoa($idpessoa)
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->addCriteria('idPessoa','=',$idpessoa);
+        $this->retrieveFromCriteria($criteria);
+        return $this;
+    }
+    
+    function Escolaridade($idEscolaridade) 
+    {
+        global $MIOLO;
+        
+        $tabelaGeral = $MIOLO->GetBusiness('common','tabelageral');
+        $tg = $tabelaGeral->ListByTabela('RH_ESCOLARIDADE');
+        $tabelaEscolaridade = $tg->chunkResult();
+        
+        foreach ($tabelaEscolaridade as $chave => $valor) 
+        {   
+            if ($chave == $idEscolaridade) 
+                return $valor;
+        }    
+        return "Não informado";
+    }
+
+    function hasOutroVinculoAtivoEst()
+    {
+        $this->getVinculos();
+
+        if ( count($this->vinculo) > 1 )
+        {
+            $i = 0;
+            foreach ( $this->vinculo as $v )
+            {
+                if ( $v->isAtivo() )
+                {
+                    $i++;
+                }
+            }
+            return ($i > 1) ? TRUE : FALSE;
+        }
+        else
+        {
+            return FALSE;
+        }
+    }
+
+    function hasOutroVinculoAtivo($idVinculo)
+    {
+        $this->getVinculos();
+        if ( is_array($this->vinculo) )
+        {
+            foreach ( $this->vinculo as $v )
+            {
+                if ( $v->idVinculo != $idVinculo && $v->isAtivo() )
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    function setEscolaridade($escolaridade)
+    {
+        $this->escolaridade = $escolaridade;
+    }
+    
+    function hasVinculoDocencia()
+    {
+        $this->getVinculos();
+        foreach ( $this->vinculo as $v )
+        {
+            if ( $v->isAtivo() )
+            {
+                if ( $v->isDocente() )
+                {   
+                    return TRUE;
+                }
+            }
+        }
+        return FALSE;
+
+    }
+
+    function ListServidoresDocentesAtivos($setor = NULL)
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->addColumnAttribute('vinculo.idVinculo');
+        $criteria->addColumnAttribute('pessoa.nome');
+        $criteria->addColumnAttribute('vinculo.provimentos.idSetor');
+        $criteria->addCriteria('vinculo.provimentos.dataFim','=', "'0001/01/01'");
+        $criteria->addCriteria('vinculo.provimentos.idSituacao','IN',array(1,8,12,20));
+        if ( $setor )
+        {
+            if ( is_array($setor) )
+            {
+                $criteria->addCriteria('vinculo.provimentos.idSetor','IN', $setor);
+            }
+            else
+            {
+                $criteria->addCriteria('vinculo.provimentos.idSetor','=', $setor);
+            }
+        }
+
+        $criteria->addCriteria('vinculo.provimentos.idGrupoCargo','=','60');
+
+        $criteria->addGroupAttribute('vinculo.idVinculo');
+        $criteria->addGroupAttribute('pessoa.nome');
+        $criteria->addGroupAttribute('vinculo.provimentos.idSetor');
+        $query = $criteria->retrieveAsQuery();
+        return $query;
+    }
+
+    function listServidoresAtivos()
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->addColumnAttribute('vinculo.idVinculo');
+        //$criteria->addColumnAttribute('pessoa.nome');
+        $criteria->addColumnAttribute('idPessoa');
+        $criteria->addColumnAttribute('vinculo.provimentos.idSetor');
+        $criteria->addCriteria('vinculo.provimentos.dataFim','=', "'0001/01/01'");
+        $criteria->addCriteria('vinculo.provimentos.idSituacao','IN',array(1,8));  //estatutários ativos
+
+//        $criteria->addGroupAttribute('vinculo.idVinculo');
+//        $criteria->addGroupAttribute('pessoa.nome');
+//        $criteria->addGroupAttribute('vinculo.provimentos.idSetor');
+
+        //$criteria->addOrderAttribute('pessoa.nome');
+        
+        $query = $criteria->retrieveAsQuery();
+
+        return $query;
+    } // listServidoresAtivos
+
+
+    function ListServidoresTAAtivos($setor = NULL)
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->addColumnAttribute('vinculo.idVinculo');
+        $criteria->addColumnAttribute('pessoa.nome');
+        $criteria->addColumnAttribute('vinculo.provimentos.idSetor');
+        $criteria->addCriteria('vinculo.provimentos.dataFim','=', "'0001/01/01'");
+        $criteria->addCriteria('vinculo.provimentos.idSituacao','IN',array(1,8,12,20));
+        if ( $setor )
+        {
+            if ( is_array($setor) )
+            {
+                $criteria->addCriteria('vinculo.provimentos.idSetor','IN', $setor);
+            }
+            else
+            {
+                $criteria->addCriteria('vinculo.provimentos.idSetor','=', $setor);
+            }
+        }
+
+        $criteria->addCriteria('vinculo.provimentos.idGrupoCargo','<>','60');
+
+        $criteria->addGroupAttribute('vinculo.idVinculo');
+        $criteria->addGroupAttribute('pessoa.nome');
+        $criteria->addGroupAttribute('vinculo.provimentos.idSetor');
+        $query = $criteria->retrieveAsQuery();
+        return $query;
+    }
+
+    function ListByNomeOrMatriculaSituacaoAtivos($nome, $matricula, $idSetores=null)
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->addColumnAttribute('idFuncionario');
+        $criteria->addColumnAttribute('vinculo.idVinculo');        
+        $criteria->addColumnAttribute('pessoa.nome');
+        $criteria->addColumnAttribute('max(vinculo.provimentos.dataInicio)');
+
+        if ($matricula != '') {
+            $criteria->addCriteria('vinculo.idVinculo','=', "'$matricula'");
+        } else {
+            $criteria->addCriteria('upper(pessoa.nome)','LIKE', "$nome");
+        }
+        
+        if (!is_null($idSetores)) {
+            $criteria->addCriteria('vinculo.provimentos.dataFim','=', "'0001/01/01'");
+            $criteria->addCriteria('vinculo.provimentos.idSetor','IN', $idSetores);           
+        }
+        
+        $criteria->addCriteria('vinculo.provimentos.dataFim','=', "'0001/01/01'");
+        $criteria->addCriteria('vinculo.provimentos.idSituacao','IN',array(1,8));  //estatutários ativos
+
+        $criteria->addGroupAttribute('idFuncionario');
+        $criteria->addGroupAttribute('vinculo.idVinculo');
+        $criteria->addGroupAttribute('pessoa.nome');
+        
+        $criteria->addOrderAttribute('pessoa.nome');
+
+        return $criteria->retrieveAsQuery();
+    }
+
+
+    function Check($id)
+    {
+	$sql = new sql("* from rh_funcionario where idfuncionario='$id'");
+	$query = $this->Query($sql);
+	return $query->result;
+    }
+    function GetVinculoByPessoa($idusuario)
+    {
+	$sql1 = new sql("idpessoa from cm_usuario where idusuario=$idusuario");
+	$query1 = $this->Query($sql1);
+	$idpessoa = $query1->result;
+	$id = $idpessoa[0][0];
+	$sql = new sql("distinct(v.idvinculo) from cm_usuario u, cm_pessoa p, rh_funcionario f, rh_vinculo v where f.idpessoa=$id and f.idfuncionario=v.idfuncionario");
+	$query = $this->Query($sql);
+	$resultado = $query->result;
+	return $resultado[0][0];
+    }
+    function GetVinculoByidFuncionario($idFuncionario)
+    {
+	$sql = new sql("distinct(v.idvinculo) from rh_funcionario f, rh_vinculo v where f.idfuncionario= '$idFuncionario' and  f.idfuncionario=v.idfuncionario");
+	$query = $this->Query($sql);
+	$resultado = $query->result;
+	return $resultado[0][0];
+    }
+
+    public function getIdFuncionario($idUsuario = null) {
+        $sql = new sql("f.idfuncionario FROM rh_funcionario f LEFT JOIN cm_usuario u ON f.idpessoa = u.idpessoa WHERE u.idusuario = $idUsuario");
+        $query = $this->Query($sql);
+        $resultado = $query->result;
+        return $resultado[0][0];
+    }
+}
+?>

@@ -1,0 +1,264 @@
+<?php
+class repUoAlmoxarifadoBoletimDiario extends MPDFReport
+{
+    public $img;
+    public $timestamp;
+    public $uoalmoxarifado;
+    public $dataRel;
+	function __construct($objUo)
+    {
+        global $MIOLO;
+        $this->uoalmoxarifado = $objUo;
+        $this->timestamp = date('d/m/Y G:i');
+        $k = new MKrono();
+        $inicio = Form::getFormValue('dataInicio');
+        $fim = Form::getFormValue('dataFim');
+        // obtem os movimentos por perÃ­odo
+        $movimento = $MIOLO->getBusiness('adm','movimento');
+	    $criteria = $movimento->getCriteria();
+        $criteria->addColumnAttribute('idMovimento');
+        $criteria->addColumnAttribute('material.codmaterial');
+        $criteria->addColumnAttribute('material.descricao');
+        $criteria->addColumnAttribute('material.unidade');
+        $criteria->addColumnAttribute('itemNota.empenhado.empenho.numero');
+        $criteria->addColumnAttribute('itemNota.notaFiscal.notaFiscal');
+        $criteria->addColumnAttribute('idRequisicao');
+        $criteria->addColumnAttribute('quantidade');
+        $criteria->addColumnAttribute('valorTotal');
+	    $criteria->addCriteria('dataMovimento','>=',"'{$k->invertDate($inicio)}'");
+	    $criteria->addCriteria('dataMovimento','<=',"'{$k->invertDate($fim)}'");
+	    $criteria->addCriteria('tipoMovimento','=',"'1'");
+	    $criteria->addCriteria('requisicao.idUoRequisitante','=',$this->uoalmoxarifado->idUo);
+	    $criteria->addCriteria('idMovimentoRef','is',"null");
+        $criteria->addOrderAttribute('dataMovimento',false);
+        $query = $criteria->retrieveAsQuery();
+        if ($query->result)
+        {
+            foreach ($query->result as $r)
+            {
+                $movimentos[$r[0]] = array($r[1],$r[2],$r[3],$r[4],$r[5],null,$r[6],$r[7],$r[8]);
+            }
+        }
+	    $criteria = $movimento->getCriteria();
+        $criteria->addColumnAttribute('idMovimento');
+        $criteria->addColumnAttribute('material.codmaterial');
+        $criteria->addColumnAttribute('material.descricao');
+        $criteria->addColumnAttribute('material.unidade');
+        $criteria->addColumnAttribute('ordem.numero');
+        $criteria->addColumnAttribute('idRequisicao');
+        $criteria->addColumnAttribute('quantidade');
+        $criteria->addColumnAttribute('valorTotal');
+	    $criteria->addCriteria('dataMovimento','>=',"'{$k->invertDate($inicio)}'");
+	    $criteria->addCriteria('dataMovimento','<=',"'{$k->invertDate($fim)}'");
+	    $criteria->addCriteria('tipoMovimento','=',"'3'");
+	    $criteria->addCriteria('requisicao.idUoExecutante','=',$this->uoalmoxarifado->idUo);
+	    $criteria->addCriteria('idMovimentoRef','is',"null");
+        $criteria->addOrderAttribute('dataMovimento',false);
+        $query = $criteria->retrieveAsQuery();
+        if ($query->result)
+        {
+            foreach ($query->result as $r)
+            {
+                $movimentos[$r[0]] = array($r[1],$r[2],$r[3],null,null,$r[4],$r[5],$r[6],$r[7]);
+            }
+        }
+	    $criteria = $movimento->getCriteria();
+        $criteria->addColumnAttribute('idMovimento');
+        $criteria->addColumnAttribute('material.codmaterial');
+        $criteria->addColumnAttribute('material.descricao');
+        $criteria->addColumnAttribute('material.unidade');
+        $criteria->addColumnAttribute('itemNota.empenhado.empenho.numero');
+        $criteria->addColumnAttribute('itemNota.notaFiscal.notaFiscal');
+        $criteria->addColumnAttribute('ordem.numero');
+        $criteria->addColumnAttribute('idRequisicao');
+        $criteria->addColumnAttribute('quantidade');
+        $criteria->addColumnAttribute('valorTotal');
+	    $criteria->addCriteria('dataMovimento','>=',"'{$k->invertDate($inicio)}'");
+	    $criteria->addCriteria('dataMovimento','<=',"'{$k->invertDate($fim)}'");
+	    $criteria->addCriteria('tipoMovimento','=',"'5'");
+	    $criteria->addCriteria('itemNota.empenhado.empenho.idUoEntrega','=',$this->uoalmoxarifado->idUo);
+	    $criteria->addCriteria('idMovimentoRef','is',"null");
+        $criteria->addOrderAttribute('dataMovimento',false);
+        $query = $criteria->retrieveAsQuery();
+        if ($query->result)
+        {
+            foreach ($query->result as $r)
+            {
+                $movimentos[$r[0]] = array($r[1],$r[2],$r[3],$r[4],$r[5],$r[6],$r[7],$r[8],$r[9]);
+            }
+        }
+        if ($movimentos)
+        {
+		    $cf = new MCurrencyFormatter();
+            ksort($movimentos);
+            foreach ($movimentos as $movimento)
+            {
+                $this->dataRel[] = array($movimento[0],$movimento[1],$movimento[2],$movimento[3],$movimento[4],$movimento[5],$movimento[6],$movimento[7],$cf->formatWithSymbol($cf->toDecimal($movimento[8])));
+            }
+        }
+        $columns = array (
+            new MPDFReportColumn('codigo', '<b>CODIGO</b>', 'right', true, 6, true),
+            new MPDFReportColumn('especificacao', '<b>ESPECIFICACAO</b>', 'left', true, 38, true),
+            new MPDFReportColumn('unidade', '<b>UNIDADE</b>', 'left', true, 6, true),
+            new MPDFReportColumn('empenho', '<b>EMPENHO</b>', 'right', true, 9, true),
+            new MPDFReportColumn('notafiscal', '<b>NOTA FISCAL</b>', 'right', true, 8, true),
+            new MPDFReportColumn('ordementrega', '<b>ORDEM ENTREGA</b>', 'right', true, 8, true),
+            new MPDFReportColumn('requisicao', '<b>NUMERO REQUISICAO</b>', 'right', true, 8, true),
+            new MPDFReportColumn('quantidade', '<b>QUANTIDADE</b>', 'right', true, 9, true),
+            new MPDFReportColumn('valor', '<b>VALOR TOTAL</b>', 'right', true, 8, true),
+        );
+        parent::__construct($this->dataRel, $columns,1000000,NULL,'landscape','a4');
+        $this->getPDF()->setFont('Courier.afm');
+        $this->GeneratePageAllHeader();
+        $this->GeneratePageFirstHeader();
+        $this->GeneratePageAllFooter();
+        $this->SetColumnAttr('codigo', 'index', 0);
+        $this->SetColumnAttr('especificacao', 'index', 1);
+        $this->SetColumnAttr('unidade', 'index', 2);
+        $this->SetColumnAttr('empenho', 'index', 3);
+        $this->SetColumnAttr('notafiscal', 'index', 4);
+        $this->SetColumnAttr('ordementrega', 'index', 5);
+        $this->SetColumnAttr('requisicao', 'index', 6);
+        $this->SetColumnAttr('quantidade', 'index', 7);
+        $this->SetColumnAttr('valor', 'index', 8);
+        $this->SetOption('fontSize', 8);
+        $this->SetOption('titleFontSize', 10);
+        $this->SetTitle("BOLETIM DIARIO NO PERIODO DE {$inicio} A {$fim}");
+        $this->SetOption('showTableTitle', 1);
+	}
+    function GeneratePageFirstHeader()
+    {
+        global $MIOLO;
+        $this->pdf->ezSetMargins(80, 50, 25, 25);
+        $x0 = $this->pdf->left;
+        $x1 = $this->pdf->right;
+        $h = $this->pdf->getFontHeight(12);
+        $header = $this->pdf->openObject();
+        $this->pdf->saveState();
+        $ui = $MIOLO->GetUI();
+        $this->img = $ui->GetImageSrc('logonet.png','tutorial');
+      //  $this->pdf->addPngFromFile($this->img, $x0+10, 515, 50, 50);
+
+        $this->pdf->addText(100,550,8,$this->manager->getConf('instituicao.nome'));
+        $this->pdf->addText(100,550-$h,8,"{$this->uoalmoxarifado->nome}     CONSUMO");
+        $this->pdf->addTextWrap($x0, 550-$h,$x1-$x0, 8,"{$this->timestamp}",'right');
+
+        $this->pdf->addText(100,550-$h-$h,8,'COORDENADORIA DE SUPRIMENTOS');
+        $this->pdf->restoreState();
+        $this->pdf->closeObject();
+        $this->pdf->addObject($header, 'add');
+    }
+    function GeneratePageAllHeader()
+    {
+        $inicio = Form::getFormValue('dataInicio');
+        $fim = Form::getFormValue('dataFim');
+        $this->pdf->ezSetMargins(50, 50, 25, 25);
+        $x0 = $this->pdf->left;
+        $x1 = $this->pdf->right;
+        $h = $this->pdf->getFontHeight(8);
+        $header = $this->pdf->openObject();
+        $this->pdf->saveState();
+        $this->pdf->SetStrokeColor(0, 0, 0);
+        $this->pdf->line($x0, 570, $x1, 570);
+        $this->pdf->addTextWrap($x0, 572,$x1-$x0, 6,"BOLETIM DIARIO NO PERIODO DE {$inicio} A {$fim}",'right');
+        $this->pdf->restoreState();
+        $this->pdf->closeObject();
+        $this->pdf->addObject($header, 'all');
+    }
+
+    function GeneratePageFooter()
+    {
+        global $MIOLO;
+        $footer = $this->pdf->openObject();
+        $cf = new MCurrencyFormatter();
+        $k = new MKrono();
+        $inicio = Form::getFormValue('dataInicio');
+        $fim = Form::getFormValue('dataFim');
+        $estoque = $MIOLO->getBusiness('adm','estoque');
+        $criteria = $estoque->getCriteria();
+        $criteria->addColumnAttribute('sum(valorTotal)');
+        $criteria->addCriteria('idUo','=',"'{$this->uoalmoxarifado->idUo}'");
+        $saldoAtual = $criteria->retrieveAsQuery()->result[0][0];
+        $movimento = $MIOLO->getBusiness('adm','movimento');
+        $criteria = $movimento->getCriteria();
+        $criteria->addColumnAttribute('idMaterial');
+        $criteria->addColumnAttribute('tipoMovimento');
+        $criteria->addColumnAttribute('quantidade');
+        $criteria->addColumnAttribute('sum(valorTotal)');
+        $criteria->addCriteria('dataMovimento','>',"'{$k->invertDate($fim)}'");
+        $criteria->addCriteria('itemNota.empenhado.empenho.idUoEntrega','=',"'{$this->uoalmoxarifado->idUo}'");
+        $criteria->addCriteria('idMovimentoRef','is','null');
+        $criteria->addGroupAttribute('idMaterial');
+        $criteria->addGroupAttribute('tipoMovimento');
+        $criteria->addGroupAttribute('quantidade');
+        $entradasADescontar = $criteria->retrieveAsQuery()->result;
+        if ($entradasADescontar)
+        {
+            foreach ($entradasADescontar as $entrada)
+            {
+                $saldoAtual -= $cf->toDecimal($entrada[3]);
+            }
+        }
+        $criteria = $movimento->getCriteria();
+        $criteria->addColumnAttribute('idMaterial');
+        $criteria->addColumnAttribute('tipoMovimento');
+        $criteria->addColumnAttribute('quantidade');
+        $criteria->addColumnAttribute('valorTotal');
+        $criteria->addCriteria('dataMovimento','>',"'{$k->invertDate($fim)}'");
+        $criteria->addCriteria('requisicao.idUoExecutante','=',"'{$this->uoalmoxarifado->idUo}'");
+        $criteria->addCriteria('idMovimentoRef','is','null');
+        $saidasADescontar = $criteria->retrieveAsQuery()->result;
+        if ($saidasADescontar)
+        {
+            foreach ($saidasADescontar as $saida)
+            {
+                $saldoAtual -= $cf->toDecimal($saida[3]);
+            }
+        }
+        if ($this->dataRel)
+        {
+            foreach ($this->dataRel as $material)
+            {
+                //var_dump($material[8],$cf->toDecimal($material[8]));
+                if ($material[3])
+                {
+                    $totalEntrada += $cf->toDecimal($material[8]);
+                }
+                if (!$material[3] || $material[5])
+                {
+                    $totalSaida += $cf->toDecimal($material[8]);
+                }
+            }
+        }
+        $saldoAnterior = $cf->toDecimal($saldoAtual) - $totalEntrada + $totalSaida;
+        $this->pdf->saveState();
+        $this->pdf->SetStrokeColor(0, 0, 0);
+        $this->pdf->ezSetMargins(50, 250, 25, 25);
+        $this->pdf->ezText("",20);
+            $this->pdf->ezText('_________________________________________________________________________________________________________________________________________________________________________________',8);
+        $this->pdf->ezText("",10);
+        $this->pdf->ezText("<b>SALDO ANTERIOR: </b> {$cf->formatWithSymbol($cf->toDecimal($saldoAnterior))}\n<b>TOTAL ENTRADAS: </b> {$cf->formatWithSymbol($cf->toDecimal($totalEntrada))}\n<b>TOTAL SAIDAS..: </b> {$cf->formatWithSymbol($cf->toDecimal($totalSaida))}\n<b>SALDO ATUAL...: </b> {$cf->formatWithSymbol($cf->toDecimal($saldoAtual))}",8);
+            $this->pdf->ezText('_________________________________________________________________________________________________________________________________________________________________________________',8);
+        $this->pdf->ezText("",30);
+        $this->pdf->ezText("_____________________________________________________\n{$this->uoalmoxarifado->nome}\nGERENTE",9,array('justification'=>'center'));
+        $this->pdf->restoreState();
+        $this->pdf->closeObject();
+        $this->pdf->addObject($footer, 'add');
+    }
+
+    function GeneratePageAllFooter()
+    {
+        $x0 = $this->pdf->left;
+        $x1 = $this->pdf->right;
+        $footer = $this->pdf->openObject();
+        $this->pdf->saveState();
+        $this->pdf->SetStrokeColor(0, 0, 0);
+        $this->pdf->line($x0, 23, $x1, 23);
+        $this->pdf->addText($x0, 15, 6,'CGCO/DSI');
+        $this->pdf->ezStartPageNumbers($x1,15, 6, 'left', '{PAGENUM}');
+        $this->pdf->restoreState();
+        $this->pdf->closeObject();
+        $this->pdf->addObject($footer, 'all');
+    }
+}
+?>

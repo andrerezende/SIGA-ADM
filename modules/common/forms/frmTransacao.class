@@ -1,0 +1,169 @@
+<?
+class frmTransacao extends Form
+{
+	function __construct()
+	{
+		parent::__construct("Transação");
+        $this->SetWidth('60%');
+		$this->EventHandler();
+	}
+
+	function CreateFields()
+	{
+		global $MIOLO, $module, $perms;
+
+		$grupo = $MIOLO->GetBusiness($module,'grupo');
+		$qryGrupo = $grupo->ListAll();
+
+		$sistema = $MIOLO->GetBusiness($module,'sistema');
+		$qrySistema = $sistema->ListAll();
+
+		$mt = array(
+			new MSelection('grupos','','Grupos',$qryGrupo->ChunkResult()),
+			new MSelection('permissoes','','Permissões',$perms->perms)
+		);
+
+
+		$fields = array(
+			new TextField('idtrans','','Id'),
+			new LookupTextField('transacao','','Transação',15),
+			new Selection('idsistema','','Sistema',$qrySistema->ChunkResult()),
+			new MMultiTextField3('grupos',null,'Acesso',$mt,280,true,'vertical')
+		);
+
+		$this->SetFields($fields);
+		$this->SetFieldAttr('idtrans','visible',false);
+	   	$this->SetFieldAttr('transacao','module','common');
+		$this->SetFieldAttr('transacao','item','transacao');
+		$this->SetFieldAttr('transacao','event','btnEdit:click');
+
+		$buttons = Array(
+           new MButton('btnPost', 'Enviar'),
+		   new MButton('btnNew', 'Novo'),
+           new MButton('btnDelete', 'Excluir'),
+	       new MButton('btnList', 'Relação'),
+	       new MButton('btnReport', 'Relatórios'),
+       );
+	   $this->SetButtons($buttons);
+		
+	}
+
+	function btnPost_click()
+	{
+		global $MIOLO, $module, $action;
+
+		$transacao = $MIOLO->GetBusiness($module,'transacao');
+		if ( $transacao )
+		{
+		
+			$data = $this->GetData();
+			$data->acesso = $this->grupos->GetCodeValue();
+			$transacao->SetData($data);
+
+		}
+	}
+
+	function btnEdit_click($sender,$key='')
+	{
+		global $MIOLO, $module, $item;
+		$item = $key ? $key : $item;
+		$transacao = $MIOLO->GetBusiness($module,'transacao');
+		$transacao->GetById($item);
+		if ($transacao->idTransacao)
+		{
+			$this->SetFieldValue('idtrans',$transacao->idTransacao);
+			$this->SetFieldValue('transacao', $transacao->transacao);
+			$this->SetFieldValue('idsistema', $transacao->idSistema);
+			$this->grupos->SetCodeValue($transacao->getArrayGroups());
+
+			$this->SetFieldAttr('idtrans','visible',true);
+			$this->SetFieldAttr('idtrans','readonly',true);
+			$this->SetFieldAttr('transacao','readonly',true);
+		   
+		   	$this->SetButtonAttr('btnNew','label','Cancelar');
+		}
+	}
+	
+	function btnList_click()
+	{   
+		global $MIOLO, $module, $self, $theme, $item;
+		$transacao = $MIOLO->GetBusiness($module,'transacao');
+
+        $sql = new sql('t.idtrans, t.transacao as transacao, t.idsistema, s.sistema',
+                       'cm_transacao t, cm_sistema s','t.idsistema = s.idsistema');
+        $columns = array(
+           new DataGridColumn('idtrans','Id','right', true, '',false),
+           new DataGridColumn('transacao','Transação','left', true, '70%',true,null,true),
+           new DataGridColumn('sistema','Sistema', 'left', true, '30%',true)
+        );
+		$href_datagrid = $MIOLO->GetActionURL($module,$self,'', Array('event'=>'btnList_click'));
+        $query = $transacao->ListAll();
+        $datagrid = new DataGrid2($query, $columns, $href_datagrid,15);
+
+        $datagrid->SetTitle('Relação de Transações');
+        $datagrid->SetLinkType('linkbutton');
+ 	    $href_edit = $MIOLO->GetActionURL($module,$self,'%0%',Array('event'=>'btnEdit:click'));
+	    $href_dele = $MIOLO->GetActionURL($module,$self,'%0%',Array('event'=>'btnDelete:click'));
+        $datagrid->AddActionUpdate($href_edit);
+	    $datagrid->AddActionDelete($href_dele);
+        $datagrid->HeaderLink('new', 'Novo Registro',
+                  $MIOLO->GetActionURL($module,$self,'',Array('event'=>'btnInsert:click')));
+        if ($item == 'detalhes')
+        {
+            $datagrid->SetColumnAttr('idtrans','visible',true);
+            $datagrid->HeaderLink('det', 'Sumário',
+                  $MIOLO->GetActionURL($module,$self,'',Array('event'=>'btnList:click')));
+        }
+        else
+        {
+            $datagrid->SetColumnAttr('idtrans','visible',false);
+            $datagrid->HeaderLink('det','Detalhes',
+                  $MIOLO->GetActionURL($module,$self,'detalhes',Array('event'=>'btnList:click')));
+        }
+		$theme->InsertContent($datagrid);
+	}
+	
+	function btnDelete_click()
+	{   
+		global $MIOLO, $module, $item, $self, $action;
+        $idtrans = isset($item) ? $item : $this->GetFieldValue('idtrans'); // $item, se get  - $this->key, se post
+        $MIOLO->Assert( isset($idtrans), 'Transação não foi informada!', $action);
+ 		$transacao = $MIOLO->GetBusiness($module,'transacao');
+        $transacao->GetById($idtrans);
+        $conf = $this->GetFormValue('conf');
+	    if ( $conf == 'sim')
+	    {
+            if ( $transacao->Delete() )
+	        {
+				$action_new = $MIOLO->GetActionURL($module,$self,'',array("event"=>"btnNew:Click"));
+			   $MIOLO->Information('Registro excluído com sucesso.',$action_new);
+	        }
+	        else
+	        {
+		       $MIOLO->Information( $transacao->GetErrors(),$action);
+            }
+	    }
+	    elseif ( $conf == 'nao')
+        {
+			$action_edit = $MIOLO->GetActionURL($module,$self,$idtrans,array("event"=>"btnEdit:Click"));
+	       $MIOLO->Information('Exclusão cancelada.',$action_edit);
+        }
+	    else
+	    {
+		    $action_sim = $MIOLO->GetActionURL($module,$self,$idtrans, array('event'=>'btnDelete:click','conf'=>'sim'));
+		    $action_nao = $MIOLO->GetActionURL($module,$self,$idtrans, array('event'=>'btnDelete:click','conf'=>'nao'));
+	        $MIOLO->Question("Confirma a exclusão da transação [$transacao->transacao]?",$action_sim, $action_nao);
+	    }
+	}
+
+	function btnNew_click()
+	{
+		$this->SetFieldValue('idtrans','');
+		$this->SetFieldValue('transacao','');
+		$this->SetFieldValue('idsistema','');
+		$this->SetFieldValue('grupos','');
+	}
+}
+
+?>
+

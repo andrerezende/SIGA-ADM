@@ -1,0 +1,143 @@
+<?
+class frmRequisicao extends Form
+{
+	function frmRequisicao()  // construtor da Classe
+	{   
+		global $MIOLO, $module, $self, $page, $ui;
+
+		$this->Form('Requisição de Material');
+        	$this->EventHandler();
+	}
+   
+	Function CreateFields()
+	{
+        	global $MIOLO,$module,$perms,$auth,$page;
+
+
+
+		$objAlmoxarifado = $MIOLO->GetBusiness('adm','almoxarifado');
+		$destinorequisicao = $objAlmoxarifado->ListAll();
+
+	
+		$f = Array(Array('id','label','nome'));
+        	$lkp = new LookupTextField('lkpMaterial','','Material',50);
+	  	$lkp->module = 'adm';
+		$lkp->labels = 'test';
+		$lkp->item = 'material';
+	        $lkp->event = 'filler';
+        	$lkp->related = 'none,lkpMaterial';
+		
+		//Se é pra COSUP o multitext tem descrição
+   		$f1 = array(
+	                $lkp,
+        	        new TextField('quantidade','','Quantidade',10),	      
+    	 		new TextField('descricao','','Descrição',50) 
+	        );
+		   
+   		$f2 = array(
+	                $lkp,
+        	        new TextField('quantidade','','Quantidade',10)	      
+	        );
+		
+		$fields = Array(
+		        new Selection('destinorequisicao','','Destino da Requisição',$destinorequisicao),
+			new TextField('numero','','Número da Requisição',6),
+		    	new TextField('ano',date("Y"),'Ano da Requisição',6),
+			new MultiTextField3('materialcosup', null,'COSUP',$f1,500,true,'horizontal'),
+			new MultiTextField3('materialalmox', null,'ALMOXARIFADO',$f2,500,true,'horizontal')
+	        );    
+        	$this->SetFields($fields);
+
+	        $this->SetFieldAttr('materialcosup', 'visible', false);
+		$this->SetFieldAttr('materialalmox', 'visible', false);
+	        $this->SetFieldAttr('numero', 'visible', false);
+	        $this->SetFieldAttr('ano', 'visible', false);
+
+	        $buttons = Array(
+	            new FormButton('btnPost','Enviar'),
+        	    new FormButton('btnPost2','Gravar Requisição')
+	        );
+    
+	        $this->SetButtons($buttons);
+		$this->SetButtonAttr('btnPost2', 'visible', false);	
+	}
+
+	
+	function GetData()
+	{
+    		global $MIOLO, $module, $ui, $action, $theme, $item, $self;
+
+	        $login = $MIOLO->GetLogin();
+		$usuario = $MIOLO->GetBusiness('common','usuario');
+		$usuario->GetById($login->idkey);
+		$idsetor = $usuario->GetSetorProvimento();
+
+		$ano = $this->GetFormValue('ano');
+		$numero = $this->GetFormValue('numero');
+		$destinorequisicao = $this->GetFormValue('destinorequisicao');
+		
+		if ($destinorequisicao == "") //Se a requisição for para a COSUP
+		{
+			$tiporequisicao = 2;
+			$itens = $this->GetFormValue('materialcosup');
+			$iditens =  $this->materialcosup->GetCodeValue();
+			$destinorequisicao = 0;
+		}
+		else
+		{
+			$tiporequisicao = 1;
+			$itens = $this->GetFormValue('materialalmox');
+			$iditens =  $this->materialalmox->GetCodeValue();
+		}
+	
+		$data->idrequisicao = $idrequisicao;
+		$data->datarequisicao = date("d")."-".strtoupper(date("M"))."-".date("y");
+		$data->dataatendimento = "";
+		$data->tiporequisicao = $tiporequisicao;
+		$data->idsetor = $idsetor;
+		$data->numero = $numero;
+		$data->ano = $ano;
+		$data->status = "1"; //Equivale ao status "Aberta"
+		$data->idalmoxarifado = $destinorequisicao;
+		$data->itens = $iditens;
+		
+		return $data;	
+	}
+
+	function btnPost_click()
+	{
+    		global $MIOLO, $module, $ui, $action;
+
+		$idalmoxarifado = $this->GetFormValue('destinorequisicao');
+		$this->SetFieldValue('destinorequisicao',$idalmoxarifado ? $idalmoxarifado : 0);
+		
+		if ($idalmoxarifado == "")
+		    	$this->SetFieldAttr('materialcosup', 'visible', true);
+		else
+			$this->SetFieldAttr('materialalmox', 'visible', true);
+
+		$this->SetFieldAttr('destinorequisicao', 'readonly', true);
+		$this->SetFieldAttr('material', 'visible', true);
+	    $this->SetFieldAttr('numero', 'visible', true);
+       	$this->SetFieldAttr('ano', 'visible', true);
+		$this->SetButtonAttr('btnPost2', 'visible', true);
+		$this->SetButtonAttr('btnPost', 'visible', false);
+	}
+
+	function btnPost2_click()
+	{
+    		global $MIOLO, $module, $ui, $action, $auth;
+    	
+		$objRequisicao = $MIOLO->GetBusiness($module,'requisicao');
+		$datareq = $this->GetData();
+		$objRequisicao->SetData($datareq);
+
+		if ($objRequisicao->Insert())
+		{
+			$action = $MIOLO->GetActionURL($module, 'requisicao', '','');
+	        	$MIOLO->Prompt(Prompt::Information('Requisição efetuada com sucesso!',$action));
+		}
+	}
+}
+
+?>

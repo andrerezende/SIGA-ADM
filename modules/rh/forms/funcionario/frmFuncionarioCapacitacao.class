@@ -1,0 +1,514 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+MIOLO::Import('extensions::cpaint2.inc.php', 'cpaint');
+class frmFuncionarioCapacitacao extends MFormAjax
+{
+  var $capacitacao;
+
+  function __construct($objCapacitacao)
+  {
+    global $MIOLO, $module, $page, $context, $self;
+
+    $this->capacitacao = $objCapacitacao;
+    //         $MIOLO->page->AddJsCode(file_get_contents(dirname(__FILE__) . '/js/frmFuncionarioCapacitacao.js'));
+    parent::__construct("Capacitação");
+    // $this->page->AddJsCode(file_get_contents(dirname(__FILE__) . '/js/frmFuncionarioCapacitacao.js'));
+    $this->SetClose($MIOLO->GetActionURL('rh', 'main:funcionario', $this->
+      capacitacao->idFuncionario, array('form' => 'capacitacoes')));
+    $this->EventHandler();
+  }
+
+  function CreateFields()
+  {
+    global $MIOLO, $module, $self, $action, $context;
+    //  $this->page->cpaint = $this->cp;
+
+    $ui = $MIOLO->getUI();
+    $url = $MIOLO->getActionURL('rh',
+      'modules:forms:funcionario:js:frmFuncionarioCapacitacao.js');
+    $this->page->addScriptURL($url);
+
+    $listCapacitacao = $MIOLO->GetBusiness('rh', 'capacitacaocurso');
+    $query = $listCapacitacao->listAll();
+
+    $linkNew = new MLink('novoCurso', '&nbsp;&nbsp;', '', 'Incluir Novo Curso');
+    $linkNew->setAction('rh', 'capacitacao:cursos:new');
+
+    $linkInst = new MLink('novaInst', '&nbsp;&nbsp;', '', 'Incluir Nova Instituição');
+    $linkInst->setAction('common', 'instituicao');
+
+    $options = array(new MOption('direta', 'S', 'Sim', false), new MOption('indireta',
+      'N', 'Não', true));
+    $options2 = array(new MOption('direta2', 'S', 'Sim', false), new MOption('indireta2',
+      'N', 'Não', true));
+
+    $fields = array(new Label('ATENÇÃO: Os cursos de educação formal devem ser lançados através dos formulários de  Escolaridade e Pós-Graduação!',
+      'red'), new Separator(), new MTextLabel('lblModulo'),
+      //$fldDescricao =  new TextField('edtDescricao','','Nome do curso:',40),
+      array(new MSelection('nome', '', 'Nome do Curso:', $query->chunkResult(), '', ''),
+      $linkNew, ), new MTextField('mod', '', 'Módulo', 35, ''), new MDiv("divSample"),
+      array(new MTextField('edtEntidade', '', 'Institui&ccedil;&atilde;o', 35), $linkInst, ),
+      new CalendarField('edtDataInicioCapacitacao', 'Data Inicio', 'Data Inicio', 10),
+      new CalendarField('edtDataFimCapacitacao', 'Data Fim', 'Data Fim', 10), $fldCargaHoraria =
+      new TextField('edtCargaHoraria', '', 'Carga Horária', 4, ''), new MHiddenField('idsModulos'),
+      new MTextLabel('text1',
+      'Curso não utilizado para concessão de incentivo à qualificação.'), new
+      MTextLabel('text2', 'Curso já utilizado para concessão de incentivo à qualificação.'),
+      new MRadioButtonGroup('relacao', 'Curso compatível com o cargo ? ', $options, '',
+      '', 'vertical', 'css'), new MRadioButtonGroup('relacao2',
+      'Curso compatível com o ambiente organizacional ? ', $options2, '', '',
+      'vertical', 'css'), );
+
+    $this->SetFields($fields);
+    $this->nome->addAttribute('onChange',
+      "ajaxCursoSelectionObject.call();ajaxApareceLink.call();");
+
+    $options = array(new MOption('direta', 'o1', 'SIM', false), new MOption('indireta',
+      'o2', 'NÃO', false));
+
+    //array_push($fields,new MRadioButtonGroup('relacao','Compatível com o cargo: ', $options,'','','vertical','css'));
+
+    $funcionario = $MIOLO->getBusiness('rh', 'funcionario');
+    $objFuncionario = $funcionario->getById($this->capacitacao->idFuncionario);
+    $vinculo = $objFuncionario->getVinculoAtivo();
+    if (!$vinculo)
+    {
+	$idVinculo = $funcionario->GetVinculoByIdFuncionario($this->capacitacao->idFuncionario);
+	$url = $MIOLO->GetActionURL('rh','main:vinculo',$idVinculo);
+	$MIOLO->information("Situação funcional não permite tal operação. Entre em contato com o administrador do sistema",$url);
+    }
+    else
+    {
+    	$vinculo->getProvimentos();
+	$objProvimento = $vinculo->getProvimentoAtual();
+    }
+
+    // if (($objProvimento->idGrupoCargo == '060') || ($objProvimento->idSituacao != '01'))
+
+    $this->SetFieldAttr('text1', 'visible', false);
+    $this->SetFieldAttr('text2', 'visible', false);
+    $this->SetFieldAttr('mod', 'visible', false);
+    // $this->SetFieldAttr('edtDataInicioCapacitacao','readonly',true);
+    //$this->SetFieldAttr('edtDataFimCapacitacao','readonly',true);
+    $this->SetFieldAttr('lblModulo', 'visible', false);
+    $this->SetData();
+    //$urlll = $MIOLO->GetActionURL($module,$self,$this->capacitacao->idFuncionario,array('form'=>'capacitacoes','conf'=>'nao','id'=>$this->capacitacao->idHistCapacitacao));
+
+    $buttons = array(new FormButton('btnPost', 'Enviar'),
+      //  new FormButton('btnPostiii', 'Enviar',"ajaxAtualizaPagina.call();"),
+      new FormButton('btnExcluirModulo', 'Excluir Módulo'), new FormButton('btnExcluirCurso',
+      'Excluir Curso'), //   new FormButton('btnNew', 'Incluir Módulos',$ui->getWindow('winWindow', true, false)),
+      );
+    $this->SetButtons($buttons);
+
+    $fldCargaHoraria->AddAttribute('maxlength', '5');
+    $fldCargaHoraria->AddAttribute('readonly', true);
+
+    $validators = array( //	  new RequiredValidator('nome'),
+      //new RequiredValidator('idsModulos'),
+    // new RequiredValidator('edtEntidade'),
+    new DATEDMYValidator('edtDataInicioCapacitacao', '', 'required'),
+      //  new DATEDMYValidator('edtDataFimCapacitacao','','required'),
+      //  new IntegerValidator('edtCargaHoraria','','(^-?[0-9][0-9]*$)'),
+    new MCompareValidator('idsModulos', 'Escolhas', '!=', '', 's', 'required'), );
+
+    //	if (!$this->capacitacao->isPersistent())
+    $this->SetValidators($validators);
+
+    $this->SetFieldAttr('btnPost', 'visible', !$this->capacitacao->isPersistent());
+    // $this->SetFieldAttr('btnPost','visible',false);
+    $this->SetFieldAttr('btnExcluirCurso', 'visible', $this->capacitacao->
+      isPersistent());
+    $this->SetFieldAttr('btnExcluirModulo', 'visible', $this->capacitacao->
+      isPersistent());
+    $this->SetFieldAttr('btnNew', 'visible', $this->capacitacao->isPersistent());
+
+    if ($this->capacitacao->isPersistent())
+    {
+      $idCurso = $this->capacitacao->idcurso;
+      $idHist = $this->capacitacao->idHistCapacitacao;
+      $info = $idCurso;
+      $idFunc = $this->capacitacao->idFuncionario;
+
+      $mod = $MIOLO->getBusiness('rh', 'capacitacaomodulo', $this->capacitacao->
+        idmodulo);
+      $this->setFieldValue('lblModulo', 'Módulo: ' . $mod->nome);
+      $this->SetFieldAttr('lblModulo', 'visible', true);
+
+      $this->setFieldValue('idsModulos', '1');
+      $db = $MIOLO->getDataBase('rh');
+      $sql = new sql('h.idmodulo', 'rh_histcapacitacao h');
+      $sql->where = "(h.idcurso = $idCurso) and (h.idfuncionario = $idFunc)";
+      $query = $db->getQuery($sql);
+      $ar = $query->result;
+
+      //var_dump("-------------------------");
+      for ($i = 0; $i < count($ar); $i++)
+      {
+        $info .= '_' . $ar[$i][0];
+
+      }
+      $info .= '_' . $idHist;
+
+      $urlWindow = $MIOLO->GetActionURL('rh', 'funcionario:novoModulo', $info);
+      $win = new MWindow('winWindow', array('url' => $urlWindow, 'width' => 600,
+        'height' => 400));
+      //            $win = new MWindow('winWindow',array('url'=>$urlWindow,'width'=>600,'height'=>400,'closable'=>'false'));
+      //$this->SetFieldAttr('edtDescricao','readonly',true);
+      $this->SetFieldAttr('edtDataInicioCapacitacao', 'readonly', true);
+      $this->SetFieldAttr('edtDataFimCapacitacao', 'readonly', true);
+      $this->SetFieldAttr('edtCargaHoraria', 'readonly', true);
+      $this->SetFieldAttr('edtEntidade', 'readonly', true);
+      $this->SetFieldAttr('nome', 'readonly', true);
+      $this->SetFieldAttr('novaInst', 'visible', false);
+      $this->SetFieldAttr('novoCurso', 'visible', false);
+      //			$this->SetFieldAttr('mod','visible',true);
+      //		$this->SetFieldAttr('mod','readonly',true);
+      $objFuncionario = $MIOLO->getBusiness('rh', 'funcionario', $this->capacitacao->
+        idFuncionario);
+      $vinculoAtual = $objFuncionario->getVinculoAtivo();
+
+      $nf = new MHiddenField('idFuncAjax', $this->capacitacao->idFuncionario);
+      $r[] = $nf;
+      //   if(count($ar)>1){
+      $l = new MLink('novoModulo', '', $win->getLink(null, true, false),
+        'Incluir Novo Módulo Desse Curso');
+      $win->setStatusBar(new MLink('updJanela',
+        'ATUALIZAR FORMULÁRIO E FECHAR ESSA JANELA',
+        "javascript:ajaxAtualizaPagina.call();miolo.getWindow('winWindow').close();"));
+      $r[] = $l;
+      $this->addField($r);
+
+      // $win->onClose("");
+
+      if ($vinculoAtual->isTA())
+      {
+        $idd = $this->capacitacao->idcurso;
+        $db = $MIOLO->getDataBase('rh');
+        $sql = new sql('h.dataprogressao', 'rh_histcapacitacao h');
+        $sql->where = "h.idcurso = $idd";
+        $query = $db->getQuery($sql);
+        $result = $query->result;
+
+        $dataProgressao = false;
+
+        for ($r = 0; $r < count($result); $r++)
+        {
+          $valor = $result[$r];
+          if ($valor[0] != null)
+          {
+            $dataProgressao = true;
+
+          }
+        }
+
+        if ($dataProgressao)
+        {
+          $this->SetFieldAttr('text2', 'visible', true);
+        } else
+        {
+          $this->SetFieldAttr('text1', 'visible', true);
+        }
+      }
+    }
+
+  }
+
+  function SetData()
+  {
+    global $MIOLO;
+    $curso = $MIOLO->getBusiness('rh', 'capacitacaocurso', $this->capacitacao->
+      idcurso);
+    $this->SetFieldValue('nome', $this->capacitacao->idcurso);
+
+    $modulo = $MIOLO->getBusiness('rh', 'capacitacaomodulo', $this->capacitacao->
+      idmodulo);
+    $this->SetFieldValue('edtDataInicioCapacitacao', $modulo->datainicio);
+    $this->SetFieldValue('edtDataFimCapacitacao', $modulo->datafim);
+    $this->SetFieldValue('edtCargaHoraria', $modulo->cargahoraria);
+    $this->SetFieldValue('edtEntidade', $curso->getInstituicao()->nome);
+    // $this->SetFieldValue('mod', $modulo->nome);
+  }
+
+  function GetData($modulo)
+  {
+    $data = new FormData();
+    $data->idcurso = $this->GetFieldValue('nome');
+    $data->idmodulo = $modulo;
+    $data->compativelcargo = $this->GetFieldValue('relacao');
+    $data->compativelambiente = $this->GetFieldValue('relacao2');
+    return $data;
+  }
+
+  function btnExcluirModulo_click()
+  {
+    global $MIOLO, $module, $self, $action;
+
+    $action_sim = $MIOLO->GetActionURL($module, $self, $this->capacitacao->
+      idFuncionario, array('form' => 'capacitacoes', 'conf' => 'sim', 'id' => $this->
+      capacitacao->idHistCapacitacao, 'event' => 'btnExcluirModulo:click'));
+    $action_nao = $MIOLO->GetActionURL($module, $self, $this->capacitacao->
+      idFuncionario, array('form' => 'capacitacoes', 'conf' => 'nao', 'id' => $this->
+      capacitacao->idHistCapacitacao));
+    $conf = $this->GetFormValue('conf');
+    if ($conf == 'sim')
+    {
+      try
+      {
+        $operacao  = OP_DEL;  
+				$descricao = 'Exclusão de capacitação - ';
+				
+				$this->capacitacao->beginTransaction();
+				$this->capacitacao->delete();
+				$this->capacitacao->log($operacao,$descricao . 'Funcionario: ' . $this->capacitacao->
+      idFuncionario . 'IdModulo: ' . $this->
+      capacitacao->idHistCapacitacao);
+      	$this->capacitacao->endTransaction();
+      
+
+        $MIOLO->Information('Módulo excluído com sucesso', $MIOLO->GetActionURL('rh',
+          'main:funcionario', $this->capacitacao->idFuncionario, array('form' =>
+          'capacitacoes')));
+
+      }
+      catch (exception $e)
+      {
+        $this->manager->error("Informe o seguinte erro à equipe do CGCO: " . $e->
+          getMessage());
+      }
+    } else
+    {
+      $MIOLO->Question("Tem certeza que deseja excluir o módulo " . $this->
+        capacitacao->descricao . " ?", $action_sim, $action_nao);
+    }
+
+  }
+
+  function btnPost_click()
+  {
+    global $MIOLO, $module, $self, $action;
+
+    $ids = explode("*", $this->getFieldValue('idsModulos'));
+    $this->capacitacao->beginTransaction();
+
+    $operacao = OP_INS;
+    $descricao = 'Inclusão de capacitação - IdModulo: ';
+
+    if (count($ids) > 1)
+    {
+      $check = false;
+      for ($i = 0; $i < count($ids); $i++)
+      {
+        if ($ids[$i] != '')
+        {
+          $this->capacitacao->SetData($this->GetData($ids[$i]));
+
+          try
+          {
+            $this->capacitacao->save();
+            $this->capacitacao->log($operacao, $descricao . $ids[$i]);
+            $this->capacitacao->setpersistent(false);
+            $check = true;
+          }
+          catch (exception $e)
+          {
+            $this->manager->error($e->getMessage());
+            break;
+          }
+        }
+      }
+    } else
+    {
+      $this->capacitacao->SetData($this->GetData($this->getFieldValue('idsModulos')));
+      try
+      {
+        $this->capacitacao->save();
+        $this->capacitacao->log($operacao, $descricao . $this->getFieldValue('idsModulos'));
+        $check = true;
+
+      }
+      catch (exception $e)
+      {
+        $this->manager->error($e->getMessage());
+      }
+
+    }
+    $this->capacitacao->endTransaction();
+
+    if ($check)
+    {
+      $go = $MIOLO->GetActionURL('rh', 'main:funcionario', $this->capacitacao->
+        idFuncionario, array('form' => 'capacitacoes'));
+      $MIOLO->Information('Dados de Capacitação atualizados com sucesso.', $go);
+    }
+  }
+
+  function ajax_btnGetInstituicao($args)
+  {
+    global $MIOLO;
+    $cursocapacitacao = $MIOLO->getBusiness('rh', 'capacitacaocurso');
+    $instituicao = $cursocapacitacao->getById($args);
+    $ins = $instituicao->getInstituicao();
+    $qtdModulos = $instituicao->countModulos();
+    // indices do array em frmFuncionarioCapacitacao.js
+    $ar[] = $qtdModulos; // 0
+    $ar[] = $ins->nome; // 1
+    // 2
+
+    $modulo = $instituicao->getModuloById($args);
+    $ar[] = $modulo->datainicio;
+    $ar[] = $modulo->datafim; // 3
+    $ar[] = $modulo->cargahoraria; // 4
+    if ($qtdModulos == 1)
+    {
+      $ar[] = $modulo->idmodulo; // 5
+    }
+
+    $this->cp->set_data($ar);
+
+  }
+
+  function ajax_mostraModulos($args)
+  {
+    global $MIOLO;
+
+    $cursocapacitacao = $MIOLO->getBusiness('rh', 'capacitacaocurso');
+    $curso = $cursocapacitacao->getById($args);
+    $modulos = $curso->getModulos();
+    $qtdMod = $curso->countModulos();
+
+    if ($qtdMod > 1)
+    {
+      $cont = 0;
+
+      foreach ($modulos as $mod)
+      {
+
+        $t = 'escolha' . $cont;
+        $aa[] = array(new MCheckBox($t, $mod->cargahoraria . '&' . $mod->idmodulo, '',
+          '', ''), $mod->nome, $mod->dataInicio, $mod->datafim, $mod->cargahoraria);
+        $cont++;
+      }
+
+      $array[] = array("<b>Escolha</b>", "<b>Módulo</b>", "<b>Data Início</b>",
+        "<b>Data Fim</b>", "<b>Carga Horária</b>");
+
+      for ($i = 0; $i < $cont; $i++)
+      {
+        $array[] = $aa[$i];
+      }
+
+      $btn = new MButton('botaoEscolha', 'Confirmar', "ajaxEscolha.call();");
+      $array[] = $btn;
+      $hd = new MHiddenField('esc', $cont);
+
+      array_unshift($array, $hd);
+
+      $addedFields[] = $aa;
+      $addedFields[] = $hd;
+
+      $lbl = new MTextLabel('lblAviso',
+        "--Atenção: Após selecionar os módulos clique no botao 'Confirmar' antes de enviar");
+      $addedFields[] = $lbl;
+      $tblZebra = new MTableRaw('', $array);
+      $tblZebra->setAlternate(true);
+      $campos[] = $lbl;
+      $campos[] = $tblZebra;
+      $sel2 = $campos;
+      // $sel2->formMode = MControl::FORM_MODE_SHOW_ABOVE;
+      // response_type = TEXT : set the ajax area of theme
+      //  $this->manager->getTheme()->setAjaxContent($sel2);
+
+      $this->addFields($addedFields);
+      //     $this->cp->set_data($array);
+      $this->addButton($btn);
+    } else
+    {
+
+      $sel = new MDiv("divSample");
+      $at[] = $hd2;
+      $at[] = $sel;
+
+      $sel2 = $at;
+      $this->addFields($at);
+
+    }
+    // $this->SetButtonAttr('btnPost','visible',true);
+    $sel2->formMode = MControl::FORM_MODE_SHOW_ABOVE;
+
+    $this->manager->getTheme()->setAjaxContent($sel2);
+  }
+
+  function btnExcluirCurso_click()
+  {
+    global $MIOLO, $module, $self, $action;
+    $r = $this->capacitacao->idcurso;
+
+    // var_dump($capacitacoes);
+    $action_sim = $MIOLO->GetActionURL($module, $self, $this->capacitacao->
+      idFuncionario, array('form' => 'capacitacoes', 'conf' => 'sim', 'id' => $this->
+      capacitacao->idHistCapacitacao, 'event' => 'btnExcluirCurso:click'));
+    $action_nao = $MIOLO->GetActionURL($module, $self, $this->capacitacao->
+      idFuncionario, array('form' => 'capacitacoes', 'conf' => 'nao', 'id' => $this->
+      capacitacao->idHistCapacitacao));
+    $conf = $this->GetFormValue('conf');
+
+    if ($conf == 'sim')
+    {
+      try
+      {
+        //foreach($cursoHist as $hist){
+        $objHist = $MIOLO->getBusiness('rh', 'histcapacitacao');
+        $queryy = $objHist->getByCurso($r);
+        $this->capacitacao->Execute($queryy);
+        $MIOLO->Information('Curso excluído com sucesso', $MIOLO->GetActionURL('rh',
+          'main:funcionario', $this->capacitacao->idFuncionario, array('form' =>
+          'capacitacoes')));
+      }
+      catch (exception $e)
+      {
+        $this->manager->error("Informe o seguinte erro à equipe do CGCO: " . $e->
+          getMessage());
+      }
+
+    } else
+    {
+      $MIOLO->Question("Tem certeza que deseja excluir o curso " . $hist->idcurso .
+        " ?", $action_sim, $action_nao);
+
+    }
+  }
+
+  /*	function btnNew_click(){
+  //global $MIOLO, $theme, $module, $page, $context, $self;
+  //$theme->clear();
+  // Form::clearFields();
+  //$this->SetFieldAttr('btnPost','visible',true);
+  //  $url = $MIOLO->GetActionURL('rh','main:funcionario',$this->capacitacao->idFuncionario, array('form'=>'capacitacoes','id'=>'new'));
+  // var_dump($_GET);
+
+  // $page->redirect($url);
+  //   var_dump($url);
+  
+  }  */
+
+}
+
+?>

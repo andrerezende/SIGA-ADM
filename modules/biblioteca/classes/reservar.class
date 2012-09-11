@@ -1,0 +1,314 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+class BusinessBibliotecaReservar extends Business
+{
+
+	var $idReservar;
+	var $objReservar;
+	var $objReserva;
+	var $objEmprestimo;
+	var $objExemplar;
+	var $idreserva;
+	
+	function BusinessBibliotecaReservar($data = null)
+	{
+	global $MIOLO,$module;
+       $this->Business('sigaept', $data);
+
+		$this->objEmprestimo = $MIOLO->GetBusiness($module,'emprestimo');
+		$this->objExemplar = $MIOLO->GetBusiness($module,'exemplar');
+		$this->objReserva = $MIOLO->GetBusiness($module,'reserva');
+		$this->objUsuario = $MIOLO->GetBusiness($module,'usuario');
+		$this->objPolitica = $MIOLO->GetBusiness($module,'politica');
+	}
+
+	function GetNumeroTombo($idExemplar)
+	{
+		return $this->objEmprestimo->IDExemplarToNumeroTombo($idExemplar);
+	}
+
+	function GetAll($idExemplar)
+	{
+		return $this->objExemplar->GetAllByCodigo($idExemplar);
+	}
+
+	function GetEstado($mnemonico)
+	{
+		$sql = new sql('idestado','bt_estado','mnemonico = ?');
+		return $this->Query($sql,$mnemonico);
+	}
+
+	function TemReservaDestaObra($isUser,$numerodaobra,$numerodotombo)
+	{
+		
+		// obtem o idsituacao equivalente a cancelada, vencida e confirmada
+		$sit_sql = new msql('idsituacao','bt_situacao','mnemonico = ?');
+		$idSitCanc = $this->Query($sit_sql,'CANCELADA')->result[0][0];
+		$idSitVenc = $this->Query($sit_sql,'VENCIDA')->result[0][0];
+		$idSitConf = $this->Query($sit_sql,'CONFIRMADA')->result[0][0];
+
+		$volume = strtoupper($this->objExemplar->GetVolumeExemplar($numerodotombo));
+		$exemplares = $this->objExemplar->ListExemplar($numerodaobra);
+		
+		foreach($exemplares->result as $exemplar)
+		{
+			if($volume == null)
+			{
+				$sql = new sql('r.idreserva','bt_reserva r, bt_exemplar e','r.idusuario = ? and r.idexemplar = ? and r.idsituacao <> ? and r.idsituacao <> ? and r.idsituacao <> ? and e.volume is null and e.idexemplar = r.idexemplar');
+				$reserva = $this->Query($sql, array($isUser, $exemplar[0], $idSitCanc, $idSitVenc, $idSitConf));
+			}
+			else
+			{
+				$sql = new sql('r.idreserva','bt_reserva r, bt_exemplar e','r.idusuario = ? and r.idexemplar = ? and r.idsituacao <> ? and r.idsituacao <> ? and r.idsituacao <> ? and upper(e.volume) = ? and e.idexemplar = r.idexemplar');
+				$reserva = $this->Query($sql, array($isUser, $exemplar[0], $idSitCanc, $idSitVenc, $idSitConf, $volume));
+			}
+			if($reserva->result != null)
+			{
+				return $reserva;
+			}
+		}
+	}
+
+	function TemPolitica($idUser,$idExemplar)
+	{
+		$idGrupo = $this->objEmprestimo->GetGrupo($idUser)->result[0][0];
+
+		$numerodotombo =  $this->objEmprestimo->IDExemplarToNumeroTombo($idExemplar)->result[0][0];
+
+		// no final é [0][2] pq na sql temos "select 'idobra,idestado,idregracirculacao' "
+		$idRegraCirculacao =  $this->objEmprestimo->GetDadosExemplar($numerodotombo)->result[0][2];
+
+		$sql = new sql('limitedereserva','bt_politica','idgrupo=? and idregracirculacao=?');
+		
+		return $this->Query($sql,array($idGrupo,$idRegraCirculacao));
+
+	}
+
+	function GetQtdeReservas($idUsuario)
+	{
+		$sql = new sql('count(idreserva)','bt_reserva','idusuario=? and foiconfirmada is null and (idsituacao=1 or idsituacao=2)');
+		return $this->Query($sql,$idUsuario);
+	
+	}
+
+	function TemDireito($idUser,$Exemplar)
+	{
+
+		$idGrupo = $this->objEmprestimo->GetGrupo($idUser)->result[0][0];
+
+		$numerodotombo =  $this->objEmprestimo->IDExemplarToNumeroTombo($Exemplar->idexemplar)->result[0][0];
+
+		// no final é [0][2] pq na sql temos "select 'idobra,idestado,idregracirculacao' "
+		$idRegraCirculacao =  $this->objEmprestimo->GetDadosExemplar($numerodotombo)->result[0][2];
+
+		$idOperacaoRESERVAWEB = $this->objEmprestimo->GetIdOperacao("RESERVAWEB")->result[0][0];
+
+       
+
+		if ($Exemplar->idestado == '1') // Exemplar esta Disponível.
+		{
+
+			$idOperacao = $this->objEmprestimo->GetIdOperacao("RESWEBDISP")->result[0][0];
+
+            
+			$sql = new sql('*','bt_direito','idgrupo=? and idregracirculacao=? and idoperacao=?');
+			return $this->Query($sql,array($idGrupo,$idRegraCirculacao,$idOperacao));
+
+		}
+
+		if ( ($Exemplar->idestado == '5') ||  ($Exemplar->idestado == '6') ) // Exemplar esta Emprestado/Reservado.
+		{
+
+			$idOperacao = $this->objEmprestimo->GetIdOperacao("RESERVAWEB")->result[0][0];
+            
+			$sql = new sql('*','bt_direito','idgrupo=? and idregracirculacao=? and idoperacao=?');
+			return $this->Query($sql,array($idGrupo,$idRegraCirculacao,$idOperacao));
+		
+		}
+	
+	}
+	
+	function  IdLastReserva()
+	{
+		return $this->_db->GetNewId('seq_bt_reserva');
+	}
+
+	
+	function Reservar($idUser,$Exemplar,$Estado)
+	{global $MIOLO,$module;
+
+		 $k = new MKrono();
+		 $dataHoje = $k->KDate('%d/%m/%Y      %H:%i:00');
+		 $dataHojeOracle = ":TO_DATE('". $dataHoje . "','DD/MM/YYYY HH24:MI:SS')";
+        		 
+		//var_dump($idUser,$Exemplar,$Estado);
+		
+/*		if ($Estado == "ATENDIDA") // Exemplar Disponível
+		{
+			//Calcula datalimite
+			$grupo = $this->objUsuario->GetGrupoByIdusuario($idUser);
+			$dias = $this->objPolitica->GetDiasReserva($grupo);
+			$DataHoraLimite = $this->objReserva->CalculaData($dias);
+				
+			$this->BeginTransaction();
+					
+			$sql = new sql('idreserva,datahoradareserva,datahoradasituacao,datahoraentrada,datahoralimite,foiconfirmada,idsituacao,idusuario,idexemplar','bt_reserva');
+			
+			$idlastreserva = $this->IdLastReserva();
+			
+			$values = array($idlastreserva,
+			                $dataHojeOracle,
+			                $dataHojeOracle,
+			                $dataHojeOracle,
+//			                ":TO_DATE('". $this->proximaData($dataHoje) . "','DD/MM/YYYY HH24:MI:SS')",
+							$this->_db->CharToTimestamp($DataHoraLimite),
+							0,
+							$this->objEmprestimo->GetSituacao("ATENDIDA")->result[0][0],
+			                $idUser,
+			                $Exemplar->idexemplar);
+						
+			$ok = $this->Execute($sql->Insert($values));
+			
+						//
+				  		// LOG ;)
+				  		//
+				  		$log = $MIOLO->GetBusiness($module,'log'); 
+						$sqlog = $log->Gravar("RESERVAWEB",$idlastreserva);	
+						$this->Execute($sqlog->Insert());
+			$this->objExemplar->AlteraEstado($Exemplar->numerodotombo,6);
+			$this->EndTransaction();
+			
+			$Mensagem = "Reserva atendida disponível até " . $DataHoraLimite;
+
+			//verifica se o limite de empréstimos/reservas para regra de circulação está esgotado
+			$query = $this->objEmprestimo->GetLimiteEmprestimos($grupo,$Exemplar->idregracirculacao);
+			$qtdeMaximaExemplaresRegra = $query->result[0][0];
+			$query = $this->objEmprestimo->GetQtdeEmprestimosRegra($idUser,$Exemplar->idregracirculacao);
+			$numeroEmprestimosRegra = $query->result[0][0];
+			$query = $this->objReserva->GetQtdeReservasRegra($idUser,$Exemplar->idregracirculacao);
+			$numeroReservasRegra = $query->result[0][0];
+			if ( ($numeroEmprestimosRegra) > $qtdeMaximaExemplaresRegra)
+			{
+				//em caso afirmativo, inclui alerta ao usuário
+				$Mensagem .= "<BR><BR>Aviso: Você ultrapassou o limite de ";
+			}
+
+			Return $Mensagem;
+
+		}
+*/
+		if ($Estado == "SOLICITADA") // Exemplar Reservado ou Emprestado
+		{
+			$this->BeginTransaction();
+		
+			$sql = new sql('idreserva,datahoradareserva,datahoradasituacao,idsituacao,idusuario,idexemplar','bt_reserva');
+			
+			$idlastreserva = $this->IdLastReserva();
+			
+			$ok = $this->Execute($sql->Insert(array($idlastreserva,
+														$dataHojeOracle,
+														$dataHojeOracle,
+														$this->objEmprestimo->GetSituacao("SOLICITADA")->result[0][0],
+														$idUser,
+														$Exemplar->idexemplar
+														)));
+														
+						//
+				  		// LOG ;)
+				  		//
+				  		$log = $MIOLO->GetBusiness($module,'log'); 
+						$sqlog = $log->Gravar("RESERVAWEB",$idlastreserva);	
+						$this->Execute($sqlog->Insert());											
+			$this->EndTransaction();
+			
+
+			
+			$Mensagem = 'Reserva solicitada. Acesse o item "Reservas" no menu para acompanhar a sua posição na fila.';
+
+			//verifica se o limite de empréstimos/reservas para regra de circulação está esgotado
+			$grupo = $this->objUsuario->GetGrupoByIdusuario($idUser);
+			$query = $this->objEmprestimo->GetLimiteEmprestimos($grupo,$Exemplar->idregracirculacao);
+			$qtdeMaximaExemplaresRegra = $query->result[0][0];
+			$query = $this->objEmprestimo->GetQtdeEmprestimosRegra($idUser,$Exemplar->idregracirculacao);
+			$numeroEmprestimosRegra = $query->result[0][0];
+			$query = $this->objReserva->GetQtdeReservasRegra($idUser,$Exemplar->idregracirculacao);
+			$numeroReservasRegra = $query->result[0][0];
+			if ( ($numeroEmprestimosRegra) >= $qtdeMaximaExemplaresRegra)
+			{
+				//em caso afirmativo, inclui alerta ao usuário
+				$Mensagem .= "<BR><BR>Atenção: você já atingiu o limite de $qtdeMaximaExemplaresRegra empréstimo(s) para esse tipo de material.";
+			}
+			elseif ( ($numeroEmprestimosRegra + $numeroReservasRegra) > $qtdeMaximaExemplaresRegra)
+			{
+				//em caso afirmativo, inclui alerta ao usuário
+				$Mensagem .= "<BR><BR>Atenção: a soma do número de empréstimos com as reservas solicitadas ultrapassa o limite de $qtdeMaximaExemplaresRegra empréstimo(s) permitido(s) para esse tipo de material.";
+			}
+
+
+			Return $Mensagem;
+			
+																	
+		}
+		
+		
+		
+
+
+
+
+	}
+	
+	
+	function proximaData($DataHoje)
+	{global $MIOLO;
+
+		//
+		//
+		// >>>> PRECISA VERIFICAR FERIADOS !
+		//
+		//
+	
+		$k = new MKrono();
+		$proximaData = $k->Operation('+',$DataHoje,1 . '%D') . ' 22:30:00';
+		
+		return $proximaData;
+		
+		
+	}
+	
+	function existeReserva($idExemplar)
+	{
+		// obtem o idsituacao equivalente a cancelada
+		$sit_sql = new msql('idsituacao','bt_situacao','mnemonico = ?');
+		$idSit = $this->Query($sit_sql,'CANCELADA')->result[0][0];
+		
+		$sql = new sql('idreserva','bt_reserva','idexemplar = ? and datahoraentrada is null and idsituacao <> ?');
+		return $this->Query($sql,array($idExemplar,$idSit));
+	}
+
+}
+?>

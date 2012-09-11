@@ -1,0 +1,113 @@
+<?php
+	class repListaMateriaisUoAlmoxarifado extends PDFReport
+	{
+		protected $uoalmoxarifado;
+		protected $img;
+		protected $timestamp;
+
+        function __construct($objUo)
+        {
+			global $MIOLO, $module, $page, $context, $self, $action, $perms;
+			parent::__construct(NULL, NULL, 55,0,'landscape','a4');
+            $ui = $MIOLO->GetUI();
+			$this->img = $ui->GetImageSrc('logonet.png',$module);
+            $this->pdf->ezSetMargins(112, 70,50, 30);
+			$this->uoalmoxarifado=$objUo;
+			$this->timestamp = date('d/m/Y G:i');
+			$this->GeneratePageHeader();
+			$this->generatePageFooter();
+			$this->generateData();
+
+		}
+
+	function generateData()
+	{		
+		$this->uoalmoxarifado->retrieveAssociation('estoque');
+		if($this->uoalmoxarifado->estoque){
+			$cols = array('<b>Código</b>','<b>CATMAT</b>','<b>Descrição</b>','<b>Unidade</b>','<b>Estoque Mínimo</b>','<b>Estoque</b>','<b>Valor Total</b>');
+			$options['textCol'] = array(0,0,0);
+			$options['shaded'] = 1;
+			$options['showLines'] = 1;
+			$options['fontSize'] = 11;
+			$options['maxWidth'] = 780;
+			$options['xPos'] = 'left';
+			$options['xOrientation'] = 'right';
+
+			foreach($this->uoalmoxarifado->estoque as $itemMaterial){
+				$itemMaterial->retrieveAssociation('material');
+				$dados[$itemMaterial->material->descricao] = array($itemMaterial->material->idMaterial,
+                    $itemMaterial->material->codmaterial,
+					$itemMaterial->material->descricao,
+					$itemMaterial->material->unidade,
+					$itemMaterial->estoqueMin,
+					$itemMaterial->estoque,
+					$itemMaterial->valorTotal);
+			}
+            ksort($dados);
+            foreach ($dados as $dado)
+            {
+                $dataRel[] = $dado;
+            }
+			$this->pdf->ezTable($dataRel,$cols,'',$options);
+		}else{	
+			$x0 = $this->pdf->left-5;
+			$x1 = $this->pdf->right-5;
+			$h = $this->pdf->getFontHeight(12);
+			$this->pdf->saveState();
+			$alturaCabecalho = $x0 + 58;
+			$height=550;
+			$this->pdf->addText($alturaCabecalho, $height-$h-$h-$h-$h-$h, 14, 'Não há materiais para esta UO');
+		}
+
+	}
+	function GeneratePageHeader()
+        {
+			$x0 = $this->pdf->left-5;
+			$x1 = $this->pdf->right-5;
+			$h = $this->pdf->getFontHeight(12);
+			$header = $this->pdf->openObject();
+			$this->pdf->saveState();
+			$alturaCabecalho = $x0 + 58;
+			$height=550;
+
+		$x00=$this->pdf->left;
+		$hh = $this->pdf->getFontHeight(12);
+		$this->pdf->addText($x00, 800, 12, $this->manager->getConf('instituicao.sigla')." - ".$this->manager->getConf('instituicao.nome'));
+		$this->pdf->addText($x00, 800 - $hh, 12, $this->manager->getConf('theme.system'));
+
+
+/*
+			$this->pdf->addPngFromFile($this->img, $x0, $height- $h - $h- $h, 50, 50);
+			$this->pdf->addText($alturaCabecalho, $height, 12, 'UFJF - Universidade Federal de Juiz de Fora');
+			$this->pdf->addText($alturaCabecalho, $height - $h, 12, 'CGCO - Centro de Gestão do Conhecimento Organizacional');
+			$this->pdf->addText($alturaCabecalho, $height - $h - $h, 12, 'SIGA - Sistema Integrado de Gestão Acadêmica');
+*/
+			$this->pdf->addText($alturaCabecalho, $height - $h - $h- $h, 12, '');
+			$this->pdf->addText($alturaCabecalho, $height - $h - $h- $h, 12, 'Lista de Materiais - '. $this->uoalmoxarifado->nome);
+			$this->pdf->SetStrokeColor(0, 0, 0);
+			$y = $$height - $h - $h- $h;
+			
+			$this->pdf->line($x0, $y, $x1, $y);
+			$this->pdf->line($x0, $y - 15, $x1, $y - 15);
+			$this->pdf->restoreState();
+			$this->pdf->closeObject();
+			$this->pdf->addObject($header, 'all');
+			$this->pdf->ezSetDy(+15);
+	
+        }
+		function GeneratePageFooter()
+        {
+          	$x0 = $this->pdf->left;
+			$x1 = $this->pdf->right;
+			$footer = $this->pdf->openObject();
+			$this->pdf->saveState();
+			$this->pdf->SetStrokeColor(0, 0, 0);
+			$this->pdf->line($x0, 28, $x1, 28);
+			$this->pdf->addText($x1-125, 19, 9, $this->timestamp . ' - CGCO/DSI');
+			$this->pdf->ezStartPageNumbers($x0, 19, 9, 'right', 'Página: {PAGENUM} de {TOTALPAGENUM}');
+			$this->pdf->restoreState();
+			$this->pdf->closeObject();
+			$this->pdf->addObject($footer, 'all');
+        }
+}
+?>

@@ -1,0 +1,107 @@
+<?
+class frmTipoReqDados extends Form
+{
+
+	protected $objTipoReq;
+	
+    function __construct($objTipoReq)
+    {
+		$this->objTipoReq = $objTipoReq;
+        $this->Form('Dados do Tipo de Requisição');
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+       global $MIOLO;
+		$fields = array(
+            new TextField('descricao','','Descrição','30','Máx. 30 caracteres'),
+			new LookupTextField('lkpDescRubrica','','Rubrica',20),
+			new HiddenField('idRubrica','')
+        );
+		
+        $this->SetFields($fields);
+
+	    $this->SetFieldAttr('lkpDescRubrica','module','adm');
+	    $this->SetFieldAttr('lkpDescRubrica','item','descrubrica');
+	    $this->SetFieldAttr('lkpDescRubrica','event','btnReadOnly:click');
+
+        $this->descricao->AddAttribute('maxlength','30');
+
+		$buttons = array(
+        	new FormButton('btnSalvar', 'Salvar')
+        );
+
+		$this->SetButtons($buttons);
+
+		$validators = array(
+			new RequiredValidator('descricao')
+		);
+		$this->SetValidators($validators);
+		$this->SetData();
+
+    }
+
+	function SetData()
+	{
+		$data = $this->objTipoReq;
+		$this->SetFieldValue('descricao',$data->descricao);
+
+		$objReqRubrica = $this->manager->GetBusiness('adm','reqrubrica');	
+		$objRubrica = $this->manager->GetBusiness('adm','rubrica');	
+		$objTipoReq = $this->manager->GetBusiness('adm','tiporeq');
+		
+		$ReqRubrica = $objReqRubrica->GetByTipoReq($data->idTipoReq);
+		$TipoReq =	$objTipoReq->GetById($data->idTipoReq);
+			
+		$objRubrica->GetById($ReqRubrica->result[0][0]);
+		$this->SetFieldValue('idRubrica',trim($ReqRubrica->result[0][0]));
+		$this->SetFieldValue('lkpDescRubrica',$objRubrica->descricao);
+	
+	}
+	
+	public function btnSalvar_click()
+	{
+		$objReqRubrica = $this->manager->GetBusiness('adm','reqrubrica');
+		
+		$this->objTipoReq->SetData($this->GetData());
+		
+		
+
+		$objReqRubrica->GetById($this->objTipoReq->idTipoReq);
+	
+		
+
+//var_dump($objReqRubrica);
+
+		try
+		{
+			$this->objTipoReq->save();
+			
+			$objReqRubrica->deleteTipo($this->objTipoReq->idTipoReq);
+			
+			$objReqRubrica->idRubrica = $this->GetData()->idRubrica;
+			
+			$objReqRubrica->save();
+			
+			$this->objTipoReq->Log(OP_UPD,"Dados de tipo de requisição modificados");
+			$this->manager->information("Dados alterados com sucesso.",$this->manager->getActionUrl('adm','main:tiporeq:find') );
+		}
+		catch (Exception $e)
+		{
+			$this->addError($e->getMessage());
+		}
+	}
+
+	function btnReadOnly_click($sender=null,$key=null)
+	{
+		$objRubrica = $this->manager->GetBusiness('adm','rubrica');		
+		$objRubrica->GetById(trim($key));
+		$this->SetFieldValue('lkpDescRubrica',$objRubrica->descricao);
+		$this->SetFieldValue('idRubrica',trim($key));
+		$this->SetFieldAttr('lkpDescRubrica','readonly',true);
+
+		$this->SetButtonAttr('btnNew','visible',true);
+	}
+ }
+?>

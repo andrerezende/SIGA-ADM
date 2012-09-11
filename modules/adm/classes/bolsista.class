@@ -1,0 +1,1032 @@
+<?PHP
+
+//select max(idbolsista) from ad_bolsista where idbolsa = '012' and IDPROJETO is null;        
+        
+class BusinessAdmBolsista extends Business
+{
+    var $idbolsista;
+    var $datainclusao;
+    var $dataexclusao;
+    var $horasprevistas;
+    var $dataalt;
+    var $idbolsa, $bolsa;
+    var $idprojeto, $projeto;         //classe ga_projeto
+    var $modalidade;
+    var $idpessoa , $pessoa, $aluno;
+    var $nome;
+        
+    var $cpf;
+    var $idbanco;
+    var $idagenc;
+    var $conta;
+
+    var $frequencias;
+
+    var $diainicialfrequencia, $diafinalfrequencia; //para permitir a digitação de frequência somente em um certo prazo
+
+    function BusinessAdmBolsista($data=null)
+    {
+        $this->Business('sigaept',$data);
+        $this->diainicialfrequencia =  0;
+        $this->diafinalfrequencia   =  0;
+    }
+
+
+    function listBolsasbyMatricula($idpessoa , $ano=NULL)
+	{
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('idbolsista');
+        //poderia também   $criteria->addColumnAttribute('identificador');   $criteria->addColumnAttribute('numero');
+		$criteria->addCriteria('idpessoa','=', $idpessoa);
+		return $criteria->retrieveAsQuery();
+    } // listBolsasbyMatricula
+
+
+	function listProjetosbyMatricula($idpessoa , $ano=NULL)
+	{
+        $criteria = $this->getCriteria();
+
+        $criteria->addColumnAttribute('bolsista.idbolsista'  ,'idbolsista'   );
+        $criteria->addColumnAttribute('projeto.identificador','identificador');
+        $criteria->addColumnAttribute('projeto.numero'       ,'numero'       );
+        $criteria->addColumnAttribute('modalidade');//'idbolsa');//'voluntario'); //já antevendo 07 sub 07,53 ; 01 sub 01,04
+        $criteria->addColumnAttribute('bolsista.datainclusao','datainclusao' );
+        $criteria->addColumnAttribute('bolsista.dataexclusao','dataexclusao' );
+
+        $criteria->addCriteria('idpessoa','=', $idpessoa);
+
+        $return = $criteria->retrieveAsQuery();
+        return $return;
+    } // listProjetosbyMatricula
+
+
+    function ativoEmOutroProjeto() //somente se para ad_bolsista:($idpessoa,$objbolsista)
+	{
+        //se pessoa tem algum registro, não no mesmo projeto em tela
+        //E a data de exclusao for futura então configura como outra bolsa-projeto ativa
+        $criteria = $this->getCriteria();
+		$criteria->addCriteria('idpessoa','=',"'$this->idpessoa'");
+		$criteria->addCriteria('idprojeto','<>',$this->idprojeto);
+
+		$data = date("Y/m/d");
+
+        $cc = new CriteriaCondition;
+          $cc->addCriteria  ( $criteria->getCriteria('bolsista.dataexclusao','IS','NULL'   ) );
+          $cc->addORCriteria( $criteria->getCriteria('bolsista.dataexclusao','>=',"'$data'") );
+        $criteria->addCriteria($cc);
+        
+		$query = $criteria->retrieveAsQuery();
+		return ( ! $query->eof() );
+    } // ativoEmOutroProjeto
+
+
+	function atualizaGrupoUsuario($matricula)
+	{
+        IF ( ! $this->ativoEmOutroProjeto() ) //se não ativo em outro projeto pretende criar a permissãao
+        {
+            $usuario = $this->_miolo->getBusiness('common','usuario');
+            $usuario->getByLogin(trim($matricula));
+			if ( is_array($usuario->grupos) )
+			{
+                foreach ( $usuario->grupos as $grupo )
+                {
+                    if ( $grupo->idGrupo != 990 )
+                    {
+                        $grupos[] = $grupo->idGrupo;
+                    }
+                }
+                $usuario->setArrayGroups($grupos);
+                $usuario->setTransaction($this->getTransaction());
+                $usuario->save();
+            } //if
+        } // IF
+    } // atualizaGrupoUsuario
+
+
+    function GetById($idbolsista,$estado='')
+    {
+        $dtatual = date('d/m/Y');
+
+        $sql = new sql('b.idbolsista, b.datainclusao, b.dataexclusao, b.horasprevistas,'.
+                       'b.idbolsa, b.idprojeto, b.modalidade, b.idpessoa,a.nome,a.cpf,a.idbanco,a.idagenc,a.conta','');
+        $sql->SetJoin('ad_bolsista b','cm_pessoa a',"a.idpessoa = b.idpessoa AND b.idbolsista = $idbolsista");
+        
+        if( $estado == 'ativo' )
+        {
+            $sql->SetWhere("( (b.dataexclusao >= '$dtatual') OR (b.dataexclusao is null) OR (b.dataexclusao = '') )");
+        }
+    
+        $query = $this->Query($sql);
+        if ( !$query->eof() )
+        {
+            $this->SetData($query->GetRowObject());
+        }
+           return $this;
+    }
+
+    function GetByIdPessoa($idpessoa)
+    {
+       global $MIOLO;
+     
+       $sql = new sql('b.idbolsista,b.datainclusao,b.dataexclusao,b.horasprevistas,b.idbolsa,b.idpessoa,a.nome,a.cpf,a.idbanco,a.idagenc,a.conta','');
+       $sql->SetJoin('ad_bolsista b','cm_pessoa a','a.idpessoa = b.idpessoa');
+       $sql->SetWhere('b.idpessoa = ?');
+       $sql->SetParameters($idpessoa);
+    
+        $query = $this->Query($sql);
+    
+        if ( !$query->eof() )
+        {
+            $this->SetData($query->GetRowObject());
+        }
+        else
+        {
+            return false;
+        }
+        
+           return $this;
+    }
+
+
+    //retorna qualquer um IDBOLSISTA que esteja ativo, somente para atualizar DATAALT (basta atualizar a data de qualquer um)
+    function getAtivobyIdPessoa($idpessoa)
+    {
+        $dtatual = date('d/m/Y');
+
+        $sql = new sql();
+        $sql->SetTables ('ad_bolsista');
+        $sql->SetColumns('idbolsista');
+        $sql->SetWhere  ("( (dataexclusao >= '$dtatual') OR (dataexclusao is null) OR (dataexclusao = '') )");
+        $sql->SetWhere  ("idpessoa = $idpessoa");
+
+        $query = $this->Query($sql);
+        return $query->result[0][0];
+    } // getAtivobyIdPessoa
+
+
+    function Insert($campos_pagamento=false, $cpfdadosbancarios=TRUE)
+    //$cpfdadosbancarios = TRUE : (ADM)    situação padrão: inclue bolsista e altera cpf e dados bancários
+    //                   = false: (ENSINO) Orientador incluindo um bolsista (PET/CG/TP/MO)
+    {
+        $cmd = Array();
+        
+        IF ($cpfdadosbancarios)  //vindo do sistema 'adm'
+        {
+            $sql = new sql();
+            $sql->SetTables('cm_pessoa p');
+            $sql->SetWhere("p.idpessoa = '{$this->idpessoa}'");
+        
+            if ($campos_pagamento)  //bolsista
+            {
+                $sql->SetColumns('p.nome,p.cpf,p.idbanco,p.idagenc,p.conta');
+                $sql->SetParameters($this->nome   ,
+                                    $this->cpf    ,
+                                    $this->idbanco,
+                                    $this->idagenc,
+                                    $this->conta  );
+            }
+            else                    //monitor Voluntário
+            {
+                $sql->SetColumns('p.nome,p.cpf');
+                $sql->SetParameters($this->nome,
+                                    $this->cpf );
+            }
+        
+            $cmd[] = $sql->Update();
+            $log = "Update pessoa consequencia do Insert Bolsista: idbolsista = $this->idbolsista, idpessoa = $this->idpessoa";
+        } // IF
+        ELSE  //vindo do sistema de Projetos ('Monitorias e Bolsas') não se altera cpf e dados bancários
+        {
+            $log = "insercao de AD_BOLSISTA vinda de Orientador";
+        }
+
+        $sql = new sql('t.idbolsista,t.datainclusao,t.dataexclusao,t.horasprevistas,t.idbolsa,t.idprojeto,t.modalidade,t.idpessoa,t.dataalt','ad_bolsista t');
+
+        $this->idbolsista = $this->_db->GetNewId('seq_ad_bolsista');
+
+        $dataalt = date('d/m/Y');
+        
+        $values = array
+        (
+            $this->idbolsista,
+            $this->datainclusao,
+            $this->dataexclusao,
+            $this->horasprevistas,
+            $this->idbolsa,
+            $this->idprojeto,
+            $this->modalidade,
+            $this->idpessoa,
+            $dataalt
+        );
+
+        $cmd[] = $sql->Insert($values);
+        
+        try
+        {
+            $this->ExecuteBatch($cmd);
+            $ok = true;
+        }
+        catch(Exception $e)
+        {                
+            $ok = false;
+        }
+
+        if ($ok)
+        {
+            $this->Log(OP_INS,"idbolsista = $this->idbolsista, idpessoa = $this->idpessoa");
+            
+            $this->Log(OP_UPD,$log);
+        }
+
+        return $ok;
+    }
+
+    function Update($campos_pagamento=false,$cpfdadosbancarios=TRUE)
+    //$cpfdadosbancarios = TRUE   (ADM)    situação padrão: altera dados do bolsista e cpf e dados bancários
+    //                   = false: (ENSINO) Orientador colocando data de encerramento para um bolsista (PET/CG/TP/MO)
+    //                                     ou Monitor atualizando cpf e dados bancários, mas alterando aqui só a Data de Alteração
+    {
+        global $MIOLO;
+
+        if( !$this->idpessoa || !$this->idbolsista )
+        {
+            $MIOLO->Error('IDBolsista não informado!');
+            return false;
+        }
+
+        $cmd = Array();
+
+        IF ($cpfdadosbancarios)  //vindo de PET/CG/TP/MO
+        {
+            $sql = new sql();
+            $sql->SetTables('cm_pessoa p');
+            $sql->SetWhere("p.idpessoa = '{$this->idpessoa}'");
+            if( $campos_pagamento )
+            {
+                $sql->SetColumns('p.nome,p.cpf,p.idbanco,p.idagenc,p.conta');
+                $sql->SetParameters($this->nome   ,
+                                    $this->cpf    ,
+                                    $this->idbanco,
+                                    $this->idagenc,
+                                    $this->conta  );
+            }
+            else
+            {
+                $sql->SetColumns('p.nome,p.cpf');
+                $sql->SetParameters($this->nome,
+                                    $this->cpf );
+            }
+
+            $cmd[] = $sql->Update();
+            $log = "Update pessoa consequencia do Update idbolsista = $this->idbolsista, idpessoa = $this->idpessoa, exclusao = $this->dataexclusao";
+        } // IF
+        ELSE
+        {
+            $log = "alteração vinda de Orientador (idbolsista = $this->idbolsista encerramento=>DATAEXCLUSAO $this->dataexclusao) ou Monitor (cpf,banco=>DATAALT)";
+        }
+
+        $sql = new sql('datainclusao,dataexclusao,horasprevistas,idbolsa,idprojeto,modalidade,idpessoa,dataalt','ad_bolsista','idbolsista = ?');
+        
+        $dataalt = date('d/m/Y');
+        
+        $values = array($this->datainclusao,$this->dataexclusao,$this->horasprevistas, 
+                        $this->idbolsa,$this->idprojeto,$this->modalidade,$this->idpessoa,$dataalt,$this->idbolsista);
+
+        $cmd[] = $sql->Update($values);
+
+        try
+        {
+            $this->ExecuteBatch($cmd);
+            $ok = true;
+        }
+        catch(Exception $e)
+        {                
+            $ok = false;
+        }
+
+        if ($ok)
+        {
+            $this->Log(OP_UPD,"idbolsista = $this->idbolsista, idpessoa = $this->idpessoa");
+            
+            $this->Log(OP_UPD,$log);
+        }
+        
+        return $ok;
+      }
+
+
+      function Delete()
+      {
+          $values = array($this->idbolsista);
+        $sql = new sql('','ad_bolsista','idbolsista = ?');    
+        
+        try
+        {
+            $this->Execute($sql->Delete($values));
+            $ok = true;
+        }
+        catch(Exception $e)
+        {                
+            $ok = false;
+        }    
+
+        if ($ok)
+        {
+            $this->Log(OP_DEL,"idbolsista = $this->idbolsista, idpessoa = $this->idpessoa");
+        }
+
+        return $ok;
+      }
+
+      function ListRange($range=NULL)
+      {
+        $sql = new sql('t.idpessoa,t.idbolsista,t.datainclusao','ad_bolsista t','','t.idbolsista');
+        
+        $sql->SetRange($range);
+        
+        $query = $this->Query($sql);
+
+        return $query;
+    }
+
+      function ListAll()
+      {
+        return $this->ListRange();
+      }
+      
+      public function verificaMesAnoAtual($dia, $mes, $ano)
+      {
+        //verifica se o mes e ano que a pessoa informou é atual
+        if ( ($mes == date('m')) AND ($ano == date('Y')) )
+        {
+            if ($dia >= date('d'))
+            {
+                return true;
+            }
+            else 
+            {
+                return false;
+            }
+        }     
+        else 
+        {
+            return false;
+        }
+      }
+      
+      function DefDataFormatura($numDia, $numMes, $numAno, $semestre, $opcao)
+      {    
+          global $MIOLO;    
+        $db = $MIOLO->GetDatabase('sigaept');                            
+
+          $mes = $this->getMesOracle($numMes);
+        $ano = substr($numAno, 2, 3);
+        $dataFormatura = $numDia.'-'.$mes.'-'.$ano;        
+        
+        //SELECT DISTINCT p.idpessoa, p.nome, a.matricula FROM cm_pessoa p, ga_aluno a, ad_bolsista b, ga_progcurtit t WHERE ( ( p.idpessoa = a.idpessoa ) AND ( b.idpessoa = a.idpessoa ) ) AND ( a.matricula = t.matricula ) AND ( t.ano = 2006 ) AND ( t.semestre = 3 ) AND ( t.opcao = 2 ) AND ( ( b.dataexclusao IS NULL ) OR (b.dataexclusao >= '14-NOV-2006') );
+        $sql = new sql('DISTINCT p.idpessoa, p.nome, a.matricula',
+                            'cm_pessoa p, ga_aluno a, ad_bolsista b, ga_progcurtit t',
+                            '( ( p.idpessoa = a.idpessoa ) AND ( b.idpessoa = a.idpessoa ) ) AND ( a.matricula = t.matricula ) AND ( t.ano = '.$numAno.' ) AND ( t.semestre = '.$semestre.' ) AND ( t.opcao = '.$opcao.' ) AND ( ( b.dataexclusao IS NULL ) OR (b.dataexclusao >= '."'$dataFormatura'".') )',
+                            'p.nome');
+        $query = $db->GetQuery($sql);
+        $arrResultados = $query->result;
+    
+        //UPDATE
+        $values = array(
+        $dataFormatura,
+        $numAno,
+        $semestre,
+        $opcao,
+        $dataFormatura,
+        $dataFormatura
+        );
+        $sql = new sql(
+            "dataexclusao",
+            "ad_bolsista",
+            "idpessoa IN (
+            SELECT DISTINCT p.idpessoa
+            FROM cm_pessoa p, ga_aluno a, ad_bolsista b, ga_progcurtit t 
+            WHERE ( ( p.idpessoa = a.idpessoa ) AND ( b.idpessoa = a.idpessoa ) ) AND ( a.matricula = t.matricula ) 
+            AND ( t.ano = ? ) 
+            AND ( t.semestre = ? ) 
+            AND ( t.opcao = ? ) 
+            AND ( ( b.dataexclusao IS NULL ) OR (b.dataexclusao >= ? ) )
+            ) AND ( (dataexclusao IS NULL) OR (dataexclusao >= ? ) )");
+        
+        
+        /*
+        $sql = new sql("
+            UPDATE ad_bolsista SET
+            dataexclusao = ".$dataFormatura." 
+            WHERE idpessoa in
+            (
+            SELECT DISTINCT p.idpessoa
+            FROM cm_pessoa p, ga_aluno a, ad_bolsista b, ga_progcurtit t 
+            WHERE ( ( p.idpessoa = a.idpessoa ) AND ( b.idpessoa = a.idpessoa ) ) AND ( a.matricula = t.matricula ) 
+            AND ( t.ano = ".$numAno." ) AND ( t.semestre = ".$semestre." ) AND ( t.opcao = ".$opcao." ) 
+            AND ( ( b.dataexclusao IS NULL ) OR (b.dataexclusao >= ".$dataFormatura.") )
+            ) AND ( (dataexclusao IS NULL) OR (dataexclusao >= ".$dataFormatura.") )
+        ");
+        */
+        //var_dump($sql->Update($values));
+        $ok = $db->Execute($sql->Update($values));
+        
+        if ($ok)
+        {
+            $this->Log(OP_UPD,"dataExclusao = $dataFormatura");
+            $this->Log(OP_UPD,"Update da data de exclusão de bolsistas formandos. Nova data = $dataFormatura");
+        }
+        
+        $objectBolsistaDef = new stdClass();
+        $objectBolsistaDef->ok = $ok;
+        $objectBolsistaDef->resultado = $arrResultados;
+        $objectBolsistaDef->gridBoolean = false;
+        
+        return $objectBolsistaDef;
+      }
+
+      function DefDataExclusao($idBolsa, $numDia, $numMes, $numAno)
+      {
+          //UPDATE ad_bolsista SET dataexclusao = '14-JUL-06'  WHERE idbolsa = '00 1' AND idbolsista NOT IN (select idbolsista from ad_pagbolsa where mesano = '07/2006') AND dataexclusao IS NULL;
+          
+          $dia = $numDia;
+          $mes = $this->getMesOracle($numMes);
+         $ano = substr($numAno, 2, 3); 
+         
+         //dataexclusao na tabela bolsista: DD-MM-AA
+         //mesano na tabela pagbolsa: MM/AAAA
+         
+         //mês e ano que o usuário informou no formato DD-MMM-AA
+        $dataExclusao = ''.$dia.'-'.$mes.'-'.$ano.'';
+        
+        //mês e ano que o usuário informou no formato MM/AAAA
+        $mesano = ''.$numMes.'/'.$numAno.''; 
+        
+        $conta = new sql();
+        $conta->SetTables('ad_bolsista');
+        $conta->SetWhere(" idbolsa = $idBolsa AND idbolsista NOT IN (select idbolsista from ad_pagbolsa where mesano = '$mesano') AND dataexclusao IS NULL");
+        $db = $this->GetDb('sigaept');
+        $conta->SetColumns('idbolsista');
+        $query = $this->ObjQuery($conta->Select());
+        $afected = count($query->result);               
+
+        //UPDATE ad_bolsista SET dataexclusao = '14-JUL-06' WHERE idbolsa = '00 1' AND idbolsista NOT IN (select idbolsista from ad_pagbolsa where mesano = '07/2006') AND dataexclusao IS NULL;
+        $sql = new sql();
+        $sql->SetTables('ad_bolsista');
+        $sql->SetWhere(" idbolsa = $idBolsa AND idbolsista NOT IN (select idbolsista from ad_pagbolsa where mesano = '$mesano') AND dataexclusao IS NULL");
+        $db = $this->GetDb('sigaept');
+        $sql->SetColumns('dataexclusao');
+        $sql->SetParameters($dataExclusao);
+        $cmd[] = $sql->Update(); 
+        $ok = 0;
+
+        try
+        {
+            $this->ExecuteBatch($cmd);
+            $ok = 1;
+        }
+        catch(Exception $e)
+        {                
+            $ok = 0;
+        }
+
+        if ($ok)
+        {
+            $this->Log(OP_UPD,"idbolsa = $idBolsa, dataExclusao = $dataExclusao");
+            $this->Log(OP_UPD,"Update da data de exclusão de bolsistas com o id da bolsa = $idBolsa. Nova data = $dataExclusao");
+        }
+        $concatenado = $afected.'@'.$ok;
+        return $concatenado;
+     }     
+     
+      function lisDefDataExclusao($idBolsa, $numDia, $numMes, $numAno)
+      {
+        $mesano = ''.$numMes.'/'.$numAno.'';
+    
+        $sql = new sql();
+        $sql->SetTables('ad_bolsista a, ad_pagbolsa b, cm_pessoa pes');
+        $sql->SetWhere("((a.idbolsa = $idBolsa) AND
+                         (a.idbolsista = b.idbolsista) AND
+                         (pes.idpessoa = a.idpessoa)) AND
+                        ((a.dataexclusao is not null) OR
+                         (b.mesano = '$mesano'))
+                      ");
+        $sql->SetColumns('a.dataexclusao');
+        $sql->SetColumns('pes.nome');
+        $query = $this->ObjQuery($sql->Select());
+        
+        $ok = array();
+        if (is_array($query->result))
+        {
+            foreach ($query->result as $bolsista)
+            {
+                $aux_data = explode('/', $bolsista[0]);
+                $aux_dia = $aux_data[0];
+                $aux_mes = $aux_data[1];
+                $aux_ano = $aux_data[2];
+                $data_comparacao = ''.$aux_ano.'/'.$aux_mes.'/'.$aux_dia.'';
+                $datatatual = date('y/m/d');
+                if ($data_comparacao >= $datatatual)
+                {
+                    $ok[] = $bolsista;
+                }
+            }
+        }
+        $ok = $this->remove_dups($ok,1);
+        return $ok;
+     }
+     
+     function remove_dups($array, $row_element) 
+     {   
+        $new_array[0] = $array[0];
+           foreach ($array as $current) 
+           {
+            $add_flag = 1;
+               foreach ($new_array as $tmp) 
+               {
+                   if ($current[$row_element]==$tmp[$row_element]) 
+                   {
+                       $add_flag = 0; 
+                       break;
+                   }
+              }
+               if ($add_flag) 
+               {
+                   $new_array[] = $current;
+               }
+           }
+           return $new_array;
+    }
+    
+      function getMesOracle($n)
+      {
+        $tabela = Array (
+            '01' => 'JAN',
+            '02' => 'FEB',
+            '03' => 'MAR',
+            '04' => 'APR',
+            '05' => 'MAY',
+            '06' => 'JUN',
+            '07' => 'JUL',
+            '08' => 'AUG',
+            '09' => 'SEP',
+            '10' => 'OCT',
+            '11' => 'NOV',
+            '12' => 'DEC',
+        );
+          
+          return $tabela[$n];
+      }
+      
+    function ListBolsistas($idpessoa='',$estado='todos')
+    {
+        $dtatual = date('d/m/Y');
+
+        $sql = new sql('','');
+        $sql->SetJoin('ad_bolsista b','cm_pessoa a','a.idpessoa = b.idpessoa');
+        $sql->SetJoin('ad_bolsista b','ad_bolsa be','b.idbolsa = be.idbolsa');
+
+        $sql->SetOrderBy('b.datainclusao');
+
+        if( $estado == 'ativos' )
+        {
+            $sql->SetColumns('b.idbolsista,a.nome,b.datainclusao,be.descricao as bolsa,b.idpessoa');
+            $sql->SetWhere("( (b.dataexclusao >= '$dtatual') OR (b.dataexclusao is null) OR (b.dataexclusao = '') )");
+        }
+        elseif( $estado == 'inativos' )
+        {
+            $sql->SetColumns('b.idbolsista,a.nome,b.datainclusao,b.dataexclusao,be.descricao as bolsa,b.idpessoa');
+            $sql->SetWhere("(b.dataexclusao < '$dtatual')");
+        }
+        else
+        {
+            $sql->SetColumns('b.idbolsista,a.nome,b.datainclusao,be.descricao as bolsa,b.idpessoa');
+        }
+
+        if( $idpessoa != '' )
+            $sql->SetWhere("b.idpessoa = $idpessoa");
+
+        $query = $this->Query($sql);
+        return $query;
+    }
+    
+    //modificacoes
+    function ListBolsistasNaoPagosPorBolsa($idbolsa,$mesano,$folha=null)
+    {
+        $dtatual = date('d/m/Y');
+
+        $sql = new sql('b.idbolsista,a.nome,b.datainclusao,b.dataexclusao,b.idpessoa','ad_bolsista b,cm_pessoa a,ad_bolsa be');
+        
+        //$sql->SetJoin('ad_bolsista b','cm_pessoa a','a.idpessoa = b.idpessoa');
+        //$sql->SetJoin('ad_bolsista b','ad_bolsa be','b.idbolsa = be.idbolsa');
+        
+        $sql->SetWhere('a.idpessoa = b.idpessoa');
+        $sql->SetWhereAnd('b.idbolsa = be.idbolsa');
+
+        $sql->SetWhereAnd("( (b.dataexclusao >= TO_DATE('$dtatual','DD/MM/YYYY')) OR (b.dataexclusao is null) OR (b.dataexclusao = '') )");
+        $sql->SetWhereAnd("b.idbolsa = $idbolsa");
+        $sql->SetWhereAnd("((a.idbanco is not null) OR (a.idbanco <> ''))");
+
+        $sqlComandBolsistasPagos = "(select x.idbolsista from ad_bolsista x, ad_pagbolsa y ";
+        $sqlComandBolsistasPagos .= "where (x.idbolsista = y.idbolsista) ";
+        $sqlComandBolsistasPagos .= "and (x.idbolsa = $idbolsa) ";
+        
+        if ($folha!=null)
+        {
+            $sqlComandBolsistasPagos .= "and (y.mesano = '$mesano') ";
+        
+            $sqlComandBolsistasPagos .= "and (y.folha = '$folha'))";
+        
+        }
+        else
+        {
+            $sqlComandBolsistasPagos .= "and (y.mesano = '$mesano'))";
+        }
+        
+        
+        $sql->SetWhereAnd("(b.idbolsista not in $sqlComandBolsistasPagos)");
+
+        $sql->SetOrderBy('a.nome');
+        
+        $query = $this->Query($sql);
+        
+        return $query;
+    }
+    
+    function ListBolsistasPagosPorBolsa($idbolsa,$mesano,$folha=null)
+    {
+        $dtatual = date('d/m/Y');
+
+        $sql = new sql('b.idbolsista,a.nome,b.datainclusao,b.dataexclusao,b.idpessoa','ad_bolsista b,cm_pessoa a,ad_bolsa be');
+        
+        $sql->SetWhere('a.idpessoa = b.idpessoa');
+        $sql->SetWhereAnd('b.idbolsa = be.idbolsa');
+
+        $sql->SetWhereAnd("( (b.dataexclusao is null) OR (b.dataexclusao = '') )");
+        $sql->SetWhereAnd("b.idbolsa = $idbolsa");
+        $sql->SetWhereAnd("((a.idbanco is not null) OR (a.idbanco <> ''))");
+
+        $sqlComandBolsistasPagos = "(select x.idbolsista from ad_bolsista x, ad_pagbolsa y ";
+        $sqlComandBolsistasPagos .= "where (x.idbolsista = y.idbolsista) ";
+        $sqlComandBolsistasPagos .= "and (x.idbolsa = $idbolsa) ";
+        
+        if ($folha!=null)
+        {
+            $sqlComandBolsistasPagos .= "and (y.mesano = '$mesano') ";
+        
+            $sqlComandBolsistasPagos .= "and (y.folha = '$folha'))";
+        
+        }
+        else
+        {
+            $sqlComandBolsistasPagos .= "and (y.mesano = '$mesano'))";
+        }
+        
+        
+        $sql->SetWhereAnd("(b.idbolsista in $sqlComandBolsistasPagos)");
+
+        $sql->SetOrderBy('a.nome');
+        
+        $query = $this->Query($sql);
+        
+        return $query;
+    }
+
+    function ListBolsistasDistinct($idpessoa='')
+    {
+        $sql = new sql();
+        $sql->SetColumns('b.idbolsista,a.nome,b.datainclusao,b.idbolsa as bolsa,b.idpessoa,a.idbanco,a.idagenc,a.conta');
+        $sql->SetJoin('ad_bolsista b','cm_pessoa a','a.idpessoa = b.idpessoa');
+
+        $sql->SetOrderBy('a.nome');
+        
+        //$sql->SetJoin('ad_bolsista b','ad_bolsa be','b.idbolsa = be.idbolsa');
+        //$sql->SetGroupBy("b.idbolsista,a.nome,b.datainclusao,be.descricao,b.idpessoa");
+
+        if( $idpessoa != '' )
+            $sql->SetWhere("b.idpessoa = $idpessoa");
+
+        $query = $this->Query($sql);
+        return $query;
+    }
+
+    function ListBolsistasAtivos($idpessoa='')
+    {
+        $dtatual = date('d/m/Y');
+
+        $sql = new sql('b.idbolsista,a.nome,b.datainclusao,be.descricao as bolsa,b.idpessoa','');
+        $sql->SetJoin('ad_bolsista b','cm_pessoa a','a.idpessoa = b.idpessoa');
+        $sql->SetJoin('ad_bolsista b','ad_bolsa be','b.idbolsa = be.idbolsa');
+        $sql->SetWhere("( (b.dataexclusao >= '$dtatual') OR (b.dataexclusao is null) OR (b.dataexclusao = '') )");
+
+        if( $idpessoa != '' )
+            $sql->SetWhere("b.idpessoa = $idpessoa");
+
+        $query = $this->Query($sql);
+        return $query;
+    }
+
+    function DesTravado()
+    {
+        $sql = new sql();
+        $sql->SetColumns('travapag');
+        $sql->SetTables('ad_controle');
+        $sql->SetWhere("travapag = 'N'");
+
+        $query = $this->Query($sql);
+           if ( !$query->eof() )
+        {
+            return true;
+        }
+        return false;
+    }
+
+    function VerificarRegistro($idbolsista='')
+    {
+        // :: $retorno = 'ok' || 'NenhumAtivo' || 'cheio' || 'erro'
+        $retorno = 'NenhumAtivo';
+
+        $dtatual = date('d/m/Y');
+
+        $sql = new sql();
+        $sql->SetColumns('idbolsista,idbolsa');
+        $sql->SetTables('ad_bolsista');
+
+        if( $idbolsista != '' )
+        {
+            $sql->SetWhere("idbolsista = $idbolsista");
+        }
+        else
+        {
+            $sql->SetWhere("idpessoa = '$this->idpessoa'");
+        }
+
+        $sql->SetWhere("( (dataexclusao >= '$dtatual') OR (dataexclusao is null) OR (dataexclusao = '') )");
+        //$sql->SetWhere("b.idbolsa = $this->idbolsa");
+
+        $query = $this->Query($sql);
+
+        if ( !$query->eof() )
+        {
+            $result = $query->result;
+            if( count($result) == 2 )
+            {
+                $retorno = 'cheio';
+            }
+            else
+            { // Verificar se bolsista ja esta cadastrado com esta bolsa
+                //if( (($result[0][1] == '00 1') && ($this->idbolsa != '00 1')) || (($result[0][1] != '00 1') && ($this->idbolsa == '00 1')) )
+                if( $result[0][1] != $this->idbolsa )
+                {
+                    $retorno = 'ok';
+                }
+                else
+                {
+                    $retorno = 'erro';
+                }
+            }
+        }
+        return $retorno;
+    }
+
+
+    function VerificarRegistro222($idbolsista='')
+    {
+        global $MIOLO,$module;
+        
+        /* + $retorno: 
+        *   - 'ok' || 'NenhumRegistroAtivo' || 'bolsistaJaCadastrado' || 'existeBolsaNaoAcumulavelCadastrada'
+        */
+        $retorno = 'NenhumRegistroAtivo';
+
+        $dtatual = date('d/m/Y');
+
+        $sql = new sql();
+        $sql->SetColumns('b.idbolsa,be.acumulavel,be.paga');
+
+        if( $idbolsista != '' )
+        {
+            $sql->SetWhere("b.idbolsista = '$idbolsista'");
+        }
+        else
+        {
+            $sql->SetWhere("b.idpessoa = '$this->idpessoa'");
+        }
+
+        $sql->SetWhere("( (b.dataexclusao >= '$dtatual') OR (b.dataexclusao is null) OR (b.dataexclusao = '') )");
+    
+        $sql->SetJoin('ad_bolsista b','ad_bolsa be','b.idbolsa = be.idbolsa');
+
+        $objBolsa = $MIOLO->GetBusiness($module,'cadastrobolsa');
+        $objBolsa = $objBolsa->GetById($this->idbolsa);
+
+        $acumulavel = ($objBolsa->acumulavel == 'S');
+        
+        if( $acumulavel )
+        {
+            $sql->SetWhere("be.acumulavel = 'S'");
+        }
+        else
+        {
+            $sql->SetWhere("be.acumulavel = 'N'");
+        }
+
+        $query = $this->Query($sql);
+
+        if ( !$query->eof() )
+        {
+            if( $objBolsa->paga == 'N' )
+            {
+                // nao pode ter bolsa nao paga
+                // qndo ja esta cadastrado como bolsista
+                $retorno = "bolsaNaoPagaNaoPode";
+            }
+            elseif( $acumulavel )
+            {
+                $retorno = 'ok';
+
+                //verificar se bolsista ja esta cadastrado nesta bolsa acumulativa
+                $result = $query->result;
+                foreach($result as $bolsaExistente)
+                {
+                    if( $bolsaExistente[0] == $this->idbolsa )
+                    {
+                        $retorno = 'bolsistaJaCadastrado';
+                        break;
+                    }
+                    if( $bolsaExistente[2] == 'N' )
+                    {
+                        // bolsista esta cadastrado com bolsa nao paga
+                        $retorno = 'jaExisteBolsaNpaga';
+                    }
+                }
+            }
+            else
+            {
+                // nao e possivel cadastrar outra bolsa nao acumulavel
+                $retorno = 'existeBolsaNaoAcumulavelCadastrada';
+            }
+        }
+
+        return $retorno;
+    }
+
+    function VerificarReg()
+    {
+        global $MIOLO,$module;
+        
+        $retorno = 'NenhumRegistroAtivo';
+
+        $dtatual = date('d/m/Y');
+
+        $sql = new sql();
+        $sql->SetColumns('b.idbolsista,b.idbolsa,be.acumulavel');
+
+        $sql->SetWhere("b.idpessoa = '$this->idpessoa'");
+
+        $sql->SetWhere("( (b.dataexclusao >= '$dtatual') OR (b.dataexclusao is null) OR (b.dataexclusao = '') )");
+    
+        $sql->SetJoin('ad_bolsista b','ad_bolsa be','b.idbolsa = be.idbolsa');
+
+        $objBolsa = $MIOLO->GetBusiness('adm','cadastrobolsa');
+        $objBolsa = $objBolsa->GetById($this->idbolsa);
+
+        $acumulavel = ($objBolsa->acumulavel == 'S');
+        
+        if( $acumulavel )
+        {
+            $sql->SetWhere("be.acumulavel = 'S'");
+        }
+        else
+        {
+            $sql->SetWhere("be.acumulavel = 'N'");
+        }
+
+        $query = $this->Query($sql);
+
+        if ( !$query->eof() )
+        {
+            if( $acumulavel )
+            {
+                $retorno = 'ok';
+                $result = $query->result;
+                foreach($result as $bolsaExistente)
+                {
+                    if( $bolsaExistente[1] == $this->idbolsa )
+                    {
+                        $retorno = 'bolsistaJaCadastrado';
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                $retorno = 'existeBolsaNaoAcumulavelCadastrada';
+            }
+        }
+        return $retorno;
+    
+    }
+
+    function getCursos()
+    {
+        //$sql = new sql('t.idpessoa,t.idbolsista,t.datainclusao','ad_bolsista t','','t.idbolsista');
+        $sql = new sql('c.curso,c.nome','ga_curso c');
+        $sql->SetOrderBy('c.nome');
+
+        $query = $this->Query($sql);
+        return $query;
+    }
+
+    function listBolsasAcademicas($dataInicio,$dataFim)
+    {
+        $sql = new sql("count(ad_bolsista.idbolsista),ga_programa.curso,ga_curso.nome,ad_bolsa.descricao",
+            
+            "ad_bolsista,ad_bolsa,    cm_pessoa,ga_aluno,ga_programa,ga_curso",
+                
+            "ad_bolsista.idbolsa = ad_bolsa.idbolsa 
+                    and ad_bolsista.idpessoa = cm_pessoa.idpessoa 
+                    and cm_pessoa.idpessoa = ga_aluno.idpessoa 
+                    and ga_aluno.matricula = ga_programa.matricula 
+                    and    ga_programa.curso = ga_curso.curso 
+                    and ad_bolsista.datainclusao <= ? 
+                    and ( ad_bolsista.dataexclusao >= ? 
+                    OR ad_bolsista.dataexclusao is null )"
+                    ,'',
+                    "ga_programa.curso,ad_bolsa.descricao,ga_curso.nome");
+        $sql->SetParameters($dataInicio,$dataFim);
+        $query = $this->Query($sql);
+        return $query;
+
+    }
+    
+    function listaIdmonitorAbertoporIdVinculo($idvinculo, $anovig,$mesvig, $anoref,$mesref, $testaano=false)
+    //lista bolsas ligadas ao usuário-orientador, sem encerramento ou com encerramento a partir do mês anterior
+    {
+        $criteria = $this->getCriteria();
+
+        $criteria->addColumnAttribute('idbolsista');
+        $criteria->addColumnAttribute('pessoa.nome'          ,'nome');
+//        $criteria->addColumnAttribute('aluno.matricula'      ,'matricula');
+
+        $criteria->addColumnAttribute('projeto.numero'       ,'numero'       );
+        $criteria->addColumnAttribute('bolsista.idbolsa'     ,'idbolsa');
+
+        $criteria->addColumnAttribute('bolsista.datainclusao','datainclusao');
+        $criteria->addColumnAttribute('bolsista.dataexclusao','dataexclusao');
+
+        $criteria->addCriteria('projeto.orientadores.idvinculo','=',"'{$idvinculo}'");  //restrito ao orientador
+
+        $criteria->addCriteria('bolsa.frequencia','=', "'S'");
+
+if ($testaano)
+        {
+        $anovigyy = substr($anovig,2,2);
+        $criteria->addCriteria('projeto.ano','=', "'$anovigyy'");
+        }
+        //$criteria->addCriteria('idbolsa','NOT IN', "('202','203','204')");   //$criteria->addCriteria('modalidade','NOT IN', "('003','004')");   //o certo é que modalidade deveria ser gravada so para 01
+
+        //Apoio Estudantil
+          /*$cc = new CriteriaCondition;            $cc->addCriteria  ( $criteria->getCriteria('modalidade','IN', "('001','002')") );
+            $cc->addORCriteria( $criteria->getCriteria('modalidade','IS', 'NULL'         ) );          $criteria->addCriteria($cc);*/
+
+        //inclusão no mês anterior
+          $criteria->addCriteria("bolsista.datainclusao",'<',"'$anovig/$mesvig/01'");////'LIKE',"'%/{$mes}/%'");
+
+        //$criteria->setAssociationType('frequencias','left');
+
+		$data = date("Y/m/d");
+
+        //sem exclusão ou exclusão a partir do mês anterior
+          $cc = new CriteriaCondition;
+            $cc->addCriteria  ( $criteria->getCriteria('bolsista.dataexclusao','IS','NULL'   ) );
+            $cc->addORCriteria( $criteria->getCriteria('bolsista.dataexclusao','>=',"'$anoref/$mesref/01'") );
+          $criteria->addCriteria($cc);
+
+        $criteria->addOrderAttribute('aluno.pessoa.nome');
+
+        $return = $criteria->retrieveAsQuery();
+        return $return;
+    } // listaIdmonitorAbertoporIdVinculo
+
+
+    function getbyIdBolsistaIdVinculo($idbolsista, $idvinculo)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('idbolsista');
+        $criteria->addCriteria('idbolsista'                    , '=', "$idbolsista" );
+        $criteria->addCriteria('projeto.orientadores.idvinculo', '=', "'{$idvinculo}'");
+
+        if ($criteria->retrieveAsQuery()->result)
+        {
+            return TRUE;
+        }
+        else
+        {
+            return false;
+        }
+    } // getbyIdBolsistaIdVinculo
+
+
+}
+?>

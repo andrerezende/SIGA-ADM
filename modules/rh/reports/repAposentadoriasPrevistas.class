@@ -1,0 +1,196 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+
+class repAposentadoriasPrevistas extends MPDFReport
+{
+    var $img;
+    var $timestamp;
+    var $k;
+    var $titulo_ano_mes;
+
+    function __construct($titulo_ano_mes)
+    {
+        global $MIOLO, $module, $page, $context, $self, $action, $perms;
+
+        parent::__construct(NULL, NULL, 55, NULL, 'landscape', 'a4');
+        $this->k = new MKrono();
+        $ui = $MIOLO->GetUI();
+        $this->img = $ui->GetImageSrc('logo_siga.png',$module);
+        $this->timestamp = date('d/m/Y G:i');
+        $this->pdf->ezStartPageNumbers(800, 540, 10, 'rigth', 'Página: {PAGENUM}/{TOTALPAGENUM}');
+        $this->pdf->ezSetMargins(100, 30, 20, 20);
+
+        $this->titulo_ano_mes = $titulo_ano_mes;
+        $consulta = $this->Matriz($titulo_ano_mes[1], $titulo_ano_mes[2]);
+        if (count($consulta) > 0)
+        {
+            $this->GeneratePageHeader();
+            $this->GeneratePageFooter();
+
+            $columns[] = new MPDFReportColumn('idVinculo','Matrícula','left',TRUE, 8,TRUE,NULL,TRUE);
+            $columns[] = new MPDFReportColumn('nome'     ,'Nome'     ,'left',TRUE,40,TRUE,NULL,TRUE);
+            $columns[] = new MPDFReportColumn('setor'    ,'Setor'    ,'left',TRUE,42,TRUE,NULL,TRUE);
+            $columns[] = new MPDFReportColumn('dtnsc'    ,'Previsão' ,'left',TRUE,10,TRUE,NULL,TRUE);
+
+            $this->SetWidth(100);
+            $this->SetColumns($columns);
+            $this->SetOption('showHeadings', 1);
+            $this->SetOption('showLines', 1);
+            $this->GenerateData($consulta);
+        }
+        else 
+        {
+            $this->SetWidth(100);
+            $this->SetOption('showHeadings', 0);
+            $this->SetOption('showLines', 1);
+            $x0 = $this->pdf->left;          
+            $this->pdf->ezSetDy(-32, 'makeSpace');
+            $y = $this->pdf->y;
+            $this->pdf->addText($x0 +50, $y - 50, 12, 'Não foram encontrados registros');
+        }
+    }
+    
+    
+    function Matriz($ano, $mes)
+    {
+        $objpessoa    = $this->manager->GetBusiness('common','pessoa'     );
+        $objsetor     = $this->manager->GetBusiness('common','setor'      );
+
+        $objVinculo   = $this->manager->GetBusiness('rh'    ,'vinculo'    );
+
+        $funcionarios = $this->manager->GetBusiness('rh'    ,'funcionario');
+        $ativos = $funcionarios->listServidoresAtivos()->result;
+
+        foreach ($ativos as $ativo)
+        {
+            $objVinculo->GetById($ativo[0]);
+            if ($objVinculo->permiteAverbacao())
+            {
+                $objVinculo->retrieveAssociation('funcionario');
+
+                $obj = new Aposentadoria($objVinculo);
+
+                $obj->ff1();
+                $r1 = $obj->PrevisaoQuadro1();
+
+                $obj->ff23();
+                $r2 = $obj->ff2();
+
+                $r2 = $obj->ff3();
+
+                $menor = $this->Menor($r1['previsaodeaposentadoria'],
+                                      $obj->previsaoTS2,$obj->previsaoID2,$obj->previsaoSP20,$obj->previsaoCA10,
+                                      $obj->previsaoTS3,$obj->previsaoID3,$obj->previsaoSP25,$obj->previsaoCA15);
+                $substrano = substr($menor,0,4);
+                $substrmes = substr($menor,5,2);
+                if ( (! $mes)  OR  ($mes  and  $substrmes == $mes) )
+                {
+                    if ($substrano == $ano)
+                    {
+                        $objpessoa->getById($ativo[1]);
+                        $objsetor->getById($ativo[2]);
+                        $return[] = array($ativo[0], $objpessoa->nome, $objsetor->nome, $this->k->invertDate($menor));
+                        $nomes [] =                  $objpessoa->nome;
+                    }
+                }
+            }
+        }
+        /*foreach ($return as $r)
+        {
+            $nomes[] = $r[1];
+        }*/
+
+        if ($return)
+        {
+            array_multisort($nomes,$return);
+        }
+
+        return $return;
+    } // Matriz
+
+
+    function GeneratePageHeader()
+    {
+        $x0 = $this->pdf->left;
+        $x1 = $this->pdf->right;
+        $h = $this->pdf->getFontHeight(10);
+        $header = $this->pdf->openObject();
+        $this->pdf->saveState();
+        $this->pdf->addPngFromFile($this->img, 40, 520 + $x0, 54, 27);
+        $this->pdf->addText($x0+85, 560, 12, 'IF - Instituto Federal');
+        $this->pdf->addText($x0+85, 560 -$h -$h , 10, 'SIGA - Sistema Integrado de Gestão Acadêmica - Módulo Recursos Humanos');
+        $y = 550 - $h - $h - 5;
+        $this->pdf->SetColor(0.4,0.4,0.4);
+        $this->pdf->filledRectangle($x0, $y-20, $x1-30, 16 );
+        $this->pdf->SetColor(1,1,1);
+        $this->pdf->addText($x0+5, $y-16, 10, "Aposentadorias previstas para " . $this->titulo_ano_mes[0]);
+        $this->pdf->restoreState();
+        $this->pdf->closeObject();
+        $this->pdf->addObject($header, 'all');
+    }
+
+    function GeneratePageFooter()
+    {
+        $x0 = $this->pdf->left;
+        $x1 = $this->pdf->right;
+        $footer = $this->pdf->openObject();
+        $this->pdf->saveState();
+        $this->pdf->SetStrokeColor(0, 0, 0);
+        $this->pdf->line($x0, 28, $x1, 28);
+        $this->pdf->addText($x0, 19, 9, $this->timestamp);
+        $this->pdf->restoreState();
+        $this->pdf->closeObject();
+        $this->pdf->addObject($footer, 'all');
+    }
+    
+    function GenerateData($data)
+    {
+        $this->pdf->ezSetDy(-5);
+        $this->SetData($data);
+        $this->rawdata = $this->GenerateTableData();
+        $this->GenerateBody($this->rawdata);
+    }
+
+    function Generate()
+    {
+        $this->SetOutput();
+        $this->Execute();
+    }
+
+
+    function Menor($previsaodeaposentadoria,
+                   $previsaoTS2,$previsaoID2,$previsaoSP20,$previsaoCA10,
+                   $previsaoTS3,$previsaoID3,$previsaoSP25,$previsaoCA15)
+    {
+        $d[] = $this->k->invertDate($previsaodeaposentadoria);
+        $d[] = $this->k->invertDate($previsaoTS2            );
+        $d[] = $this->k->invertDate($previsaoID2            );
+        $d[] = $this->k->invertDate($previsaoSP20           );
+        $d[] = $this->k->invertDate($previsaoCA10           );
+        $d[] = $this->k->invertDate($previsaoTS3            );
+        $d[] = $this->k->invertDate($previsaoID3            );
+        $d[] = $this->k->invertDate($previsaoSP25           );
+        $d[] = $this->k->invertDate($previsaoCA15           );
+        return max($d);
+    } // Menor
+
+
+}
+?>

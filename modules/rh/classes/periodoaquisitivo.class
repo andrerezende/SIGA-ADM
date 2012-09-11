@@ -1,0 +1,1121 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+MIOLO::Import('modules::rh::classes::exception');
+/**
+ * Classe PeriodoAquisitivo()
+ * @author: CGCO/UFJF
+ * @status: 'em construcao'
+ */
+class BusinessRhPeriodoAquisitivo extends MBusiness
+{
+    public $idVinculo;              // NUMBER(7)
+    public $dataInicio;             // DATE
+    public $dataFim;                // DATE
+    public $totalDias;              // NUMBER(2)
+    public $diasUsufruidos;         // NUMBER(2)
+    public $faltas;                 // NUMBER(3)
+    public $obs;                    // VARCHAR2(200)
+    public $dataPrescricao;         // DATE
+
+    public $ferias;
+    public $vinculo;
+    public $periodoFerias;
+
+    public $status=0; // retorna se dados foram carregados corretamente, seta readonly na criação do form
+    public $objLicafast;
+    public $objFerias;
+    
+    public $krono;
+
+
+	function __construct($data = null)
+    {
+        global $MIOLO;
+        $this->krono = new MKrono();
+        parent::__construct('sigaept',$data);
+        define('PERIODO_DOCENTE',45);
+        define('PERIODO_TECADM',30);
+    }
+
+
+    function OnCreate($data)
+    {
+        if (empty($data))
+        {
+//            $this->initialize();
+        }
+        else
+        {
+            $this->GetById($data);
+        }
+    }
+
+
+	function GetById($id, $proxy=true)
+    {
+       $this->idVinculo = $id;
+       if ($proxy)
+       {
+           $this->retrieveAsProxy();
+       }
+       else
+       {
+           $this->retrieve();
+       }
+       return $this;
+    }
+
+
+	/**
+     * class openPeriodoAquisitivo()
+     * openPeriodoAquisitivo -> metodo principal para carregamento dos dados para formulario
+     * @status: 'ready'
+     */
+    function openPeriodoAquisitivo()
+    {
+        global $MIOLO;
+        $this->retrieveAssociation('vinculo');
+        $this->vinculo->getProvimentoAtual();
+    
+        $this->loadData($this->idVinculo);
+
+    }
+
+
+	/**
+     * Method runScript()
+     * runScript -> traz o provimento atual para rodar o script
+     * @status: 'ready'
+    */
+    function runScript()
+     {
+         global $MIOLO;
+         $this->retrieveAssociation('vinculo');
+         $this->vinculo->getProvimentoAtual();
+     }
+
+    /**
+     * Metodos de encapsulamento
+     */
+    function setIdVinculo($id)
+    {
+        $this->idVinculo = $id;
+    }
+
+    function getIdVinculo()
+    {
+        return $this->idVinculo;
+    }
+    
+    function setDataInicio($data)
+    {
+        $this->dataInicio = $data;
+    }
+
+    function getDataInicio()
+    {
+        return $this->dataInicio;
+    }
+    
+    function setDataFim($data)
+    {
+        $this->dataFim = $data;
+    }
+
+    function getDataFim()
+    {
+        return $this->dataFim;
+    }
+
+    function setTotalDias($total)
+    {
+        $this->totalDias = $total;
+    }
+
+    function getTotalDias()
+    {
+        return $this->totalDias;
+    }
+
+    function setDiasUsufruidos($dias)
+    {
+        $this->diasUsufruidos = $dias;
+    }
+
+    function getDiasUsufruidos()
+    {
+        return $this->diasUsufruidos;
+    }
+
+    function setFaltas($faltas)
+    {
+        $this->faltas = $faltas;
+    }
+
+    function getFaltas()
+    {
+        return $this->faltas;
+    }
+
+    function setObs($obs)
+    {
+        $this->obs = $obs;
+    }
+
+    function getObs()
+    {
+        return $this->obs;
+    }
+
+    function setDataPrescricao($data)
+    {
+        $this->dataPrescricao = $data;
+    }
+
+    function getDataPrescricao()
+    {
+        return $this->dataPrescricao;
+    }
+    
+    function getAnoInicioPerAq()
+    {
+        list(,,$year) = split('/',$this->getDataInicio());
+        return $year;
+    }
+
+
+    /**
+     * Method LoadData()
+     * LoadData -> metodo para carregamento dos dados
+     * a serem inseriodos no formulario
+     * @status: 'ready'
+     */
+    function loadData()
+    {
+        $this->idVinculo = $this->vinculo->idVinculo;
+    
+        if ($this->isDocente())
+        {
+            $this->setDocente($this->idVinculo);
+        }
+        else
+		{
+			if ($this->isTecnicoAdministrativo())
+			{
+				$this->setTecnicoAdministrativo($this->idVinculo);
+			}
+			else
+			{
+				$this->totalDias = 0;
+			}
+		}
+    
+        if ($this->isEstatutario())
+        {   
+            if ($this->existsDataExercicio($this->idVinculo))
+            {
+                $this->setEstatutario($this->idVinculo);
+            }
+            else
+            {
+                throw new ESimpleRnException("Não é possivel abrir periodo aquisitivo pois o servidor não possui 12 meses de efetivo exercício!");
+            }
+        }
+        else // celetista
+        {
+            if (!$this->onLicenca($this->idVinculo))
+            {
+                if ($this->existsDataExercicio($this->idVinculo))
+                {
+                   $this->setCeletista($this->idVinculo); 
+                }
+                else
+                {
+					throw new ESimpleRnException("Não é possivel abrir periodo aquisitivo pois o servidor não possui 12 meses de trabalho cumprido!");
+                }
+            }
+            else
+            {
+                 throw new ESimpleRnException("Não é possivel abrir novo periodo aquisitivo pois o servidor se encontra em Licenca atualmente!");
+            }
+        }//celetista fim
+   
+    }// fim loadData
+
+
+    /**
+     * public BreakUp()
+     * Retorna a diferença de dias de uma férias interrompidas ou false
+     * para o caso de não haver férias interrompidas
+     * status 'nao está funcionando corretamente - objFerias nao está sendo usado'
+    */
+    function BreakUp()
+    {   
+		global $MIOLO;
+        $today = date('d/m/Y');
+        $difDias = false;
+        $objFerias = $MIOLO->GetBusiness('rh','ferias');
+        $objFerias->idVinculoPerAq = $this->idVinculo;
+        $objFerias->dataInicioPerAq = $this->dataInicio;
+        foreach ( $this->getThisPerAqFerias() as $f )
+		{
+            if ( $this->krono->Between($f->dataInicio , $today, $f->dataFim) )
+			{
+                $difDias = $this->krono->daysDiff($today, $f->dataFimPrevista);
+			}
+		}
+        return $difDias;
+    }
+
+
+   /**
+    * public permiteFerias()
+    * permiteFerias -> este metodo checa se funcionario pode ou nao lançar férias em periodo aquisitivo
+    * @status: 'ready'
+    */
+   function permiteFerias()
+   {    
+		global $MIOLO;
+        if ($this->isTecnicoAdministrativo($this->idVinculo))
+        {
+            $dias = 30;
+        }
+        else
+        {
+            $dias = 45;
+        }
+        $dataAtual = date('d/m/Y');
+        $Atual = new InvertDate($dataAtual);
+        if ($this->isEstatutario())
+        {
+            $krono = new MKrono();
+            $dataAtual = date('d/m/Y');
+            $criteria = $this->getCriteria();
+            $criteria->addColumnAttribute('idVinculo');
+            $criteria->addColumnAttribute('diasUsufruidos');
+            $criteria->addColumnAttribute('dataPrescricao');
+            $criteria->addColumnAttribute('dataFim');
+            $criteria->addOrderAttribute('dataPrescricao',true);
+            $criteria->addCriteria('idVinculo','=',"$this->idVinculo");
+            $query = $criteria->retrieveAsQuery();
+            $resultado = $query->result;
+            if ($query->result>1)
+            {
+                foreach($resultado as $periodo)
+                {
+                    $dataPrescicao = $periodo[2];
+                    $jaPrescrito = $this->krono->CompareDate($dataAtual, '>', $dataPrescicao);
+                    // preparando os dias usufruidos
+                    if ( $periodo[1] == null )
+                    {
+                        $diasUsufruidos = 0;
+                    }
+                    else
+                    {
+                        $diasUsufruidos = $periodo[1];
+                    }
+                    if ( $diasUsufruidos < $dias )
+                    {
+                        $okDias = true;
+                    }
+                    else
+                    {
+                        $okDias = false;
+                    }
+                    if ( (!$jaPrescrito) && ($okDias) )
+                    {
+                        $dataFim = $periodo[3];
+                        list($day,$month,$year) = explode("/",$dataFim);
+                        $preStamp = $year.$month.$day;
+                        $periodo[3] = $preStamp;
+                        $periodos[] .=  $periodo[3];
+                    }
+                }
+                //echo "<pre>"; var_dump($periodos); echo "</pre>";
+                //sort($periodos);
+                //reset($periodos);
+
+            }//fim if se  >1
+            else
+            {
+                $dataPrescicao = $periodo[2];
+                $jaPrescrito = $this->krono->CompareDate($dataAtual, '>', $dataPrescicao);
+                // preparando os dias usufruidos
+                if ( $periodo[1] == null )
+				{
+                    $diasUsufruidos = 0;
+				}
+                else
+				{
+                    $diasUsufruidos = $periodo[1];
+				}
+
+                if ( $diasUsufruidos < $dias )
+				{
+                    $okDias = true;
+				}
+                else
+				{
+                    $okDias = false;
+				}
+                if ( (!$jaPrescrito) && ($okDias) )
+                {
+                    $dataFim = $periodo[3];
+                    list($day,$month,$year) = explode("/",$dataFim);
+                    $preStamp = $year.$month.$day;
+                    $periodo[3] = $preStamp;
+                    $periodos[] .=  $periodo[3];
+                }
+            }// fim else
+            list($day,$month,$year) = explode("/",$this->dataFim);
+            $thisDataFim = $year.$month.$day;
+            $periodoMaisAntigo = ($thisDataFim == $periodos[0]);
+            if ($periodoMaisAntigo)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+        else //caso não seja estatutário
+        {
+            if ($this->isCeletista())
+            {
+                $krono = new MKrono();
+                $dataAtual = date('d/m/Y');
+                $criteria = $this->getCriteria();
+                $criteria->addColumnAttribute('idVinculo');
+                $criteria->addColumnAttribute('diasUsufruidos');
+                $criteria->addColumnAttribute('dataInicio');
+                $criteria->addColumnAttribute('dataFim');
+                $criteria->addColumnAttribute('dataPrescricao');
+                $criteria->addOrderAttribute('dataPrescricao',true);
+                $criteria->addCriteria('idVinculo','=',"$this->idVinculo");
+                //$criteria->addCriteria('diasUsufruidos','<',"$dias");
+                $query = $criteria->retrieveAsQuery();
+                $resultado = $query->result;
+                $prescreve = $resultado[0][4];
+                $menorDataInicio = $resultado[0][2];
+                $prescrito = $this->krono->CompareDate($dataAtual, '>', $prescreve);
+                $periodoMaisAntigo = $this->krono->CompareDate($menorDataInicio, '=', $this->dataInicio);
+                //so deve permitir lançamento de ferias após o vencimento do período e antes da prescição (1 ano)
+                $dataMinima = $this->krono->CompareDate($dataAtual, '>', $this->dataFim);
+                $dataMaxima = $this->krono->CompareDate($dataAtual, '<', $this->dataPrescricao);
+                if ($dataMinima and $dataMaxima)
+                {
+                    return true;
+                }
+                else
+                {
+                    return false;
+                }
+            }
+        }
+    
+    }
+   
+
+    function FeriasFuturas()
+    {
+        $this->getFerias();
+        $today = date("d/m/Y");
+        if ( $this->ferias != null )
+		{
+            foreach ( $this->ferias as $objFerias )
+			{
+                if ($this->krono->compareDate($objFerias->dataInicio,'>=',$today)) 
+				{
+					return true;
+				}
+			}
+		}
+        return false;
+    }
+
+
+    function PrimeiraFeriasFuturas()
+    {
+        if (is_null($this->ferias))
+		{
+            $this->getFerias();
+		}
+
+        $today = date("d/m/Y");
+    
+        if ( $this->ferias != null )
+		{
+            foreach ( $this->ferias as $objFerias )
+			{
+                if ($this->krono->compareDate($objFerias->dataInicio,'>=',$today)) 
+				{
+					return $objFerias;
+				}
+			}
+		}
+    }
+    
+
+	function ApagaFeriasFuturas()
+    {
+        $this->getFerias();
+        $today = date("d/m/Y");
+
+        if ( $this->ferias != null )
+		{
+            foreach ( $this->ferias as $objFerias )
+			{
+                if ($this->krono->compareDate($objFerias->dataInicio,'>=',$today))
+				{
+                    $objFerias->delete();
+				}
+			}
+		}
+    }
+    
+
+    /**
+     * public getFerias()
+     * getFerias -> pega todas as ferias deste funcionario, independente do periodo aquisitivo
+     * @status: 'ready'
+     */
+    function getFerias()
+    {
+        $this->retrieveAssociation('ferias');
+
+        if ($this->ferias != null)
+		{
+            if (!is_array($this->ferias))
+			{
+                $this->ferias = array($this->ferias);  
+			}
+		}
+    }
+
+    /**
+     * public getThisPerAqFerias()
+     * getThisPerAqFerias -> pega as ferias 'deste' periodo aquisitivo para este funcionario
+     * @status: 'ready'
+     */
+    function getThisPerAqFerias()
+    {   global $MIOLO;
+    
+        $this->getFerias();
+    
+        if ( $this->ferias != null )
+        {
+            foreach ($this->ferias as $objPerAqFerias )
+			{
+                if ($this->krono->CompareDate($this->dataInicio,'=',$objPerAqFerias->dataInicioPerAq))
+				{
+                    $arrayFerias[] = $objPerAqFerias;
+				}
+			}
+            return $arrayFerias;
+        }
+    }
+
+    /**
+     * public getThisFerias()
+     * getThisFerias -> pega uma parcela especifica das ferias 'deste' periodo aquisitivo para este funcionario
+     * @status: 'ready'
+     */
+    function getThisFerias($dtInicio=null)
+    {
+        global $MIOLO;
+        $this->getFerias();
+    
+        if ( $this->ferias != null )
+        {
+			foreach ($this->ferias as $object )
+			{
+				if( ($this->krono->CompareDate($this->getDataInicio(),'=',$object->getDataInicioPerAq()) && ($this->krono->CompareDate($dtInicio,'=',$object->getDataInicio() ))))
+				{
+					return $object;
+				}
+			}
+        }
+        $f = $MIOLO->GetBusiness('rh','ferias');
+        $f->setIdVinculoPerAq($this->idVinculo);
+        $f->setDataInicioPerAq($this->dataInicio);
+        return $f;
+    
+    }
+
+	
+    /**
+     * public setDocente()
+     * setDocente -> seta o total de dias para docente
+     * @status: 'ready'
+     */
+    function setDocente($idMatricula=null)
+    {
+        $this->totalDias = PERIODO_DOCENTE;
+    }
+
+
+    /**
+     * public setTecnicoAdministrativo()
+     * setDocente -> seta o total de dias para tecnico administrativo
+     * @status: 'ready'
+     */
+    function setTecnicoAdministrativo($idMatricula=null)
+    {
+        $this->totalDias = PERIODO_TECADM;
+    }
+    
+  
+    /**
+     * public setEstatutario()
+     * setEstatutario -> atribui as informacoes nos atributos para funcionario estatutario
+     * @status: 'ready'
+     */
+    function setEstatutario($idMatricula=null)
+    {
+
+        $ano_exercicio = $this->getLastPerAq($this->idVinculo); //pega o ultimo periodo aquisitivo
+    
+        $ano_atual = date("Y");
+        $ano_atual++;
+
+        $this->dataInicio = '01/01/'.($ano_atual);
+        $this->dataFim = '31/12/'.($ano_atual);
+
+        $this->dataPrescricao = '31/12/'.($ano_atual+=1);
+        $this->faltas = $this->getOcorrenciaFaltas($this->idVinculo);
+        $this->diasUsufruidos=0;
+        $this->status=1; // seta 1 = readonly - pois funcionario possui data exercicio ou fim
+    }
+
+
+    /**
+     * public setCeletista()
+     * setCeletista -> atribui as informacoes nos atributos para funcionario celetista
+     * @status: 'ready'
+     */
+    function setCeletista($idMatricula=null)
+    {
+        $ano_exercicio = $this->getLastPerAq($this->idVinculo);
+        $data_exercicio = $this->getDataExercicio($this->idVinculo);
+
+        //ano atual
+        $aAtual = $this->getToday();
+    
+        if ($ano_exercicio!='')
+        {
+            $aAtual++;
+            //data inicio  - ultimo periodo aquisitivo
+            list($diaInicio,$mesInicio,) = split('/',$ano_exercicio[0]);
+            //data fim - ultimo periodo aquisitivo
+            list($diaFim,$mesFim,) = split('/',$ano_exercicio[1]);
+            $this->dataInicio = ($diaInicio).'/'.($mesInicio).'/'.($aAtual);
+            $this->dataFim = ($diaFim).'/'.($mesFim).'/'.($aAtual);
+            $this->dataPrescricao = ($diaInicio).'/'.($mesInicio).'/'.($aAtual+=2);
+        }
+        else
+        {
+            //data inicio  - exercicio
+            list($diaInicio,$mesInicio,) = split('/',$data_exercicio);
+            //data fim -  exercicio
+            list($diaFim,$mesFim,) = split('/',$data_exercicio);
+            $this->dataInicio = ($diaInicio).'/'.($mesInicio).'/'.($aAtual);
+            $this->dataFim = ($diaFim).'/'.($mesFim).'/'.(++$aAtual);
+            $this->dataPrescricao = ($diaInicio).'/'.($mesInicio).'/'.($aAtual+=2);
+        }
+		$this->status=1;
+		$this->diasUsufruidos=0;
+		$this->faltas = $this->getOcorrenciaFaltas($this->idVinculo);
+		$this->totalDias = $this->calculaTotalDias($this->idVinculo);
+	}
+
+
+    /**
+     * public calculaTotalDias()
+     * calculaTotalDias -> calcula o total de dias que funcionario celetista tem direito
+     * com base em suas faltas
+     * @status: 'ready'
+     */
+    function calculaTotalDias($idMatricula=null)
+    {
+        $dias=0;
+    
+        if($this->faltas <=5)
+		{
+            $dias = $this->totalDias;
+		}
+        else
+		{
+            if (($this->faltas > 5) && ($this->faltas <=14))
+			{
+				$dias = 24;
+			}
+            else
+			{
+                if (($this->faltas > 14) && ($this->faltas <=23))
+				{
+					$dias = 18;
+				}
+			}
+		}
+            return $dias;
+    }
+    
+    
+    /**
+     * public onLicenca()
+     * onLicenca -> metodo que retorna true ou false, se funcionario está em licenca na data atual
+     * @status: 'ready'
+     */
+    public function onLicenca($idMatricula)
+    {   
+		global $MIOLO;
+    
+        $hoje = date('d/m/Y');
+        list($diaHoje,$mesHoje,$anoHoje) = split('/',$hoje);
+        $tipoLicensa = array('035','102','104','105','106','107','109','128','135','166','175','176');
+        // regra, se usuario está sob essa lincesa e tem dataAtual entre dataInicio e dataFim.
+        // nao permitir abertura de periodo aquisitivo.. 
+        $objLicafast = $MIOLO->getBusiness('rh','licafast');
+        $criteria = $objLicafast->getCriteria();
+        $criteria->addColumnAttribute('dataInicio');
+        $criteria->addColumnAttribute('dataFim');
+        $criteria->addCriteria('idVinculo','=',"{$idMatricula}");
+        if ( is_array($tipoLicensa) )
+		{
+            $criteria->addCriteria('idOcorrencia','IN',$tipoLicensa);
+		}
+        else
+		{
+            $criteria->addCriteria('idOcorrencia','=',$tipoLicensa);
+		}
+        $query = $criteria->retrieveAsQuery();
+        $query->MoveFirst();
+        if ($query->result != null)
+        {
+			foreach($query->result as $r)
+			{
+				list($diaInicio,$mesInicio,$anoInicio) = split('/',$r[0]);
+				list($diaFim,$mesFim,$anoFim) = split('/',$r[1]);
+
+				if ($anoHoje == $anoInicio)
+				{
+					if (($mesHoje>=$mesInicio) && ($mesHoje<=$mesFim))
+					{
+						if (($diaHoje>$diaInicio) && ($diaHoje<$diaFim))
+						{
+							return true;
+						}
+					}
+				}// if hoje = datainicio
+			}// foeach
+        }// if Result is not null
+		return false;
+	}// onLicenca
+    
+
+    /**
+     * method getToday()
+     * getToday -> metodo que retorna o ano atual
+     * @status: 'ready'
+     */
+    function getToday()
+    {
+        $today = date('d/m/Y');
+        list(,,$ano) = split('/',$today);
+        return $ano;
+    }
+
+
+    /**
+     * method getDataExercicio()
+     * getToday -> metodo que retorna a data de Exercicio do funcionario
+     * @status: 'ready'
+     */
+    function getDataExercicio()
+    {
+        return  $this->vinculo->dataExercicio;
+    }
+    
+
+    /**
+     * method getLastPerAq()
+     * getLastPerAq -> retorna o ultimo periodo aquisitivo do funcionario
+     * @status: 'ready'
+     */
+    function getLastPerAq($idMatricula)
+    {
+        $anoAtual = $this->getToday();
+        $criteria = $this->getCriteria();
+        if (!$this->isEstatutario($this->idVinculo))
+        {
+            $criteria->addColumnAttribute('dataInicio');
+        }
+        $criteria->addColumnAttribute('dataFim');
+        $criteria->addCriteria('idVinculo','=',"{$idMatricula}");
+        $criteria->addOrderAttribute('dataFim');
+        $query = $criteria->retrieveAsQuery();
+        $query->MoveFirst();
+        if ($query->result >1)
+        {
+            foreach($query->result as $p)
+             $last = $p;
+        }
+        else
+        {
+            $last = $query->result;
+        }
+        list(,,$valor) = split('/',$last[0]);
+        $anoAtual = date("Y");
+        if (++$anoAtual>$valor)
+        {
+            if ($this->isEstatutario($this->idVinculo))
+			{
+                return $last[0];
+			}
+            else
+			{
+                return $last;
+			}
+        }
+        else
+		{
+            throw new ESimpleRnException("Não é possivel abrir novo periodo aquisitivo pois o periodo ja se encontra aberto para o ano de ".$anoAtual."!");
+		}
+    }
+
+
+	function  UltimoPeriodo()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addCriteria('idVinculo','=',"{$this->idVinculo}");
+        $query = $criteria->retrieveAsQuery();
+        $menorAno = 0;
+ if (!$query->result)
+                $query->result = array(); 
+        foreach ($query->result as $periodo)
+        {
+            $ano = $this->krono->getYear($periodo[1]);
+            if ($ano > $menorAno)
+	   {
+                $menorAno = $ano;
+	   }
+        }
+        $anoPeriodo = $this->krono->getYear($this->dataInicio);
+        if ($anoPeriodo < $menorAno)
+		{
+            return false;
+		}
+        else
+		{
+            return true;
+		}
+    }
+    
+
+    /**
+     * public existsDataExercicio()
+     * existsDataExercicio -> retorna true ou false se o funcionario tem 10 meses de trabalhos cumpridos
+     * @status: 'ready'
+     */
+    function existsDataExercicio()
+    {
+        if ($this->vinculo->dataExercicio)
+        {
+            $today = date('d/m/Y');
+            $dataExercicio = $this->krono->operation('+',$this->vinculo->dataExercicio,'10%M');
+            if ( $this->krono->compareDate($dataExercicio, '<', $today) )
+            {
+                 return true;
+            }
+            else
+            {
+                 return false;
+            }
+        }
+        else
+        { 
+            return false;
+        }
+    }
+
+	/* 
+    function existsDataExercicio()
+    {
+        if ($this->vinculo->dataExercicio)
+        {
+            list($diaExercicio,$mesExercicio,$anoExercicio) = split('/',$this->vinculo->dataExercicio);
+            $today = date('d/m/Y');
+            list($dia,$mes,$ano) = split('/',$today);
+            $anoDiff = $ano - $anoExercicio;
+            $mesDiff = $mes - $mesExercicio;
+            $diaDiff = $dia - $diaExercicio;
+    
+            if (($anoDiff ==1) && ($mesDiff>=1)) //testa se diferença de ano = 1 e mes >=1
+                return true;
+            else
+                if (($anoDiff ==1) && ($mesDiff==0) && ($diaDiff>=0)) //testa se diferença de ano = 1 e mes = 1 e dia >=0
+                    return true;
+                else
+                    if ($anoDiff >1) //testa se diferencça de ano >= 1
+                        return true;
+                    else
+                        return false;
+        }
+        else return false;
+    }
+	*/
+
+    /**
+     * public getOcorrenciaFaltas()
+     * isEstatutario -> retorna o numero de ocorrencias de faltas do funcionario
+     * @status: 'ready'
+     */
+    function getOcorrenciaFaltas($idMatricula)
+    {       
+		global $MIOLO;
+		$anoAtual = $this->getToday();
+
+		/*var local para registrar n° de ocorrencias */
+		$regOcorrencias=0;
+
+		/*  testa tipos de faltas para estaturario  */
+		if ($this->isEstatutario($this->idVinculo))
+		{
+			$faltas = array('012','013','016','019','031','100','101','113','117','133','135','137','999');
+		}
+		else  /*    testa tipos de faltas para celetista    */
+		{
+			$faltas = array('043','044','047','995','996');
+		}
+
+		 /* instancia um objeto licafast - query e pega licafasta do idVinculo */
+		$objLicafast = $MIOLO->getBusiness('rh','licafast');
+		$criteria = $objLicafast->getCriteria();
+		$criteria->addColumnAttribute('dataInicio');
+		$criteria->addCriteria('idVinculo','=',"{$idMatricula}");
+		if ( is_array($faltas) )
+		{
+			$criteria->addCriteria('idOcorrencia','IN',$faltas);
+		}
+		else
+		{
+			$criteria->addCriteria('idOcorrencia','=',$faltas);
+		}
+		$criteria->addOrderAttribute('idOcorrencia');
+		$query = $criteria->retrieveAsQuery();
+		$query->MoveFirst();
+
+		if ($query->result != null)
+		{
+			foreach($query->result as $r)
+			{
+				list($diaInicio,$mesInicio,$anoInicio) = split('/',$r[0]);
+
+			   if ($anoAtual == $anoInicio) //se o ano de licensa é = ao ano de abertura de periodoaquisiitivo
+				  {
+					$regOcorrencias++;
+				  }
+			}
+		}
+        return $regOcorrencias;
+    }
+
+
+    /**
+     * public isEstatutario()
+     * isEstatutario -> retorna true se funcionario é estatutário
+     * @status: 'ready'
+     */
+    function isEstatutario()
+    {
+        $this->retrieveAssociation('vinculo');
+        $this->vinculo->getProvimentos();
+        $provimentoAtual = $this->vinculo->getProvimentoAtual();
+        if ($provimentoAtual->regimeJuridico==("EST"))
+            return true;
+        else
+            return false;
+    }
+
+	/*
+	 -> verificações
+	 
+	 1. docente + celetista 
+	 2. docente + estatutario OK (para 1 servidor) - carlos alberto nascimento
+	 
+	 3. tecadm + celetista
+	 4. tecadm + estaturario
+
+	 para todos estes testar
+	 
+	 -> permissao de lancamento de periodos aquisitivos (ok para carlos alberto nascimento)
+	 -> permissao de lancamento de ferias(ok para carlos alberto nascimento)
+	 -> exclusao de periodo aquisitivos (ok para calors alberto nascimento)
+	 -> exclusao de ferias ( ok para carlos alberto nascimento)
+	 -> interrupcao de ferias
+	*/
+    /**
+     * public isCeletista()
+     * isCeletista -> retorna true se funcionario é celetista
+     * @status: 'ready'
+     */
+    function isCeletista()
+    {
+    
+        $this->retrieveAssociation('vinculo');
+        $this->vinculo->getProvimentos();
+        $provimentoAtual = $this->vinculo->getProvimentoAtual();
+        if ($provimentoAtual->regimeJuridico==("CLT") || $provimentoAtual->regimeJuridico==("CDT"))
+        {
+            return true;
+        }
+        else
+		{
+            return false;
+		}
+    
+    }
+
+
+    /**
+     * public isDocente()
+     * isDocente -> retorna true se funcionario é docente
+     * @status: 'ready'
+     */
+    function isDocente()
+    {
+        $this->retrieveAssociation('vinculo');
+        $this->vinculo->getProvimentos();
+        $provimentoAtual = $this->vinculo->getProvimentoAtual();
+        if(($provimentoAtual->idGrupoCargo == ("060")) || ($provimentoAtual->idGrupoCargo == ("60")))
+		{
+            return true;
+		}
+        else
+		{
+            return false;
+		}
+    }
+
+
+    /**
+     * public isTecnicoAdministrativo()
+     * isTecnicoAdministrativo -> retorna true se funcionario é tecnico administrativo
+     * @status: 'ready'
+     */
+    function isTecnicoAdministrativo()
+    {
+        $this->retrieveAssociation('vinculo');
+        $this->vinculo->getProvimentos();
+        $provimentoAtual = $this->vinculo->getProvimentoAtual();
+        if($provimentoAtual->idGrupoCargo !=("060"))
+		{
+            return true;
+		}
+        else
+		{
+            return false;
+		}
+    }
+
+
+    function saveForced()
+    {
+         parent::save();
+         return true;
+    }
+
+    // metodo utilizado para checar as regras de negocio e gravacao ou nao dos dados....
+    function save($opcheck=false)
+    {
+        $err = false;
+        /**
+         *testa se é docente ou tecnico administrativo - RN01 e RN02
+         */
+        if ($this->isDocente($this->idVinculo))
+            $this->setDocente($this->idVinculo);
+        else
+            if ($this->isTecnicoAdministrativo($this->idVinculo))
+                $this->setTecnicoAdministrativo($this->idVinculo);
+
+        /**
+         *testa se é celetista ou estatutario - RN03-RN04-RN06
+         */
+        if ($this->isEstatutario($this->idVinculo))
+        {
+            if (($this->existsDataExercicio($this->idVinculo)) || ($opcheck==true))
+            {
+                 $this->setEstatutario($this->idVinculo);
+                 //var_dump("Passou pelo save()");
+                 parent::save();
+            }
+            else
+            {
+                throw new ESimpleRnException("Não foi possivel gerar o novo periodo aquisitivo pois o funcionario não possui 12 meses de trabalho cumprido!");
+            }
+        }
+        else
+        /**
+         * celetista - RN03
+         */
+            {
+                /**
+                 * testa se está de licenca no momento da abertura do periodo
+                 */
+                if (!$this->onLicenca($this->idVinculo)) // RN08-RN09
+                {
+                    if (($this->existsDataExercicio($this->idVinculo)) || ($opcheck==true))
+                    {
+                        $this->setCeletista($this->idVinculo);
+                        parent::save();
+                    }
+                     else
+                    {
+                        throw new ESimpleRnException("Não foi possivel gerar o novo periodo aquisitivo pois o funcionario não possui 12 meses ( 10 meses ) de trabalho cumprido!");
+                    }
+                }
+                else
+                {
+                  throw new ESimpleRnException("Não foi possivel gerar o novo periodo aquisitivo pois o funcionario se encontra em Licenca atualmente!!");
+                }
+            }// fim celetista
+    }// fim save
+
+
+    function possuiFeriasInterrompidas()
+    {
+        $k = new MKrono();
+        $this->dataInicio = $k->invertDate($this->dataInicio);
+        $this->retrieveAssociation('periodoFerias');
+        if ( is_array($this->periodoFerias) )
+        {
+            foreach ( $this->periodoFerias as $ferias )
+            {
+                if ( $ferias->dataFim != $ferias->dataFimPrevista )
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+}
+?>

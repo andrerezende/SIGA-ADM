@@ -1,0 +1,432 @@
+<?php
+/**
+ * BusinessAdmMovimento
+ */
+class BusinessAdmMovimento extends Business {
+
+	public $idMovimento;
+	public $tipoMovimento;
+	public $dataMovimento;
+	public $quantidade;
+	public $valorTotal;
+	public $idOrdemEntrega;
+	public $idRequisicao;
+	public $idMaterial;
+	public $idItemNota;
+	public $idUoAlmoxarifado;
+	public $itemreq;
+	public $idMovimentoRef;
+	public $material;
+	public $tabelaGeral;
+	public $quantidadetotal;
+	public $valorunitario;
+	public $datahora;
+	public $notafiscal;
+	public $empenho;
+	public $cnpj;
+	public $idFornecedor;
+	public $fornecedor;
+	public $extraOrcamentario;
+	public $datanotafiscal;
+
+/**
+ * __construct
+ *
+ * @param array $data
+ */
+    public function __construct($data = null) {
+        parent::__construct('sigaept', $data);
+    }
+
+/**
+ *
+ * @param int $id
+ * @return BusinessAdmMovimento
+ */
+    public function getById($id) {
+        $this->idMovimento = $id;
+        $this->retrieve();
+        return $this;
+    }
+
+/**
+ * GetValorUnitario
+ *
+ * @param int $idMaterial
+ * @return array
+ */
+    public function GetValorUnitario($idMaterial) {        
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('valorunitario');
+        $criteria->addCriteria('idMaterial', '=', "$idMaterial");
+        $criteria->addCriteria('tipoMovimento', '<>', "'9'");
+        $criteria->addOrderAttribute('idMovimento', false);
+        $result = $criteria->retrieveAsQuery();
+        return $result->result[0];
+    }
+
+/**
+ * ListMovimentosByMaterialUo
+ *
+ * @param int $idMaterial
+ * @param int $idUoAlmoxarifado
+ * @return RetrieveCriteria
+ */
+    public function ListMovimentosByMaterialUo($idMaterial, $idUoAlmoxarifado) {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('idMovimento');
+        $criteria->addColumnAttribute('idMaterial');
+        $criteria->addColumnAttribute('material.descricao');
+        $criteria->addColumnAttribute('quantidade');
+        $criteria->addColumnAttribute('valorunitario');
+        $criteria->addColumnAttribute('valorTotal');
+        $criteria->addColumnAttribute("to_char(datahora, 'DD/MM/YYYY HH24:MI:SS')", 'datahora');
+        $criteria->addCriteria('idMaterial', '=', "$idMaterial");
+        $criteria->addCriteria('idUoAlmoxarifado', '=', "$idUoAlmoxarifado");
+        $criteria->addCriteria('tipoMovimento', '=', "'1'");
+        $criteria->addCriteria('idMovimentoRef', 'is null');
+        $criteria->addOrderAttribute('dataMovimento');
+        $criteria->addOrderAttribute('idMovimento');
+        return $criteria->retrieveAsQuery();
+    }
+
+/**
+ * ListMovimentosByOrdemEntregaNaoImpressa
+ *
+ * @param string $ordem
+ * @return RetrieveCriteria
+ */
+    public function ListMovimentosByOrdemEntregaNaoImpressa($ordem) {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('idMaterial');
+        $criteria->addColumnAttribute('itemreq.material.descricao');
+        $criteria->addColumnAttribute('itemreq.material.unidade');
+        $criteria->addColumnAttribute('idRequisicao');
+        $criteria->addColumnAttribute('quantidade');
+        $criteria->addColumnAttribute('(valorTotal / quantidade)', 'valorunitario');
+        $criteria->addColumnAttribute('valorTotal');
+        $criteria->addColumnAttribute('ordem.numero');
+        $criteria->addColumnAttribute('itemreq.requisicao.idUoRequisitante');
+        $criteria->addCriteria('ordem.impresso', '=', "'0'");
+        $criteria->addCriteria('ordem.numero', '=', "$ordem");
+        return $criteria->retrieveAsQuery();
+    }
+
+/**
+ * ListMovimentosByOrdemEntrega
+ *
+ * @param string $ordem
+ * @return RetrieveCriteria
+ */
+    public function ListMovimentosByOrdemEntrega($ordem) {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('idMaterial');
+        $criteria->addColumnAttribute('itemreq.material.descricao');
+        $criteria->addColumnAttribute('itemreq.material.unidade');
+        $criteria->addColumnAttribute('idRequisicao');
+        $criteria->addColumnAttribute('quantidade');
+        $criteria->addColumnAttribute('(valorTotal / quantidade)', 'valorunitario');
+        $criteria->addColumnAttribute('valorTotal');
+        $criteria->addColumnAttribute('ordem.numero');
+        $criteria->addColumnAttribute('itemreq.requisicao.idUoRequisitante');
+        $criteria->addCriteria('ordem.numero', '=', "$ordem");
+        return $criteria->retrieveAsQuery();
+    }
+
+/**
+ * getByValorQuantidade
+ *
+ * @param float $valor
+ * @param int $quantidade
+ * @param int $idmaterial
+ * @return RetrieveCriteria
+ */
+    public function getByValorQuantidade($valor, $quantidade, $idmaterial) {
+        $valor = str_replace(",", ".", $valor);
+
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('idMaterial');
+        $criteria->addColumnAttribute('idMovimento');
+        $criteria->addColumnAttribute('idUoAlmoxarifado');
+        $criteria->addColumnAttribute('idMovimentoRef');
+        $criteria->addColumnAttribute('valorunitario');
+        $criteria->addColumnAttribute('quantidadetotal');
+        $criteria->addCriteria('valortotal', '=', "$valor");
+        $criteria->addCriteria('quantidade', '=', "$quantidade");
+        $criteria->addCriteria('idMaterial', '=', "$idmaterial");
+        return $criteria->retrieveAsQuery();
+    }
+
+/**
+ * GetByRequisicaoMaterialTipo
+ *
+ * @param int $requisicao
+ * @param int $idmaterial
+ * @param string $tipo
+ * @return RetrieveCriteria
+ */
+    public function GetByRequisicaoMaterialTipo($requisicao, $idmaterial = null, $tipo = null) {
+        $criteria = $this->getCriteria();
+        $criteria->addCriteria('idRequisicao', '=', "$requisicao");
+        if ($idmaterial) {
+            $criteria->addCriteria('idMaterial', '=', "$idmaterial");
+        }
+        if ($tipo) {
+            $criteria->addCriteria('tipoMovimento', 'in', "$tipo");
+        }
+        $criteria->addCriteria('idMovimentoRef', 'IS', "null");
+        return $criteria->retrieveAsQuery();
+    }
+
+/**
+ * ListByRequisicaoTipo
+ *
+ * @param int $requisicao
+ * @param int $tipo
+ * @return RetrieveCriteria
+ */
+    public function ListByRequisicaoTipo($requisicao, $tipo) {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('idMovimento');
+        $criteria->addColumnAttribute('dataMovimento');
+        $criteria->addColumnAttribute('quantidade');
+        $criteria->addColumnAttribute('valorTotal');
+        $criteria->addColumnAttribute('material.codmaterial');
+        $criteria->addColumnAttribute('material.descricao');
+        $criteria->addCriteria('idRequisicao', '=', "$requisicao");
+        $criteria->addCriteria('tipoMovimento', '=', "'$tipo'");
+        $criteria->addCriteria('idMovimentoRef', 'IS', "null");
+        return $criteria->retrieveAsQuery();
+    }
+
+    public function ListByEmpenhoTipos($empenho, $tipos) {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('idMovimento');
+        $criteria->addColumnAttribute('dataMovimento');
+        $criteria->addColumnAttribute('quantidade');
+        $criteria->addColumnAttribute('valorTotal');
+        $criteria->addColumnAttribute('itemNota.notaFiscal.notaFiscal');
+        $criteria->addColumnAttribute('material.codmaterial');
+        $criteria->addColumnAttribute('material.descricao');
+        $criteria->addColumnAttribute('tabelaGeral.item2');
+        $criteria->addCriteria('itemNota.notaFiscal.idEmpenho', '=', "$empenho");
+        $criteria->addCriteria('tipoMovimento', 'in', "$tipos");
+        $criteria->addCriteria('tabelaGeral.tabela', '=', "'AD_ALMOXTIPOMOVTO'");
+        return $criteria->retrieveAsQuery();
+    }
+
+    public function GetQuantidadeByRequisicaoIdEmpenhado($idRequisicao, $idEmpenhado) {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('sum(quantidade)');
+        $criteria->addCriteria('itemNota.idEmpenhado', '=', "$idEmpenhado");
+        $criteria->addCriteria('idRequisicao', '=', "$idRequisicao");
+        $criteria->addCriteria('tipoMovimento', 'in', "('1','5')");
+        $criteria->addCriteria('idMovimentoRef', 'is', "null");
+        $query = $criteria->retrieveAsQuery();
+        return $query->result[0][0];
+    }
+
+    public function getQuantidadeByMaterial($idmaterial) {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('SUM(quantidade)');
+        $criteria->addCriteria('idMaterial', '=', "$idmaterial");
+        $criteria->addCriteria('tipoMovimento', 'IN', "('1','5')");
+        $query = $criteria->retrieveAsQuery();
+        return $query->result[0][0];
+    }
+
+    public function getValorUnitarioQuantidade($idmaterial) {
+        $sql = new sql(
+            'round(mov.valortotal/mov.quantidade, 2) as valorunit, quantidade',
+            'ad_movimento mov'
+        );
+        $sql->SetWhere('mov.idmaterial = ' . $idmaterial);
+        $sql->SetWhereAnd('mov.idmovimentoref IS NULL');
+        $sql->SetOrderBy('mov.idmovimento asc');
+        $query = $this->Query($sql);
+        return $query->result;
+    }
+
+    public function getValorUnitarioTotal($idmaterial) {
+        $sql = new sql(
+            'mov.idmovimento, mov.valorunitario, mov.quantidadetotal',
+            'ad_movimento mov'
+        );
+        $sql->SetWhere('mov.idmaterial = ' . $idmaterial);
+        $sql->SetWhereAnd('mov.idmovimentoref IS NULL');
+        $sql->SetGroupBy('mov.idmovimento, mov.valorunitario, mov.quantidadetotal');
+        $sql->SetOrderBy('mov.idmovimento desc');
+        $query = $this->Query($sql);
+        return $query->result[0];
+    }
+    
+    //Tiago Macedo 19-16-2012
+    public function getLastValorUnitarioQuantidadeTotal($idmaterial, $uo){
+        $sql = new sql('valorunitario, quantidadetotal, valortotal', 'ad_movimento'); 
+        $sql->SetWhere("idmovimento = (select max(idmovimento) from ad_movimento where idmaterial = ".$idmaterial." and iduoalmox = ".$uo." and idmovimentoref iS NULL and datamov = (select max(datamov) from ad_movimento where idmaterial = ".$idmaterial." and iduoalmox = ".$uo." and idmovimentoref iS NULL))");                
+        $query = $this->Query($sql);
+        return $query->result[0];
+    }    
+    
+    public function getLastValorUnitarioQtdTotalByData(){
+        $sql = new sql('valorunitario, quantidadetotal, valortotal', 'ad_movimento');
+        $sql->SetWhere("idmovimento = (select max(idmovimento) from ad_movimento where idmaterial = ".$this->idMaterial." and iduoalmox = ".$this->idUoAlmoxarifado."and idmovimentoref iS NULL and datamov <= '".$this->dataMovimento."')");
+        $query = $this->Query($sql);
+        return $query->result[0];        
+    }
+    
+    //Tiago Macedo 19-16-2012
+    public function proximosIdMovimentosEntradaRetro(){         
+        $sql = new sql('idmovimento', 'ad_movimento');
+        $sql->SetWhere("datamov >= '".$this->dataMovimento."'");         
+        $sql->SetWhereAnd('idmaterial ='.$this->idMaterial);
+        $sql->SetWhereAnd('idmovimentoref IS NULL');
+        $sql->SetWhereAnd('iduoalmox = '.$this->idUoAlmoxarifado);
+        $sql->SetOrderBy('datamov, idmovimento');
+        $query = $this->Query($sql);
+        return $query->result;        
+    }
+    //Tiago Macedo 19-16-2012
+    //Esta função só pode ser usada em casos especificos, devido a data e id não estarem  na mesma ordem.
+    public function getValorUnitarioQtdTotalAnterior(){
+        $sql = new sql('valorunitario, quantidadetotal, valortotal', 'ad_movimento');
+        $sql->SetWhere("idmovimento = (select max(idmovimento) from ad_movimento where idmaterial = ".$this->idMaterial." and iduoalmox = ".$this->idUoAlmoxarifado."and idmovimentoref iS NULL and datamov <= '".$this->dataMovimento."' and idmovimento < ".$this->idMovimento.")");
+        $query = $this->Query($sql);
+        return $query->result;        
+    }    
+    
+    public function getAllQuantidades(){
+        $sql = new sql('idmovimento, tipomovimento, quantidade', 'ad_movimento');
+        $sql->SetWhereAnd('idmaterial ='.$this->idMaterial);
+        $sql->SetWhereAnd('idmovimentoref IS NULL');
+        $sql->SetWhereAnd('iduoalmox = '.$this->idUoAlmoxarifado);        
+        $sql->SetOrderBy('datamov, idmovimento');
+        $query = $this->Query($sql);
+        return $query->result;        
+    }
+    
+    //Tiago Macedo 19-16-2012
+    //Corrige a tabela toda de determinado material, caso algum movimento seja estornado, a entrada seja retroativa ou a saída leve a quantidade total = 0.
+    public function corrigeTudo($idmaterial, $uo){         
+        //Query com os dados do movimento do material
+        $sql = new sql('idmovimento, tipomovimento, quantidade, valortotal, quantidadetotal, valorunitario', 'ad_movimento');
+        $sql->SetWhere('idmaterial ='.$idmaterial);
+        $sql->SetWhereAnd('idmovimentoref IS NULL');
+        $sql->SetWhereAnd('iduoalmox = '.$uo);
+        $sql->SetOrderBy('datamov, idmovimento');
+        $query = $this->Query($sql);        
+        
+        //Dados com a primeira linha da query, assume que seja uma entrada.
+        $idmovimento2 = $query->result[0][0];            
+        $tipoMovimento2 = $query->result[0][1];
+        $quantidade2 = $query->result[0][2];
+        $valortotal2 = $query->result[0][3];
+        $quantidadetotal2 = $query->result[0][4];
+        $valorunitario2 = $query->result[0][5];
+        
+        $quantidadetotal = $quantidade2 + $quantidadetotal;
+        $valortotal = $valortotal + $valortotal2;
+        $valorSUM += $valortotal2;
+        
+        //calculo para valor unitário
+        if ($quantidadetotal == 0){
+            $valorunitario = 0;             
+        } else {
+            $valorunitario = $valortotal / $quantidadetotal;
+            $valorunitario = explode(".",$valorunitario);
+            $valorunitario = $valorunitario[0].".".substr($valorunitario[1], 0,2);
+        } 
+        
+        //Atualiza no banco a coluna quantidadetotal e valor unitario.
+        $sql = new sql();
+        $sql->SetColumns('
+                quantidadetotal,
+                valorunitario
+        ');
+        $sql->SetTables('ad_movimento');
+        $sql->SetWhere('idmovimento = '.$idmovimento2);
+        $values = array($quantidadetotal, $valorunitario);
+        $this->Execute($sql->Update($values)); 
+
+        //Loop para o resto dos dados.
+        for ($i = 1; $i < count($query->result); $i++){           
+            $idmovimento2 = $query->result[$i][0];            
+            $tipoMovimento2 = $query->result[$i][1];
+            $quantidade2 = $query->result[$i][2];
+            $valortotal2 = $query->result[$i][3];
+            $quantidadetotal2 = $query->result[$i][4];
+            $valorunitario2 = $query->result[$i][5];
+            
+            //Se for entrada.
+            if ($tipoMovimento2 == 1) {
+                    //Calculo para o valor unitário.
+                    $valortotal = ($valorunitario * $quantidadetotal + $valortotal2);
+                    $quantidadetotal = $quantidade2 + $quantidadetotal;
+                    $valorSUM += $valortotal2;
+                                   
+                    $valorunitario = $valortotal / $quantidadetotal;
+                    $valorunitario = explode(".",$valorunitario);
+                    $valorunitario = $valorunitario[0].".".substr($valorunitario[1], 0,2); 
+                    
+                    //Atualiza no banco a coluna quantidadetotal e valor unitario.
+                    $sql = new sql();
+                    $sql->SetColumns('
+                            quantidadetotal,
+                            valorunitario
+                    ');
+                    $sql->SetTables('ad_movimento');
+                    $sql->SetWhere('idmovimento = '.$idmovimento2);
+                    $values = array($quantidadetotal, $valorunitario);
+                    $this->Execute($sql->Update($values)); 
+                
+                //Se o tipo for uma saída ou uma baixa.    
+                } elseif($tipoMovimento2 == 3 || $tipoMovimento2 == 9){ 
+                    $quantidadetotal = $quantidadetotal - $quantidade2;
+                    if($quantidadetotal == 0){                                                   
+                            
+                            $valortotal = $valorSUM;
+                            $valorSUM = 0;
+                            $sql = new sql();
+                            $sql->SetColumns('
+                                    valortotal,
+                                    quantidadetotal,
+                                    valorunitario
+                            ');
+                            $sql->SetTables('ad_movimento');
+                            $sql->SetWhere('idmovimento = '.$idmovimento2);
+                            $values = array($valortotal, $quantidadetotal, $valorunitario);
+                            $this->Execute($sql->Update($values)); 
+                            //$valortotal = $valorunitario * $quantidade2; 
+                    
+                    }else{                    
+                        
+                        $valortotal = $valorunitario * $quantidade2;
+                        $valorSUM -= $valortotal;
+                        
+                        $sql = new sql();
+                        $sql->SetColumns('
+                                valortotal,
+                                quantidadetotal,
+                                valorunitario
+                        ');
+                        $sql->SetTables('ad_movimento');
+                        $sql->SetWhere('idmovimento = '.$idmovimento2);
+                        $values = array($valortotal, $quantidadetotal, $valorunitario);
+                        $this->Execute($sql->Update($values)); 
+                    }               
+                    
+                }                
+        }
+        $sql = new sql();
+        $sql->SetColumns('
+                valortotal,
+                estoque
+        ');
+        $sql->SetTables('ad_estoque');
+        $sql->SetWhere('idmaterial = '.$idmaterial);
+        $sql->SetWhereAnd('iduo ='.$uo);
+        $values = array($valorSUM, $quantidadetotal);
+        $this->Execute($sql->Update($values)); 
+    }   
+    
+}

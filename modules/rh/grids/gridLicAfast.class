@@ -1,0 +1,166 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+/**
+ * Grid Licencas e Afastamentos
+ * Grid de uso geral para selecionar licensas e afastamentos do vínculo
+ * @package br.org.miolo.ufjf.rh.listing
+ */
+class gridLicAfast extends MObjectGrid
+{
+    //protected $k;
+    /**
+     * Constructor
+     */
+    function __construct($objVinculo)
+    {
+        global $MIOLO, $module,$self ;
+        $perms = $MIOLO->getPerms();
+        $login = $MIOLO->getLogin();
+//        $this->k = new MKrono();
+        
+        $columns = array(
+            new MObjectGridColumn('dataInicio'           ,'Início'    ,'left' ,false,'10%',TRUE),
+            new MObjectGridColumn('dataFim'              ,'Fim'       ,'left' ,false,'10%',TRUE),
+            new MObjectGridColumn('dias'                 ,'Dias'      ,'right',false, '5%',TRUE),
+            new MObjectGridColumn('ocorrencia->descricao','Ocorrência','left' ,false,'75%',TRUE)
+        );
+
+        // controles no rodape
+        $ctlArray = array (
+            new FormButton('btnNew', 'Incluir Nova Licença/Afastamento',$MIOLO->GetActionURL('rh','main:vinculo',$objVinculo->idVinculo, array('form'=>'licAfast','id'=>'new')))
+        );
+
+        $href_grid = $MIOLO->GetActionURL('rh','main:vinculo',$objVinculo->idVinculo,array('form'=>'licAfast'));
+        $objVinculo->getOcorrenciasLicenca();
+
+        $fields[] = new MSpacer(1);
+        $fields[] = $this->TabelaFaltaseLicencas($objVinculo);
+        $container = new MVContainer('container', $fields);
+        $MIOLO->getTheme()->appendContent( $container );
+
+        parent::__construct($objVinculo->licAfast, $columns, $href_grid,25);
+        $this->SetTitle("Licenças/Afastamentos");
+        $this->SetFilter(true);
+        $this->SetIndex(1);
+        $this->SetWidth('100%');
+        $this->SetLinkType('hyperlink');
+        if ( $objVinculo->isAtivo() && (($perms->checkAccess('rh_licafast',A_ACCESS) &&  (! $perms->isMemberOf('','RH_SECRETARIA'))) || $perms->isAdmin()) )
+        {
+            $this->SetControls($ctlArray);
+            $action = $MIOLO->GetActionURL($module,$self,$objVinculo->idVinculo,array('form'=>'licAfast','id'=>'#0#'));
+            $this->AddActionIcon('ID','select.gif',$action);
+        }
+
+        $provimento = $objVinculo->getProvimentoAtual();
+        if ($provimento)
+        {
+            if ( $perms->isMemberOf($login,'RH_SECRETARIA') && ( !$perms->isAdmin() ) )
+            {
+                $usuario = $MIOLO->getBusiness('common','usuario');
+                $usuario->getById($login->idkey);
+                
+                $vinculoUsuario = $this->manager->getBusiness('rh','vinculo');
+                $vinculoUsuario->getById($usuario->login);
+
+                $vinculoUsuario->getProvimentos();
+                $provimentoUsuario = $vinculoUsuario->getProvimentoAtual();
+
+                if ( ! $idSetor )
+                {
+                    $idSetor = $usuario->idSetor;
+                }
+                /*
+                if ( ! $provimentoUsuario )
+                {
+                    $this->manager->Error('Seu usuário não está apto a fazer transações no SIGA-RH.');
+                }
+                */
+                
+                $setor = $MIOLO->getBusiness('common','setor');
+                $setor->getById($provimentoUsuario->idSetor);
+                
+                $setorPai = $MIOLO->getBusiness('common','setor');
+                $setorPai->getById($setor->idPaiSetor);
+    
+
+                $idSetorPai = ( ( $setorPai->idSetor == 1 ) || ( $setorPai->idSetor == 0 ) ) ? $setor->idSetor : $setorPai->idSetor;
+
+                $setoresFilhos = $setor->getSetoresFilhos($idSetorPai);
+        
+                $mesmoSetor = in_array($provimento->idSetor,$setoresFilhos);
+
+                if ( $mesmoSetor || $perms->isAdmin() )
+                {
+                    $this->SetControls($ctlArray);
+                    $action = $MIOLO->GetActionURL($module,$self,$objVinculo->idVinculo,array('form'=>'licAfast','id'=>'#0#'));
+                    $this->AddActionIcon('ID','select.gif',$action);
+                }
+            }
+        }
+        $this->setRowMethod('gridLicAfast','MyRowMethod');
+    }
+
+
+    public function myRowMethod( $indrow, $row, $actions, $columns ) //$row: colunas da tabela
+    {
+        $k = new MKrono();
+        if ($row[1])
+        {
+            $columns[2]->control[$indrow] = $k->daysDiff($row[0], $row[1]) + 1;
+        }
+    } // myRowMethod
+
+
+    function TabelaFaltaseLicencas($objVinculo)
+    {
+        global $MIOLO;
+
+        $licafast = $MIOLO->getBusiness('rh','licafast');
+        $table = new MTableRaw('Faltas e LICENÇAS'                           ,
+                               $licafast->AcumulaFaltaseLicencas($objVinculo),
+                               array('Ano','Faltas','202','083','LPA','Líquido')   );
+        //202: licenças de saúde e acidente de trabalho; 083: acompanhamento de familiar
+        for ( $i=0; $i<count($table->array); $i++)
+        {
+            $table->SetCellAttribute($i,1,'align','right');
+            $table->SetCellAttribute($i,2,'align','right');
+            $table->SetCellAttribute($i,3,'align','right' );
+            $table->SetCellAttribute($i,4,'align','right' );
+            $table->SetCellAttribute($i,5,'align','right' );
+        }
+        $table->SetCellAttribute(3,0,'bgcolor','yellow');
+        $table->SetCellAttribute(3,1,'bgcolor','yellow');
+        $table->SetCellAttribute(3,2,'bgcolor','yellow');
+        $table->SetCellAttribute(3,3,'bgcolor','yellow');
+        $table->SetCellAttribute(3,4,'bgcolor','yellow');
+        $table->SetCellAttribute(3,5,'bgcolor','yellow');
+$table->SetAttributes('align=center');
+$table->SetAttributes('border=1');//'bgcolor=#0000FF');
+        return $table;
+    } // TabelaFaltaseLicencas
+
+    
+    function GenerateHeader()
+    {
+        return NULL;
+    }
+
+
+}
+?>

@@ -1,0 +1,121 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+class gridProadesCoordenacao extends MDataGrid
+{
+    public $proades;
+
+	function __construct($proades)
+	{
+        $this->proades = $proades;
+
+        $MIOLO = MIOLO::getInstance(); 
+        
+		$href = $MIOLO->getActionURL('rh','main:proades:main','#0#');
+
+		$columns = array(
+				new MDataGridColumn('idmembro','Código','center',false,'10%',false),
+				new MDataGridColumn('idvinculo','SIAPE','left',false,'15%',true),
+				new MDataGridColumn('nome','Nome','left',false,'85%',true),
+        );
+
+        $query = $proades->listMembrosEquipeCoordenacao();
+
+		parent::__construct($query,$columns,$hrefGrid,15);
+
+        $this->setTitle("Membros Cadastrados - Coordenção Setorial");
+
+		$this->SetFilter(false);
+
+		$this->SetIndex(1);
+
+		$this->SetLinkType('hyperlink');
+
+        $href_dele = $MIOLO->getActionURL( 'rh', 'main:proades:main', $proades->idProades, array( 'form'=>'fase1','subform'=>'coord','cs'=>'cadastro','idMembro'=>'#0#','event' => 'btnExcluir:click' ) );
+	
+
+        $perms = $this->manager->getPerms();
+        
+        if ( $perms->checkAccess('rh_proadesexecute',A_ACCESS) )
+        {       
+            $this->addActionDelete( $href_dele );
+        }
+
+        $this->setRowMethod( 'gridProadesCoordenacao', 'MyRowMethod' );
+
+        //if ( ! $proades->primeiraFaseHabilitada() )
+        //{
+            if ( count($query->result) >= 3 )
+            {
+                if ( $perms->checkAccess('rh_proadesexecute',A_ACCESS) )
+                {
+                    $this->setControls(new MButton('btnFinalizar','Finalizar Cadastro da Coordena&ccedil;&atilde;o',$MIOLO->getActionUrl('rh','main:proades:main', $proades->idProades, array( 'form'=>'fase1','subform'=>'coord','cs'=>'cadastro','event' => 'btnFinalizar:click'))));
+                }
+            }
+        //}
+	}
+
+    function GenerateHeader()
+    {
+        return null;
+    }
+
+	function GenerateFooter()
+	{
+		if ( ! $this->data )
+		$footer[] = $this->GenerateEmptyMsg();
+		$footer[] = new MSeparator();
+		$footer[] = $this->GenerateControls();
+		return $footer;
+	}
+
+    public function myRowMethod( $i, $row, $actions, $columns )
+    {
+        $MIOLO = MIOLO::getInstance();
+
+        $idMembro = $row[0];
+
+        $membro = $MIOLO->getBusiness('rh','membro');
+        $membro->getById($idMembro);
+
+        $membro->retrieveAssociation("equipe");
+
+        $membro->equipe->retrieveAssociation("proades");
+
+        /*
+        if ( $membro->equipe->proades->primeiraFaseHabilitada() )
+        {
+            $actions[0]->enabled = false;
+        }
+        else
+        {
+        */
+            if ( $membro->equipe->proades->idDirigente == $row[1] )
+            {
+                $actions[0]->enabled = false;
+            }
+            else
+            {
+                $actions[0]->enabled = true;
+            }
+        //}
+        
+
+    }
+}
+?>

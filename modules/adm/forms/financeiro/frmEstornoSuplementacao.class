@@ -1,0 +1,277 @@
+<?
+class frmEstornoSuplementacao extends Form
+{
+	var $objLicitacao;
+
+	function __construct()
+    {
+		global $MIOLO;
+        $this->Form('Estorno de Suplementação para Itens da Licitação');
+		$this->SetClose($this->manager->GetActionURL('adm','main:financeiro:estornosuplementacao'));
+        $this->EventHandler();
+		$this->defaultButton = false;
+    }
+
+    function CreateFields()
+    {
+		global $MIOLO, $module;
+
+		$this->objLicitacao = $MIOLO->GetBusiness($module, 'licitacao');
+
+		$options = array(
+			array('1','Novas'),
+			array('2','Parciais'),
+			array('0','Todas'),
+		);
+		$fields = array(
+			array(
+				new MLookupTextField('licitacao', '', 'Número da Licitação', 20),
+//				new MTextField('numItem', '', 'Item', 5),
+			),
+			new MSpacer(1),
+//			new MSelection('selLicitacao','0','Exibir Licitações', $options),
+		);
+       	$this->SetFields($fields);
+		$this->SetFieldAttr('licitacao','module',$module);
+		$this->SetFieldAttr('licitacao','item','licitacao');
+		$this->SetFieldAttr('licitacao','event','filler');
+		$this->SetFieldAttr('licitacao','related', '"",licitacao');
+//		$this->SetFieldAttr('licitacao','filter', 'licitacao,selLicitacao');
+
+		$button = array(
+			new FormButton('btnEnviar','Enviar'),
+			new FormButton('btnConfirmarEstorno','Confirmar'),
+		);
+       	$this->SetButtons($button);
+		$this->SetButtonAttr('btnConfirmarEstorno','visible',false);
+
+		$this->manager->page->addJsCode("
+			function atualizaTotal(i,total)
+			{
+				x = MIOLO_GetElementById('quant['+i+']'); 
+				y = MIOLO_GetElementById('preco['+i+']'); 
+				w = y.value;
+				while(w.indexOf('.')>=0)
+				{
+					w = w.replace('.','');
+				}
+				w = w.replace(',','.');
+				z = MIOLO_GetElementById('total['+i+']'); 
+				z.innerHTML = x.value * w; 
+				//vírgula dos centavos
+				ponto = z.innerHTML.length; 
+				z.innerHTML = z.innerHTML+'000'; 
+				for(i=0;i<z.innerHTML.length;i++) 
+				{ 
+					if(z.innerHTML.substring(i,i+1)=='.') 
+					{
+						ponto=i
+					} 
+				}; 
+				z.innerHTML = z.innerHTML.substr(0,ponto)+','+z.innerHTML.substr(ponto+1,2); 
+				//pontos de milhares
+				a = z.innerHTML.substr(z.innerHTML.length-3,3);
+				i = 0;
+				for(j=3;j<z.innerHTML.length;j++)
+				{
+					i = i + 1;
+					k = z.innerHTML.length - j;
+					a = z.innerHTML.substring(k-1,k) + a;
+					if(i == 3)
+					{
+						i = 0;
+						if(j < z.innerHTML.length-1)
+						{
+							a = '.' + a;
+						}
+					}
+				}
+				z.innerHTML = a;
+			}
+		");
+	}
+
+	function btnEnviar_click()
+    {
+		global $MIOLO, $module, $item;
+
+		$this->page->SetAction($MIOLO->GetActionURL($module, $action));
+		$licitacao = $this->GetFormValue('licitacao');
+//		$numItem = $this->GetFormValue('numItem');
+		if($licitacao == null)
+		{
+			$idLicitacao = $this->GetFormValue('idLicitacao');
+		}
+		else
+		{
+			$this->objLicitacao = $MIOLO->GetBusiness($module,'licitacao');
+			$idLicitacao = $this->objLicitacao->GetIdBynumero($licitacao);
+		}
+		if($idLicitacao == null)
+		{
+			$MIOLO->Error('Licitação não encontrada', $MIOLO->GetActionURL($module, $action) );
+		}
+
+		$this->objLicitacao = $MIOLO->GetBusiness($module,'licitacao',$idLicitacao);
+		$itensDaLicitacao = $this->objLicitacao->getItens();
+
+		//verifica status da licitacao
+		if( ($this->objLicitacao->status != '4') and ($this->objLicitacao->status != '5') )
+		{
+			$MIOLO->Error('O status da licitacao não permite este tipo de operação.', $MIOLO->GetActionURL($module, $action) );
+		}
+
+        $this->SetTitle('Estorno de Suplementação para Itens da Licitação ' . $this->objLicitacao->numero);
+
+        $columns = array(
+           	new MGridColumn('Nº','center', true,'5%'),
+           	new MGridColumn('Descrição','left', false,'30%'),
+           	new MGridColumn('Quantidade','center', true,'10%'),
+           	new MGridColumn('Unidade','center', true,'5%'),
+           	new MGridColumn('R$ Unit','center', true,'10%'),
+           	new MGridColumn('Empresa','left', false,'20%'),
+           	new MGridColumn('R$ Total','center', true,'10%'),
+           	new MGridColumn('Rubrica','center', false,'10%'),
+        );
+
+		$data = $this->objLicitacao->GetDadosItensParaSuplementacaoEstorno($idLicitacao, $itensDaLicitacao);
+		$grid = new MGrid($data, $columns, $href_datagrid, 0);
+		$grid->AddActionSelect();
+
+		$fields = array(
+            $grid,
+			new MHiddenField('idLic', $idLicitacao),
+//			new MHiddenField('numItem', $numItem),
+        );
+        $this->SetFields($fields);
+
+		$this->SetButtonAttr('btnEnviar','visible',false);
+		if( count($data) > 0 )
+		{
+			$this->AddButton(new MButton('btnEstorno','Definir Estorno'));
+		}
+	}
+
+	function btnEstorno_click()
+	{   
+		global $MIOLO, $module, $item, $action, $theme;
+
+		$selected = $this->GetFormValue('select');
+//		$numItem = $this->GetFormValue('numItem');
+//		if($numItem)
+//		{
+//			$selected = array($numItem);
+//		}
+		if($selected == null)
+		{
+			$selected =  $this->GetFormValue('selected');
+			if($selected)
+			{
+				$selected = explode('@', $selected);
+			}
+		}
+		$idLicitacao =  $this->GetFormValue('idLic');
+		if($idLicitacao == null)
+		{
+			$idLicitacao =  $this->GetFormValue('idLicitacao');
+		}
+		$totalItens = count($selected);
+
+		if($totalItens == 0)
+		{
+			$this->page->SetAction($MIOLO->GetActionURL($module, $action, '', array('event'=>'btnEnviar_click', 'idLicitacao'=>$idLicitacao)));
+			$MIOLO->Error('Por favor, selecione os itens', $MIOLO->GetActionURL($module, $action, '', array('event'=>'btnEnviar_click', 'idLicitacao'=>$idLicitacao)) );
+		}
+		else //um ou mais de um item foi selecionado
+		{
+			$this->objLicitacao = $MIOLO->GetBusiness($module,'licitacao',$idLicitacao);
+			$itensDaLicitacao = $this->objLicitacao->getItens();
+
+			$this->SetTitle('Definir Estorno de Suplementação para Itens da Licitação ' . $this->objLicitacao->numero);
+
+			$columns = array(
+				new MGridColumn('Nº','center', true,'3%'),
+				new MGridColumn('Descrição','left', false,'35%'),
+				new MGridColumn('Quantidade','center', true,'10%'),
+				new MGridColumn('Unidade','center', true,'5%'),
+				new MGridColumn('R$ Unit','center', true,'8%'),
+				new MGridColumn('Empresa','left', false,'20%'),
+				new MGridColumn('R$ Total','center', true,'8%'),
+	           	new MGridColumn('Rubrica','center', false,'10%'),
+			);
+
+			$data = $this->objLicitacao->GetDadosItensParaSuplementacaoEstorno($idLicitacao, $itensDaLicitacao);
+			$data2 = array(); //elimina os itens não selecionados
+			$select = '';
+			for($i = 0; $i < count($data); $i++)
+			{
+				if(in_array($data[$i][0], $selected))
+				{
+					$data2[] = $data[$i];
+					$select .= $data[$i][0] . '@';
+				}
+			}
+			$select = substr($select, 0, -1); //concatenação de todos os itens selecionados separados por @
+
+			$n2 = 48; //indice para cada uma das linhas ($row), onde fica o total de itens mostrados na tela
+			for($i = 0; $i < count($data2); $i++)
+			{
+				$data2[$i][$n2] = $totalItens;
+			}
+
+			//definição dos campos do form
+			$grid = new MGrid($data2, $columns, $href_datagrid, 0);
+			$fields = array(
+				$grid,
+				new MHiddenField('idLicitacao', $idLicitacao),
+				new MHiddenField('selected', $select),
+			);
+			$this->SetFields($fields);
+		}
+		$this->SetButtonAttr('btnConfirmarEstorno','visible',true);
+		$this->SetButtonAttr('btnEnviar','visible',false);
+	}
+
+	function btnConfirmarEstorno_click()
+	{   
+		global $MIOLO, $module, $item, $action;
+
+		$selected = $this->GetFormValue('selected');
+		$itens = explode('@', $selected);
+		$idLicitacao = $this->GetFormValue('idLicitacao');
+		$quant = $this->GetFormValue('quant');
+		$preco = $this->GetFormValue('preco');
+		$tipo = $this->GetFormValue('tipo');
+
+		$this->objLicitacao = $MIOLO->GetBusiness($module,'licitacao',$idLicitacao);
+		$itensDaLicitacao = $this->objLicitacao->getItens();
+		$data = $this->objLicitacao->GetDadosItensParaSuplementacaoEstorno($idLicitacao, $itensDaLicitacao);
+
+		$data2 = array(); //elimina os itens não selecionados
+		$i = 0;
+		foreach($data as $itemLic)
+		{
+			if( in_array($itemLic[0], $itens) )
+			{
+				$data2[] = $itemLic;
+				$data2[$i][4] = str_replace('.', '', $data2[$i][4]);
+				$data2[$i][4] = floatval(str_replace(',', '.', $data2[$i][4]));
+				$data2[$i][6] = str_replace('.', '', $data2[$i][6]);
+				$data2[$i][6] = floatval(str_replace(',', '.', $data2[$i][6]));
+				$i++;
+			}
+		}
+
+		try
+		{
+			$empenhos = $this->objLicitacao->DefineSuplementacaoEstornoParaItensLicitacao($idLicitacao, $data2, $tipo);
+
+			$MIOLO->Information("Estorno de Suplementação realizado com sucesso.", $MIOLO->GetActionURL($module, $action));
+		}
+		catch (Exception $e)
+		{
+			$MIOLO->Error($e->getMessage(), $MIOLO->GetActionURL($module, $action) );
+		}
+	}
+}
+?>

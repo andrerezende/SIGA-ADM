@@ -1,0 +1,203 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+class gridFrequeciaSetor extends MGrid
+{
+    var $listURL;
+    function __construct()
+    {
+        global $MIOLO, $module, $page, $context, $self, $action, $perms, $state;
+
+        $mes = Form::GetFormValue('mes');
+        $ano = Form::GetFormValue('ano');
+        $idSetor = Form::GetFormValue('idSetor');
+        $mostrar = true;
+        if ((is_null($mes)) or (empty($mes))
+            or (is_null($ano)) or (empty($ano))
+            or (is_null($idSetor)) or (empty($idSetor))
+            or ($ano > date('Y'))
+            or ( ($ano == date('Y')) and ($mes >= date('m')) )
+            )
+        {
+            $mostrar = false;
+        }
+
+        //var_dump($mostrar);
+
+        if ( $mostrar )
+        {
+            $mes = ( is_null($mes) or ($mes == 0) or ($mes == "") or empty($mes) ) ? '00' : $mes;
+            $ano = ( is_null($ano) or ($ano == 0) or ($ano == "") or empty($ano) ) ? '00' : $ano;
+            $idSetor = ( is_null($idSetor) or ($idSetor == 0) or ($idSetor == "") or empty($idSetor) ) ? '000' : $idSetor;
+            $data->mes = $mes;
+            $data->ano = $ano;
+            $data->idSetor = $idSetor;
+            $dias = $this->daysInMonth($data->ano,$data->mes);
+            $mesAno = $data->mes.'/'.$data->ano;
+            $funcionario = $MIOLO->getBusiness('rh','funcionario');
+            $dataInicio = '01/'.$mesAno;
+            $dataFim = $dias.'/'.$mesAno;
+            $data->dataRef = $dataInicio;
+            $vinculo = $MIOLO->getBusiness('rh','vinculo');
+            $setor = $MIOLO->getBusiness('common','setor',$data->idSetor);
+            if ( ! $data->idSetor )
+            {
+                $login = $MIOLO->getLogin();
+                $usuario = $MIOLO->getBusiness('common','usuario');
+                $usuario->getByLogin($login->id);
+                $setor = $MIOLO->getBusiness('common','setor');
+                $setor->getById($usuario->idSetor);
+                $setorPai = $MIOLO->getBusiness('common','setor');
+                $setorPai->getById($setor->idPaiSetor);
+                $idSetorPai = ( $setorPai->idPaiSetor == 0 ) ? $setor->idSetor : $setorPai->idSetor;
+                $data->idSetor = $setor->getSetoresFilhos($idSetorPai);
+            }
+            $query = $funcionario->listBySetor($data->idSetor,$data->dataRef); //servidores
+            $query2 = $vinculo->listLicencas($dataInicio,$dataFim,$data->idSetor); //servidores com licencas
+            if ( is_array ( $query->result) )
+            {
+                foreach ( $query->result as $result )
+                {
+                    $mesFreq[] = $result[0];
+                    $mesFreq[] = $result[1];
+                    for ( $i = 1; $i <= $dias; $i++ )
+                    {
+                        $mesFreq[$i+1] = 'N';
+                    }
+                    $servidores[$result[0]] = $mesFreq;
+                    unset($mesFreq);
+                }
+            }
+            $mnemonicos["N"] = "FREQUENCIA NORMAL";
+            while ( ! $query2->eof() )
+            {
+                $idVinculo = $query2->fields('idvinculo');
+                if ( array_key_exists($idVinculo,$servidores) )
+                {
+                    $k = new MKrono();
+                    $dataInicioLic = $query2->fields('datainicio');
+                    $dataFimLic = $query2->fields('datafim');
+                    $mnemonico = $query2->fields('mnemonico');
+                    $descricao = $query2->fields('descricao');
+                    $inicio = (int)$k->getDay($dataInicioLic);
+
+                    if ( $k->compareDate($dataFimLic,'>=',$dataFim) )
+                        $fim = (int)$dias;
+                    else
+                        $fim = (int)$k->getDay($dataFimLic);
+                    $meses = $servidores[$idVinculo];
+                    for ( $i = $inicio; $i <= $fim; $i++ )
+                        $meses[$i+1] = $mnemonico;
+                    $servidores[$idVinculo] = $meses;
+                    $mnemonicos[$mnemonico] = $descricao;
+                }
+                $query2->moveNext();
+            }
+            if ( is_array($servidores) )
+            {
+                foreach ( $servidores as $s )
+                {
+                    for($i=2; $i<=$dias+1; $i++)
+                    {
+                        if(count_chars($s[$i])>1)
+                        {
+                            $s[$i] = substr($s[$i],0,1);
+                        }
+                    }
+                    //unset($s);
+                    $nServ[] = $s;
+                }
+            }
+            $columns = array(
+                new MGridColumn('Matrícula',            'center', false, '6%',    false),
+                new MGridColumn('Nome do Servidor',     'left', false, '26%'),
+            );
+            for($i=1; $i <= $dias; $i++)
+            {
+                $columns[] = new MGridColumn("$i",'center', true,'2%');
+            }
+            //$href_grid = $MIOLO->GetActionURL($module,$self);
+            $href_grid = $MIOLO->GetActionURL($module,$action);
+            $page->SetAction($href_grid);
+            //if ( !is_null($nServ) )
+            //{
+                parent::__construct($nServ,$columns,$href_grid,10);
+                $this->SetTitle('Relatório do mês de '.$this->getMes($data->mes).' de '.$data->ano.'.');
+                $this->SetFilter(false);
+                $this->SetIndex(0);
+                $this->SetClose(null);
+                $this->SetLinkType('hyperlink');
+                $this->SetWidth('100%');
+            //}
+        }
+    }
+
+    function GenerateFooter()
+    {
+        if (!$this->data) 
+        {
+            $footer[] = $this->GenerateEmptyMsg();
+        }
+        //$fldbox = new MFieldLabel('t0','Relatório do mês de '.$this->getMes($data->mes).' de '.$data->ano.'.');
+        //$fldbox->width = '95%';
+        //$fldbox->box->textAlign = 'center';
+        $footer = array(
+            new MLabel('<b>LEGENDA:</b><br>'),
+            new MLabel('N = Freqüência Normal<br>'),
+            new MLabel('F = Férias<br>'),
+            new MLabel('L = Licença para tratamento de saúde, ART 202, LEI 8112<br>'),
+        );
+        //$footer[] = new Separator();
+        //$footer[] = $this->GenerateControls();
+        return $footer;
+    }
+
+    public function DaysInMonth ($Year,$MonthInYear )
+    {
+       if ( in_array ( $MonthInYear, array ( 1, 3, 5, 7, 8, 10, 12 ) ) )
+           return 31;
+
+       if ( in_array ( $MonthInYear, array ( 4, 6, 9, 11 ) ) )
+           return 30;
+
+       if ( $MonthInYear == 2 )
+           return ( checkdate ( 2, 29, $Year ) ) ? 29 : 28;
+
+       return false;
+    }
+
+    public function getMes($a)
+    {
+      $Ames = array(
+            '01' => "Janeiro",
+            '02' => "Fevereiro",
+            '03' => "Março",
+            '04' => "Abril",
+            '05' => "Maio",
+            '06' => "Junho",
+            '07' => "Julho",
+            '08' => "Agosto",
+            '09' => "Setembro",
+            '10' => "Outubro",
+            '11' => "Novembro",
+            '12' => "Dezembro",
+        );
+        return $Ames[$a];
+    }
+}
+?>

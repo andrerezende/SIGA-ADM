@@ -1,0 +1,101 @@
+<?php
+class frmUoAlmoxarifadoBaixaMateriais extends Form {
+	protected $objMaterial;
+
+	function __construct($objEstoque) {
+		$this->Form('Baixa de Material');
+		$this->EventHandler();
+	}
+
+	public function CreateFields() {
+		$fields = array(
+//			new MHiddenField('idMaterial', '', 'Idmaterial'),
+//                        new MLookupTextField('lkpMaterial', '', 'Material', 40),
+			new MTextField('quantidade', '', 'Quantidade', 5),
+			new MSelection('tipoBaixa', '', 'Tipo', array(
+				'FURTO' => 'FURTO',
+				'ROUBO' => 'ROUBO',
+				'OBSOLESCÊNCIA' => 'OBSOLESCÊNCIA',
+				'SINISTRO' => 'SINISTRO',
+				'DOAÇÃO' => 'DOAÇÃO',
+				'REAPROVEITAMENTO' => 'REAPROVEITAMENTO',
+			)),
+			new MMultiLineField('observacao', '', 'Observação', 60, 5, 60),
+		);
+
+		$this->SetFields($fields);
+                
+                $this->quantidade->addAttribute('maxlength',7);
+
+//		$this->SetFieldAttr('lkpMaterial', 'module', 'adm');
+//		$this->SetFieldAttr('lkpMaterial', 'item', 'material');
+//		$this->SetFieldAttr('lkpMaterial', 'event', 'filler');
+//		$this->SetFieldAttr('lkpMaterial', 'related', 'idMaterial,lkpMaterial');
+
+//		$validators = array(
+//			new MRequiredValidator('idMaterial'),
+//		);
+//		$this->SetValidators($validators);
+
+		$buttons = array(
+			new FormButton('btnPost', 'Enviar'),
+		);
+		$this->SetButtons($buttons);
+	}
+
+	public function btnPost_click() {
+		global $item, $MIOLO, $module;
+
+		$data = $this->getData();
+                $id = Form::GetFormValue('id');                
+		$cf = new MCurrencyFormatter();
+
+		$go = $MIOLO->GetActionURL($module, 'main:uoalmoxarifado', $item);
+
+		$objEstoque = $MIOLO->GetBusiness($module, 'estoque');
+
+		$objEstoque->getById($item, $id);
+		$valor = $objEstoque->valorTotal/$objEstoque->estoque;
+		$objEstoque->estoque -= $data->quantidade;
+		$objEstoque->valorTotal = $cf->toDecimal($objEstoque->valorTotal) - $cf->toDecimal($valor);
+
+		try {
+			
+                        if ($objEstoque->estoque >= 0){
+                            
+                            // Adiciona o movimento na AD_MOVIMENTO
+                            $objMovimento = $MIOLO->GetBusiness($module, 'movimento');
+                            $objMovimento->tipoMovimento = "9";
+                            $objMovimento->idUoAlmoxarifado = Form::GetFormValue('item');;
+                            $objMovimento->dataMovimento = date('d/m/Y');
+                            $ultimoValorQtd = $objMovimento->getLastValorUnitarioQuantidadeTotal($id, $objMovimento->idUoAlmoxarifado);
+                            $objMovimento->quantidade = $data->quantidade;
+                            $objMovimento->valorunitario = $cf->toDecimal($ultimoValorQtd[0]);
+                            $objMovimento->valorTotal = $cf->toDecimal($data->quantidade) * $objMovimento->valorunitario;                           
+                            $objMovimento->quantidadetotal = $ultimoValorQtd[1] - $data->quantidade;                                                                                               			
+                            $objMovimento->idMaterial = $id;
+                            $objMovimento->datahora = date('Y-m-d H:i:s');
+                            $objMovimento->extraOrcamentario = 'N';
+                            
+
+
+                           
+                        
+                        
+                            $objMovimento->save();
+                            $objMovimento2 = $MIOLO->GetBusiness($module, 'movimento');
+                            if ($objMovimento2->quantidadetotal == 0) $objMovimento2->corrigeTudo($id, $objMovimento->idUoAlmoxarifado);
+                            $objEstoque->save();
+                            $objBaixAlmox = $MIOLO->GetBusiness($module, 'baixaalmox');
+                            $objBaixAlmox->idMovimento = $objMovimento->idMovimento;
+                            $objBaixAlmox->tipo = $data->tipoBaixa;
+                            $objBaixAlmox->observacao = $data->observacao;
+                            $objBaixAlmox->save();
+                            $this->manager->Information('Baixa de Material realizada com sucesso.', $go);
+                        }else $this->AddError("Não foi possível realizar a operação. Pois o estoque ficará com valor negativo.");                              			
+			
+		} catch (Exception $e) {
+			$this->AddError('Não foi possível realizar a operação. Motivo: ' . $e->getMessage());
+		}
+	}
+}

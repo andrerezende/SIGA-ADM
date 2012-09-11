@@ -1,0 +1,188 @@
+<?php
+class frmLicitacaoVencedores extends Form
+{
+	protected $objLicitacao;    
+
+	function __construct($licitacao)
+	{
+ 		global $MIOLO;
+        
+        $this->objLicitacao = $licitacao;
+        $this->Form('Definição de Vencedores');
+        $this->EventHandler();        
+	}
+	
+	Function CreateFields()
+	{
+		global $MIOLO,$module,$item,$self;
+		
+		$list = $this->objLicitacao->ListItensByIdLicitacao();
+
+		// Pega o vencedor ou o menor participante de menor preço em cada item
+		foreach ($list as $ls)
+		{
+			$idFornecedor = $this->objLicitacao->GetParticipanteVencedor($this->objLicitacao->idLicitacao,$ls[0]);
+			if (!$idFornecedor)
+				$idFornecedor = $this->objLicitacao->GetParticipanteComMenorPreco($this->objLicitacao->idLicitacao,$ls[0]);
+				
+			$dataItem[] = $ls[0];
+			$dataIdFornecedor[] = $idFornecedor;
+
+			// Mostra a descrição do material ou CANCELADO se for o caso
+			if ($ls[2] == '3')
+				$dataDescricao[] = 'CANCELADO';
+			else if ($ls[2] == '4')
+				$dataDescricao[] = 'ANULADO';
+			else
+			{
+				if ($this->objLicitacao->idTipoLicitacao == '1' OR $this->objLicitacao->idTipoLicitacao == '3')
+					$dataDescricao[] = $ls[1];
+				else
+					$dataDescricao[] = $ls[3];
+			}
+		}
+
+		// Monta o array para o Grid
+		$quantidade = count($dataItem);
+		for($i=0;$i<$quantidade;$i++)
+		{
+			$list2[] = array($dataItem[$i],$dataDescricao[$i],$dataIdFornecedor[$i]);
+		}
+
+		$queryParticipante = $this->objLicitacao->ListParticipantesByLicitacao();
+
+		if (is_array($queryParticipante))
+		{
+			$selParticipante = new Selection('selParticipante','%2%','Participante',$queryParticipante);
+			$columns = array(
+				new GridColumn('Ítem','center',true,'5%',true),
+				new GridColumn('Especificação','left',false,'65%',true),
+				new GridControl($selParticipante,'Vencedor','center',true,'30%')
+			);
+
+			$grid = new Grid($list2, $columns, $this->listURL,0,0);
+			$grid->SetTitle(NULL);
+		}
+
+		$fields = Array(
+			$grid,
+			new Separator('<b>OBSERVAÇÕES</b>'),
+			new Text('','A primeira opção da caixa de seleção se refere ao vencedor da licitação, caso este já tenha sido definido, ou ao participante que fez proposta com menor preço.'),
+		);
+        
+		$this->SetFields($fields);
+
+		$buttons = Array(
+        	new FormButton('btnDefineVencedor','Gravar Alterações'),
+			new FormButton('btnFinaliza','Finalizar Definição de Vencedores'),
+		);
+		$this->SetButtons($buttons);
+
+		if ($this->objLicitacao->status == '4')
+		{
+			$this->SetButtonAttr('btnFinaliza','visible',false);
+			$this->SetButtonAttr('btnDefineVencedor','visible',false);
+		}
+		else
+		{
+			//Se o usuário gravou as alterações, mostra o botão para Finalizar o processo
+			$okFinaliza = $this->GetFormValue('okFinaliza');
+			if (!$okFinaliza)
+				$this->SetButtonAttr('btnFinaliza','visible',false);
+		}
+
+	}
+	
+	function btnDefineVencedor_click($sender='',$key='')
+	{
+		global $MIOLO,$module,$item;
+
+		$selParticipante = $this->GetFormValue('selParticipante');
+		$queryLicitacao = $this->objLicitacao->ListItensByIdLicitacao();
+	
+		$i = 0;
+		foreach ($queryLicitacao as $rs)
+		{
+			$item = $rs[0];
+			$ok = true;
+			//var_dump($item);
+			//var_dump($selFornecedor[$i]);
+
+			if (!$this->objLicitacao->SetVencedor($item,$selParticipante[$i]))
+				$ok = false;
+
+			$i++;
+		}
+
+		if ($ok)
+		{
+			$action = $this->manager->GetActionURL('adm','main:licitacoes',$this->objLicitacao->idLicitacao,array('form'=>'vencedores','okFinaliza'=>true));
+			$MIOLO->Information('Vencedores cadastrados com sucesso. Para concluir, clique em "Finalizar definição de Vencedores"',$action);
+		}
+	}
+
+	function btnFinaliza_click()
+	{
+		global $MIOLO,$module,$item;
+
+		$this->objLicitacao->alteraStatus('4');
+
+		try
+		{
+			$this->objLicitacao->save();
+
+			$queryLicitacao = $this->objLicitacao->ListItensByIdLicitacao();
+
+			if ($this->objLicitacao->idTipoLicitacao == '1' OR $this->objLicitacao->idTipoLicitacao == '4')
+			{
+				// Atualiza o status dos items de requisição que fazem parte desta licitacao
+				$itemReq = $this->manager->getBusiness('adm','itemreq');
+				foreach ($queryLicitacao as $rs)
+				{
+					if ($this->objLicitacao->temPropostaValida($rs[0])) //Se existe pelo menos uma proposta válida para este item
+					{
+						$itemReq->setStatusByLicitacao($this->objLicitacao->idLicitacao,$rs[0],'5');
+						$this->objLicitacao->Log(OP_UPD,"licitacao ".$this->objLicitacao->idLicitacao.". item ".$rs[0]." status de itemreq passou para 5.");
+					}
+				}
+			}
+			else if ($this->objLicitacao->idTipoLicitacao == '3')
+			{
+				// Atualiza o status dos items de requisição que fazem parte desta licitacao
+				$itemReq = $this->manager->getBusiness('adm','itemreqbib');
+				foreach ($queryLicitacao as $rs)
+				{
+					if ($this->objLicitacao->temPropostaValida($rs[0])) //Se existe pelo menos uma proposta válida para este item
+					{
+						$itemReq->setStatusByLicitacao($this->objLicitacao->idLicitacao,$rs[0],'5');
+						$this->objLicitacao->Log(OP_UPD,"licitacao ".$this->objLicitacao->idLicitacao.". item ".$rs[0]." status de itemreq passou para 5.");
+					}
+				}
+			}
+			else
+			{
+				// Atualiza o status dos items de requisição que fazem parte desta licitacao
+				$itemServExt = $this->manager->getBusiness('adm','itemservext');
+				foreach ($queryLicitacao as $rs)
+				{
+					if ($this->objLicitacao->temPropostaValida($rs[0])) //Se existe pelo menos uma proposta válida para este item
+					{
+						$itemServExt->setStatusByLicitacao($this->objLicitacao->idLicitacao,$rs[0],'5');
+						$this->objLicitacao->Log(OP_UPD,"licitacao ".$this->objLicitacao->idLicitacao.". item ".$rs[0]." status de itemreq passou para 5.");
+					}
+				}
+			}
+
+			$this->objLicitacao->updatePrevisoesDeDebito();
+
+			$this->objLicitacao->Log(OP_UPD,"licitacao ".$this->objLicitacao->idLicitacao.". status da licitacao passou para 4.");
+			$action = $this->manager->GetActionURL('adm','main:licitacoes',$this->objLicitacao->idLicitacao);
+			$this->manager->information("Definição de vencedores concluida com sucesso.",$action);
+		}
+		catch (Exception $e)
+		{
+			$this->AddError("Informe o seguinte erro a equipe do CGCO: ".$e->getMessage());
+		}
+	}
+}
+?>

@@ -1,0 +1,195 @@
+<?
+class frmUoAlmoxarifadoOrdemEntrega extends MCompoundForm
+{
+    protected $uoalmoxarifado;
+    protected $ordem;
+    protected $movimentos; // 14/12/2010 JOSELITO
+    function __construct($objUO)
+    {
+        global $MIOLO;
+        $this->uoalmoxarifado = $objUO;
+        $this->ordem = $MIOLO->getBusiness('adm','ordementrega',Form::getFormValue('idOrdemEntrega'));
+		parent::__construct("Ordem de Entrega {$this->ordem->numero}");
+        $this->eventHandler();
+    }
+    function CreateFields()
+    {
+        global $item,$movimentos, $idEmpenho;
+
+        $this->ordem->retrieveAssociation('movimento');
+        $this->ordem->movimento[0]->retrieveAssociation('requisicao');
+		$cf = new MCurrencyFormatter();
+		$tipoReq = $this->manager->GetBusiness('adm','tiporeq');
+		$tipoReq->GetById($this->ordem->movimento[0]->requisicao->idTipoReq);
+       	$tabelaGeral = $this->manager->GetBusiness('common','tabelageral');
+	   	$status = $tabelaGeral->GetByItem('AD_ALMOXSTATUSREQ',$this->ordem->movimento[0]->requisicao->status);
+		$this->_info[] = new TextLabel('txtNumero',$this->ordem->numero,'OE');
+		$this->_info[]	= new TextLabel('txtNumero',$this->ordem->movimento[0]->requisicao->idRequisicao,'Requisição');
+		$this->ordem->movimento[0]->requisicao->retrieveAssociation('uoRequisitante');
+		$this->ordem->movimento[0]->requisicao->retrieveAssociation('uoExecutante');
+		$this->_info[] = new TextLabel('txtTipoReq',$tipoReq->descricao,'Tipo');
+        $this->_info[] = new TextLabel('txtDataHora',$this->ordem->movimento[0]->requisicao->dataHora,'Data Hora');
+		$this->_info[] = new TextLabel('txtUoRequisitante',$this->ordem->movimento[0]->requisicao->uoRequisitante->nome,'UO Req.');
+//      var_dump($this->ordem->movimento[0]->requisicao->idRequisicao);
+//      var_dump($this->ordem->movimento[0]->idOrdemEntrega);
+//      $idEmpenho = $this->ordem->getEmpenhoByMovimento($this->ordem->movimento[0]->idOrdemEntrega);
+//      var_dump($idEmpenho);
+//      var_dump($this->ordem->listMovimentobyRequisicaoeEmpenho($this->ordem->movimento[0]->requisicao->idRequisicao,$idEmpenho[0]));
+//      $movimentos = $this->ordem->listMovimentobyRequisicaoandEmpenhoandOrdem($this->ordem->movimento[0]->requisicao->idRequisicao,$idEmpenho[0],$this->ordem->numero);
+//      var_dump($movimentos[1][5]);
+
+//      14/12/2010 JOSELITO
+        $this->movimentos = $this->ordem->listMateriaisOrdemEntrega($this->ordem->numero,  Form::getFormValue('idOrdemEntrega'));
+        $this->_form[] = $this->manager->GetUI()->GetGrid('adm','gridUoAlmoxarifadoOrdemEntrega',$this->movimentos->result);
+        $this->addButton(new MButton('btnReport','Imprimir Ordem','pdf'));
+    }
+
+    // 14/12/2010 JOSELITO
+    function btnReport_click() {
+        global $MIOLO, $module;
+        $ui = $this->manager->GetUI();
+        try {
+            $report = new MJasperReport('sigaept');
+            $parameters['SUBREPORT_DIR']   =  $MIOLO->GetConf('home.modules');
+            $parameters['pURL']            =  $MIOLO->GetConf('home.url');
+            $parameters['int_pUser']   =  $MIOLO->login->idkey;
+            $parameters['pUserNome']    =   $this->removeAcentos($MIOLO->login->user);
+            $parameters['int_pIdRequisicao']   =  $this->ordem->movimento[0]->requisicao->idRequisicao;
+            $parameters['int_pNumero']         =  $this->ordem->numero;
+            $parameters['pDataHora'] = date('d/m/Y G:i');
+            $parameters['pIdOrdemEntrega'] =  $this->ordem->numero;
+            $parameters['pNomeSetor']     = $this->removeAcentos($this->uoalmoxarifado->nome);
+            $parameters['pLocalEntrega'] = $this->removeAcentos($this->ordem->movimento[0]->requisicao->localEntrega);
+            $parameters['pUoRequisitante'] = $this->ordem->movimento[0]->requisicao->uoRequisitante->nome;
+            $parameters['pUoExecutante'] = $this->ordem->movimento[0]->requisicao->uoExecutante->nome;
+
+            $report->Execute($module, 'repUoAlmoxarifadoOrdemEntrega', $parameters);
+            $this->ordem->MarcarImpresso($this->ordem->numero);
+        }
+        catch (Exception $e)
+        {
+            $this->addError($e->getMessage());
+        }
+    }
+/*
+    function btnReport_click()
+    {
+		global $MIOLO,$movimentos, $idEmpenho;
+        $ui = $this->manager->GetUI();
+        try
+        {
+		    foreach ($movimentos as $movimento)
+        {
+           $this->ordem->MarcarImpresso($movimento[5]);
+        }
+		$idOrdemEntrega = Form::getFormValue('idOrdemEntrega');
+		$ordem = $MIOLO->getBusiness('adm','ordementrega',$idOrdemEntrega);
+
+		$requisicao        = $ordem->getRequisicao();
+
+
+		$report = new MJasperReport('sigaept');
+		$parameters['SUBREPORT_DIR']   =  $MIOLO->GetConf('home.modules');
+		$parameters['pURL']            =  $MIOLO->GetConf('home.url');
+		$parameters['int_pConsulta']   =  $MIOLO->login->idkey;
+		$parameters['int_pIdReq']      =  $requisicao->idRequisicao;
+
+		$parameters['int_pIdRequisicao']   =  $this->ordem->movimento[0]->requisicao->idRequisicao;
+		$parameters['int_pIdEmpenho']      =  $idEmpenho[0];
+		$parameters['int_pNumero']         =  $this->ordem->numero;
+
+
+		$parameters['int_pIdOrdement'] =  $idOrdemEntrega;
+//var_dump($parameters);
+
+		$report->Execute('adm', 'OrdemDeEntrega', $parameters);
+
+
+//		$this->ordem->movimento[0]->requisicao->idRequisicao
+//		$idEmpenho[0]
+//		$this->ordem->numero
+
+
+        }
+        catch (Exception $e)
+        {
+            $this->addError($e->getMessage());
+        }
+
+		$cf = new MCurrencyFormatter();
+        $report = new MEzPDFReport('2','portrait');
+	    $report->pdf->ezSetMargins(80,180,32,32);
+        $cols = array('Código','N. Empenho','Especifição','UN','Quant.','Valor Total');
+        $options['textCol'] = array(0,0,0);
+        $options['shaded'] = 1;
+        $options['showLines'] = 0;
+        $options['fontSize'] = 10;
+        $options['width'] = 540;
+        $options['xPos'] = 'left';
+        $options['xOrientation'] = 'right';
+        $report->pdf->ezText('',20);
+        foreach ($this->ordem->movimento as $movimento)
+        {
+            $movimento->retrieveAssociation('itemreq');
+            $movimento->itemreq->retrieveAssociation('material');
+            $movimento->retrieveAssociation('itemNota');
+            if ($movimento->itemNota) $movimento->itemNota->retrieveAssociation('empenhado');
+            if ($movimento->itemNota->empenhado) $movimento->itemNota->empenhado->retrieveAssociation('empenho');
+            $data[$movimento->itemreq->material->idMaterial][0] =  $movimento->itemreq->material->codmaterial;
+            $data[$movimento->itemreq->material->idMaterial][1] =  $movimento->itemNota->empenhado->empenho->numero;
+            $data[$movimento->itemreq->material->idMaterial][2] =  $movimento->itemreq->material->descricao;
+            $data[$movimento->itemreq->material->idMaterial][3] =  $movimento->itemreq->material->unidade;
+            $data[$movimento->itemreq->material->idMaterial][4] +=  $movimento->quantidade;
+            $data[$movimento->itemreq->material->idMaterial][5] +=  $cf->toDecimal($movimento->valorTotal);
+            $total = $cf->toDecimal($total) + $cf->toDecimal($movimento->valorTotal);
+        }
+        foreach ($data as $d)
+        {
+            $resultado[] = array($d[0],$d[1],$d[2],$d[3],$d[4],$cf->formatWithSymbol($d[5]));
+        }
+        $resultado[] = array('Total','','','','',$cf->formatWithSymbol($cf->toDecimal($total)));
+        try
+        {
+            $this->ordem->impresso = 1;
+            $this->ordem->save();
+            $this->ordem->Log(OP_UPD,"Ordem Entrega impressa.");
+            $this->generatePageHeader($report);
+            $report->pdf->ezText("Requisição: {$this->ordem->movimento[0]->idRequisicao}",14,array('justification'=>'center'));
+            $report->pdf->ezText("",14);
+            $report->pdf->ezTable($resultado,$cols,'',$options);
+            $report->pdf->ezText('_______________________________________________________________________________________________',10);
+            $this->generateReportFooter($report);
+            $report->Execute();
+        }
+        catch (Exception $e)
+        {
+            $this->addError($e->getMessage());
+        }
+
+    }
+  */
+	public function removeAcentos($str, $enc = 'UTF-8') {
+		$acentos = array(
+			'A' => '/&Agrave;|&Aacute;|&Acirc;|&Atilde;|&Auml;|&Aring;/',
+			'a' => '/&agrave;|&aacute;|&acirc;|&atilde;|&auml;|&aring;/',
+			'C' => '/&Ccedil;/',
+			'c' => '/&ccedil;/',
+			'E' => '/&Egrave;|&Eacute;|&Ecirc;|&Euml;/',
+			'e' => '/&egrave;|&eacute;|&ecirc;|&euml;/',
+			'I' => '/&Igrave;|&Iacute;|&Icirc;|&Iuml;/',
+			'i' => '/&igrave;|&iacute;|&icirc;|&iuml;/',
+			'N' => '/&Ntilde;/',
+			'n' => '/&ntilde;/',
+			'O' => '/&Ograve;|&Oacute;|&Ocirc;|&Otilde;|&Ouml;/',
+			'o' => '/&ograve;|&oacute;|&ocirc;|&otilde;|&ouml;/',
+			'U' => '/&Ugrave;|&Uacute;|&Ucirc;|&Uuml;/',
+			'u' => '/&ugrave;|&uacute;|&ucirc;|&uuml;/',
+			'Y' => '/&Yacute;/',
+			'y' => '/&yacute;|&yuml;/',
+			'a.' => '/&ordf;/',
+			'o.' => '/&ordm;/'
+		);
+		return preg_replace($acentos, array_keys($acentos), htmlentities($str,ENT_NOQUOTES, $enc));
+	}
+}
+?>

@@ -1,0 +1,91 @@
+<?
+class frmTipoReqNew extends Form
+{
+
+	function __construct()
+	{
+		$this->Form('Incluir Novo Tipo de Requisição');
+		$this->EventHandler();
+	}
+
+	function CreateFields()
+	{
+		$fields = array(
+			new TextField('descricao','','Descrição','15','Máx. 30 caracteres'),
+			new LookupTextField('lkpDescRubrica','','Rubrica',20),
+			new HiddenField('idRubrica')
+		);
+
+		$this->SetFields($fields);
+
+		$this->SetFieldAttr('lkpDescRubrica','module','adm');
+		$this->SetFieldAttr('lkpDescRubrica','item','descrubrica');
+		$this->SetFieldAttr('lkpDescRubrica','event','btnReadOnly:click');
+		$this->SetFieldAttr('lkpDescRubrica','related','idRubrica');
+
+		$this->descricao->AddAttribute('maxlength','30');
+
+		$buttons = array(
+			new FormButton('btnNew', 'Incluir Tipo de Requisição')
+		);
+		$this->SetButtons($buttons);
+
+		//$this->SetButtonAttr('btnNew','visible',false);
+		/*
+		$validators = array(
+			new RequiredValidator('descricao')
+		);
+		$this->SetValidators($validators);
+		*/
+
+	}
+
+	function btnNew_click()
+	{	
+		$idRubrica = $this->GetFormValue('idRubrica');
+		$data = $this->GetData();
+		$data->descricao = strtoupper($data->descricao);
+		$tiporeq = $this->manager->GetBusiness('adm','tiporeq');
+		$tiporeq->SetData($data);
+		$reqrubrica = $this->manager->GetBusiness('adm','reqrubrica');
+
+		if(strlen(trim(Form::GetFormValue('descricao'))) < 4)
+		{
+			$this->AddError('Informe a descrição do tipo de requisição.');
+		}
+		elseif(Form::GetFormValue('idRubrica') == '')
+		{
+			$this->AddError('Selecione uma rubrica.');
+		}
+		else
+		{
+			try
+			{
+				$tiporeq->save();
+				$tiporeq->Log(OP_INS,"Novo tipo de requisição criado");
+				$reqrubrica->idRubrica = $idRubrica;
+				$reqrubrica->idTipoReq = $tiporeq->idTipoReq;
+				
+				$reqrubrica->save();
+				$go = $this->manager->GetActionURL('adm','main:tiporeq',$tiporeq->idTipoReq);
+				$this->manager->Information('Tipo de Requisição criado com sucesso.',$go);
+			}
+			catch (Exception $e)
+			{
+				$this->addError($e->getMessage());
+			}
+		}
+	}
+
+	function btnReadOnly_click($sender=null,$key=null)
+	{
+		$objRubrica = $this->manager->GetBusiness('adm','rubrica');		
+		$objRubrica->GetById(trim($key));
+		$this->SetFieldValue('lkpDescRubrica',$objRubrica->descricao);
+		$this->SetFieldValue('idRubrica',trim($key));
+		$this->SetFieldAttr('lkpDescRubrica','readonly',true);
+
+		$this->SetButtonAttr('btnNew','visible',true);
+	}
+ }
+?>

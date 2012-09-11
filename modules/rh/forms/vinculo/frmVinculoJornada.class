@@ -1,0 +1,234 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmVinculoJornada extends MForm
+{
+	protected $objVinculo;
+    protected $provimento;
+
+    function __construct($objVinculo)
+    {
+		$this->objVinculo = $objVinculo;
+        parent::__construct('Mudança de Jornada');
+        $this->eventHandler();
+    }
+
+    function CreateFields()
+    {
+        $jornada = $this->manager->getBusiness('rh','jornada');
+        $this->provimento = $this->objVinculo->getProvimentoAtual();
+        $this->provimento->getJornada();
+
+        $fields = array(
+            array(
+                new MLabel("Jornada Atual: "),
+                new MLabel($this->provimento->jornada->descricao),
+            ),
+            new MSelection('idJornada','','Nova Jornada',$jornada->ListJornadasMudanca($this->provimento->idJornada,$this->objVinculo->isDocente())->result),
+            new MCalendarField('dataInicio',date('d/m/Y'),'Data de Início'),
+			new MHiddenField('idPublicacao'),
+            new MHiddenField('jornadaAtual',$this->provimento->idJornada),
+			new MLookupFieldValue('numero','','Publicação'),
+        );
+
+        $this->setFields($fields);
+        
+	   	$this->SetFieldAttr('numero','module','rh');
+		$this->SetFieldAttr('numero','item','publicacao');
+		$this->SetFieldAttr('numero','event','filler');
+		$this->SetFieldAttr('numero','related','idPublicacao,null,numero');
+        $this->setfieldAttr('idJornada','showValues',FALSE);
+
+        $buttons = array(
+            new MButton('btnPost')
+        );
+
+        $this->setButtons($buttons);
+    }
+
+    function btnPost_click()
+    {
+        $idJornada = $this->getFormValue('idJornada');
+        $idPublicacao = $this->getFormValue('idPublicacao');
+        $jornadaAtual = $this->getFormValue('jornadaAtual');
+        $insercaoEspecial = FALSE;
+
+        $k = new MKrono();
+
+        $dataInicio = $this->getFormValue('dataInicio');
+        $dataInicio = ( $dataInicio ) ? $dataInicio : date('d/m/Y');
+
+        $ontem = $k->operation('-',$dataInicio,'1%D');
+        
+        $provimentoAtual = $this->objVinculo->getProvimentoAtual();
+        if ( $k->compareDate($provimentoAtual->dataInicio,'>',$ontem) )
+        {
+            /*$err = TRUE;
+            $msg[] = 'A data de início da mudança da jornada deve ser maior que a data de início do último provimento.';*/
+            $insercaoEspecial = TRUE;
+        } 
+
+        if ( $this->objVinculo->isDocente() )
+        {
+            if ( $idJornada == 40 )
+            {
+                $err = FALSE;
+            }
+            else
+            {
+                if ( $this->objVinculo->isDocenteEfetivo() )
+                {
+                    
+                    //Checa se a data início da alteração encontra-se dentro do período de 60 (sessenta) dias antecedentes ao início de férias já marcadas para o docente. Caso afirmativo, não permite a alteração.
+                    
+                    if(!$insercaoEspecial)
+                    {
+                    	$periodoAquisitivo = $this->objVinculo->getUltimoPerAq();
+	                    if ( $periodoAquisitivo )
+	                    {
+	                        if ( $periodoAquisitivo->feriasFuturas() )
+	                        {
+	                            $ferias = $periodoAquisitivo->primeiraFeriasFuturas(); 
+	                            if ( $ferias )
+	                            {
+	                                $diff = $k->daysDiff($dataInicio,$ferias->dataInicio);
+	                                if ( $diff < 60 )
+	                                {
+	                                    $err = TRUE;
+	                                    $msg[] = "A alteração de jornada de trabalho do docente não pode ser concedida dentro do período de 60 (sessenta) dias antecedentes à sua usufruição de férias.";
+	                                }
+	                            }
+	                        }
+	                    }
+                    }
+                    else 
+                    {
+                    	$periodoAquisitivo = $this->objVinculo->getUltimoPerAq();
+                    	if ( $periodoAquisitivo )
+	                    {
+                    		$periodoAquisitivo->getFerias();
+                    		$ferias = $periodoAquisitivo->ferias;
+                    		
+                    		if($ferias)
+                    		{
+                    			foreach($ferias as $f)
+		                    	{
+		                    		
+		                    		$diff = $k->daysDiff($dataInicio,$f->dataInicio);
+		                    		if ( ($diff < 60) && ($diff > 0) )
+	                                {
+	                                    $err = TRUE;
+	                                    $msg[] = "A alteração de jornada de trabalho do docente não pode ser concedida dentro do período de 60 (sessenta) dias antecedentes à sua usufruição de férias.";
+	                                }
+		                    	}
+                    		}	                    	
+	                    }
+                    }
+                    
+                    //Verificar se já decorreram 36 (trinta e seis) meses a partir da última alteração de jornada de trabalho. Caso contrário, não permitir a alteração (RN11).
+                    $provimento = $this->objVinculo->getProvimentoByOcorrencia(6,200);
+                    //var_dump($provimento);
+                    if ( $provimento )
+                    {
+                        $intersticio = $this->objVinculo->intersticioJornada($provimento->dataInicio,$dataInicio);
+                        //var_dump($intersticio);
+                        if ( $intersticio < 1095 )
+                        {
+                            /*
+                        	$err = TRUE;
+                            $msg[] = 'Nova mudança de jornada só poderá ocorrer após decorrido um interstício de 36 (trinta e seis) meses após a última mudança.';
+                            */
+                            $altMenos36mes = TRUE;
+                        }
+                    }
+                    //Se a alteração for de Dedicação Exclusiva para 20 horas, checar se o docente integralizou 72 (setenta e dois) meses de efetivo exercício. Para tanto, verificar seu tempo a partir da data de início do exercício. Caso não tenha ainda ocorrido a integralização, não permitir que seja realizada a alteração (RN09).
+                    if ( $jornadaAtual == '99' && $idJornada == '20' )
+                    {
+                        $dataExercicio = $this->objVinculo->dataExercicio;
+                        
+                        $intersticio = $this->objVinculo->intersticioJornada($dataExercicio,$dataInicio);
+                        
+                        if ( $intersticio < 2190 )
+                        {
+                            $err = TRUE;
+                            $msg[] = 'O docente não pode reduzir sua jornada de trabalho antes de integralizar um período de 72 (setenta e dois) meses de efetivo exercício.';
+                        }
+                    }
+                    //Na mudança para Dedicação Exclusiva, o sistema deverá checar se o docente efetivo possui outro vínculo ativo (situação funcional = ¿01¿, ¿08¿, ¿12¿ ou ¿20¿ e último provimento com data fim em aberto, ou seja, sem ocorrência de exclusão) na UFJF. Caso afirmativo, não permitir a alteração (RN06)
+                    if ( $idJornada == '99' )
+                    {
+                        $this->objVinculo->getFuncionario();
+
+                        if ( $this->objVinculo->funcionario->hasOutroVinculoAtivo($this->objVinculo->idVinculo) )
+                        {
+                            $err = TRUE;
+                            $msg[] = 'O docente cuja jornada de trabalho é a de Dedicação Exclusiva não pode ter qualquer outro tipo de vínculo (dentro ou fora da Instituição)';
+                        }
+                    }
+                    
+                }
+                else
+                {
+                    $err = FALSE;
+                }
+            }
+        }
+        else
+        {
+            $err = FALSE;
+        }
+        
+        if ($idJornada == null) {
+        	$err = TRUE;
+        	$msg[] = 'Deve se escolher um tipo de jornada de trabalho.';
+        }
+
+        if ( ! $err )
+        {
+            try
+            {
+                $idGrupoOcorrencia = 6;
+                $idOcorrencia = 200;
+                if ($insercaoEspecial) $this->objVinculo->insereEspecial($dataInicio,$idGrupoOcorrencia,$idOcorrencia,'',$idPublicacao,$idJornada);
+                else $this->objVinculo->novoProvimento($dataInicio,$ontem,$idGrupoOcorrencia,$idOcorrencia,'',$idPublicacao,$idJornada);
+                if($altMenos36mes)
+                {
+                	$this->manager->information("Já foi feita uma alteração de jornada em menos de 36 meses. Jornada alterada com sucesso!");
+                }
+                else 
+                {
+                	$this->manager->information("Jornada alterada com sucesso");
+                }
+            }
+            catch ( Exception $e )
+            {
+                $this->addError($e->getMessage()); 
+            }
+        }
+        else
+        {
+            foreach($msg as $e)
+            {
+                $this->addError($e);
+            }
+        }
+    }
+
+ }
+?>

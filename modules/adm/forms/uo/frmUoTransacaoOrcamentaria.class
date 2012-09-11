@@ -1,0 +1,122 @@
+<?
+global $MIOLO;
+/**
+/**
+ * Formulário básico para seleção de uos
+ * 
+ */
+class frmUoTransacaoOrcamentaria extends MForm //MFormAjax
+{
+
+    protected $objUo;
+
+    function __construct($objUo)
+    {
+        $this->objUo = $objUo;
+        parent::__construct('Pesquisar Orçamentos Internos');
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+        $objRubrica = $this->manager->getBusiness('adm','rubrica');
+
+        $rubrica1 = $objRubrica->ListById(99999901)->result;
+        $rubrica2 = $objRubrica->ListById(99999905)->result;
+        $rubrica3 = $objRubrica->ListById(99999906)->result;
+
+        $rubricas = array ($rubrica1[0][0]=>$rubrica1[0][1],
+                           $rubrica2[0][0]=>$rubrica2[0][1],
+                           $rubrica3[0][0]=>$rubrica3[0][1]
+                           );
+
+        $grid = $this->manager->GetUI()->GetGrid('adm','gridTransacaoOrcamentaria',$this->objUo);
+        $fields = array (
+                    $grid,
+                    new MLabel ('Selecione as Rubricas para realizar a transferência:'),
+                    new MSpacer ('1'),
+                    new MSelection ('idRubricaOrigem','','Rubrica Origem',$rubricas),
+                    new MSelection ('idRubricaDestino','','Rubrica Destino',$rubricas),
+                    new MCurrencyField ('valor','','Valor'),
+                    new MSpacer ('1'),
+                    new FormButton ('btnTransacao','Efetuar Transação')
+                    );
+        $this->SetFields($fields);
+        $this->idRubricaOrigem->addAttribute('onChange',"ajaxSelection.call()");
+        $this->defaultButton = false;
+    }
+    
+    function btnTransacao_click()
+    {
+        $data = $this->getData();
+        $ano = date("Y");
+        $cf = new MCurrencyFormatter();
+        $valor = $cf->toDecimal($data->valor);
+
+        //transacoes so podem ser feitas entre rubricas do mesmo grupo
+        if ($data->idRubricaOrigem != $data->idRubricaDestino)
+        {
+            $orcOrigem = $this->manager->getBusiness('adm','orcamentointerno');
+            $orcOrigem->getById($this->objUo->idUo,$data->idRubricaOrigem,$ano);
+            $orcOrigem->setSaldo();
+
+            if (($valor <= $orcOrigem->getSaldo())&&($valor!=0))
+            {
+                //RETIRADA DE CREDITO
+                $orcOrigem->beginTransaction();
+                $orcOrigem->removeCredito($valor);
+
+                $orcOrigem->save();
+                $lancamentoInt = $this->manager->getBusiness('adm','lancamentoint');
+                $lancamentoInt->tipoLancamento = '2'; //ANULACAO DE CREDITO
+				$lancamentoInt->data = date("d/m/Y");
+    			$lancamentoInt->valor = $valor;
+	   		    $lancamentoInt->ano = date("Y");
+				$lancamentoInt->obs = "Transacao orcamentaria da rubrica ".$data->idRubricaOrigem." para ".$data->idRubricaDestino;
+                $lancamentoInt->idRubrica = $data->idRubricaOrigem;
+                $lancamentoInt->idUsuario = $this->manager->GetLogin()->idkey;
+				$lancamentoInt->setTransaction($orcOrigem->getTransaction());
+				$lancamentoInt->save();
+
+                //ADIÇÃO DE CREDITO
+                $orcDestino = $this->manager->getBusiness('adm','orcamentointerno');
+                $orcDestino->setTransaction($orcOrigem->getTransaction());
+
+                $orcDestino->getById($this->objUo->idUo,$data->idRubricaDestino,$ano);
+                $orcDestino->addCredito($valor);
+
+                $orcDestino->save();
+                $lancamentoInt = $this->manager->getBusiness('adm','lancamentoint');
+                $lancamentoInt->tipoLancamento = '8'; //SUPLEMENTACAO DE CREDITO
+				$lancamentoInt->data = date("d/m/Y");
+    			$lancamentoInt->valor = $valor;
+	   		    $lancamentoInt->ano = date("Y");
+				$lancamentoInt->obs = "Transacao orcamentaria da rubrica ".$data->idRubricaOrigem." para ".$data->idRubricaDestino;
+				$lancamentoInt->idUsuario = $this->manager->GetLogin()->idkey;
+                $lancamentoInt->idRubrica = $data->idRubricaDestino;
+				$lancamentoInt->setTransaction($orcOrigem->getTransaction());
+				$lancamentoInt->save();
+                $lancamentoInt->Log(OP_INS,"TRANSACAO ORCAMENTARIA EFETUADA COM SUCESSO DA RUBRICA ".$data->idRubricaOrigem." PARA ".$data->idRubricaDestino." NO VALOR DE R$ ".$valor);
+
+                $orcOrigem->endTransaction();
+                $this->manager->information("Transação efetuada com sucesso");
+            }
+            else
+            {
+                if ($valor == 0)
+                {
+                    $this->addError("Informe o valor a ser transferido");
+                }
+                else
+                {
+                    $this->addError("Saldo insuficiente para realizar esta operação");
+                }
+            }
+        }
+        else
+        {
+            $this->addError("A rubrica de origem e de destino devem ser diferentes");
+        }
+    }
+ }
+?>

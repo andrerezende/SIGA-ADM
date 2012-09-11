@@ -1,0 +1,147 @@
+<?php
+    class repUoAlmoxarifadoOrdemEntrega extends MPDFReport
+    {
+        var $img;
+        var $timestamp;
+        var $uoalmoxarifado;
+        var $ordem;
+        var $requisicao;
+        var $dataRel;
+
+        function __construct($objUo)
+        {
+            global $MIOLO, $module, $page, $context, $self, $action, $perms;
+            $this->uoalmoxarifado = $objUo;
+            $idOrdemEntrega = Form::getFormValue('idOrdemEntrega');
+            $this->ordem = $MIOLO->getBusiness('adm','ordementrega',$idOrdemEntrega);
+            $ui = $MIOLO->GetUI();
+            $this->img = $ui->GetImageSrc('logonet.png','tutorial');
+            $this->requisicao = $this->ordem->getRequisicao();
+	    // obtem os movimentos por período
+            $movimento = $MIOLO->getBusiness('adm','movimento');
+            /*
+            $criteria = $movimento->getCriteria();
+            $criteria->addColumnAttribute('material.codmaterial');
+            $criteria->addColumnAttribute('itemNota.empenhado.empenho.numero');
+            $criteria->addColumnAttribute('material.descricao');
+            $criteria->addColumnAttribute('material.unidade');
+            $criteria->addColumnAttribute('quantidade');
+            $criteria->addColumnAttribute('valortotal');
+            $criteria->addCriteria('idOrdemEntrega','=',"{$idOrdemEntrega}");
+            $criteria->addOrderAttribute('material.descricao');
+            $this->dataRel = $criteria->retrieveAsQuery()->result;
+            */
+	    if ($this->requisicao->idTipoReq == 8)
+	    {
+                $criteria = $movimento->getCriteria();
+                $criteria->addColumnAttribute('distinct(idmovimento)');
+                $criteria->addColumnAttribute('material.codmaterial');
+                $criteria->addColumnAttribute('material.descricao');
+                $criteria->addColumnAttribute('material.unidade');
+                $criteria->addColumnAttribute('quantidade');
+                $criteria->addColumnAttribute('valortotal');
+                $criteria->addCriteria('idOrdemEntrega','=',"{$idOrdemEntrega}");
+                $criteria->addOrderAttribute('material.descricao');
+                $this->dataRel = $criteria->retrieveAsQuery()->result;
+            }
+	    else
+	    {
+	    	$sql = new MSql("ad_material.codmaterial,ad_empenho.numero,ad_material.descricao,ad_material.unidade,ad_movimento.quantidade,valortotal","ad_movimento,ad_material,ad_itemnota,ad_empenhado,ad_empenho","(ad_movimento.idordement = {$idOrdemEntrega}) and (ad_movimento.idmaterial=ad_material.idmaterial) and (ad_movimento.iditemnota=ad_itemnota.iditemnota) and (ad_itemnota.idempenhado=ad_empenhado.idempenhado) and (ad_empenhado.idempenho=ad_empenho.idempenho)");
+            	$sql->SetOrderBy("ad_material.descricao ASC");    
+            	$movimentos = $movimento->Query($sql)->result;
+            	if ($movimentos)
+            	{
+                    $cf = new MCurrencyFormatter();
+                    foreach ($movimentos as $data)
+                    {
+                        $this->dataRel[] = array($data[0],$data[1],$data[2],$data[3],$data[4],$cf->formatWithSymbol($cf->toDecimal($data[5])));
+                    }
+                }
+	    }
+            $columns = array (
+                new MPDFReportColumn('codigo', '<b><i>CODIGO</i></b>', 'left', true, 12, true),
+                new MPDFReportColumn('empenho', '<b><i>N EMPENHO</i></b>', 'left', true, 14, true),
+                new MPDFReportColumn('especificacao', '<b><i>ESPECIFICACAO</i></b>', 'left', true, 32, true),
+                new MPDFReportColumn('unidade', '<b><i>UNIDADE</i></b>', 'left', true, 14, true),
+                new MPDFReportColumn('quantidade', '<b><i>QUANTIDADE</i></b>', 'left', true, 14, true),
+                new MPDFReportColumn('valortotal', '<b><i>VALOR TOTAL</i></b>', 'left', true, 14, true),
+            );
+            parent::__construct($this->dataRel, $columns, 49);
+            $this->getPDF()->setFont('monofont.afm');
+            $this->SetColumnAttr('codigo', 'index', 0);
+            $this->SetColumnAttr('empenho', 'index', 1);
+            $this->SetColumnAttr('especificacao', 'index', 2);
+            $this->SetColumnAttr('unidade', 'index', 3);
+            $this->SetColumnAttr('quantidade', 'index', 4);
+            $this->SetColumnAttr('valortotal', 'index', 5);
+            $this->SetTitle("ORDEM DE ENTREGA PARA A REQUISIÇÃO: {$this->requisicao->idRequisicao}");
+            $this->SetOption('showTableTitle', 1);
+            //$this->SetRowMethod('repAluno', 'MyRowMethod');
+            $this->timestamp = date('d/m/Y G:i');
+        }
+
+        function MyRowMethod($row, $columns, $slot, $obj)
+        {
+            if (substr($row[1], 0, 1) == 'F')
+            {
+                $row[1] .= '**';
+            }
+        }
+        function GeneratePageHeader()
+        {   
+            $k = new MKrono();
+            $h = $this->pdf->getFontHeight(12);
+//            $this->pdf->ezImage($this->img,5,50,'none','left');
+  
+
+	$this->pdf->addText(90,800,12,$this->manager->getConf('instituicao.nome'));
+        
+    $this->pdf->addText(90,800-$h,12,"{$this->uoalmoxarifado->nome}     CONSUMO");
+            $this->pdf->addText(480,800-$h,12,"{$this->timestamp}");
+            $this->pdf->addText(90,800-$h-$h,12,'COORDENADORIA DE SUPRIMENTOS');
+            $this->pdf->addText(90,800-$h-$h-$h,12,"ORDEM DE ENTREGA N. {$this->ordem->numero}");
+            $this->pdf->addText(500,800-$h-$h-$h,12,'PAGINA: ' . $this->pn->pageNumber . '/' . $this->pn->pageCount);
+            $this->pdf->ezSetY(800-$h-$h-$h-$h);
+        }
+
+        function GeneratePageFooter()
+        {   
+            $this->pdf->ezSetDy(-10);
+            $cf = new MCurrencyFormatter();
+            if ($this->dataRel)
+            {
+                foreach ($this->dataRel as $data)
+                {
+                    $total += $cf->toDecimal($data[5]);
+                }
+            }
+            $this->pdf->ezText("",15);
+            $this->pdf->ezText('_____________________________________________________________________________________________________________________________________',10);
+            $this->pdf->ezText("",10);
+            $this->pdf->ezText("<b>TOTAL...........: </b> {$cf->formatWithSymbol($total)}\n<b>LOCAL DE ENTREGA: </b> {$this->requisicao->localEntrega}",9);
+            $this->pdf->ezText('_____________________________________________________________________________________________________________________________________',10);
+            $this->pdf->ezText("",60);
+            $h = $this->pdf->getFontHeight(9);
+            $x0 = 40;
+            $this->pdf->addText($x0+0, 180, 9, 'VISTO');
+            $this->pdf->addText($x0+180, 180, 9, "SR. COORDENADOR DA COSUP");
+            $this->pdf->addText($x0+180, 180-(1*$h), 9, "PROVINDECIAMOS A ENTREGA DO");
+            $this->pdf->addText($x0+180, 180-(2*$h), 9, "MATERIAL ESPECIFICADO ACIMA");
+            $this->pdf->addText($x0+360, 180, 9, "DECLARO PELO PRESENTE ");
+            $this->pdf->addText($x0+360, 180-(1*$h), 9, "DOCUMENTO DE RESPONSABILIDADE,");
+            $this->pdf->addText($x0+360, 180-(2*$h), 9, "QUE RECEBI DO SETOR DE ESTOQUE");
+            $this->pdf->addText($x0+360, 180-(3*$h), 9, "DA EAFB, O MATERIAL ACIMA"); 
+            $this->pdf->addText($x0+360, 180-(4*$h), 9, "ESPECIFICADO");
+            $this->pdf->addText($x0+0, 120, 9, date('d/m/Y'));
+            $this->pdf->addText($x0+180, 120, 9, date('d/m/Y'));
+            $this->pdf->line($x0+0, 60, $x0+160, 60);
+            $this->pdf->line($x0+180, 60, $x0+340, 60);
+            $this->pdf->line($x0+360, 60, $x0+520, 60);
+            //$this->pdf->addText($x0+0, 50, 9, 'JULIETA M. BARRA');
+            $this->pdf->addText($x0+180, 50, 9, 'GERENTE');
+            $this->pdf->addText($x0+360, 50, 9, 'FUNCIONÁRIO RESPONSÁVEL');
+            $this->pdf->addText($x0+0, 40, 9, 'COORDENADOR DE SUPRIMENTOS');
+            $this->pdf->addText($x0+180, 40, 9, "{$this->uoalmoxarifado->nome}");
+        }
+    }
+?>

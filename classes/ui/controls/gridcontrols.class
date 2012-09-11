@@ -1,0 +1,1371 @@
+<?
+class MBaseGrid extends MControl
+{
+}
+
+class MGridColumn extends MBaseGrid
+{
+    var $grid; // grid which this columns belongs to
+    var $title; // column title
+    var $footer; // column footer
+    var $options; // array for mapping of data value to display value
+    var $align; // column align - rigth, center, left
+    var $nowrap; // column wrap/nowrap
+    var $width; // column width in pixels or percent
+    var $order; // column position on the grid
+    var $value; // value at current row
+    var $basecontrol; // base Control to render value
+    var $control; // array of Control clonning of basecontrol
+    var $index; // column index in the data array
+
+    function __construct($title = '',    $align = 'left', $nowrap = false, $width = 0, $visible = true, $options = null,
+                         $order = false, $filter = false)
+    {
+        parent::__construct();
+        $this->SetClass('data');
+        $this->visible = $visible;
+        $this->title = $title;
+        $this->options = $options;
+        $this->align = $align;
+        $this->nowrap = $nowrap;
+        $this->width = $width;
+        $this->order = $order;
+        $this->value = '';
+        $this->index = 0;
+        $this->footer = null;
+        $this->basecontrol = new MLabel('');
+        $this->control = array
+            (
+            );
+    }
+
+    function Generate()
+    {
+        $i = $this->grid->currentRow;
+        $row = $this->grid->data[$i];
+        $this->control[$i] = clone $this->basecontrol; // clonning
+        $value = $row[$this->index];
+        $this->control[$i]->value = $value;
+
+        if ($this->options)
+        {
+            $this->control[$i]->value = $this->options[$value];
+
+            if ($this->grid->showid)
+            {
+                $this->control[$i]->value .= " ($value)";
+            }
+        }
+
+        return $this->control[$i];
+    }
+}
+
+class MGridHyperlink extends MGridColumn
+{
+    var $href; // link - replaces #?# with column's value
+    function __construct($title = '', $href, $width = 0, $visible = true, $options = null, $order = false,
+                         $filter = false)
+    {
+        parent::__construct($title, null, false, $width, $visible, $options, $order, $filter);
+        $this->align = 'left';
+        $this->href = $href;
+        $this->basecontrol = new MLink('', '', $href);
+        $this->basecontrol->SetClass('m-grid-column-link');
+    }
+
+    function Generate()
+    {
+        $i = $this->grid->currentRow;
+        $row = $this->grid->data[$i];
+        $this->control[$i] = clone $this->basecontrol; // clonning
+        $value = $row[$this->index];
+        $n = count($row);
+        $href = $this->href;
+
+        for ($r = 0; $r < $n; $r++)
+            $href = str_replace("#$r#", trim($row[$r]), $href);
+
+        $href = str_replace('#?#', $value, $href);
+        $this->control[$i]->href = $href;
+        $this->control[$i]->action = $href;
+        $this->control[$i]->label = $value;
+        return $this->control[$i];
+    }
+}
+
+class MGridControl extends MGridColumn
+{
+    var $control; // web control for the column
+
+    function __construct($control, $title = '', $align = 'left', $nowrap = false, $width = 0, $visible = true)
+    {
+        parent::__construct($title, $align, $nowrap, $width, $visible);
+        $this->basecontrol = $control;
+    }
+
+    function Generate()
+    {
+        $i = $this->grid->currentRow;
+        $row = $this->grid->data[$i];
+        $this->control[$i] = clone $this->basecontrol; // clonning
+        $name = $this->control[$i]->GetName();
+
+        //se o nome não é um array acrescenta os colchetes para torná-lo um
+        if (strpos($name, "[") === false && strpos($name, "]") === false)
+        {
+            $name .= "[$i]";
+        }
+        else
+        {
+            //posição do caracter identificador, que será substituído
+            $pos = strpos($name, '%');
+
+            //se o nome está de acordo com as regras de nomenclatura do grid. Numero da linha entre %'s
+            if (!$pos === false)
+            {
+                $rowNumber = substr($name, $pos + 1, -2);
+                $name = str_replace("%$rowNumber%", trim($row[$rowNumber]), $name);
+            }
+        }
+
+        $this->control[$i]->SetName($name);
+        $this->control[$i]->SetId($name);
+        $n = count($row);
+
+        for ($r = 0; $r < $n; $r++)
+        {
+            $this->control[$i]->SetValue(str_replace("%$r%", trim($row[$r]), $this->control[$i]->GetValue()));
+        }
+
+        return $this->control[$i];
+    }
+}
+
+class MGridAction extends MBaseGrid
+{
+    var $grid; // grid which this action belongs to
+    var $type; // "text", "image", "select" or "none"
+    var $alt; // image alt
+    var $value; // image/text label for on
+    var $valueoff; // image/text label for off
+    var $href; // link pattern - replaces
+    // #n# with value of column "n"
+    // %n% with urlencode(value) of column "n"
+    // $id with value of column "index"
+    var $index; // deprecated
+    var $enabled;
+
+    function __construct($grid, $type, $alt, $value, $href, $enabled = true, $index = null)
+    {
+        parent::__construct();
+        $this->grid = $grid;
+        $this->type = $type;
+        $this->alt = $alt;
+
+        if (is_array($value))
+        {
+            $this->value = $value[0];
+            $this->valueoff = $value[1];
+        }
+        else
+        {
+            $this->value = $this->valueoff = $value;
+        }
+
+        $this->href = $href;
+        $this->index = $index;
+        $this->enabled = $enabled;
+    }
+
+    function Enable()
+    {
+        $this->enabled = true;
+    }
+
+    function Disable()
+    {
+        $this->enabled = false;
+    }
+
+    function GenerateLink($row)
+    {
+        $index = $row[$this->grid->index];
+        $href = ereg_replace('\$id', $index, $this->href);
+        $n = count($row);
+
+        // substitute positional parameters
+        for ($r = 0; $r < $n; $r++)
+        {
+            $href = str_replace("%$r%", urlencode($row[$r]), $href);
+            $href = str_replace("#$r#", $row[$r], $href);
+        }
+
+        return $href;
+    }
+
+    function Generate()
+    {
+    }
+}
+
+class MGridActionIcon extends MGridAction
+{
+    var $path;
+
+    function __construct($grid, $value, $href, $alt = null)
+    {
+        parent::__construct($grid, 'image', $alt, $value, $href);
+/*
+        $class = "m-grid-action-icon-{$this->value}-on";
+        preg_match_all("/{$class}[\s]*\{[\s]*background-image:[\s]*url\((.*?)\);[\s]*\}/i", $this->grid->css, $match);
+        $this->path[true] = $match[1][0];
+        $class = "m-grid-action-icon-{$this->value}-off";
+        preg_match_all("/{$class}[\s]*\{[\s]*background-image:[\s]*url\((.*?)\);[\s]*\}/i", $this->grid->css, $match);
+        $this->path[false] = $match[1][0];
+*/
+        $this->path[true] = $this->manager->getUI()->getIcon("{$this->value}-on");
+        $this->path[false] = $this->manager->getUI()->getIcon("{$this->value}-off");
+    }
+
+    function Generate()
+    {
+        $path = $this->path[$this->enabled];
+        $class = "m-grid-action-icon";
+        if ($this->enabled)
+        {
+            $row = $this->grid->data[$this->grid->currentRow];
+            $href = $this->GenerateLink($row);
+            $img = $this->grid->GetImage($this->value);
+            $control = ($this->grid->linktype == 'hyperlink') ? 
+                       new MImageLink('', $this->alt, $href, $path) :
+                       new MImageButton('', $this->alt, $href, $path);
+        }
+        else
+        {
+            $control = new MImage('', $this->alt, $path);
+        }
+        $control->SetClass($class);
+        return $control;
+    }
+}
+
+class MGridActionText extends MGridAction
+{
+     
+    function __construct($grid, $value, $href)
+    {
+        parent::__construct($grid, 'text', null, $value, $href);
+        $this->attributes = "width=\"20\" align=\"center\"";
+    }
+
+    function Generate()
+    {
+        $value = $this->value;
+
+        if ($this->enabled)
+        {
+            $row = $this->grid->data[$this->grid->currentRow];
+            $n = count($row);
+
+            for ($r = 0; $r < $n; $r++)
+            {
+                $value = str_replace("%$r%", $row[$r], $value);
+            }
+
+            $href = $this->GenerateLink($row);
+            $control = ($this->grid->linktype == 'hyperlink') ? new MLink('', $value, $href) : new MLink('', $value, $href);
+            $control->SetClass('m-grid-link');
+        }
+        else
+        {
+            $control = new MSpan('', $value, 'm-grid-link-disable');
+        }
+
+        return $control;
+    }
+}
+
+class MGridActionDefault extends MGridActionText
+{
+     
+    function Generate()
+    {
+        if ($this->href == '#')
+		{
+			return '&nbsp;&nbsp;';
+		}
+		else
+		{
+			$control = parent::generate();
+		    $control->setClass('m-grid-link-action-default',false);
+            return substr(strtoupper($control->href), 0, 7) == 'HTTP://' ? "javascript:miolo.linkButton('{$control->href}','','');" : $control->href;
+        }
+    }
+}
+
+class MGridActionDetail extends MGridActionIcon
+{
+    function Generate()
+    {
+        $class = "m-grid-action-icon-detail";
+        $row = $this->grid->data[$this->grid->currentRow];
+        $n = count($row);
+
+        $href = $this->href;
+        for ($r = 0; $r < $n; $r++)
+        {
+            $href = str_replace("%$r%", $row[$r], $href);
+        }
+        $href = str_replace("%r%", $this->grid->currentRow, $href);
+        $hrefOn = str_replace("%s%", '1', $href);
+        $hrefOff = str_replace("%s%", '0', $href);
+        $controlOn = new MImage('', '', $this->path[true]);
+        $controlOff = new MImage('', '', $this->path[false]);
+        $controlOn->addAttribute('onClick',$hrefOn); 
+        $controlOn->SetClass($class);
+        $controlOff->addAttribute('onClick',$hrefOff); 
+        $controlOff->SetClass($class);
+        $control = new MDiv('',array($controlOn, $controlOff),'detail');
+        return $control;
+    }
+}
+
+class MGridActionSelect extends MGridAction
+{
+    
+    function __construct($grid, $index = 0)
+    {
+        parent::__construct($grid, 'select', null, null, null, true, $index);
+    }
+
+    function Generate()
+    {
+        $i = $this->grid->currentRow;
+        $row = $this->grid->data[$i];
+        $index = $row[$this->grid->index];
+        $control = new MCheckBox("select".$this->grid->name."[$i]", $index, '');
+        $control->AddAttribute('onclick', "javascript:miolo.grid.check(this,'".$this->grid->name."[$i]"."');");
+        return $control;
+    }
+}
+
+class MGridHeaderLink extends MLink
+{
+    function __construct($id, $label, $href)
+    {
+        parent::__construct($id, "[$label]", $href);
+        $this->SetClass('m-grid-link');
+    }
+}
+
+class MGridFilter extends MBaseGrid
+{
+    var $grid; // grid which this filter belongs to
+    var $type; // "text", "selection"
+    var $label; // image alt
+    var $value; // image/text label for on/off
+    var $index; // column index in the data array
+    var $enabled;
+    var $control;
+
+    function __construct($grid, $type, $label, $value, $index, $enabled = false)
+    {
+        parent::__construct();
+        $this->grid = $grid;
+        $this->type = $type;
+        $this->label = $label;
+        $this->index = $index;
+        $this->enabled = $enabled;
+        $this->control = null;
+    }
+
+    function Generate()
+    {
+        if ($this->enabled)
+        {
+            $array[] = new MSpan('', $this->label . '&nbsp;', 'm-grid-font');
+            $this->control->SetValue(($this->grid->GetFiltered()) ? $this->value : NULL);
+            $array[] = $this->control->Generate();
+            $array[] = '&nbsp;&nbsp;&nbsp;';
+        }
+        return $array;
+    }
+}
+
+class MGridFilterText extends MGridFilter
+{
+    function __construct($grid, $label, $value = '', $index = 0, $enabled = false)
+    {
+        parent::__construct($grid, 'text', $label, $value, $index, $enabled);
+        $this->control = new MTextField("m-grid-filter-text-$index", $value, $label, 20);
+        $this->value = $this->page->Request($this->control->name) ? $this->page->Request($this->control->name) : $value;
+    }
+}
+
+class MGridFilterSelection extends MGridFilter
+{
+    
+    function __construct($grid,      $label, $options = array(
+        ),               $index = 0, $enabled = false)
+    {
+        parent::__construct($grid, 'selection', $label, '', $index, $enabled);
+        $this->control = new MSelection("m-grid-filter-sel-$index", '', $label, $options);
+        $this->value = $this->page->Request($this->control->name) ? $this->page->Request($this->control->name) : $value;
+    }
+}
+
+class MGridFilterControl extends MGridFilter
+{
+    
+    function __construct($grid, &$control, $type = 'text', $index = 0, $enabled = false)
+    {
+        parent::__construct($grid, $type, $control->label, $control->value, $index, $enabled);
+        $this->control = $control;
+        $this->value = $this->page->Request(
+                           $this->control->name) ? $this->page->Request($this->control->name) : $control->value;
+    }
+}
+
+class MGrid extends MBaseGrid
+{
+    var $title; // table display title
+    var $filters; // array of grid filter controls
+    var $filtered; // is filtered?
+    var $filter; // show/hide filters 
+    var $orderby; // base column to sort
+    var $ordered; // is ordered?
+    var $data; // table data cells
+    var $actions; // array with actions controls
+    var $select; // a column for select action
+    var $showid; // show ids or not?
+    var $columns; // array with columns
+    var $icons; // action icons
+    var $errors; // array of errors
+    var $pageLength; // max number of rows to show - 0 to all rows
+    var $rowCount; // total number of rows
+    var $href; // grid url
+    var $pn; // gridnavigator
+    var $headerLinks; // array of headerlinks
+    var $linktype; // hyperlink or linkbutton (forced post)
+    var $width; // table width for the grid
+    var $rowmethod; // method to execute (callback) at each row
+    var $index; // the column to act as index of grid
+    var $controls;
+    var $emptyMsg;
+    var $currentRow; // index of row to renderize
+    var $box;
+    var $selecteds;
+    var $allSelecteds;
+    var $pageNumber;
+    var $prevPage;
+    var $name;
+    var $css;
+    var $hasDetail;
+	var $actionDefault;
+    var $alternateColors;
+    var $buttonSelectClass;
+
+/*    
+      Grid constructor
+         $data - the data array
+         $columns - array of columns objects
+         $href - base url of this grid
+         $pageLength - max number of rows to show (0 to show all)
+*/    
+    
+    function __construct($data, $columns, $href, $pageLength = 15, $index = 0, $name = '', $useSelecteds = true, $useNavigator = true)
+    {
+        global $state;
+
+        parent::__construct(NULL);
+        $this->AddStyleFile('m_grids.css');
+        $this->SetColumns($columns);
+        $this->href = $href;
+        $this->pageLength = $pageLength;
+        $this->headerLinks = array();
+        $this->width = '';
+        $this->SetLinkType('linkbutton');
+        $this->box = new MBox('', 'backContext', '');
+        $this->rowmethod = null;
+        $this->data = $data;
+        $this->index = $index;
+        $this->emptyMsg = 'Nenhum registro encontrado!';
+        $this->data = $data;
+        $this->rowCount = count($this->data);
+        $this->controls = array();
+        $this->select = NULL;
+        $this->name = $name;
+        $this->hasDetail = false;
+        $this->pageNumber = MUtil::NVL($state->get('pn_page', $this->name),'1');
+        $this->prevPage = MUtil::NVL($state->get('grid_page', $this->name),'1');
+        $state->set('grid_page', $this->pageNumber, $this->name);
+        $this->selecteds = array();
+        $this->allSelecteds = array();
+		$this->actionDefault = new MGridActionDefault($this, '&nbsp;&nbsp;', NULL);
+        $this->alternateColors = true;
+        $this->buttonSelectClass = 'linkbtn';
+
+        $this->SetUseSelecteds($useSelecteds);
+        
+//        if (!$useNavigator) {
+          $this->HandlerSelecteds();
+//        }
+        $this->page->AddScript('m_grid.js');
+
+//        $this->css = file_get_contents($this->manager->getTheme()->getPath() . '/m_grids.css');
+    }
+
+    function GetURL($filter = false, $order = false, $item = '')
+    {
+        $url = $this->href;
+        $url .= ($filter) ? "&__filter=1" : "&__filter=0";
+
+        if ($order)
+            $url .= "&orderby={$this->orderby}";
+
+        if ($item)
+            $url .= $item;
+
+        return $url;
+    }
+
+    function SetTitle($title)
+    {
+        $this->caption = $this->title = $title;
+    }
+
+    function SetPageLength($pageLength)
+    {
+        $this->pageLength = $pageLength;
+    }
+
+    function GetPageLength()
+    {
+        return $this->pageLength;
+    }
+
+    function SetFooter($footer)
+    {
+        $this->footer = $footer;
+    }
+
+    function SetColumns($columns)
+    {
+        $this->columns = array
+            (
+            );
+
+        if (!is_array($columns))
+            $columns = array($columns);
+
+        foreach ($columns as $k => $c)
+        {
+            $this->columns[$k] = $c;
+            $this->columns[$k]->index = $k;
+            $this->columns[$k]->grid = $this;
+        }
+    }
+
+    function SetLinkType($linktype)
+    {
+        $this->linktype = strtolower($linktype);
+    }
+
+    function SetControls($controls)
+    {
+        if (!is_array($controls))
+            $controls = array($controls);
+
+        $this->controls = array_merge($this->controls, $controls);
+    }
+
+    function SetButtons($aButtons) //backward compatibility
+    {
+        $this->SetControls($aButtons);
+    }
+
+    function SetWidth($width)
+    {
+        $this->width = $width;
+    }
+
+    function SetIndex($index)
+    {
+        $this->index = $index;
+    }
+    
+    function SetRowMethod($class, $method)
+    {
+        $this->rowmethod = array
+            (
+            $class,
+            $method
+            );
+    }
+
+    function HeaderLink($id, $label, $href)
+    {
+        $this->headerLinks[$id] = new MGridHeaderLink($id, $label, $href);
+    }
+
+    function SetColumnAttr($col, $attr, $value)
+    {
+        $this->columns[$col]->$attr = $value;
+    }
+
+    function SetButtonSelectClass($class='')
+    {
+        $this->buttonSelectClass = $class;
+    }
+
+    function setAlternate($status = true)
+    {
+        $this->alternateColors = $status;
+    }
+
+    function SetData($data)
+    {
+        $this->data = $data;
+        $this->rowCount = count($this->data);
+    }
+
+    function GetData()
+    {
+        return $this->data;
+    }
+
+    function GetDataValue($row, $col)
+    {
+        return $this->data[$row][$col];
+    }
+
+    function GetPage()
+    {
+        if (count($this->data))
+        {
+            return array_slice($this->data, $this->pn->idxFirst, $this->pn->gridCount);
+        }
+    }
+
+    function GetPageNumber()
+    {
+        return $this->pageNumber;
+    }
+
+    function GetPrevPage()
+    {
+        return $this->prevPage;
+    }
+
+    function setActionDefault($href)
+    {
+        $this->actionDefault = new MGridActionDefault($this, '&nbsp;&nbsp;', $href);
+    }
+
+	function AddActionSelect()
+    {
+        $this->select = new MGridActionSelect($this);
+    }
+     
+    function AddActionIcon($alt, $icon, $href, $index = 0)
+    {
+        if ($p = strpos($icon,'.')) $icon = substr($icon,0,$p);
+        $this->actions[] = new MGridActionIcon($this, $icon, $href, $alt);
+    }
+
+    function AddActionText($alt, $text, $href, $index = 0)
+    {
+        $this->actions[] = new MGridActionText($this, $text, $href);
+    }
+
+    function AddActionUpdate($href)
+    {
+//        $this->AddActionIcon('Editar', array('button_edit.png', 'button_noedit.png'), $href);
+        $this->AddActionIcon('Editar', 'edit', $href);
+    }
+
+    function AddActionDelete($href)
+    {
+//        $this->AddActionIcon('Excluir', array('button_drop.png', 'button_noempty.png'), $href);
+        $this->AddActionIcon('Excluir', 'delete', $href);
+    }
+
+    function AddActionDetail($href)
+    {
+        $this->hasDetail = true;
+        $this->actions[] = new MGridActionDetail($this, 'detail', $href);
+    }
+
+    function AddFilterSelection($index, $label, $options, $value = '')
+    {
+        $f = new MGridFilterSelection($this, $label, $options, $index, $this->GetFilter());
+        $this->filters[$index] = $f;
+    }
+
+    function AddFilterText($index, $label, $value = '')
+    {
+        $f = new MGridFilterText($this, $label, $value, $index, $this->GetFilter());
+        $this->filters[$index] = $f;
+    }
+
+    function AddFilterControl($index, $control, $type = 'text')
+    {
+        $this->filters[$index] = new MGridFilterControl($this, $control, $type, $index, $this->GetFilter());
+    }
+
+    function GetFilterValue($index)
+    {
+        return $this->filters[$index]->value;
+    }
+
+    function GetFilterControl($index)
+    {
+        return $this->filters[$index]->control;
+    }
+
+    function SetFiltered($value = false)
+    {
+        $this->filtered = $value;
+        ;
+    }
+
+    function GetFiltered()
+    {
+        if (($f = $this->page->Request('__filter')) != '')
+        {
+            $this->filtered = ($f == '1');
+        }
+
+        return $this->filtered;
+    }
+
+    function GetFilter()
+    {
+        return $this->filter;
+    }
+
+    function SetFilter($status)
+    {
+        $this->filter = $status;
+
+        if ($this->filters)
+        {
+            foreach ($this->filters as $k => $f)
+            {
+                $this->filters[$k]->enabled = $status;
+            }
+        }
+    }
+
+    function ApplyFilter()
+    {
+        if ($this->filters)
+        {
+            foreach ($this->filters as $f)
+            {
+                $value[$f->index] = $f->value;
+            }
+
+            foreach ($this->data as $row)
+            {
+                $ok = true;
+
+                foreach ($value as $k => $v)
+                {
+                    $n = strlen(trim($v));
+                    $ok = $ok && (strncmp($row[$k], $v, $n) == 0);
+                }
+
+                if ($ok)
+                    $data[] = $row;
+            }
+            $this->data = $data;
+            $this->rowCount = count($this->data);
+        }
+    }
+
+    function ApplyOrder($column)
+    {
+        $p = $this->columns[$column]->index;
+        $n = count($this->data[0]);
+
+        foreach ($this->data as $key => $row)
+        {
+            for ($i = 0; $i < $n; $i++)
+                $arr[$i][$key] = $row[$i];
+        }
+
+        $sortcols = "\$arr[$p]";
+
+        for ($i = 0; $i < $n; $i++)
+            if ($i != $p)
+                $sortcols .= ",\$arr[$i]";
+
+        eval("array_multisort({$sortcols}, SORT_ASC);");
+        $this->data = array
+            (
+            );
+
+        for ($i = 0; $i < $n; $i++)
+        {
+            foreach ($arr[$i] as $key => $row)
+                $this->data[$key][$i] = $row;
+        }
+    }
+
+    function AddError($err)
+    {
+        if ($err)
+        {
+            if (is_array($err))
+            {
+                if ($this->errors)
+                {
+                    $this->errors = array_merge($this->errors, $err);
+                }
+                else
+                {
+                    $this->errors = $err;
+                }
+            }
+            else
+            {
+                $this->errors[] = $err;
+            }
+        }
+    }
+     
+    function ShowID($state)
+    {
+        $this->showid = $state;
+    }
+
+    function SetClose($action)
+    {
+        $this->box->SetClose($action);
+    }
+
+    function SetSelecteds($s)
+    {
+        global $state;
+        $selecteds = $state->get('selecteds', $this->name);
+        $selecteds[$this->pageNumber] = $s;
+        $state->set('selecteds',$selecteds, $this->name);
+        $state->set('useselecteds', true, $this->name);
+    }
+
+    function SetUseSelecteds($opt)
+    {
+        global $state;
+        $state->set('useselecteds', $opt, $this->name);
+    }
+
+    function HandlerSelecteds()
+    {
+        global $state;
+
+        $selecteds = $state->get('selecteds', $this->name);
+        $useSelecteds = $state->get('useselecteds', $this->name);
+
+        if (urldecode($this->page->Request('gridName')) == $this->name)
+        {
+          $state->set('pn_page', $this->page->Request('pn_page'), $this->name);
+        }
+        $this->pageNumber = MUtil::NVL($state->get('pn_page', $this->name),1);
+        $this->prevPage = MUtil::NVL($state->get('grid_page', $this->name),1);
+
+        $this->selecteds = array();
+
+        if ($useSelecteds)
+        {
+            $selecteds[$this->prevPage] = array();
+            if ($select = $this->page->Request('select'.$this->name))
+            {
+                foreach($select as $k=>$v)
+                {
+                    $selecteds[$this->prevPage][] = $k;
+                }
+            }
+            if (is_array($selecteds[$this->pageNumber]))
+            {
+                $this->selecteds = $selecteds[$this->pageNumber];
+            }
+            $this->allSelecteds = $selecteds;
+        }
+
+        $state->set('grid_page', $this->pageNumber, $this->name);
+
+        $state->set('useselecteds', $useSelecteds, $this->name);
+        $state->set('selecteds',$selecteds, $this->name);
+    }
+
+    function GenerateTitle()
+    {
+        if ($this->caption != '')
+        {
+            $this->box->SetCaption($this->caption);
+            return $this->box->boxTitle->Generate();
+        } 
+    }
+
+    private function GenerateNavigationDiv()
+    {
+        $array[0] = $this->pn->GetPageFirst();
+        $array[0]->_AddStyle('float', 'left');
+        $array[1] = $this->pn->GetPagePrev();
+        $array[1]->_AddStyle('float', 'left');
+        $array[2] = $this->pn->GetPageRange();
+        $array[2]->_AddStyle('float', 'left');
+        $array[3] = $this->pn->GetPageNext();
+        $array[3]->_AddStyle('float', 'left');
+        $array[4] = $this->pn->GetPageLast();
+        $array[4]->_AddStyle('float', 'left');
+        $d = new MDiv('', $array, 'm-pagenavigator');
+        $d->AddStyle('float', 'right');
+        return $d;
+    } 
+
+    function GenerateNavigationHeader()
+    {
+        if (!$this->pn)
+            return null;
+
+        $links = $this->pn->GetPageLinks();
+
+        foreach ($links as $link)
+            $link->float = 'left';
+
+        $d1 = new MDiv('', $links);
+        $d1->AddStyle('float', 'left');
+        $d2 = $this->generateNavigationDiv(); 
+        $d = new MDiv('', array($d1, $d2), 'm-grid-navigation');
+        return $d;
+    }
+
+    function GenerateNavigationFooter()
+    {
+        if (!$this->pn)
+            return null;
+
+        $links = $this->pn->GetPageLinks();
+
+        foreach ($links as $link)
+        {
+            $link->float = 'left';
+        }
+
+        $d1 = new MDiv('', $links);
+        $d1->AddStyle('float', 'left');
+        $d2 = $this->generateNavigationDiv(); 
+        $d = new MDiv('', array($d1, $d2), 'm-grid-navigation');
+        return $d;
+    }
+
+    function GenerateLinks()
+    {
+        if (!count($this->headerLinks))
+            return NULL;
+
+        foreach ($this->headerLinks as $link)
+            $link->float = 'left';
+
+        $div = new MDiv('', $this->headerLinks, 'm-grid-header-link');
+        return $div;
+    }
+
+    function GenerateControls()
+    {
+        if (!count($this->controls))
+            return NULL;
+
+        $i = 0;
+
+        foreach ($this->controls as $c)
+        {
+            $array[$i++] = $c->Generate();
+            $array[$i++] = '&nbsp;&nbsp;';
+        }
+
+        return new MDiv('', $array, 'm-grid-controls');
+    }
+
+    function GenerateFilter()
+    {
+        if (!$this->filter)
+            return null;
+
+        foreach ($this->filters as $k => $f)
+        {
+            $array[] = $f->Generate();
+        }
+
+        $img = new MImageButton('', 'Filtrar', $this->GetURL(true, $this->ordered), "/images/button_select.png");
+        $array[] = $img->Generate();
+        $array[] = '&nbsp;&nbsp;';
+        $img = new MImageButton('', 'Remover filtro', $this->GetURL(false, $this->ordered), "/images/button_browse.png");
+        $array[] = $img->Generate();
+        return new MDiv('', $array, 'm-grid-filter');
+    }
+
+    function HasErrors()
+    {
+        return count($this->errors);
+    }
+
+    function GenerateErrors()
+    {
+        global $MIOLO;
+
+        $caption = ('Erros');
+
+        $t = new MSimpleTable('');
+        $t->SetAttributes(
+            "class=\"m-prompt-box-error\" border=\"0\" cellspacing=\"0\" cellpadding=\"0\" width=\"100%\"  border=\"0\"");
+        $t->attributes['cell'][0][0] = "colspan=\"2\" class=\"m-prompt-box-error-title\"";
+        $t->cell[0][0] = $caption;
+        $t->attributes['cell'][1][0] = "valign=\"top\" width=\"60\"";
+        $t->cell[1][0] = new ImageForm('', '', '/images/error.gif');
+        $t->attributes['cell'][1][1] = "class=\"m-prompt-box-error-text\"";
+        $leftmargin = '&nbsp;&nbsp;&nbsp;&nbsp;';
+
+        foreach ($this->errors as $e)
+        {
+            $msg .= $leftmargin . "-&nbsp;$e<br>";
+        }
+
+        $t->cell[1][1] = $msg;
+        return $t;
+    }
+
+    function GenerateHeader()
+    {
+        $header[] = $this->GenerateFilter();
+        $header[] = $this->GenerateLinks();
+        if ($this->data)
+        {
+            $header[] = $this->GenerateNavigationHeader();
+        }
+
+        return $header;
+    }
+
+    function GenerateColumnsHeading(&$tbl)
+    {
+//        $spanClass = ($this->select != NULL) ? 'tall' : '';
+        $spanClass = ''; // adjusted via javascript
+        $p = 0;
+        $this->page->onLoad("miolo.grid.ajustSelect('linkbtn');"); 
+        $this->page->onLoad("miolo.grid.ajustTHead();"); 
+        $tbl->setColGroup($p);
+//        $tbl->SetColGroupCol($p,0,"width=10");
+/*
+        $tbl->setHead($p, new MSpan('','&nbsp;',$spanClass)); 
+        $tbl->setHeadClass($p++, 'btn ' . $this->buttonSelectClass); 
+*/
+        $span = new MSpan('','&nbsp;',$this->buttonSelectClass);
+        $tbl->setHead($p, $span ); 
+        $tbl->setHeadClass($p++, 'btn'); 
+        if ($n = count($this->actions))
+        {
+            $tbl->setColGroup($p,"span={$n}");
+            $tbl->setHead($p,new MSpan('',_M('Ação'),$spanClass));
+            $tbl->setHeadAttribute($p,'colspan',$n);
+            $tbl->setHeadClass($p++,'action');
+        }
+        if ($this->select != NULL)
+        {
+            $rowCount = count($this->data);
+            $this->page->OnLoad("miolo.grid.checkEachRow($rowCount,'".$this->name."');");
+            $tbl->setColGroup($p);
+            $check = new MCheckBox("chkAll", 'chkAction', '');
+            $check->addAttribute('onclick',"javascript:miolo.grid.checkAll(this,$rowCount,'".$this->name."');");
+            $check->_addStyle('padding','0px');
+            $tbl->setHead($p,new MSpan('',$check,'select'));
+            $tbl->setHeadClass($p++,'select');
+        }
+
+        // generate column headings
+        $tbl->setColGroup($p); $c = 0;
+        $last = count($this->columns) - 1;
+        foreach ($this->columns as $k => $col)
+        {
+            if ((!$col->visible) || (!$col->title))
+                continue;
+
+            if ($col->order)
+            {
+                $this->orderby = $k;
+                $link = new MLinkButton('', $col->title, $this->GetURL($this->filtered, true));
+                $link->SetClass('order');
+                $colTitle = new MSpan('',$link,$spanClass);
+                $tbl->setHeadClass($p+$c,'order');
+            }
+            else
+            {
+                $colTitle = new MSpan('',$col->title,$spanClass);
+                $tbl->setHeadClass($p+$k,'data');
+            }
+
+            if (($col->width))
+            {
+                $attr =  ($k != $last) ? " width=\"$col->width\"" : " width=\"100%\"";
+            }
+
+            $tbl->setColGroupCol($p,$c,$attr);
+            $tbl->setHead($p+$c++,$colTitle);
+        }
+    }
+
+    function GenerateActions(&$tbl)
+    {
+        $i = $this->currentRow;
+
+        if ($this->hasDetail)
+        {
+           $i += $this->currentRow;
+        }
+        $c = 0; // colNumber
+
+//        $control = new MButton('', '&nbsp;', $this->actionDefault->href);
+        $spanClass = ($this->select != NULL) ? ' tall' : '';
+        $control = new MSpan('', '&nbsp;');
+        if ($this->actionDefault->href)
+        {
+            $control->addAttribute('onclick',$this->actionDefault->generate());
+        }
+        $control->setClass($this->buttonSelectClass,false);
+//        $control->setClass($spanClass,true);
+        $tbl->setCell($i, $c, $control); 
+        $tbl->setCellClass($i, $c, 'btn'); 
+
+        if ($this->hasDetail)
+        {
+           $tbl->setCell($i+1,$c,new MDiv('ddetail' . $this->currentRow, NULL));
+           $tbl->setCellClass($i+1,$c,'action-default');
+        }
+        $c++; 
+        if ($n = count($this->actions))
+        {
+            // generate action links
+            while ($c < ($n + 1))
+            {
+				$action = $this->actions[$c-1]; 
+                $tbl->setCell($i,$c,$action->Generate(),$action->Attributes());
+                if ($this->hasDetail)
+                {
+                    $tbl->setCell($i+1,$c,new MDiv('adetail' . $this->currentRow, NULL));
+                }
+                $tbl->setCellClass($i,$c,$c == ($n) ? 'data action' : 'action');
+                $c++; 
+            }
+        }
+
+        if ($this->select != NULL)
+        {
+            $tbl->setRowAttribute($i,'id',"row".$this->name."[{$this->currentRow}]");
+            $tbl->setCellClass($i,$c,'data select');
+            $select = $this->select->generate();
+            $select->checked = (array_search($i, $this->selecteds) !== false);
+            $tbl->cell[$i][$c] = $select;
+            if ($this->hasDetail)
+            {
+                $tbl->setCell($i+1,$c,new MDiv('sdetail' . $this->currentRow, NULL));
+            }
+        }
+    }
+
+    function GenerateColumnsControls()
+    {
+        foreach ($this->columns as $k => $col)
+        {
+            $col->Generate();
+        }
+    }
+
+    function GenerateColumns(&$tbl)
+    {
+        $i = $this->currentRow;
+        if ($this->hasDetail)
+        {
+           $i += $this->currentRow;
+        }
+        $p = count($this->actions) + 1;
+
+        if ($this->select != NULL)
+            $p++;
+
+        $colspan = 0;
+        $first = $p;
+
+        foreach ($this->columns as $k => $col)
+        {
+            if ((!$col->title) || (!$col->visible))
+                continue;
+
+            ++$colspan;
+
+            $control = $col->control[$this->currentRow];
+            $attr = "";
+
+            if ($col->nowrap)
+            {
+                $tbl->setCellAttribute($i,$p,"nowrap");
+            }
+
+            if ($col->width)
+            {
+//                $tbl->setCellAttribute($i,$p,"width",$col->width);
+            }
+
+            if ($col->align)
+            {
+                $tbl->setCellAttribute($i,$p,"align",$col->align);
+            }
+            $class = $col->GetClass();
+            $tbl->setCellClass($i,$p,$class == '' ? 'data' : $class);
+            $tbl->setCell($i,$p++,$control);
+        }
+        if ($this->hasDetail)
+        {
+            $tbl->setCell(++$i,$first,new MDiv('detail' . $this->currentRow, NULL));
+            $tbl->setCellAttribute($i,$first,"colspan",$colspan);
+            $tbl->setRowClass($i,'detail');
+        }
+    }
+
+    function GenerateEmptyMsg()
+    {
+        $div = new MDiv('', $this->emptyMsg, 'm-grid-attention');
+        return $div;
+    }
+
+    function GenerateData()
+    {
+        if (!$this->data)
+            return;
+
+        $this->orderby = $this->page->Request('orderby');
+
+        if ($this->ordered = isset($this->orderby))
+        {
+            $this->ApplyOrder($this->orderby);
+            $this->page->state->set('orderby', $this->orderby, $this->name);
+        }
+
+        if ($this->GetFiltered())
+        {
+            $this->ApplyFilter();
+        }
+
+        if ($this->pageLength)
+        {
+            $this->pn = new MGridNavigator($this->pageLength, $this->rowCount,
+                                          $this->GetURL($this->filtered, $this->ordered), $this);
+            $this->data = $this->GetPage();
+        }
+        else
+            $this->pn = null;
+    }
+
+    function CallRowMethod()
+    {
+        if (isset($this->rowmethod))
+        {
+            $i = $this->currentRow;
+            $row = $this->data[$i];
+            call_user_func($this->rowmethod, $i, $row, $this->actions, $this->columns);
+        }
+    }
+    
+    function GenerateBody()
+    {
+        global $MIOLO, $SCRIPT_NAME;
+
+        if ($this->HasErrors())
+        {
+            $this->GenerateErrors();
+        }
+
+        $tblData = new MSimpleTable('', "cellspacing=\"0\" cellpadding=\"0\" border=\"0\" width=\"100%\" class=\"m-grid-body\"");
+        $this->GenerateColumnsHeading($tblData);
+
+        if ($this->data)
+        {
+            // generate data rows
+            $i = 0;
+
+            foreach ($this->data as $row) // foreach row
+            {
+                $this->currentRow = $i;
+                $rowId = ($i % 2) + 1;
+                $rowClass = $this->alternateColors ? "row$rowId" : "row0";
+                $c = $this->hasDetail ? $i+$this->currentRow : $i;
+                $i++;
+                $tblData->setRowClass($c,$rowClass);
+                $this->GenerateColumnsControls();
+                $this->CallRowMethod();
+                $this->GenerateActions($tblData);
+                $this->GenerateColumns($tblData);
+            } // end foreach row
+        }     // end if
+
+        $body = $tblData;
+        return $body;
+    }
+
+    function GenerateFooter()
+    {
+        if (!$this->data)
+            $footer[] = $this->GenerateEmptyMsg();
+
+        if ($this->data)
+            $footer[] = $this->GenerateNavigationFooter();
+
+        $footer[] = $this->GenerateControls();
+        return $footer;
+    }
+
+    function GetImage($src)
+    {
+        $url = $this->icons[$src];
+        if (!$url)
+        {
+            if (substr($src, 0, 1) == '/' || substr($src, 0, 5) == 'http:')
+            {
+                $url = $src;
+            }
+            else
+            {
+                $file = $this->manager->GetConf('home.themes')  . '/' . $this->manager->GetConf('theme.main')  . '/images/' . $src;
+                if (file_exists($file))
+                {
+                    $url = $this->manager->GetUI()->GetImageTheme($this->manager->GetConf('theme.main'), $src);
+                }
+                else
+                {
+                    $url = $this->manager->GetUI()->GetImage('', $src);
+                }
+            }
+
+            $this->icons[$src] = $url;
+        }
+        return $url;
+    }
+
+    function Generate()
+    {
+        $this->GenerateData();
+        $header = $this->painter->GenerateToString($this->GenerateHeader());
+        $title = $this->painter->GenerateToString($this->GenerateTitle());
+        $body = $this->painter->GenerateToString($this->GenerateBody());
+        $footer = $this->painter->GenerateToString($this->GenerateFooter());
+        $f = new MDiv('', array($title, $header, $body, $footer), 'm-grid-box');
+        if ($this->width != '')
+        {
+            $f->AddStyle('width', $this->width);
+        }
+        return $f->Generate();
+    }
+}
+?>

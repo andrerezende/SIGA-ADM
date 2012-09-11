@@ -1,0 +1,175 @@
+<?
+MIOLO::Import('modules::protocolo::controls::linkBusca');
+class frmBuscaTramite extends MForm
+{
+    var $oid;
+    var $Busca;
+   
+
+    function __construct($objBusca)
+    {
+        global $MIOLO, $page, $module, $self;
+    	$this->Busca = $objBusca;
+        parent::__construct();
+        $this->SetClose($this->manager->GetActionURL('protocolo','main'));
+        $this->SetTitle('Consulta Trâmite');
+        $this->SetIcon($this->manager->GetUI()->GetImage('','lupa.gif'));
+    }
+
+    public function CreateFields()
+    {
+        
+    	global $MIOLO, $page, $module, $self;
+    	$Busca = $this->Busca;
+        Util::SetIfNull($this->oid, $Busca->numBusca);
+        $ui = $this->manager->GetUI();
+	   
+    	$fields = Array (
+
+			new TextField('edtBusca','','Número do processo',20,'Formato ######/####-##'),
+						);
+
+		
+		$this->SetFields($fields);
+				            
+        $this->edtBusca->addAttribute('maxlength','20');
+        	
+						
+		// BotÃµes que aparecem no formulário
+		$buttons = Array(
+			new FormButton('btnConsulta', 'Consulta'),
+			new MButton('btnVoltar', 'Voltar',$MIOLO->GetActionURL($module,$self)),
+			new FormButton('btnGerarPDF', 'Imprimir Resultado','PDF'),
+			    		);
+
+		//Insere os Botões
+		$this->SetButtons($buttons);
+		
+		$this->SetButtonAttr('btnVoltar','visible',false);
+		$this->SetButtonAttr('btnGerarPDF','visible',false);
+		
+										
+		$this->EventHandler();		
+   }
+   public function btnConsulta_click()
+   {	
+   		
+   		global $MIOLO, $page, $module, $self, $item, $context, $action;
+   		$ui = $this->manager->GetUI();
+		$this->Busca = $MIOLO->GetBusiness($module,'busca');
+   		$Busca = $this->Busca;
+        $data = $this->getData();    
+		
+	    
+	    $numpro =  $Busca->numProcesso($data->edtBusca);
+	    $tramite = $Busca->Tramite($numpro);
+	    if ($tramite->result[0][2]) $stmpent = $Busca->dataFormatada($tramite->result[0][2]);
+	    if ($tramite->result[0][4]) $stmpsai = $Busca->dataFormatada($tramite->result[0][4]);
+	    
+	    
+	    if ( $tramite->result != NULL )
+	    {
+	    		    
+			$n = count($tramite->result);	   
+			$space = new MSpacer('10px');
+			
+			for ($i=0;$i<$n;$i++)
+			{
+   	   
+		    
+		   
+	       		   
+		    $content = array (  new MLabel( "Setor Atual: "), $tramite->result[$i][1], new MSeparator(),
+		  				 	    new MLabel( "Entrada em : "), $stmpent, new MSeparator(),
+		  					    new MLabel( "Setor de destino: "), $tramite->result[$i][3], new MSeparator(),
+		  					    new MLabel( "Saída em : "), $stmpsai, new MSeparator(),
+		   					    new MLabel( "Decisão: "), $tramite->result[$i][5], new MSeparator(),
+		   					  
+                            );
+	                 
+	       						
+		   $box = new MThemeBox('Trâmite: '.$tramite->result[$i][0], $content);
+		   
+	       $fields = array( $space, $box, $space );
+		   $this->AddFields($fields);
+		   $this->SetButtonAttr('btnGerarPDF','visible',true);
+			
+			}	
+			  
+	    }
+	    else 
+		{
+			$MIOLO->Prompt(Prompt::Error("Número de processo não encontrado",$MIOLO->GetActionURL($module,$self)));				
+		}
+	    
+    	   
+		
+          
+	}
+	
+	function btnGerarPDF_click()
+	{  
+				     
+        global $MIOLO, $page, $module, $self, $item, $context, $action;
+   		$ui = $this->manager->GetUI();
+		$this->Busca = $MIOLO->GetBusiness($module,'busca');
+   		$Busca = $this->Busca;
+        $data = $this->getData();    
+		
+	    
+	    $numpro =  $Busca->numProcesso($data->edtBusca);
+	    $tramite = $Busca->Tramite($numpro);
+	    if ($tramite->result[0][2]) $stmpent = $Busca->dataFormatada($tramite->result[0][2]);
+	    if ($tramite->result[0][4]) $stmpsai = $Busca->dataFormatada($tramite->result[0][4]);
+	       
+	    
+	    if ( $tramite->result != NULL )
+	    {
+	    		    
+			$count = count($tramite->result);	
+			 
+			
+						
+			 // configura a página
+	       $report = new MEzPDFReport('2','portrait');
+	       $report->pdf->ezSetCmMargins(2.5,2.5,3.5,2.5);
+	       
+	       $h = $report->pdf->getFontHeight(10);
+           $report->pdf->ezImage($ui->GetImage('protocolo','logonet.png'),5,50,'','left',0);
+		   $report->pdf->addText(110,810,10,'UNIVERSIDADE FEDERAL DE JUIZ DE FORA');
+		   $report->pdf->addText(110,810-($h),10,'SISTEMA INTEGRADO DE GESTÃO ACADÊMICA - SIGA');
+		   $report->pdf->addText(110,810-(2*$h),10,'RELATÓRIO DE SITUAÇÃO DE TRAMITE '.' - '.date('d/m/Y'));
+		   $report->pdf->ezText('',20); 
+	        
+	       // configura a tabela
+	       $options['textCol'] = array(0,0,0);
+	       $options['shaded'] = 0;
+	       $options['showLines'] = 0;
+	       $options['fontSize'] = 10;
+	       $options['maxWidth'] = 780;
+	       $options['xPos'] = 'left';
+	       $options['xOrientation'] = 'right';
+	       $cols = array('','');
+			
+			for ($i=0;$i<$count;$i++)
+			{    		
+			   $dataRel[] = array('TRÂMITE:',$tramite->result[$i][0]);
+		       $dataRel[] = array('SETOR ATUAL:',$tramite->result[$i][1]);
+		       $dataRel[] = array('ENTRADA EM:',$stmpent);
+		       $dataRel[] = array('SETOR DE DESTINO:',$tramite->result[$i][3]);
+		       $dataRel[] = array('SAÍDA EM:',$stmpsai);
+		       $dataRel[] = array('DECISÃO:',$tramite->result[$i][5]);
+		       $dataRel[] = array('','');	   
+	       	   
+		      			
+			}
+			$report->pdf->ezTable($dataRel,$cols,'',$options);
+						
+			// gera o relatório
+	       $report->Execute();	
+			  
+	    }
+	    
+    }	
+}
+?>

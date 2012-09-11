@@ -1,0 +1,438 @@
+<?php
+
+class BusinessCommonAdmin extends Business
+{
+    var $idtrans;
+    var $transacao;
+    var $idsistema;
+
+    function GetDatabase()
+    {
+        global $MIOLO;
+        return $MIOLO->GetDatabase('common');
+    }
+    
+    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    # Returns module's info
+    #---------------------------------------------------------------------
+    function GetModule($name)
+    {
+        $db = $this->GetDatabase();
+
+        $sql = ' select name,description,rights '.
+               '   from cmn_modules '.
+               '  where name=? ';
+        
+        $result = $db->Query($db->Prepare($sql,$name));
+        
+        if ( $result )
+        {
+            $data = new CommonModule();
+            
+            $data->name        = $result[0][0];
+            $data->description = $result[0][1];
+            $data->rights      = explode(',',$result[0][2]);
+            
+            if ( is_array($data->rights) )
+            {
+                sort($data->rights);
+            }
+        }
+        
+        $this->CheckError($db);
+        
+        return $data;
+    }
+    
+    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    # Returns registered modules. 
+    # If user != null, returns the modules of a user
+    #---------------------------------------------------------------------
+    function GetModules($user=null)
+    {
+        $db = $this->GetDatabase();
+
+        if ( $user )
+        {
+            $sql = 'select distinct cmn_modules.name, cmn_modules.description '.
+                   '  from cmn_modules, cmn_access '.
+                   ' where cmn_access.module=cmn_modules.name '.
+                   '   and cmn_access.login=? '.
+                   ' order by cmn_modules.name ';
+                   
+           $args[] = $user;
+        }
+        else
+        {
+            $sql = ' select name,description '.
+                   '   from cmn_modules '.
+                   '   order by name ';
+        }
+        
+        $result = $db->Query($db->Prepare($sql,$args));
+        
+        $this->CheckError($db);
+        
+        return $result;
+    }
+    
+    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    # Insert a new module
+    #---------------------------------------------------------------------
+    function InsertModule($module)
+    {
+        $db = $this->GetDatabase();
+        
+        $sql = ' insert into cmn_modules (name,description,rights) '.
+               ' values (?,?,?)';
+        
+        $args = array($module->name,
+                      $module->description,
+                      is_array($module->rights) ?
+                          implode(',',$module->rights) : $module->rights);
+        
+        $ok = $db->Execute($db->Prepare($sql,$args));
+        
+        $this->CheckError($db);
+        
+        return $ok;
+    }
+    
+    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    # Change module's data
+    #---------------------------------------------------------------------
+    function UpdateModule($module)
+    {
+        $db = $this->GetDatabase();
+        
+        $sql = ' update cmn_modules '.
+               '    set description=?,rights=? '.
+               '  where name=?';
+        
+        $args = array($module->description,
+                      is_array($module->rights) ?
+                          implode(',',$module->rights) : $module->rights,
+                      $module->name);
+        
+        $ok = $db->Execute( $db->Prepare($sql, $args) );
+        
+        $this->CheckError($db);
+        
+        return $ok;
+    }
+    
+    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    # Delete a Module
+    #---------------------------------------------------------------------
+    function DeleteModule($module)
+    {
+        $db = $this->GetDatabase();
+        
+        $sql[] = $db->prepare(' delete from cmn_modules where name=?', $module);
+        $sql[] = $db->prepare(' delete from cmn_access  where module=?', $module);
+        
+        $ok = $db->Execute( $sql );
+        
+        $this->CheckError($db);
+        
+        return $ok;
+    }
+    
+    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    # Returns user's info
+    #---------------------------------------------------------------------
+    function GetUser($login)
+    {
+        $db = $this->GetDatabase();
+        
+        $sql = ' select login, nickname, password, name, email '.
+               '   from cmn_users '.
+               '  where login=? ';
+        
+        $result = $db->Query($db->Prepare($sql,$login));
+        
+        $this->CheckError($db);
+        
+        if ( $result )
+        {
+            // CommonUser is defined in ../types.inc
+            $user = new CommonUser();
+            
+            list ( $user->login,
+                   $user->nickname,
+                   $user->password,
+                   $user->name,
+                   $user->email ) = $result[0];
+        }
+        
+        return $user;
+    }
+        
+    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    # Returns all users registered. 
+    # If $module != null, returns users of a module
+    #---------------------------------------------------------------------
+    function GetUsers($module=null)
+    {
+        $db = $this->GetDatabase();
+        
+        if ( $module !== null )
+        {
+            $sql = ' select distinct cmn_users.login, cmn_users.name, cmn_users.nickname, cmn_users.email '.
+                   '   from cmn_users, cmn_access '.
+                   '  where cmn_access.login=cmn_users.login '.
+                   '    and cmn_access.module=? '.
+                   '  order by cmn_users.name ';
+                   
+            $args[] = $module;
+        }
+        else
+        {
+            $sql = ' select login, name, nickname, email '.
+                   '   from cmn_users '.
+                   '  order by name ';
+        }
+        
+        $result = $db->Query($db->Prepare($sql,$args));
+        
+        $this->CheckError($db);
+        
+        return $result;
+    }
+        
+    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    # Inserts a new user
+    #---------------------------------------------------------------------
+    function InsertUser($user)
+    {
+        $db = $this->GetDatabase();
+        
+        $sql = ' insert into cmn_users (name,nickname,login,password,email) '.
+               ' values (?,?,?,?,?)';
+        
+        $args = array($user->name,
+                      $user->nickname,
+                      $user->login,
+                      $user->password,
+                      $user->email);
+        
+        $ok = $db->Execute($db->Prepare($sql,$args));
+        
+        $this->CheckError($db);
+        
+        return $ok;
+    }
+        
+    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    # Change user's info
+    #---------------------------------------------------------------------
+    function UpdateUser($user)
+    {
+        $db = $this->GetDatabase();
+        
+        $sql = 'update cmn_users set name=?,nickname=?,password=?,email=? '.
+               'where login=?';
+        
+        $args = array($user->name,
+                      $user->nickname,
+                      $user->password,
+                      $user->email,
+                      $user->login);
+        
+        $ok = $db->Execute($db->Prepare($sql,$args));
+        
+        $this->CheckError($db);
+        
+        return $ok;
+    }
+        
+    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    # Delete a user
+    #---------------------------------------------------------------------
+    function DeleteUser($user)
+    {
+        $db = $this->GetDatabase();
+        
+        $sql = ' delete from cmn_users '.
+               '  where login=?';
+               
+        $args = array($user);
+        
+        $ok = $db->Execute( $db->Prepare($sql,$args) );
+        
+        $this->CheckError($db);
+        
+        if ( $ok )
+        {
+            $ok = $this->DeleteUserPermissions($user);
+        }
+        
+        return $ok;
+    }
+        
+    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    # Delete user's permissions
+    #---------------------------------------------------------------------
+    function DeleteUserPermissions($user)
+    {
+        $db = $this->GetDatabase();
+        
+        $sql = ' delete from cmn_access '.
+               '  where login=?';
+               
+        $ok = $db->Execute( $db->Prepare($sql,$user) );
+        
+        $this->CheckError($db);
+        
+        return $ok;
+    }
+    
+    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    # Change user's permissions
+    #---------------------------------------------------------------------
+    function UpdateUserPermissions($module,$login,$rights)
+    {
+        $db = $this->GetDatabase();
+        
+        $sql[] = $db->Prepare('delete from cmn_access where module=? and login=?',
+                              array($module,$login));
+        
+        foreach ( $rights as $action => $access )
+        {
+            if ( $access )
+            {
+                $sql[] = $db->Prepare(' insert into cmn_access (module,login,action,fl_access)'.
+                                      ' values (?,?,?,true)',
+                                      array($module,$login,$action));
+            }
+        }
+        
+        $ok = $db->Execute($sql);
+        
+        $this->CheckError($db);
+        
+        return $ok;
+    }
+
+    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    # Returns transaction's info
+    #---------------------------------------------------------------------
+    function GetTransaction($idtrans)
+    {
+        $db = $this->GetDatabase();
+
+        $sql = 'select distinct t.idtrans, t.transacao, t.idsistema' .
+               '   from cm_transacao t'.
+               '   where t.idtrans = ? ';
+        
+        $result = $db->Query($db->Prepare($sql,$idtrans));
+        
+        if ( $result )
+        {
+            $this->idtrans     = $result[0][0];
+            $this->transacao   = $result[0][1];
+            $this->idsistema   = $result[0][2];
+        }
+        
+        $this->CheckError($db);
+        
+        return $this;
+    }
+
+    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    # Returns registered transactions. 
+    # If user != null, returns the transactions of a group
+    #---------------------------------------------------------------------
+    function GetTransactions($group=null)
+    {
+        $db = $this->GetDatabase();
+
+        if ( $group )
+        {
+            $sql = 'select distinct t.idtrans, t.transacao' .
+                   ' from cm_grupoacesso g, cm_acesso a, cm_transacao t ' .
+                   ' where (g.idgrupo = a.idgrupo)' .
+                   ' and (a.idtrans = t.idtrans)' .
+                   ' and upper(g.grupo) = ? ' .
+				   ' order by t.transacao ';
+                   
+           $args[] = $group;
+        }
+        else
+        {
+            $sql = 'select distinct t.idtrans, t.transacao' .
+                   '   from cm_transacao t'.
+                   '   order by t.transacao ';
+        }
+        
+        $result = $db->Query($db->Prepare($sql,$args));
+        
+        $this->CheckError($db);
+        
+        return $result;
+    }
+    
+    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    # Insert a new transaction
+    #---------------------------------------------------------------------
+    function InsertTransaction()
+    {
+        $db = $this->GetDatabase();
+        
+        $sql = ' insert into cm_transacao (IdTrans, Transacao, IdSistema) '.
+               ' values (?,?,?)';
+        
+        $args = array($this->idtrans,
+                      $this->transacao,
+                      $this->idsistema);
+        
+        $ok = $db->Execute($db->Prepare($sql,$args));
+        
+        $this->CheckError($db);
+        
+        return $ok;
+    }
+    
+    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    # Change transaction's data
+    #---------------------------------------------------------------------
+    function UpdateTransaction()
+    {
+        $db = $this->GetDatabase();
+        
+        $sql = ' update cm_transacao '.
+			   ' set Transacao=?, IdSistema=? '.
+               ' where IdTrans = ?';
+
+        $args = array($this->transacao,
+                      $this->idsistema,
+			          $this->idtrans);
+        
+        echo "update";
+		echo $db->Prepare($sql,$args);
+
+		$ok = $db->Execute($db->Prepare($sql,$args));
+        
+        $this->CheckError($db);
+        
+        return $ok;
+    }
+    
+    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    # Delete a transaction
+    #---------------------------------------------------------------------
+    function DeleteTransaction()
+    {
+        $db = $this->GetDatabase();
+        
+        $sql[] = $db->prepare(' delete from cm_acesso where idTrans=?', $this->idtrans);
+        $sql[] = $db->prepare(' delete from cm_transacao where idTrans=?', $this->idtrans);
+        
+        $ok = $db->Execute( $sql );
+        
+        $this->CheckError($db);
+        
+        return $ok;
+    }
+}
+?>

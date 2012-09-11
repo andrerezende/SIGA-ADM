@@ -1,0 +1,205 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+$MIOLO->Uses('ui/controls/lkppublicacao.class','rh');
+
+
+        //$validators[] = new MRequiredValidator('idpublicacaofim','Publicação');
+class frmFuncaoIncluir extends MFormAjax
+{
+    protected $objfuncao;
+
+
+    function __construct()
+    {
+        parent::__construct('Incluir Nova Função de Confiança');
+        $this->registerMethod('onSelectCargo');
+        $this->EventHandler();
+    } // __construct
+
+
+    function CreateFields()
+    {
+        global $MIOLO, $module;
+        $nbsp = str_repeat("&nbsp;",36);
+        
+        $ui = $MIOLO->getUI();
+        
+        $tipoCargo = $this->manager->GetBusiness('rh','cargoconfianca');
+        $tipoCargo = $tipoCargo->ListAll();
+        
+        $url = $this->manager->getActionURL('rh','modules:forms:funcao:frmFuncaoIncluir.js'); 
+        $this->page->addScriptURL($url);
+	   
+        $idsetor = MForm::GetFormValue('idsetor');
+        if ($idsetor)                //para recuperar descrições após algum refazimento de tela
+        {
+            $obj = $this->manager->GetBusiness('common','setor');
+            $obj->getById($idsetor);
+            $nomesetor = $obj->nome;   //visualização acessória
+        }
+
+        $objnivelfuncao = $MIOLO->GetBusiness($module,'nivelfuncao');
+           $nivelfuncao = $objnivelfuncao->ListAll();
+
+        $lkpsetor = new MLookupFieldValue('siglasetor','','Sigla do Setor', 15);
+          $lkpsetor->module  = 'common';
+          $lkpsetor->item    = 'SetorAtivo';                     //método em lookup.class
+          $lkpsetor->event   = 'btnSetor_click';                 //filler: enche os campos em 'related'; método: chama o método local
+        
+        $fields[] = new MSelection    ('idnivel','','Nível',$nivelfuncao->result);
+        $fields[] = new MSpacer(1);
+
+        $fields[] = $lkpsetor;
+          $fields[] = new MHiddenField('idsetor');
+          $fields[] = array( new MLabel($nbsp) , new MTextLabel('nomesetor' ,$nomesetor,'','blue') );
+          $fields[] = new MSpacer(1);
+          $fields[] = new MSelection('idcargoconfianca','','Tipo', $tipoCargo->result);
+        $fields[] = new MSpacer(1);
+        $fields[] = new MDiv('divCurso','');
+
+        $fields[] = new MSpacer(1);
+        $fields[] = new MTextField    ('descricao','','Descrição'        ,'100');
+        $fields[] = new MTextField    ('mandato'  ,'','Mandato (em anos)', '3');
+        $fields[] = new MSpacer(1);
+        $fields[] = new MCalendarField('datainicio','','Início'          ,'10');
+
+        lkppublicacao($fields,'idpublicacaoinicio','Publicação');
+
+        $this->SetFields($fields);
+
+        //$this->descricao->addMask('aaaaaallllllllllllllllllllllllllllllllll');
+        $this->mandato->addMask('#');
+        $this->idcargoconfianca->addAttribute('onchange','ajaxCurso.call()'); // set onchange
+        
+        $validators[] = new MRequiredValidator('idnivel','',8);
+        $validators[] = new MRequiredValidator('siglasetor');
+        $validators[] = new MRequiredValidator('descricao');
+        $validators[] = new MRequiredValidator('datainicio');
+        //$validators[] = new MRequiredValidator('idpublicacaofim','Publicação');
+        $this->SetValidators($validators);
+
+        $buttons = array( new MButton('btnSalvar', 'Incluir Função') );
+        $this->SetButtons($buttons);
+    } // CreateFields
+
+
+    function btnSetor_click($sender,$key='')
+    {
+        $item = $key ? $key : $item; 
+        $obj = $this->manager->GetBusiness('common','setor');
+        $obj->getById($item);
+        $this->SetFieldAttr('siglasetor'        ,'value',$obj->sigla);   //campo editável, de procura
+        $this->SetFieldAttr('nomesetor'         ,'value',$obj->nome );   //visualização acessória
+        $this->SetFieldAttr('idsetor'           ,'value',$item);         //campo invisível, só para gravar
+    } // btnSetor_click
+
+
+    function Verifica($data)
+    {
+        $dataidpublicacaoinicio = $this->GetFieldValue('dataidpublicacaoinicio'); //campo não editável, que não é recuperado em GetData()
+        $erros = $this->objfuncao->VerificaInicio($data , $dataidpublicacaoinicio);
+        
+        if($data->idcargoconfianca == 5)
+        {
+        	if (($this->GetFormValue(divCurso) == '') || is_null($this->GetFormValue(divCurso)) )
+        	{
+        		$erros[] = 'Em caso de Coordenação de Curso deve-se escolher o curso.';
+        	}
+        }
+        
+        if ( count($erros) > 0 )
+        {
+            foreach ( $erros as $e )
+            {
+                $this->addError($e);
+            }
+            return false;
+        }
+
+        return TRUE;
+    } // Verifica
+
+
+    function btnSalvar_click()
+    {
+        global $module;
+        $data = $this->GetData();                    //recupera somente os editáveis
+        $data->descricao = trim($data->descricao);   //tira eventuais brancos do início para teste
+        if ($data->mandato == 0)
+        {
+            $data->mandato = NULL;   //para manter o conteúdo em branco em vez de 0 nas visualizações
+        }
+        
+        if($data->idcargoconfianca == 5)
+        {
+        	$data->idcurso = $this->GetFormValue(selCurso);
+        }
+        else
+        {
+        	$data->idcurso = NULL;
+        }
+
+        $this->objfuncao = $this->manager->getBusiness($module,'funcao');
+
+        if (! $this->Verifica($data))
+        {
+            RETURN;
+        }
+
+        $this->objfuncao->SetData($data);
+
+        $this->objfuncao->BeginTransaction();
+        TRY
+        {
+            $this->objfuncao->save();
+
+            $msg = ' Função incluída: ' . $this->objfuncao->descricao . ', Setor: ' . $data->siglasetor;
+            $this->objfuncao->Log(OP_INS,$this->objfuncao->idfuncao . $msg);
+            $this->objfuncao->EndTransaction();
+            $go = $this->manager->GetActionURL($module,'main:funcao:find');
+            $this->manager->Information($msg,$go);
+        }
+        CATCH (Exception $e)
+        {
+            $this->AddError($e->GetMessage());
+        }
+    } // btnSalvar_click
+    
+    function onSelectCargo($args)
+    {
+        $cargoConfianca = $args;
+        
+        if ($cargoConfianca == 5)
+        {
+                
+			$curso = $this->manager->GetBusiness('ensino','curso');
+	        $curso = $curso->ListCursosGraduacao();
+	        
+	        $divCurso = new MSelection('selCurso','','Curso', $curso->result);
+	        // response_type = TEXT : set the ajax area of theme 
+	        $divCurso->formMode = MControl::FORM_MODE_SHOW_ABOVE;
+	        
+	        $this->manager->getTheme()->setAjaxContent($divCurso);
+   		}		        
+		
+    }
+
+}
+?>

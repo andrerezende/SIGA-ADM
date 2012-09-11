@@ -1,0 +1,147 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+/**
+ * Formulário de exibição dos dados de Provimento
+ */
+class frmVinculoHistoricoAmbiente extends MCSSForm
+{
+    /**
+     * Objeto Provimento
+     * @access protected
+     * @var BusinessRhProvimento
+     */
+     
+    protected $objProvimento;
+	 
+    /** 
+     * Objeto Vinculo
+     * @access protected
+     * @var BusinessRhVinculo
+     */
+    
+	protected $objVinculo;
+
+    function __construct($objProvimento)
+    {
+    	global $MIOLO;
+    	
+		$this->objProvimento = $objProvimento;
+		$this->objVinculo = $MIOLO->GetBusiness('rh','vinculo',$objProvimento->idVinculo);
+		parent::__construct('Dados da Ocorrência');
+        $this->SetAlternate(true);
+        $this->setClose($this->manager->getActionUrl('rh','main:vinculo',$objProvimento->idVinculo,array('form'=>'historico')));
+        $this->EventHandler();
+    }
+    function CreateFields()
+    {
+        global $MIOLO, $context;
+        
+        $ultimoProvimento = $this->objVinculo->getUltimoProvimento();
+        $this->objVinculo->getProvimentos();
+        $numProv = count($this->objVinculo->provimentos);
+
+        $this->SetField(0,0,18,new MLabel('Ocorrência:'));
+        $this->SetField(0,1,100,new TextLabel('ocorrencia','','Ocorrencia'));
+        
+        $this->SetField(1,0,18,new MLabel('Data da Ocorrência:'));
+        $this->SetField(1,1,15,new MTextLabel('dataOcorrencia','','Data da Ocorrência'));
+        //$this->SetField(1,2,10,new MLabel('Data Fim:'));
+        //$this->SetField(1,3,15,new TextLabel('dataFim','','Data Fim'));
+        
+        $this->SetField(2,0,18,new MLabel('Excede Lotação:'));
+        $this->SetField(2,1,10,new TextLabel('excedeLotacao','','Excede Lotação'));
+        
+        $this->SetField(3,0,18,new MLabel('Regime Jurídico:'));
+        $this->SetField(3,1,100,new TextLabel('regimeJuridico','','Regime Jurídico'));
+        
+        $this->SetField(4,0,18,new MLabel('Classe Referência:'));
+        $this->SetField(4,1,10,new TextLabel('classeRef','','Classe/Referência'));
+        
+        $this->SetField(5,0,18,new MLabel('Jornada:'));
+        $this->SetField(5,1,100,new TextLabel('jornada','','Jornada'));
+        
+        $this->SetField(6,0,18,new MLabel('Situação:'));
+        $this->SetField(6,1,100,new TextLabel('situacao','','Situação'));
+
+        $this->SetField(7,0,18,new MLabel('Cargo:'));
+        $this->SetField(7,1,100,new TextLabel('cargo','','Cargo'));
+        
+        $this->SetField(8,0,18,new MLabel('Setor:'));
+        $this->SetField(8,1,100,new TextLabel('setor','','Setor'));
+        
+        $this->SetField(9,0,18,new MLabel('Ambiente Organizacional:'));
+        $this->SetField(9,1,100,new TextLabel('ambiente','',''));        
+
+        $this->SetField(10,1,18,new MLabel('Publicação:'));
+        $this->SetField(10,0,100,new TextLabel('publicacao','','Publicação'));
+        
+        $this->SetField(11,0,18,new MLabel('Observação'));
+        $this->SetField(11,1,100,new TextLabel('observacao','','Observação'));
+        
+        $action = $context->action;
+        $close = $MIOLO->GetActionURL('rh',$action, $this->objProvimento->idVinculo, array("form"=>"historico") );
+        $buttons = array(
+            new FormButton('btnPost','Fechar', $close),
+        );
+        $this->SetButtons($buttons);
+        $this->SetData();
+        $this->setFieldAttr('dataOcorrencia','showLabel',true);
+		
+
+    }
+
+    function SetData()
+    {   
+        global $MIOLO;
+        $provimento = $this->objProvimento;
+        $provimento->retrieveAssociation('publicacao');
+        $provimento->retrieveAssociation('setor');
+        $provimento->retrieveAssociation('ambiente');
+        $provimento->retrieveAssociation('ocorrencia');
+        $provimento->getClasse();
+        $provimento->getReferencia();
+        $provimento->getJornada();
+        $provimento->getSituacaoFuncional();
+        $provimento->getCargo();
+        $regimeJuridico = $MIOLO->GetBusiness('common','tabelageral');
+        $regimeJuridico->GetByItem('RH_REGIMEJUR', $provimento->regimeJuridico);
+        $this->SetFieldValue('dataOcorrencia',$provimento->dataInicio);
+        //$this->SetFieldValue('dataFim',$provimento->dataFim);
+        $this->SetFieldValue('excedeLotacao',($provimento->excedeLotacao == 'S' ? 'Sim' : 'Não'));
+        $this->SetFieldValue('regimeJuridico', $regimeJuridico->item1 . ' - ' . $regimeJuridico->item2);
+        $this->SetFieldValue('classeRef', $provimento->classe->nome . '/'. $provimento->referencia->nivelPadrao);
+        $this->SetFieldValue('jornada',$provimento->jornada->descricao);
+        $this->SetFieldValue('situacao',$provimento->situacaofuncional->descricao);
+        $this->SetFieldValue('ambiente',$provimento->ambiente->descricao);
+        $this->SetFieldValue('setor',$provimento->setor->sigla . ' - ' . $provimento->setor->nome);
+        $this->SetFieldValue('cargo',$provimento->cargo->descricao);
+        $this->SetFieldValue('ocorrencia',$provimento->ocorrencia->descricao);
+        if ($this->objProvimento->publicacao)
+            {
+                $this->SetFieldValue('publicacao',$provimento->publicacao->diplomaLegal->descricao.' '.
+                                            $provimento->publicacao->numero.' de '.
+                                            $provimento->publicacao->data.' - '.
+                                            $provimento->publicacao->autoridade);
+            }
+        $this->SetFieldValue('observacao',$provimento->obs);
+    }
+
+ }
+?>

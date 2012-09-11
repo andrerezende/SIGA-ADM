@@ -1,0 +1,110 @@
+
+<?class frmMaterialDados extends MForm
+{
+    protected $objMaterial;
+    protected $objUnidade;
+
+    function __construct($objMaterial)
+    {
+        $this->objMaterial = $objMaterial;
+        parent::__construct('Dados do Material');
+        $this->EventHandler();
+    }
+    function CreateFields()
+    {
+        global $MIOLO, $module;
+        $this->objUnidade = $MIOLO->GetBusiness($module,'unidade');
+        $unidade = $this->objUnidade->selAllById();  
+        $unidade = array_keys($unidade);        
+        $unidade = array_combine($unidade, $unidade);
+        $opcoes1 = array("S"=>"SIM","N"=>"NÃO");
+        $opcoes2 = array("C"=>"CONSUMO","P"=>"PERMANENTE");
+
+        $fields = array(
+			new MTextField('codmaterial','','CATMAT','14','Máximo 14 caracteres'),
+		    new MMultiLineField('descresum','','Descricao Resumida','',2,60,'Máximo 100'),
+            new MMultiLineField('descricao','','Descricao Detalhada','',4,60,'Máximo 500'),
+            new MSelection('unidade','KG','Unidade',$unidade),
+	    	new MTextField('precoestimado','','Preço Estimado','14','Separação decimal por vírgula'),
+            new MSelection('permcons','C','Tipo',$opcoes2),
+            new MSelection('estocavel','N','Estocável',$opcoes1),
+			new MTextField('idelemento','','Elemento','6','Máximo 6 caracteres'),
+			new MTextField('idsubelemento','','Subelemento','2','Máximo 2 caracteres'),
+			new MSelection('ativo','S','Ativo',$opcoes1),
+            new MHiddenField('idMaterial')
+        );
+
+        $this->SetFields($fields);
+        
+        $this->SetFieldAttr('idMaterial','readonly',true);
+
+        $buttons = array(
+                  new MButton('btnSalvar','Enviar'),
+        );
+        $this->SetButtons($buttons);
+
+
+        $this->SetData();
+    }
+
+
+
+    function SetData()
+    {
+        $data = $this->objMaterial;
+        $this->SetFieldValue('idMaterial',$data->idMaterial);
+		$this->SetFieldValue('descresum',$data->descresum);
+        $this->SetFieldValue('descricao',$data->descricao);
+        $this->SetFieldValue('unidade',$data->unidade);
+        
+        $data->precoestimado = str_replace('.', ',', $data->precoestimado);
+		$this->SetFieldValue ('precoestimado',$data->precoestimado);
+        $this->SetFieldValue('permcons',$data->permcons);
+        $this->SetFieldValue('estocavel',$data->estocavel);
+        $this->SetFieldValue('codmaterial',$data->codmaterial);
+        $this->SetFieldValue('idelemento',$data->idelemento);
+        $this->SetFieldValue('idsubelemento',$data->idsubelemento);
+		$this->SetFieldValue('ativo',$data->ativo);
+    }
+
+    public function btnSalvar_click()
+    {
+        $dadosMaterial = $this->objMaterial->getData();
+        $data = $this->getData();
+
+        if (($data->idelemento != $dadosMaterial->idelemento)||($data->idsubelemento != $dadosMaterial->idsubelemento))
+        {
+              if ($this->objMaterial->jaFoiEmpenhado()->result == NULL)    //nunca foi empenhado
+              {
+                  $this->salvarAlteracoes();
+              }
+              else
+              {
+                  $this->manager->error('Existe empenho com este material. <BR> Não é possível alterar o elemento ou subelemento.');
+              }
+        }
+        else
+        {
+            $this->salvarAlteracoes();
+        }
+    }
+
+    function salvarAlteracoes()
+    {
+        
+        $data = $this->GetData();
+        
+        $data->precoestimado = str_replace(',', '.', $data->precoestimado);
+        $this->objMaterial->SetData($data);
+        try
+        {
+             $this->objMaterial->save();
+             $this->manager->information("Dados alterados com sucesso.",$this->manager->getActionUrl('adm','main:material:find') );
+        }
+        catch (Exception $e)
+        {
+             $this->AddError($e->GetMessage());
+        }
+    }
+}
+?>

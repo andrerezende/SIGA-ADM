@@ -1,0 +1,310 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+MIOLO::Import('extensions::cpaint2.inc.php','cpaint'); 
+MIOLO::Import('extensions::class.phpmailer.php','PHPMailer'); 
+
+class gridCapacitacaoInsc extends MObjectGrid
+{
+    var $listURL;
+    var $objModulo;
+    var $cp;  // the cpaint object
+
+    function __construct($objModulo)
+    {
+        global $MIOLO, $module, $page, $context, $self, $action, $perms, $state;
+
+        $this->objModulo = $objModulo;
+
+        $this->cp = new cpaint();
+        $this->cp->register(array($this,'ajax_detail'));
+        // testing if we have a AJAX call - if yes, return; cpaint already did the job...
+        if ($this->start()) 
+        {
+            return;
+        }
+         
+        $status = array(""=>"Pendente","E"=>"Excedente","P"=>"Pendente","A"=>"Autorizado","C"=>"Confirmado", "X"=>"Autoriz-Exc","F"=>"Concluido");
+ 
+        $ctlArray = array( 
+            new MButton( 'btnInsc', 'Confirmar inscrições marcadas'),
+            new MButton( 'btnNotInsc', 'Tornar pendente as inscrições marcadas'),
+            new MButton( 'btnConclude', 'Tornar concluídas as inscrições marcadas'),
+//            new MButton( 'btnRemInsc', 'Remover inscrições marcadas'),
+        );
+
+        $columns = array(
+            new MObjectGridColumn('inscricao','','left', false,'0%',false),
+            new MObjectGridColumn('idvinculo','SIAPE','left', false,'10%',true),
+            new MObjectGridColumn('dadosPessoais->nome','Nome','left', false,'45%',true),
+            new MObjectGridColumn('telefone','Telefone','left', false,'15%',true),
+            new MObjectGridColumn('ts','Data Inscricao','right', false,'20%',true),
+            new MObjectGridColumn('status','Status','right', false,'10%',true,$status),
+        );
+        
+        $action = $MIOLO->GetActionURL('rh','main:capacitacao:modulos:main',"#0#",array('form'=>'dados'));
+
+        $href_grid = $MIOLO->GetActionURL($module,$self);
+        $inscritos = $objModulo->getInscritos();
+//        foreach($inscritos as $i) { var_dump($i->idvinculo);var_dump($i->status);var_dump($i->idcurso);}
+        parent::__construct($inscritos, $columns, $href_grid,0);
+        $this->page->addScript('x/x_core.js');
+        $this->page->addScript('cpaint/cpaint2.inc.js');
+        $this->page->addScript('m_ajax.js');
+//        $this->AddActionIcon('ID','select.gif',$action);
+//        $this->SetTitle('Inscrições para [' . $objModulo->idcurso . ']  ' . $objModulo->nome . ' - ' . $objModulo->modulo);
+        $this->SetTitle('Inscrições para [módulo: ' . $objModulo->modulo . ']  ');
+        $this->setRowMethod('gridCapacitacaoInsc','gridRowMethod');
+        $this->addActionSelect();
+        $this->SetFilter(false);
+        $this->SetIndex(0);
+        $this->SetWidth('99%');
+        $this->SetLinkType('hyperlink');
+        $this->setControls( $ctlArray );
+        // add javascript functions used by this grid
+        $url = $this->manager->getActionURL('rh','modules:grids:gridCapacitacaoInsc.js'); 
+        $this->page->addScriptURL($url);
+
+        $href_detail = "ajaxDetail.call(%r%,%0%,%s%)";
+        $this->addActionDetail( $href_detail );
+        $this->eventHandler();
+    }
+
+    function btnInsc_click()
+    {
+       global $self;
+       $n = count( $this->selecteds );
+       if ( $this->objModulo->podeConfirmar($n) )
+       {
+          foreach( $this->allSelecteds as $pageNum => $p )
+          {
+              foreach( $p as $lineNum )
+              {
+                 $pos    = ( ( $pageNum - 1 ) * $this->getPageLength() ) + $lineNum;
+                 $candidato = clone($this->objArray[$pos]);
+                 if (($candidato->status == "A") || ($candidato->status == "X"))
+                 {
+                     $candidato->getDadosPessoais();
+                     $candidato->setStatus("C");
+                     $this->sendMail($candidato);
+                 }
+              }
+          }
+          $this->page->redirect($this->manager->getActionURL('rh',$self,'',array('idmodulo'=>$this->objModulo->idmodulo)));
+       }
+       else
+       { 
+          $this->selecteds = array();
+          $this->addError('Não foi possível confirmar as inscrições selecionadas, por ultrapassar o número de vagas.');
+       } 
+    }
+
+    function btnNotInsc_click()
+    {
+       global $self;
+       if ( count( $this->selecteds ) )
+       {
+          foreach( $this->allSelecteds as $pageNum => $p )
+          {
+              foreach( $p as $lineNum )
+              {
+                 $pos    = ( ( $pageNum - 1 ) * $this->getPageLength() ) + $lineNum;
+                 $candidato = clone($this->objArray[$pos]);
+                 $candidato->getDadosPessoais();
+                 $candidato->setStatus("P");
+                 $this->sendMail($candidato);
+              }
+          }
+       }
+       $this->page->redirect($this->manager->getActionURL('rh',$self,'',array('idmodulo'=>$this->objModulo->idmodulo)));
+    }
+
+    function btnConclude_click()
+    {
+       global $self;
+       if ( count( $this->selecteds ) )
+       {
+          foreach( $this->allSelecteds as $pageNum => $p )
+          {
+              foreach( $p as $lineNum )
+              {
+                 $pos    = ( ( $pageNum - 1 ) * $this->getPageLength() ) + $lineNum;
+                 $candidato = clone($this->objArray[$pos]);
+                 $candidato->getDadosPessoais();
+                 $candidato->setStatus("F");
+//                 $this->sendMail($candidato);
+              }
+          }
+       }
+       $this->page->redirect($this->manager->getActionURL('rh',$self,'',array('idmodulo'=>$this->objModulo->idmodulo)));
+    }
+
+    function btnRemInsc_click()
+    {
+       global $self;
+       if ( count( $this->selecteds ) )
+       {
+          foreach( $this->allSelecteds as $pageNum => $p )
+          {
+              foreach( $p as $lineNum )
+              {
+                 $pos    = ( ( $pageNum - 1 ) * $this->getPageLength() ) + $lineNum;
+                 $candidato = $this->objArray[$pos];
+                 $candidato->delete();
+              }
+          }
+       }
+       $this->page->redirect($this->manager->getActionURL('rh',$self,'',array('idmodulo'=>$this->objModulo->idmodulo)));
+    }
+
+    function gridRowMethod($i, $row, $actions,$columns)
+    {
+        if ( $row[5]{0} == 'A' )
+        {
+            $columns[5]->control[$i]->setColor('blue');
+            $columns[5]->control[$i]->setBold(true);
+        }
+        if ( $row[5]{0} == 'C' )
+        {
+            $columns[5]->control[$i]->setColor('green');
+            $columns[5]->control[$i]->setBold(true);
+        }
+        if ( $row[5]{0} == 'F' )
+        {
+            $columns[5]->control[$i]->setColor('red');
+            $columns[5]->control[$i]->setBold(true);
+        }
+    }
+
+
+    function generateData()
+    {
+       if ( count( $this->objArray ) )
+       {
+           foreach ($this->objArray as $i => $row)
+           {
+               $row->getDadosPessoais();
+           }
+           parent::generateData();
+       }
+    }
+
+    function GenerateHeader()
+    {
+        return NULL;
+    }
+
+    function GenerateFooter()
+    {
+        if (!$this->data) 
+           $footer[] = $this->GenerateEmptyMsg();
+        $footer[] = new MSeparator();
+        $footer[] = $this->GenerateControls();
+        return $footer;
+    }
+
+    function GenerateBody()
+    {
+        global $MIOLO, $SCRIPT_NAME;
+
+        if ($this->HasErrors())
+        {
+            $leftmargin = '&nbsp;&nbsp;&nbsp;&nbsp;';
+
+            foreach ($this->errors as $e)
+            {
+               $msg .= $leftmargin . "-&nbsp;$e<br>";
+            }
+            $body[] = new MLabel('ERRO! <br>' . $msg .'<br>','red',true);
+        }
+        $body[] = parent::generateBody();
+        return $body;
+    }
+
+    function start()
+    {
+        global $MIOLO;
+        $page = $MIOLO->getPage();
+        if ($ajax = ($page->request('cpaint_function') != "")) 
+        {
+            $MIOLO->getTheme()->clearContent();
+            $page->generateMethod = 'generateAJAX';
+            $page->cpaint = $this->cp;
+            $this->cp->start('ISO-8859-1');
+        }
+        return $ajax;
+    }
+
+    function SendMail($candidato)
+    {  
+       $modulo = $this->manager->getBusiness('rh','capacitacaomodulo',$candidato->idmodulo);
+       $aTurno = array("M"=>"Manhã","T"=>"Tarde","N"=>"Noite");	
+       $turno = $aTurno[$modulo->turno];
+       $pessoa = $candidato->getPessoa();
+       if ($candidato->status = 'P') $msgStatus = 'cancelada';
+       if ($candidato->status = 'C') $msgStatus = 'confirmada';
+       $mail = new PHPMailer();
+       $mail->IsSMTP(); // telling the class to use SMTP
+       $mail->Host = "smtp.ufjf.br"; // SMTP server
+       $mail->From = 'capacita.prorh@ufjf.edu.br';
+       $mail->FromName = 'Pró-Reitoria de Recursos Humanos/UFJF';
+       $mail->Subject = "Cursos/Evento de Capacitação - Inscrição [{$candidato->inscricao}]";
+       $mail->WordWrap = 100;
+       $body =
+<<< HERE
+Olá,
+A seguinte inscrição foi {$msgStatus} pela PRORH:
+
+Número: {$candidato->inscricao}
+
+Curso: {$modulo->curso->nome}
+Módulo: {$modulo->nome}
+Turno: {$turno}
+
+Nome: {$pessoa->nome}
+Siape: {$candidato->idvinculo}
+HERE;
+       $mail->Body = $body;
+       $mail->AddAddress($candidato->dadosPessoais->email);
+//       $mail->AddBCC('ely.matos@ufjf.edu.br');
+//       foreach($coord[$curso] as $c)
+//         $mail->AddBCC($c);
+       $mail->Send();
+    }
+
+    function ajax_detail($id)
+    {
+        // this method is called by CPAINT at doDetail execution
+        global $MIOLO;
+        $inscricao = $MIOLO->GetBusiness('rh','capacitacaoinsc',$id);
+        $data = array();
+        $data[] = "Unidade: " . $inscricao->dadosFuncionais->unidade;    
+        $data[] = "Cargo: " . $inscricao->dadosFuncionais->cargo;    
+        if (($inscricao->status == "C") || ($inscricao->status == "A") || ($inscricao->status == "X"))
+        {
+            $data[] = 'Autorizado por: [' . $inscricao->dadosAuth->siape . '] ' . $inscricao->dadosAuth->nome;
+        }
+        $control = new MTableRaw('',$data);
+        $control->setAlternate(true);
+        // response_type = TEXT : set the content area of theme with the control
+        $MIOLO->getTheme()->setAjaxContent($control);
+    }
+
+
+}
+?>

@@ -1,0 +1,109 @@
+<?
+class frmRepResultado extends Form
+{
+	function __construct()
+	{   
+		// nome do formulário
+		parent::__construct('Imprimir Vencedores');
+		// eventos
+		$this->EventHandler();
+	}
+		
+	Function CreateFields()
+	{
+		global $MIOLO,$module,$item,$self;
+		$idLicitacao = $item;
+		$objLicitacao = $MIOLO->GetBusiness($module,'licitacao',$idLicitacao);
+		$list = $objLicitacao->ListAbertas();
+		$buttons = Array(
+	        	new FormButton('btnReport','Exibir Vencedores','pdf')
+	 	);
+		$this->SetButtons($buttons);
+	}
+	
+	function btnReport_click()
+	{
+		global $MIOLO,$module,$item;		
+		$idLicitacao = $item;
+		$objLicitacao = $MIOLO->GetBusiness($module,'licitacao',$idLicitacao);
+		if($objLicitacao->status < 4)
+		{
+			$MIOLO->Error('Vencedores ainda não definidos para essa licitação!');
+		}
+		else
+		{
+			$cf = new MCurrencyFormatter();			
+			$report = new MEzPDFReport('2','portrait');
+			$h  = $report->pdf->getFontHeight(10);
+			$ui = $this->manager->GetUI();
+			$report->pdf->ezImage($ui->GetImage('','logonet.png'),5,50,'none','left',0);
+			$report->pdf->addText(110,810       ,10,'UFJF - UNIVERSIDADE FEDERAL DE JUIZ DE FORA');
+			$report->pdf->addText(110,810-$h    ,10,'CGCO - CENTRO DE GESTÃO DO CONHECIMENTO ORGANIZACIONAL');
+			$report->pdf->addText(110,810-(2*$h),10,'SIGA - SISTEMA INTEGRADO DE GESTÃO ACADÊMICA');
+            $report->pdf->addText(110,810-(3*$h),10,'COSUP - COORDENADORIA DE SUPRIMENTOS');
+
+			$report->pdf->ezText('<b>VENCEDORES</b>',16,array('justification'=>'center'));
+			$report->pdf->ezText('<b>LICITAÇÃO NÚMERO '.$objLicitacao->numero.'</b>',10,array('justification'=>'center'));		$report->pdf->ezText('',20);			
+			$options['textCol']      = array(0,0,0);
+			$options['shaded']       = 1;
+			$options['showLines']    = 1;		
+			$options['fontSize']     = 10;
+			$options['width']        = 540;
+			$options['xPos']         = 'left';
+			$options['xOrientation'] = 'right';		
+			
+			$descricao = $objLicitacao->ListItensByVencedores($idLicitacao);
+			//var_dump($descricao);
+			$vencedores = $objLicitacao->ListVencedoresByLicitacao($idLicitacao);
+			//var_dump($vencedores);
+			$descItens = $objLicitacao->getDescricaoItens($idLicitacao);
+			//var_dump($descItens);
+
+			if ($vencedores)
+			{				
+				foreach ($vencedores as $venc)
+				{						
+					$nomeEmp = $venc[1];
+                    $cnpj = str_replace(".","",$venc[3]);
+                    $cnpj = str_replace("/","",$cnpj);
+                    $cnpj = str_replace("-","",$cnpj);
+                    $cnpj = trim($cnpj);
+
+                    $cnpjEmp = substr($cnpj,0,2).".".substr($cnpj,2,3).".".substr($cnpj,5,3)."/".substr($cnpj,8,4)."-".substr($cnpj,12,2);
+                    
+					$report->pdf->ezText('<b>EMPRESA: "'.$nomeEmp.'"</b>',10,array('justification'=>'left'));
+					$report->pdf->ezText('<b>CNPJ: '.$cnpjEmp.'</b>',10,array('justification'=>'left'));
+
+					$report->pdf->ezText('',3);					
+					foreach ($descricao as $desc)
+					{						
+						if ($venc[0] == $desc[0])
+						{					
+							foreach ($descItens as $di) 
+							{							
+								if($di[0] == $desc[1])
+								{									
+									$valorItem = $cf->formatWithSymbol($cf->toDecimal($desc[3])); //transforma os valores unitarios em R$
+									$subtotal = ($cf->toDecimal($desc[3]))*$desc[4]; //calculo do subtotal onde val[2] é o valor e val2[2] é a quantidade
+									$total = ($cf->toDecimal($total));
+									$total += $subtotal;	
+									$subtotal = $cf->formatWithSymbol($cf->toDecimal($subtotal));							
+									$dataRel[] = array($desc[1],$di[2],$di[1],$desc[4],$valorItem,$subtotal);					
+								}							
+						    }
+					    }				
+						$total = $cf->formatWithSymbol($cf->toDecimal($total));					
+						$cols = array('<b>ITENS</b>','<b>COD</b>','<b>DESCRIÇÃO</b>','<b>QTD</b>','<b>VALOR UNIT</b>','<b>SUBTOTAL</b>');														
+				    }
+					$dataRel[] = array(null,null,null,null,"<b>TOTAL:</b> ",$total);
+					$report->pdf->ezTable($dataRel,$cols,'',$options);					
+					$report->pdf->ezText('',10);
+					unset($total);
+					unset($dataRel);		
+			   }				
+		      }//if				
+			  $report->Execute();
+		}//else
+	}//function btnReport_click()	
+}//class frmRepResultado extends Form
+?>

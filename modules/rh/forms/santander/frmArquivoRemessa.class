@@ -1,0 +1,508 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmArquivoRemessa extends MForm
+{
+	public $nomeArquivoRemessa;
+	
+	function __construct()
+    {
+        parent::__construct('Geração do arquivo remessa');
+        $this->SetClose($this->manager->GetActionURL('rh', 'main:integracaosiape:santander'));
+        $this->EventHandler();
+    }
+
+
+    function CreateFields()
+    {
+        $ui = $this->manager->getUI();
+        $k = new MKrono();
+		$arrTiposRemessa = Array("P" => "Professores","F" => "Funcionários");
+		$spacer = new MSpacer('15px');
+        $fields = array
+        (
+			$spacer,
+			new MSelection('selTipoRemessa', '', 'Tipo Remessa', $arrTiposRemessa, false),
+        	array(new MTextLabel('txtDownload','Link para download do arquivo:')),
+       		new MLinkButton('lnkDownload','Arquivo'),
+			$spacer,
+			array(new MTextLabel('txtMd5','Código para autenticação MD5 do conteúdo do arquivo (opcional):')),
+       		new MTextLabel('md5s','','','green',false),
+			new MHiddenField('nomeArquivo'),
+        );
+        $this->SetFields($fields);
+
+        $this->setfieldattr('md5s','visible',false);
+        $this->setfieldattr('lnkDownload','visible',false);
+		$this->setfieldattr('txtDownload','visible',false);
+		$this->setfieldattr('txtMd5','visible',false);
+
+		$goFechar = $this->manager->GetActionURL('rh','main:integracaosiape:santander');
+		$goOutro  = $this->manager->GetActionURL('rh','main:integracaosiape:santander:remessa');		
+
+        $buttons = array(
+            new MButton('btnGerar', 'Gerar Arquivo'),
+            new MButton('btnFechar','Cancelar',   $goFechar),
+            new MButton('btnOutro', 'Gerar Outro',$goOutro),
+			new MButton('btnSair',  'Sair',       $goFechar),
+        );
+        $this->SetButtons($buttons);
+		$this->SetButtonAttr('btnSair', 'visible',false);
+		$this->SetButtonAttr('btnOutro','visible',false);
+    }
+
+	
+    function lnkDownload_click()
+    {
+    	$this->nomeArquivoRemessa = $this->GetFormValue('nomeArquivo');
+		$this->manager->SaveFile("rh",$this->nomeArquivoRemessa,"files/");
+    }
+	
+	
+	function btnGerar_click()
+    {
+        $selTipoRemessa = $this->GetFormValue('selTipoRemessa');
+
+        if ( is_null($selTipoRemessa) or empty($selTipoRemessa) )
+        {
+            $erro[] = "Selecione um 'Tipo de Remessa'.";
+        }
+        if ( count($erro) > 0 )
+        {
+            foreach ( $erro as $e )
+            {
+                $this->addError($e);
+            }
+        }
+        else
+        {
+			$dataCriacao = date("Ymd");
+			$horaCriacao = date("His");
+            // HEADER ---------------------------------------------------------------------------------------------------------
+            $TIPO_DO_REGISTRO         = "H"; // preencher sempre com "H" (header)
+            $CNPJ                     = str_pad("21195755000169",15,"0",STR_PAD_LEFT);
+            $ATUALIZACAO_CADASTRO_IES = "I"; // para testes sempre usar I
+            $NUMERO_SEQUENCIA_ENVIO   = "000001"; // para testes obrigatório "000001"
+            $DATA_GERACAO             = $dataCriacao; // formato AAAAMMDD ------------------
+            $HORA_GERACAO             = $horaCriacao; // formato HHMMSS	 ------------------
+            $CAMPO_INULTILIZADO       = "N"; // "campo inultilizado" sempre preenchido com N
+            $CODIGO_IDENTIFICADOR_ARQUIVO = "T"; // sempre "T" quando teste, sempre "P" quando produção
+            $NOME_FANTASIA_UFJF       = str_pad("UNIVERSIDADE FEDERAL DE JUIZ DE FORA",50," ",STR_PAD_LEFT);
+            $CODIGO_FILIAL            = "001"; // null
+			$CODIGO_BANCO             = "000"; // null
+			$TIPO_UNIORG_IDENTIFICADOR_PAB   = "000"; // null
+			$CODIGO_UNIORG_IDENTIFICADOR_PAB = "0000"; // null
+			$NUMERO_CONTA_CORRENTE           = "0000000000000"; // null
+			$LOGRADOURO  = str_pad("BENJAMIM CONSTANT",50," ",STR_PAD_LEFT);
+			$NUMERO      = str_pad("790",6,"0",STR_PAD_LEFT);
+			$COMPLEMENTO = str_pad("",20," ",STR_PAD_LEFT); // null
+			$BAIRRO      = str_pad("",20," ",STR_PAD_LEFT); // null
+			$MUNICIPIO   = str_pad("",20," ",STR_PAD_LEFT);	// null
+			$UF          = str_pad("", 2," ",STR_PAD_LEFT); // null
+			$CEP         = str_pad("", 8,"0",STR_PAD_LEFT); // null
+			$DDD         = str_pad("", 4,"0",STR_PAD_LEFT); // null
+			$TELEFONE    = str_pad("", 8," ",STR_PAD_LEFT); // null
+			$RAMAL       = str_pad("", 5," ",STR_PAD_LEFT); // null
+			$FAX_DDD     = str_pad("", 4,"0",STR_PAD_LEFT); // null
+			$FAX_TELEFONE= str_pad("", 8," ",STR_PAD_LEFT); // null
+			$FAX_RAMAL   = str_pad("", 5," ",STR_PAD_LEFT); // null
+			$NOME_REPRESENTANTE      = str_pad("",50," ",STR_PAD_LEFT); // null
+			$CARGO_REPRESENTANTE     = str_pad("",20," ",STR_PAD_LEFT); // null
+			$DDD_REPRESENTANTE       = str_pad("", 4,"0",STR_PAD_LEFT); // null
+			$TELEFONE_REPRESENTANTE  = str_pad("", 8," ",STR_PAD_LEFT); // null
+			$RAMAL_REPRESENTANTE     = str_pad("", 5," ",STR_PAD_LEFT); // null
+			$COD_NICHO_ALUNO         = str_pad("", 4,"0",STR_PAD_LEFT); // null
+			$COD_NICHO_PROFRESSORES  = str_pad("", 4,"0",STR_PAD_LEFT); // null
+			$COD_NICHO_FUNCIONARIOS  = str_pad("", 4,"0",STR_PAD_LEFT); // null
+			$CAMPO_INULTILIZADO_2    = "   "; // 3 casas sempre preenchidas com espaços
+            $FILLER_1000B            = str_repeat(" ",623); // 829 posições brancos até completar fim 1000bytes
+			$HEADER = 
+					$TIPO_DO_REGISTRO.$CNPJ.
+					$ATUALIZACAO_CADASTRO_IES.$NUMERO_SEQUENCIA_ENVIO.
+					$DATA_GERACAO.$HORA_GERACAO.$CAMPO_INULTILIZADO.
+					$CODIGO_IDENTIFICADOR_ARQUIVO.$NOME_FANTASIA_UFJF.
+					$CODIGO_FILIAL.$CODIGO_BANCO.
+					$TIPO_UNIORG_IDENTIFICADOR_PAB.
+					$CODIGO_UNIORG_IDENTIFICADOR_PAB.
+					$NUMERO_CONTA_CORRENTE.$LOGRADOURO.
+					$NUMERO.$COMPLEMENTO.$BAIRRO.$MUNICIPIO.$UF.$CEP.$DDD.$TELEFONE.$RAMAL.$FAX_DDD.$FAX_TELEFONE.$FAX_RAMAL.
+					$NOME_REPRESENTANTE.$CARGO_REPRESENTANTE.$DDD_REPRESENTANTE.$TELEFONE_REPRESENTANTE.$RAMAL_REPRESENTANTE.
+					$COD_NICHO_ALUNO.$COD_NICHO_PROFRESSORES.$COD_NICHO_FUNCIONARIOS.
+					$CAMPO_INULTILIZADO_2.
+					$FILLER_1000B;
+            // HEADER ---------------------------------------------------------------------------------------------------------
+
+
+            // REGISTROS (DETALHE)------------------------------------------------------------------------------------------------
+			
+			// PEGAR DADOS DO BANCO
+			$objFitaEspelho	= $this->manager->GetBusiness('rh','fitaespelho');
+			$query = $objFitaEspelho->listarServidores($selTipoRemessa);
+
+			$totalRegistros = count($objCursorFitaEspelho->result);
+
+			$REGISTROS = "";
+
+			$contadorDeRegistros = 0;
+
+			while ( ! $query->eof() )
+			{
+				// CAMPO #01
+				$TIPO_REGISTRO = "D"; // sempre preenchido com "D" (detalhe)
+
+				// CAMPO #02
+				$FUNCAO_MOVIMENTO = "I"; // para testes sempre "I" inclusão
+				
+				// CAMPO #03
+				$TIPO_EMISSAO = "E"; // para testes "E" (emissão) / "N" (não emissão)
+				
+				// CAMPO #04
+				$TIPO_EMBOSSAMENTO = "F"; // cartão Java com bandeira mastercard e função debito (by Sirlene - Santander)
+				
+				// CAMPO #05
+				// truncamento do nome para impressão no cartão (20 casas)
+				if ( strlen(trim($query->fields('nome_servidor'))) > 20 )
+				{
+					$pedacos = explode(" ", trim($query->fields('nome_servidor')) );
+					$numeroPedacos = count($pedacos);
+					$nome = $pedacos[0]." ".$pedacos[$numeroPedacos-1];
+					$nome = substr($nome,0,20);
+				}
+				else
+				{
+					$nome =  $query->fields('nome_servidor');
+				}
+
+				$NOME_CARTAO = str_pad(strtoupper(trim($nome)),50," ",STR_PAD_RIGHT);
+				
+				// CAMPO #06
+				$NUMERO_CPF = str_pad(strtoupper(trim($query->fields('cpf'))),11,"0",STR_PAD_LEFT);
+				
+				// CAMPO #07 !
+				$TITULAR_CPF = "S"; // entende-se que todos servidores estejam utilizando seu próprio CPF
+				
+				// CAMPO #08 !
+				$TIPO_DOCUMENTO = "1"; // entende-se que todos servidores tenham identidade 
+
+				//- página 1 ------------------------------------------
+
+				// CAMPO #09 !         // entende-se que todos servidores tenham identidade   
+				//$NUMERO_DOCUMENTO = str_pad(strtoupper(trim($query->fields('rg_numero'))),12,"*",STR_PAD_LEFT);
+				$RG = str_pad(trim($query->fields('rg_numero')),14,"0",STR_PAD_LEFT);
+				$NUMERO_DOCUMENTO = substr($RG,2,14);
+
+				//- página 2 ------------------------------------------
+				
+				// CAMPO #10
+				// passando para o padrao pedido de data AAAAMMDD
+				$dataTemp = $query->fields(strtoupper(trim('rg_dt_emissao')));
+				$diaTemp  =	substr($dataTemp,0,2);
+				$mesTemp  =	substr($dataTemp,2,2);
+				$anoTemp  =	substr($dataTemp,4,4);
+				$dataFinal=	$anoTemp.$mesTemp.$diaTemp;
+				$DT_EMISSAO_DOCUMENTO = str_pad($dataFinal,8,"0",STR_PAD_LEFT); // null
+				
+				// CAMPO #11
+				$ORGAO_EXPEDIDOR_DOCUMENTO = str_pad(substr(trim($query->fields('rg_orgao')),0,6),6," ",STR_PAD_LEFT); // null
+				
+				// CAMPO #12
+				$UF_DOCUMENTO = str_pad(substr(trim($query->fields('rg_uf')),0,2),2," ",STR_PAD_LEFT);; // null
+				
+				// CAMPO #13
+				// passando para o padrao pedido de data AAAAMMDD
+				$dataTemp = $query->fields(strtoupper(trim('dt_nascimento')));
+				$diaTemp  =	substr($dataTemp,0,2);
+				$mesTemp  =	substr($dataTemp,2,2);
+				$anoTemp  =	substr($dataTemp,4,4);
+				$dataFinal=	$anoTemp.$mesTemp.$diaTemp;
+				$DT_NASCIMENTO = str_pad($dataFinal,8," ",STR_PAD_LEFT);
+				
+				// CAMPO #14
+				// traduzir código da nacionalidade
+				$CODIGO_NACIONALIDADE = str_pad("1",1," ",STR_PAD_LEFT); // entende-se que todos sejam brasileiros
+				
+				// CAMPO #15
+				$CODIGO_SEXO = str_pad(strtoupper(trim(($query->fields('sexo')))),1," ",STR_PAD_LEFT);
+				
+				// CAMPO #16 !
+				$CODIGO_ESTADO_CIVIL = str_pad(strtoupper(trim(($query->fields('estado_civil')))),1," ",STR_PAD_LEFT);
+				
+				// CAMPO #17
+				$TIPO_TELEFONE = str_pad("1",1," ",STR_PAD_LEFT); // entende-se que todos usem telefones residenciais
+				
+				// CAMPO #18
+				$DDD_TELEFONE = str_pad("",4,"0",STR_PAD_LEFT);	// null !
+				
+				// CAMPO #19
+				$NUMERO_TELEFONE = str_pad("",8,"0",STR_PAD_LEFT); // null ! (CONTRADITÓRIO)
+				
+				// CAMPO #20
+				$NUMERO_RAMAL = str_pad("",5,"0",STR_PAD_LEFT); // null
+				
+				// CAMPO #21
+				$NUMERO_CELULAR  = str_pad("",15,"0",STR_PAD_LEFT); // null
+				
+				// CAMPO #22
+				$EMAIL = str_pad("",30," ",STR_PAD_LEFT); // null
+				
+				// CAMPO #23
+				$LOGRADOURO = str_pad($this->NormalizarEndereco(strtoupper(trim(($query->fields('end_logradouro'))))),50," ",STR_PAD_LEFT);
+				//echo("<pre>"); var_dump($this->NormalizarEndereco("CLÉBICAR")); echo("</pre>");
+					
+				//- página 3 ------------------------------------------
+
+				// CAMPO #24
+				$NUMERO = str_pad($this->NormalizarEndereco(strtoupper(trim(($query->fields('end_numero'))))),6," ",STR_PAD_LEFT);
+				
+				// CAMPO #25
+				$COMPLEMENTO = str_pad($this->NormalizarEndereco(substr(strtoupper(trim((str_replace("/","",$query->fields('end_complemento'))))),0,15)),15," ",STR_PAD_LEFT); // null
+				
+				// CAMPO #26
+				$BAIRRO = str_pad($this->NormalizarEndereco(substr(strtoupper(trim(($query->fields('end_bairro')))),0,30)),30," ",STR_PAD_LEFT);
+				
+				// CAMPO #27
+				$MUNICIPIO = str_pad($this->NormalizarEndereco(strtoupper(trim(($query->fields('end_municipio'))))),30," ",STR_PAD_LEFT);
+				
+				// CAMPO #28
+				$UF = str_pad(strtoupper(trim(($query->fields('end_uf')))),2," ",STR_PAD_LEFT);
+				
+				// CAMPO #29
+				$CEP = str_pad(strtoupper(trim(($query->fields('end_cep')))),8,"0",STR_PAD_LEFT);
+				
+				// CAMPO #30
+				$PAIS = str_pad("BRASIL",20," ",STR_PAD_LEFT); // entende-se que todo endereço seja no brasil
+				
+				// CAMPO #31
+				$SIAPE = str_pad(strtoupper(trim(($query->fields('siape')))),15,"0",STR_PAD_LEFT);  // siape completado com 0 (zero) a esquerda 
+				
+				// CAMPO #32
+				$COD_BARRA_SIAPE = str_pad(strtoupper(trim(($query->fields('siape')))),14,"0",STR_PAD_LEFT);	// siape completado com 0 (zero) a esquerda 
+				
+				// CAMPO #33
+				$MONTAGEM_CHIP_01 = $CNPJ.$CODIGO_FILIAL.$COD_BARRA_SIAPE.$SIAPE.$NOME_CARTAO;
+				$CHIP_01 = str_pad($MONTAGEM_CHIP_01,256," ",STR_PAD_LEFT);
+				
+				// CAMPO #34
+				$CHIP_02 = str_pad("",256," ",STR_PAD_LEFT);
+				
+				// CAMPO #35
+				if ( strtoupper(trim($selTipoRemessa)) == "P" )
+				{
+					$tipoVinculo = "2";
+				}
+				else if( strtoupper(trim($selTipoRemessa)) == "F" )
+				{
+					$tipoVinculo = "3";
+				}
+				else
+				{
+					$tipoVinculo = "4"; // não utilizado - espera-se numca cair nesse caso
+				}
+					
+				$TIPO_VINCULO_IES = $tipoVinculo; // 2 PROF. 3 FUNC.
+				
+				// CAMPO #36
+				$RENDA_MENSAL = str_pad("",14,"0",STR_PAD_LEFT); // null
+
+				//- página 4 ------------------------------------------
+				
+				// CAMPO #37
+				$NUMERO_CONTA_CORRENTE = str_pad("",13," ",STR_PAD_LEFT); // null
+				
+				// CAMPO #38
+				$LINHA_EXTRA_CARTAO = str_pad("",24," ",STR_PAD_LEFT); // null
+				
+				// CAMPO #39
+				$ANO_EM_CURSO = str_pad("",2," ",STR_PAD_LEFT); // null
+				
+				// CAMPO #40
+				$DATA_CONCLUSAO_CURSO = str_pad("",6," ",STR_PAD_LEFT); // null
+				
+				// CAMPO #41
+				$LINHA_EXTRA_CARTAO_2 = str_pad("",55," ",STR_PAD_LEFT); // null
+				
+				// CAMPO #42
+				$FILLER_ATE_1000B = str_pad("",14," ",STR_PAD_LEFT); // completando até o byte 1000 do registro (obrigatório)
+
+				// Concatenando campos para formar um registro (1 linha = 1000bytes)
+				$REGISTROS .= $TIPO_REGISTRO.$FUNCAO_MOVIMENTO.
+					$TIPO_EMISSAO.$TIPO_EMBOSSAMENTO.$NOME_CARTAO.$NUMERO_CPF.
+					$TITULAR_CPF.$TIPO_DOCUMENTO.$NUMERO_DOCUMENTO.$DT_EMISSAO_DOCUMENTO.
+					$ORGAO_EXPEDIDOR_DOCUMENTO.$UF_DOCUMENTO.$DT_NASCIMENTO.$CODIGO_NACIONALIDADE.
+					$CODIGO_SEXO.$CODIGO_ESTADO_CIVIL.$TIPO_TELEFONE.$DDD_TELEFONE.
+					$NUMERO_TELEFONE.$NUMERO_RAMAL.$NUMERO_CELULAR.$EMAIL.$LOGRADOURO.$NUMERO.$COMPLEMENTO.
+					$BAIRRO.$MUNICIPIO.$UF.$CEP.$PAIS.$SIAPE.$COD_BARRA_SIAPE.
+					$CHIP_01.$CHIP_02.$TIPO_VINCULO_IES.$RENDA_MENSAL.$NUMERO_CONTA_CORRENTE.
+					$LINHA_EXTRA_CARTAO.$ANO_EM_CURSO.$DATA_CONCLUSAO_CURSO.$LINHA_EXTRA_CARTAO_2.$FILLER_ATE_1000B."\n";
+
+				$contadorDeRegistros++;
+				$query->MoveNext();
+			} // final while percorre cursor
+            // REGISTROS (DETALHE)------------------------------------------------------------------------------------------------
+
+
+            // TRAILER ---------------------------------------------------------------------------------------------------------
+			$TIPO_DO_REGISTRO_TRAILER = "T"; // sempre preenchido com "T"
+            $QUANTIDADE_REGISTROS	  = str_pad(trim($contadorDeRegistros),6,"0",STR_PAD_LEFT); // quantidade de registros de detalhe
+            $FILLER_TRAILER_1000B	  = str_pad("",993," ",STR_PAD_LEFT); // 993 posições brancos até completar fim 1000bytes
+            $TRAILER = $TIPO_DO_REGISTRO_TRAILER.$QUANTIDADE_REGISTROS.$FILLER_TRAILER_1000B;
+            // TRAILER ---------------------------------------------------------------------------------------------------------
+
+            $CONTEUDO = $HEADER."\n".$REGISTROS.$TRAILER;
+			//var_dump($CONTEUDO);
+
+			$nomeArquivoRemessa = "ARQ_REMESSA_SANTANDER_".$selTipoRemessa."_".$dataCriacao."_".$horaCriacao.".txt"; 
+			$this->nomeArquivoRemessa = $nomeArquivoRemessa;
+
+			// GERAR O ARQUIVO EM DISCO (PARA DISPONIBILIZAR PARA DOWNLOAD)
+			$file = fopen($this->manager->getConf('home.modules')."/rh/files/".$nomeArquivoRemessa,"w+");
+			fwrite($file,$CONTEUDO);
+			fclose($file);
+
+			// SALVAR O ARQUIVO GERADO EM BANCO DE DADOS
+			$hashmd5		= hash_file("md5",$this->manager->getConf('home.modules')."/rh/files/".$nomeArquivoRemessa);
+           	$tamanhoArquivo = strlen($CONTEUDO);
+			$data			= date("d/m/Y");
+
+			$objArquivo = $this->manager->getBusiness('common','arquivo');
+			$objArquivo->md5			= $hashmd5;
+			$objArquivo->nome			= $nomeArquivoRemessa;
+			$objArquivo->caminho		= "GRAVADO NO BANCO (CAMPO BLOB)";
+			$objArquivo->tipoMime		= "text/plain";
+			$objArquivo->tamanho		= $tamanhoArquivo;
+			$objArquivo->mesReferencia	= "00";
+			$objArquivo->anoReferencia	= "00";
+			$objArquivo->dataGravacao	= $data;
+			$objArquivo->idUsuario		= $login->idkey;
+			$objArquivo->processado		= "1";
+			$objArquivo->conteudo		= $CONTEUDO;
+			$objArquivo->dataProcessamento	= $data;
+			$objArquivo->scriptProcessamento= "NAO E PROCESSADO";
+			$objArquivo->caminhoScript		= "NAO E PROCESSADO";
+			$objArquivo->Save();
+
+			$this->SetFieldAttr('selTipoRemessa','visible',false);
+			$this->setfieldattr('txtDownload','visible',true);
+			$this->setfieldattr('txtMd5','visible',true);
+			$this->SetFieldAttr('lnkDownload','visible',true);
+			$this->SetFieldAttr('lnkDownload','label',$this->nomeArquivoRemessa);
+			$this->SetFieldAttr('nomeArquivo','value',$this->nomeArquivoRemessa);
+			$this->SetFieldAttr('md5s','value',$hashmd5);
+			$this->SetFieldAttr('md5s','visible',true);
+                
+			$this->SetButtonAttr('btnGerar', 'visible',false);
+			$this->SetButtonAttr('btnFechar','visible',false);
+			$this->SetButtonAttr('btnOutro', 'visible',true);
+			$this->SetButtonAttr('btnSair',  'visible',true);
+						
+			$info = "Arquivo gerado com sucesso!<br>Faça o <u>download</u> do arquivo usando o link abaixo.";
+			$this->addInfo($info);
+
+       }
+    }
+
+
+	function NormalizarEndereco($texto)
+	{
+			$texto = strtolower(trim($texto));
+			// tirar acentos e sinais gráficos
+			$texto = eregi_replace("[#áàâãäÄªÓó·]","a",$texto);		   
+			$texto = eregi_replace("[¿éèê`]","e",$texto);
+			$texto = eregi_replace("[±òôõº]","o",$texto);	
+			$texto = eregi_replace("[úùû·]","u",$texto);
+			$texto = eregi_replace("[\"œ]","i",$texto);
+			$texto = eregi_replace("[çŸŸ]","c",$texto);
+			$texto = eregi_replace("[Ññ]","n",$texto);
+
+			$texto = str_replace(", "," ",$texto);
+			$texto = str_replace(","," ",$texto);
+			$texto = str_replace(".","",$texto);
+			$texto = str_replace(":"," ",$texto);
+
+			$texto = str_replace("--", " ",$texto);
+			$texto = str_replace("--", " ",$texto);
+			$texto = str_replace("-", " ",$texto);
+
+			$texto = str_replace("__", " ",$texto);
+			$texto = str_replace("__", " ",$texto);
+			$texto = str_replace("_", " ",$texto);
+
+			$texto = str_replace("  ", " ",$texto);
+			$texto = str_replace("  ", " ",$texto);
+			$texto = str_replace("  ", " ",$texto);
+			$texto = str_replace("  ", " ",$texto);
+
+			$texto = str_replace(" , ", ",",$texto);
+			$texto = str_replace(", ", ",",$texto);
+			$texto = str_replace(" ,", ",",$texto);
+
+			$texto = str_replace("apartamento","ap",$texto);
+			$texto = str_replace(" apto ", "/",$texto);
+			$texto = str_replace(" apt ", "/",$texto);
+			$texto = str_replace(" ap ", "/",$texto);
+
+			$texto = str_replace(" / ", "/",$texto);
+			$texto = str_replace("/ ", "/",$texto);
+			$texto = str_replace(" /", "/",$texto);
+
+			$texto = str_replace("bloco","bl",$texto);
+			$texto = str_replace("lote","lt",$texto);
+			$texto = str_replace("estrada","est",$texto);
+			$texto = str_replace("cx postal","cp",$texto);
+			$texto = str_replace("caixa postal","cp",$texto);
+
+			$texto = str_replace("conjunto","conj",$texto);
+			$texto = str_replace("bloco","bl",$texto);
+			$texto = str_replace("rua","r",$texto);
+			$texto = str_replace("avenida","av",$texto);
+			$texto = str_replace("doutor","dr",$texto);
+			$texto = str_replace("capitao","cap",$texto);
+			$texto = str_replace("sargento","sgt",$texto);
+			$texto = str_replace("coronel","cel",$texto);
+			$texto = str_replace("travessa","trav",$texto);
+			$texto = str_replace("praca","p",$texto);
+			$texto = str_replace("condominio","cond",$texto);
+			$texto = str_replace("condomínio","cond",$texto);
+			$texto = str_replace("sant","snt",$texto);
+			$texto = str_replace("senhor","sr",$texto);
+			$texto = str_replace("professor","prof",$texto);  
+			$texto = str_replace("tel","",$texto); 
+			$texto = str_replace("edificio","ed",$texto);  
+			$texto = str_replace("edifício","ed",$texto);  
+			// passado acima
+			//$texto = str_replace("apartamento", "/",$texto);
+			// diminuir string
+			$texto = str_replace("primeiro","1",$texto);  
+			$texto = str_replace("segundo","2",$texto);
+			$texto = str_replace("terceiro","3",$texto);
+			$texto = str_replace("quarto","4",$texto);
+			$texto = str_replace("quinto","5",$texto);
+			$texto = str_replace("sexto","6",$texto);
+			$texto = str_replace("setimo","7",$texto);
+			$texto = str_replace("oitavo","8",$texto);
+			$texto = str_replace("nono","9",$texto);
+			$texto = str_replace("decimo","10",$texto);
+			$texto = str_replace("  "," ",$texto);
+			$texto = str_replace("  "," ",$texto);
+			$texto = str_replace("  "," ",$texto);
+			$texto = str_replace("  "," ",$texto);
+			return strtoupper($texto);
+	} 
+}
+?>

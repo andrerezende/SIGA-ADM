@@ -1,0 +1,2019 @@
+<?
+
+class frmRequisicaoveiculo extends Form {
+
+		protected $objRequisicao;
+		private $grid, $form;
+		private $cpf2;
+		public $objPessoa;
+		public $flag = false;
+
+		function __construct($objRequisicao) {
+				$this->objRequisicao = $objRequisicao;
+				$this->Form(null);
+				$this->EventHandler();
+				$this->page->AddJsCode(file_get_contents(dirname(__FILE__) . '/../../ui/js/mask.js'));
+		}
+
+		function CreateFields() {
+				// 30-11-2011 - Daniel Bonfim
+
+				global $MIOLO, $module;
+				$ui = $this->manager->getUi();
+
+				$this->form = $ui->GetForm($module, 'frmItinerarioNew', $this->objRequisicao, 'requisicoes');
+				$lkpLocalOrigem = new MLookupTextField('localOrigem', '', 'Origem', 20);
+				$lkpLocalDestino = new MLookupTextField('localDestino', '', 'Destino', 20);
+
+				$texto = new Text('Data', '<br>Data de Saída');
+
+				$lkpLocalOrigem->module = 'adm';
+				$lkpLocalOrigem->item = 'endereco';
+				$lkpLocalOrigem->event = 'filler';
+				$lkpLocalOrigem->related = 'localOrigem';
+
+				$lkpLocalDestino->module = 'adm';
+				$lkpLocalDestino->item = 'endereco';
+				$lkpLocalDestino->event = 'filler';
+				$lkpLocalDestino->related = 'localDestino';
+
+
+				$horaSaida = new TextField('horaSaida', '', 'Hora de saída', 5, 'Ex: 19:25');
+				$horaSaida->AddAttribute('onBlur', 'makeMask(this, \'##:##\');');
+				$horaSaida->AddAttribute('maxlength', '5');
+				$itinerario = array($lkpLocalOrigem,
+						$lkpLocalDestino,
+						new CalendarField('dataSaida', '', 'Data de Saída', 10, 'Ex: 01/01/2001'), $horaSaida
+				);
+
+
+				$this->grid = $ui->GetGrid('adm', 'gridItinerarioEndereco', $this->objRequisicao);
+
+				$fields = array(
+						new HiddenField('idPessoa'),
+						new MPanel('', 'Dados do Responsável'),
+						new TextField('nome', '', 'Nome', 50),
+						new TextField('siape', '', 'Matrícula Siape', 20),
+						new TextField('cpf', '', 'CPF', 20, '999.999.999-99'),
+						new HiddenField('hiddenCpf', ''),
+						new TextField('telefone', '', 'Telefone de Contato', 20),
+						new TextField('celular', '', 'Celular de Contato', 20),
+						new MSpacer(2),
+						new MPanel('painelViagem', 'Dados da Viagem'),
+						new HiddenField('idUsuarioGestor', ''),
+				);
+
+
+				$this->SetFields($fields);
+				$objRequisicaoVeiculo = $this->manager->getBusiness('adm', 'requisicaoveiculo');
+				$objRequisicaoVeiculo = $objRequisicaoVeiculo->GetById($this->objRequisicao->idRequisicao);
+
+				/* --------------------------------------------Adicionar Dados da Viagem----------------------------------------------------------- */
+				$this->AddField(new Selection('tipoVeiculo', $objRequisicaoVeiculo->tipoVeiculo, 'Tipo Veículo'));
+				$this->AddField(new Selection('tipoTransporte', $objRequisicaoVeiculo->tipoTransporte, 'Transporte'));
+				$this->AddField(new TextField('qtdPassageiros', $objRequisicaoVeiculo->quantidadePassageiros, 'Quantidade de Passageiros', 10, 'Total sem motorista'));
+				$this->AddField(new MMultiLineField('outrosPassageiros', $objRequisicaoVeiculo->nomePassageiros, 'Relação de Passageiros', '', 3, 50));
+				$this->AddField(new MMultiLineField('justificativa', $objRequisicaoVeiculo->justificativa, 'Finalidade da Viagem', '', 3, 50));
+				$this->AddField(new MMultiLineField('obs', $objRequisicaoVeiculo->obs, 'Observações', '', 3, 50));
+				$this->AddField(new MSpacer(2));
+				$this->AddField(new MLinkButton('linkItinerario', 'Inserir Itinerario', ''));
+
+
+				$this->SetFieldAttr('localOrigem', 'endereco', $lkpLocalOrigem);
+				$this->SetClose(NULL);
+
+
+				$this->cpf->addAttribute('onKeyUp', 'makeMask(this, \'###.###.###-##\');');
+				$this->cpf->addAttribute('onKeyUp', 'makeMask(this, \'###.###.###-##\');');
+				$this->cpf->addAttribute('onBlur', 'makeMask(this, \'###.###.###-##\');');
+				$this->cpf->AddAttribute('maxlength', '14');
+				$tabelaGeral = $this->manager->getBusiness('common', 'tabelageral');
+				$query = $tabelaGeral->listByTabela('AD_TIPOCARGA');
+				$this->SetFieldAttr('tipoTransporte', 'options', $query->result);
+
+				$tipoVeiculo = $this->manager->getBusiness('adm', 'tipoveiculo');
+				$query = $tipoVeiculo->listAll();
+				$this->SetFieldAttr('tipoVeiculo', 'options', $query->result);
+
+				$buttons = array(
+						new FormButton('btnSolicitar', 'Enviar'),
+						new FormButton('btnSalvar', 'Confirmar'),
+						new FormButton('btnSalvareSolicitar', 'Confirmar e requerer para outro passageiro'),
+						new FormButton('btnAtender', 'Enviar'),
+						new FormButton('btnConfirmarAtendimento', 'Confirmar'),
+						new FormButton('btnExecutar', 'Enviar'),
+						new FormButton('btnConfirmarExecucao', 'Confirmar'),
+						new FormButton('btnAnular', 'Anular Requisição'),
+						new FormButton('btnLiberar', 'Enviar'),
+						new FormButton('btnRecusar', 'Enviar'),
+						new FormButton('btnConfirmarRecusa', 'Confirmar'),
+						new FormButton('btnAvaliar', 'Enviar'),
+						new FormButton('btnConfirmarAvaliacao', 'Confirmar'),
+						new FormButton('btnRetornaExecucao', 'Retornar Execução'),
+						new FormButton('btnConfirmarRetorno', 'Confimar Retorno'),
+						new FormButton('btnEstornar', 'Estornar'),
+						new FormButton('btnCancelar', 'Cancelar'),
+						new FormButton('btnNextCPF', 'Enviar'),
+						new FormButton('btnCPF', 'Procurar'),
+						//IFF
+						new MButtonWindow('btnAbastecimento', 'Cadastrar Abastecimentos', $this->manager->GetActionURL('adm', 'main:abastecimento', $this->objRequisicao->idRequisicao))
+				);
+				$this->SetButtons($buttons);
+
+				$this->setButtonAttr('btnSalvar', 'visible', FALSE);
+				$this->setButtonAttr('btnSalvareSolicitar', 'visible', FALSE);
+				$this->setButtonAttr('btnExecutar', 'visible', FALSE);
+				$this->setButtonAttr('btnAtender', 'visible', FALSE);
+				$this->setButtonAttr('btnConfirmarAtendimento', 'visible', FALSE);
+				$this->setButtonAttr('btnCPF', 'visible', FALSE);
+				$this->setButtonAttr('btnSolicitar', 'visible', FALSE);
+				$this->setButtonAttr('btnConfirmarExecucao', 'visible', FALSE);
+				$this->setButtonAttr('btnCancelar', 'visible', FALSE);
+				$this->setButtonAttr('btnLiberar', 'visible', FALSE);
+				$this->setButtonAttr('btnRecusar', 'visible', FALSE);
+				$this->setButtonAttr('btnConfirmarRecusa', 'visible', FALSE);
+				$this->setButtonAttr('btnAvaliar', 'visible', FALSE);
+				$this->setButtonAttr('btnConfirmarAvaliacao', 'visible', FALSE);
+				$this->setButtonAttr('btnRetornaExecucao', 'visible', FALSE);
+				$this->setButtonAttr('btnConfirmarRetorno', 'visible', FALSE);
+				$this->setButtonAttr('btnNextCPF', 'visible', FALSE);
+				$this->setButtonAttr('btnAnular', 'visible', FALSE);
+				$this->setButtonAttr('btnEstornar', 'visible', FALSE);
+				//IFF
+				$this->setButtonAttr('btnAbastecimento', 'visible', FALSE);
+
+				// Se está fazendo a requisicao municipio de origem é setado com Juiz de Fora
+				if ($this->objRequisicao->status != '1') {
+						$this->setButtonAttr('btnSolicitar', 'visible', FALSE);
+						$this->setObjectData();
+				}
+
+				$idUsuario = $this->manager->GetLogin()->idkey;
+
+				switch ($this->objRequisicao->status) {
+
+						case 1:
+
+								// validator de CPF só quando o usuário está fazendo a requisição
+								//$validators = array(new CPFValidator('cpf','','required'));
+								//$this->SetValidators($validators);
+								// Verifica se é a requisição do primeiro passageiro (controle == null)
+								if ($controle = $this->getFormValue('controle') != null) {
+										$idRequisicaoAntiga = $this->getFormValue('idRequisicaoAntiga');
+										$tipoVeiculo = $this->getFormValue('tipoVeiculo');
+										if (($tipoVeiculo == '2') || ($tipoVeiculo == '4')) {
+												$this->AddInfo("Solicitação submetida à avaliação do gestor. O número da requisição é " . $idRequisicaoAntiga . ". Atenção, a lista dos passageiros deve ser enviada ao setor de Transportes até 5 dias antes da viagem.");
+										} else {
+												$this->AddInfo("Solicitação submetida à avaliação do gestor. O número da requisição é " . $idRequisicaoAntiga . ".");
+										}
+										$this->SetDataDadosRequisicao();
+										$this->setReadOnlyDadosRequisicao();
+
+										if ($objRequisicaoVeiculo->idPessoa) {
+												$this->btnCPF_click();
+										} else {
+
+												$this->visible(FALSE);
+										}
+
+										//$this->SetFieldAttr('valorEstimado','visible',FALSE);
+										$this->SetButtonAttr('btnNextCPF', 'visible', TRUE);
+								} else {
+										if ($objRequisicaoVeiculo->idPessoa) {
+												$this->visible(FALSE);
+												$this->btnCPF_click();
+										} else {
+
+												$this->visible(FALSE);
+										}
+										//$this->setFieldAttr('valorEstimado','visible',FALSE);
+										$this->setButtonAttr('btnCPF', 'visible', TRUE);
+								}
+								break;
+
+						case 2: // Solicitada, a ser autorizada pelo gestor da UO requisitante
+								$this->objRequisicao->getUoRequisitante();
+								if ($this->objRequisicao->uoRequisitante->isGestorOf($idUsuario)) {
+										$itemRequisicao = $this->objRequisicao->getItem();
+
+										$this->posCriada();
+										$this->AddField(new Separator('<b>AÇÕES DO GESTOR DA UO REQUISITANTE</b>'));
+
+
+										$this->SetFormValue('idUsuarioGestor', $idUsuario);
+
+										$this->AddField(New Selection('acaoGestorUoReq', '', 'Ação'));
+										$this->AddField(new MultiLineField('motivoRejeicao', '', 'Motivo', '', 3, 50));
+
+										$tipoAcao = array("4" => "AUTORIZAR", "5" => "DEVOLVER", "6" => "RECUSAR");
+										$this->SetFieldAttr('acaoGestorUoReq', 'options', $tipoAcao);
+										$this->setFieldAttr('cpf', 'visible', FALSE);
+										//$this->setFieldAttr('endereco','visible',FALSE);
+										//$this->setFieldAttr('numrg','visible',FALSE);
+										$this->setFieldAttr('telefone', 'visible', FALSE);
+										//$this->setFieldAttr('bairro','visible',FALSE);
+										//$this->setFieldAttr('cep','visible',FALSE);
+										//$this->setFieldAttr('edtEstado','visible',FALSE);
+										//$this->setFieldAttr('lkpMunicipio','visible',FALSE);
+										$this->setFieldAttr('tipoVeiculo', 'visible', TRUE);
+										$this->setFieldAttr('tipoTransporte', 'visible', FALSE);
+										$this->setButtonAttr('btnAtender', 'visible', TRUE);
+								}
+								break;
+
+						case 4: // Autorizada, a ser liberada para execução
+								$this->objRequisicao->getUoExecutante();
+								$this->posCriada();
+								$this->setFieldAttr('cpf', 'visible', FALSE);
+
+								//$this->setFieldAttr('endereco','visible',FALSE);
+								//$this->setFieldAttr('numrg','visible',FALSE);
+								$this->setFieldAttr('telefone', 'visible', FALSE);
+								//$this->setFieldAttr('bairro','visible',FALSE);
+								//$this->setFieldAttr('cep','visible',FALSE);
+								//$this->setFieldAttr('edtEstado','visible',FALSE);
+								//$this->setFieldAttr('lkpMunicipio','visible',FALSE);
+								$this->setFieldAttr('tipoVeiculo', 'visible', TRUE);
+								$this->setFieldAttr('tipoTransporte', 'visible', FALSE);
+
+
+								if ($this->objRequisicao->uoExecutante->isExecutorOf($idUsuario)) {
+										$this->AddField(new MSpacer(2));
+										//$this->AddField(new Separator('<b>LIBERAÇÃO DA REQUISIÇÃO</b>'));
+										$this->AddField(new MPanel('', 'Liberação da Requisição'));
+										$tipoAcao = array("1" => "LIBERAR", "2" => "RECUSAR");
+										$this->AddField(New Selection('acaoGestorUoExec', '', 'Ação', $tipoAcao));
+										$this->AddField(new MultiLineField('motivoRejeicao', '', 'Motivo da Recusa', '', 3, 50));
+
+										$this->AddField(new HiddenField('idMotorista', ''));
+										$this->AddField(new MLookupFieldValue('lkpMotorista', '', 'Motorista', 50));
+										$this->AddField(new HiddenField('placa', ''));
+										$this->AddField(new MLookupFieldValue('lkpVeiculo', '', 'Veículo', 50));
+										$this->AddField(new MSpacer(2));
+
+										//$this->AddField(new CalendarField('DataVeiculoConsulta', '', 'Data Consulta', 15, 'Ex: 01/01/2001'));
+										//$this->AddField(new FormButton('btnConsultarVeiculo', 'Consultar Veiculo'));
+
+
+
+
+										//TAKA
+
+										$this->SetFieldAttr('lkpMotorista', 'module', 'adm');
+										$this->SetFieldAttr('lkpMotorista', 'item', 'motorista');
+										$this->SetFieldAttr('lkpMotorista', 'event', 'filler');
+										$this->SetFieldAttr('lkpMotorista', 'related', 'idMotorista,lkpMotorista');
+										$SESSAO = $this->manager->getSession();
+										$SESSAO->set('tipoveiculo', $this->tipoVeiculo->getValue());
+										$this->SetFieldAttr('lkpVeiculo', 'module', 'adm');
+										$this->SetFieldAttr('lkpVeiculo', 'item', 'veiculo');
+										$this->SetFieldAttr('lkpVeiculo', 'event', 'filler');
+
+										$this->SetFieldAttr('lkpVeiculo', 'related', 'null,placa,null,null,lkpVeiculo');
+										//$this->SetFieldAttr('lkpVeiculo','related','placa,null,null,lkpVeiculo');
+
+										$this->setButtonAttr('btnLiberar', 'visible', TRUE);
+								}
+								break;
+
+						case 5: // Devolvida para acertos
+								$this->setReadOnly(FALSE, TRUE);
+								$this->setButtonAttr('btnSolicitar', 'visible', TRUE);
+								$this->AddField(new MultiLineField('motivoRejeicao', $this->objRequisicao->motivoRejeicao, 'Motivo da Devolução', '', 3, 50));
+								$this->setFieldAttr('motivoRejeicao', 'readonly', TRUE);
+
+								break;
+
+						case 7: // Liberada pela UO Exec, a ser executada pelo gestor da UO executante
+								$this->posCriada();
+								$this->objRequisicao->getUoExecutante();
+								$this->objRequisicao->getUoRequisitante();
+								$itemRequisicao = $this->objRequisicao->getItem();
+								if ($this->objRequisicao->uoExecutante->isExecutorOf($idUsuario)) {
+										//$itemRequisicao = $this->objRequisicao->getItem();
+										$itemRequisicao->retrieveAssociation('veiculo');
+
+										$options=array(1=>'OK', 2=>'NÃO CONFORME', 3=>'NÃO SE APLICA');
+
+										$this->AddField(new Separator('<b>EXECUÇÃO DA REQUISIÇÃO</b>'));
+										$this->AddField(new HiddenField('idMotorista', ''));
+										$this->AddField(new MLookupFieldValue('lkpMotorista', $itemRequisicao->motorista->pessoa->nome, 'Motorista', 50));
+										$this->AddField(new HiddenField('placa', ''));
+										$this->AddField(new MLookupFieldValue('lkpVeiculo', $itemRequisicao->veiculo->modelo . " - " . $itemRequisicao->placa, 'Veículo', 50));
+										$this->AddField(new TextField('odometroSaida', '', 'Odômetro Saída', 10));
+										$this->AddField(new CalendarField('dataSaida', '', 'Data Saída', '10', 'Ex.: 01/01/2001'));
+										$this->AddField(new TextField('horaSaida', '', 'Hora Saída', 10, 'Ex.: 19:00'));
+										$this->AddField(new TextField('odometroChegada', '', 'Odômetro Chegada', 10));
+										$this->AddField(new CalendarField('dataChegada', '', 'Data Chegada', '10', 'Ex.: 01/01/2001'));
+										$this->AddField(new TextField('horaChegada', '', 'Hora Chegada', 10, 'Ex.: 19:00'));
+										//$this->AddField(new CurrencyField('valorReal','','Valor Real',10,''));
+										$this->AddField(new MultiLineField('ocorrencias', '', 'Ocorrências', '', 3, 50));
+										$this->AddField(new MSpacer(1));
+										//$this->AddField(new Separator('<b>INSPEÇÃO DO VEÍCULO</b>'));
+										//Inspecao
+										$this->AddField(new MPanel('titulo2', 'Inspeção de Veículo'));
+										$this->AddField(new MSpacer(1));
+										$this->AddField(new MSeparator(''));
+										$this->AddField(new MTextLabel('label','Nível Óleo Motor'));
+										$this->AddField(new MSelection('nivelOleoMotor', '', '', $options));
+										$this->AddField(new MTextLabel('label','Observações'));
+										$this->AddField(new MultiLineField('nivelOleoMotorObs','','','',4,50));
+										$this->AddField(new MSeparator(''));
+										$this->AddField(new MTextLabel('label','Nível Óleo Hidráulico (Freio e Direção)'));
+										$this->AddField(new MSelection('nivelOleoHidraulico', '', '', $options));
+										$this->AddField(new MTextLabel('label','Observações'));
+										$this->AddField(new MultiLineField('nivelOleoHidraulicoObs','','','',4,50));
+										$this->AddField(new MSeparator(''));
+										$this->AddField(new MTextLabel('label','Nível Água Arref Motor'));
+										$this->AddField(new MSelection('nivelAguaArref', '', '', $options));
+										$this->AddField(new MTextLabel('label','Observações'));
+										$this->AddField(new MultiLineField('nivelAguaArrefObs','','','',4,50));
+										$this->AddField(new MSeparator(''));
+										$this->AddField(new MTextLabel('label','Nível Água Limpeza de Pára Brisa'));
+										$this->AddField(new MSelection('nivelAguaLimpeza', '', '', $options));
+										$this->AddField(new MTextLabel('label','Observações'));
+										$this->AddField(new MultiLineField('nivelAguaLimpezaObs','','','',4,50));
+										$this->AddField(new MSeparator(''));
+										$this->AddField(new MTextLabel('label','BANCO / ASSENTOS'));
+										$this->AddField(new MSelection('bancosAssentos', '', '', $options));
+										$this->AddField(new MTextLabel('label','Observações'));
+										$this->AddField(new MultiLineField('bancosAssentosObs','','','',4,50));
+										$this->AddField(new MSeparator(''));
+										$this->AddField(new MTextLabel('label','Assoalho'));
+										$this->AddField(new MSelection('assoalho', '', '', $options));
+										$this->AddField(new MTextLabel('label','Observações'));
+										$this->AddField(new MultiLineField('assoalhoObs','','','',4,50));
+										$this->AddField(new MSeparator(''));
+										$this->AddField(new MTextLabel('label','Buzina'));
+										$this->AddField(new MSelection('buzina', '', '', $options));
+										$this->AddField(new MTextLabel('label','Observações'));
+										$this->AddField(new MultiLineField('buzinaObs','','','',4,50));
+										$this->AddField(new MSeparator(''));
+										$this->AddField(new MTextLabel('label','Cinto de Segurança'));
+										$this->AddField(new MSelection('cintoSeguranca', '', '', $options));
+										$this->AddField(new MTextLabel('label','Observações'));
+										$this->AddField(new MultiLineField('cintoSegurancaObs','','','',4,50));
+										$this->AddField(new MSeparator(''));
+										$this->AddField(new MTextLabel('label','Espelho Retrovisor'));
+										$this->AddField(new MSelection('espelhoRetrovisor', '', '', $options));
+										$this->AddField(new MTextLabel('label','Observações'));
+										$this->AddField(new MultiLineField('espelhoRetrovisorObs','','','',4,50));
+										$this->AddField(new MSeparator(''));
+										$this->AddField(new MTextLabel('label','Extintor de Incêndio'));
+										$this->AddField(new MSelection('extintorIncendio', '', '', $options));
+										$this->AddField(new MTextLabel('label','Observações'));
+										$this->AddField(new MultiLineField('extintorIncendioObs','','','',4,50));
+										$this->AddField(new MSeparator(''));
+										$this->AddField(new MTextLabel('label','Macaco / Triângulo'));
+										$this->AddField(new MSelection('macacoTriangulo', '', '', $options));
+										$this->AddField(new MTextLabel('label','Observações'));
+										$this->AddField(new MultiLineField('macacoTrianguloObs','','','',4,50));
+										$this->AddField(new MSeparator(''));
+										$this->AddField(new MTextLabel('label','Freios de Estacionamento'));
+										$this->AddField(new MSelection('freioEstacionamento', '', '', $options));
+										$this->AddField(new MTextLabel('label','Observações'));
+										$this->AddField(new MultiLineField('freioEstacionamentoObs','','','',4,50));
+										$this->AddField(new MSeparator(''));
+										$this->AddField(new MTextLabel('label','Pára-Brisas'));
+										$this->AddField(new MSelection('paraBrisa', '', '', $options));
+										$this->AddField(new MTextLabel('label','Observações'));
+										$this->AddField(new MultiLineField('paraBrisaObs','','','',4,50));
+										$this->AddField(new MSeparator(''));
+										$this->AddField(new MTextLabel('label','Portas(Abrir por Dentro)'));
+										$this->AddField(new MSelection('portas', '', '', $options));
+										$this->AddField(new MTextLabel('label','Observações'));
+										$this->AddField(new MultiLineField('portasObs','','','',4,50));
+										$this->AddField(new MSeparator(''));
+										$this->AddField(new MTextLabel('label','Pneus / Estepe'));
+										$this->AddField(new MSelection('pneus', '', '', $options));
+										$this->AddField(new MTextLabel('label','Observações'));
+										$this->AddField(new MultiLineField('pneusObs','','','',4,50));
+										$this->AddField(new MSeparator(''));
+										$this->AddField(new MTextLabel('label','Farol (Luz baixa, alta e estacionamento)'));
+										$this->AddField(new MSelection('farol', '', '', $options));
+										$this->AddField(new MTextLabel('label','Observações'));
+										$this->AddField(new MultiLineField('farolObs','','','',4,50));
+										$this->AddField(new MSeparator(''));
+										$this->AddField(new MTextLabel('label','Luz de Ré'));
+										$this->AddField(new MSelection('luzRe', '', '', $options));
+										$this->AddField(new MTextLabel('label','Observações'));
+										$this->AddField(new MultiLineField('luzReObs','','','',4,50));
+										$this->AddField(new MSeparator(''));
+										$this->AddField(new MTextLabel('label','Luz de Freio'));
+										$this->AddField(new MSelection('luzFreio', '', '', $options));
+										$this->AddField(new MTextLabel('label','Observações'));
+										$this->AddField(new MultiLineField('luzFreioObs','','','',4,50));
+										$this->AddField(new MSeparator(''));
+										$this->AddField(new MTextLabel('label','Pisca Alerta'));
+										$this->AddField(new MSelection('piscaAlerta', '', '', $options));
+										$this->AddField(new MTextLabel('label','Observações'));
+										$this->AddField(new MultiLineField('piscaAlertaObs','','','',4,50));
+										$this->AddField(new MSeparator(''));
+										$this->AddField(new MTextLabel('label','Limpador de Pára-Brisa(Funcionamento)'));
+										$this->AddField(new MSelection('limpadorParabrisa', '', '', $options));
+										$this->AddField(new MTextLabel('label','Observações'));
+										$this->AddField(new MultiLineField('limpadorParabrisaObs','','','',4,50,''));
+										$this->AddField(new MSeparator(''));
+										$this->AddField(new MTextLabel('label','Setas'));
+										$this->AddField(new MSelection('setas', '', '', $options));
+										$this->AddField(new MTextLabel('label','Observações'));
+										$this->AddField(new MultiLineField('setasObs','','','',4,50));
+										$this->AddField(new MSeparator(''));
+										$this->AddField(new MTextLabel('label','Travamento Capô'));
+										$this->AddField(new MSelection('travamentoCapo', '', '', $options));
+										$this->AddField(new MTextLabel('label','Observações'));
+										$this->AddField(new MultiLineField('travamentoCapoObs','','','',4,50));
+										$this->AddField(new MSeparator(''));
+										$this->AddField(new MSpacer(2));
+
+
+										$this->setButtonAttr('btnExecutar', 'visible', TRUE);
+										$this->setButtonAttr('btnAnular', 'visible', TRUE);
+										// IFF
+										$this->setButtonAttr('btnAbastecimento', 'visible', TRUE);
+										//
+										$this->SetFieldAttr('lkpMotorista', 'module', 'adm');
+										$this->SetFieldAttr('lkpMotorista', 'item', 'motorista');
+										$this->SetFieldAttr('lkpMotorista', 'event', 'filler');
+										$this->SetFieldAttr('lkpMotorista', 'related', 'idMotorista,lkpMotorista');
+										$this->setFieldAttr('cpf', 'visible', FALSE);
+										//$this->setFieldAttr('endereco','visible',FALSE);
+										//$this->setFieldAttr('numrg','visible',FALSE);
+										$this->setFieldAttr('telefone', 'visible', FALSE);
+										//$this->setFieldAttr('bairro','visible',FALSE);
+										//$this->setFieldAttr('cep','visible',FALSE);
+										//$this->setFieldAttr('edtEstado','visible',FALSE);
+										//$this->setFieldAttr('lkpMunicipio','visible',FALSE);
+										$this->setFieldAttr('tipoVeiculo', 'visible', TRUE);
+										$this->setFieldAttr('tipoTransporte', 'visible', FALSE);
+										$this->SetFieldAttr('lkpVeiculo', 'module', 'adm');
+										$this->SetFieldAttr('lkpVeiculo', 'item', 'veiculo');
+										$this->SetFieldAttr('lkpVeiculo', 'event', 'filler');
+
+										$this->SetFieldAttr('lkpVeiculo', 'related', 'null,placa,null,null,lkpVeiculo');
+										//$this->SetFieldAttr('lkpVeiculo','related','placa,null,null,lkpVeiculo');
+								} else if (($this->objRequisicao->idUsuarioRequisitante == $idUsuario) || ($this->objRequisicao->uoRequisitante->isGestorOf($idUsuario))) {// Se for o requisitante ou o gestor da UO que responde pela requisição
+										$objVeiculo = $this->manager->GetBusiness('adm', 'veiculo');
+										$veiculo = $objVeiculo->GetById($itemRequisicao->placa);
+
+										$this->AddField(new MTextField('lkpMotorista', $itemRequisicao->motorista->pessoa->nome, 'Motorista', 50));
+										$this->AddField(new MTextField('lkpVeiculo', $veiculo->modelo . " - " . $veiculo->placa, 'Veículo', 50));
+										$this->SetFieldAttr('lkpMotorista', 'readonly', true);
+										$this->SetFieldAttr('lkpVeiculo', 'readonly', true);
+								}
+								break;
+
+						case A: // Recusada a ser acompanhada pela pessoa que requisitou
+								$this->posCriada();
+								$this->AddField(new MultiLineField('motivoRejeicao', $this->objRequisicao->motivoRejeicao, 'Motivo da Recusa', '', 3, 50));
+								$this->setFieldAttr('motivoRejeicao', 'readonly', TRUE);
+								break;
+
+						case D: // Pagamento não autorizado pelo pelo requisitante
+								// Se é o gestor da Uo Executante, habilita opção de estorno de requisição
+								$this->posCriada();
+								$this->objRequisicao->getUoExecutante();
+								if ($this->objRequisicao->uoExecutante->isExecutorOf($idUsuario)) {
+										$objEmpenho = $this->manager->GetBusiness('adm', 'empenho');
+										$queryEmpenho = $objEmpenho->ListAll();
+
+										$itemRequisicao = $this->objRequisicao->getItem();
+										$itemRequisicao->retrieveAssociation('veiculo');
+										$this->AddField(new Separator('<b>RETORNO DE EXECUÇÃO</b>'));
+										$this->AddField(new HiddenField('idMotorista', ''));
+										$this->AddField(new MLookupFieldValue('lkpMotorista', $itemRequisicao->idMotorista, 'Motorista', 50));
+										$this->AddField(new HiddenField('placa', ''));
+										$this->AddField(new MLookupFieldValue('lkpVeiculo', $itemRequisicao->veiculo->modelo . " - " . $itemRequisicao->placa, 'Veículo', 50));
+										$this->AddField(new TextField('odometroSaida', $itemRequisicao->odometroSaida, 'Odômetro Saída', 10));
+										$this->AddField(new CalendarField('dataSaida', substr($itemRequisicao->dataHoraSaida, 0, 10), 'Data Saída'));
+										$this->AddField(new TextField('horaSaida', substr($itemRequisicao->dataHoraSaida, 11, 5), 'Hora Saída', 10));
+										$this->AddField(new TextField('odometroChegada', $itemRequisicao->odometroChegada, 'Odômetro Chegada', 10));
+										$this->AddField(new CalendarField('dataChegada', substr($itemRequisicao->dataHoraRetorno, 0, 10), 'Data Chegada'));
+										$this->AddField(new TextField('horaChegada', substr($itemRequisicao->$itemRequisicao->dataHoraRetorno, 11, 5), 'Hora Chegada', 10));
+										//$this->AddField(new CurrencyField('valorReal',$itemRequisicao->valorReal,'Valor Real',10,''));
+										$this->AddField(new MultiLineField('ocorrencias', $itemRequisicao->ocorrencias, 'Ocorrências', '', 3, 50));
+										$this->addfield(new hiddenfield('idempenho', $itemrequisicao->idempenho));
+
+										$this->setButtonAttr('btnRetornaExecucao', 'visible', TRUE);
+										$this->setFieldAttr('cpf', 'visible', FALSE);
+										//$this->setFieldAttr('endereco','visible',FALSE);
+										//$this->setFieldAttr('numrg','visible',FALSE);
+										$this->setFieldAttr('telefone', 'visible', FALSE);
+										//$this->setFieldAttr('bairro','visible',FALSE);
+										//$this->setFieldAttr('cep','visible',FALSE);
+										//$this->setFieldAttr('edtEstado','visible',FALSE);
+										//$this->setFieldAttr('lkpMunicipio','visible',FALSE);
+										$this->setFieldAttr('tipoVeiculo', 'visible', TRUE);
+										$this->setFieldAttr('tipoTransporte', 'visible', FALSE);
+								} else {
+										$itemRequisicao = $this->objRequisicao->getItem();
+										$itemRequisicao->retrieveAssociation('veiculo');
+
+										$this->AddField(new TextLabel('lkpMotorista', $itemRequisicao->motorista->pessoa->nome, 'Motorista'));
+										$this->AddField(new TextLabel('lkpVeiculo', $itemRequisicao->veiculo->modelo . " - " . $itemRequisicao->placa, 'Veículo', 50));
+										$this->AddField(new TextLabel('odometroSaida', $itemRequisicao->odometroSaida, 'Odôm. Saída', 10));
+										$this->AddField(new TextLabel('dataSaida', substr($itemRequisicao->dataHoraSaidaGaragem, 0, 10), 'Data Saída'));
+										$this->AddField(new TextLabel('horaSaida', substr($itemRequisicao->dataHoraSaidaGaragem, 11, 5), 'Hora Saída', 10));
+										$this->AddField(new TextLabel('odometroChegada', $itemRequisicao->odometroChegada, 'Odôm. Cheg.', 10));
+										$this->AddField(new TextLabel('dataChegada', substr($itemRequisicao->dataHoraChegadaGaragem, 0, 10), 'Data Chegada'));
+										$this->AddField(new TextLabel('horaChegada', substr($itemRequisicao->dataHoraChegadaGaragem, 11, 5), 'Hora Chegada', 10));
+										//$this->AddField(new CurrencyField('valorReal',$itemRequisicao->valorReal,'Valor Real',10,''));
+										$this->AddField(new TextLabel('ocorrencias', $itemRequisicao->ocorrencias, 'Ocorrências', '', 3, 50));
+										$this->setFieldAttr('cpf', 'visible', FALSE);
+										//$this->setFieldAttr('endereco','visible',FALSE);
+										//$this->setFieldAttr('numrg','visible',FALSE);
+										$this->setFieldAttr('telefone', 'visible', FALSE);
+										//$this->setFieldAttr('bairro','visible',FALSE);
+										//$this->setFieldAttr('cep','visible',FALSE);
+										//$this->setFieldAttr('edtEstado','visible',FALSE);
+										//$this->setFieldAttr('lkpMunicipio','visible',FALSE);
+								}
+								break;
+
+						case E: // Pagamento autorizado pelo pelo requisitante
+								$itemRequisicao = $this->objRequisicao->getItem();
+								$this->AddField(new CurrencyField('valorReal', $itemRequisicao->valorReal, 'Valor Real', 10, ''));
+								//$this->setFieldAttr('valorReal','readonly',TRUE);
+								$this->setButtonAttr('btnEstornar', 'visible', TRUE);
+								break;
+
+						case G: //Finalizada
+								$this->posCriada();
+								$itemRequisicao = $this->objRequisicao->getItem();
+								// $this->AddField(new CurrencyField('valorReal',$itemRequisicao->valorReal,'Valor Real',10,''));
+								// $this->setFieldAttr('valorReal','readonly',TRUE);
+								break;
+				}
+		}
+
+		function setObjectData() {
+				$itemRequisicao = $this->objRequisicao->getItem();
+
+				$itemRequisicao->pessoa=$this->objPessoa;
+				//$itemRequisicao->retrieveAssociation('pessoa');
+				//$itemRequisicao->pessoa->retrieveAssociation('municipio');
+
+				$this->SetFieldValue('nome', $itemRequisicao->pessoa->nome);
+				//$this->SetFieldValue('numrg',$itemRequisicao->pessoa->numrg);
+				$this->SetFieldValue('cpf', $itemRequisicao->pessoa->cpf);
+				$this->SetFieldValue('telefone', $itemRequisicao->pessoa->telefone);
+				//$this->SetFieldValue('endereco',$itemRequisicao->pessoa->endereco);
+				//$this->SetFieldValue('bairro',$itemRequisicao->pessoa->bairro);
+				//$this->SetFieldValue('cep',$itemRequisicao->pessoa->cep);
+				//$this->SetFieldValue('lkpMunicipio',$itemRequisicao->pessoa->municipio->municipio);
+				//$this->SetFieldValue('edtEstado',$itemRequisicao->pessoa->municipio->idUF);
+				$this->SetFieldValue('tipoTransporte', $itemRequisicao->tipoTransporte);
+				$this->SetFieldValue('tipoVeiculo', $itemRequisicao->tipoVeiculo);
+				//$this->SetFieldValue('enderecoOrig',$itemRequisicao->enderecoOrig);
+				//$this->SetFieldValue('bairroOrig',$itemRequisicao->bairroOrig);
+				//$this->SetFieldValue('idMunicipioOrig',$itemRequisicao->municipioOrig->idmunicipio);
+				//$this->SetFieldValue('lkpMunicipioOrig',$itemRequisicao->municipioOrig->municipio);
+				//$this->SetFieldValue('edtEstadoOrig',$itemRequisicao->municipioOrig->idUF);
+				//$this->SetFieldValue('cepOrig',$itemRequisicao->cepOrig);
+				//$this->SetFieldValue('referenciaOrig',$itemRequisicao->referenciaOrig);
+				//$this->SetFieldValue('dataSaidaOrig',substr($itemRequisicao->dataHoraSaidaOrig,0,10));
+				//$this->SetFieldValue('horaSaidaOrig',substr($itemRequisicao->dataHoraSaidaOrig,11,5));
+				//$this->SetFieldValue('enderecoDest',$itemRequisicao->enderecoDest);
+				//$this->SetFieldValue('bairroDest',$itemRequisicao->bairroDest);
+				//$this->SetFieldValue('idMunicipioDest',$itemRequisicao->municipioDest->idMunicipio);
+				//$this->SetFieldValue('lkpMunicipioDest',$itemRequisicao->municipioDest->municipio);
+				//$this->SetFieldValue('edtEstadoDest',$itemRequisicao->municipioDest->idUF);
+				//$this->SetFieldValue('referenciaDest',$itemRequisicao->referenciaDest);
+				//$this->SetFieldValue('prevDataChegDest',substr($itemRequisicao->prevDataHoraChegDest,0,10));
+				//$this->SetFieldValue('prevHoraChegDest',substr($itemRequisicao->prevDataHoraChegDest,11,5));
+				$this->SetFieldValue('justificativa', $itemRequisicao->justificativa);
+				$this->SetFieldValue('idUsuarioGestor', $itemRequisicao->idUsuarioGestor);
+				$this->SetFieldValue('outrosPassageiros', $itemRequisicao->outrosPassageiros);
+				//$this->SetFieldValue('quilometragemEst',$itemRequisicao->quilometragemEst);
+				//$this->SetFieldValue('valorEstimado',$itemRequisicao->valorEstimado);
+				//$this->SetFieldValue('prevDataRetorno',substr($itemRequisicao->prevDataHoraRetorno,0,10));
+				//$this->SetFieldValue('prevHoraRetorno',substr($itemRequisicao->prevDataHoraRetorno,11,5));
+
+
+				$this->setReadOnly();
+		}
+
+		//teste
+		function setReadOnly($all = true, $pessoa = true) {
+				$this->setFieldAttr('nome', 'readonly', $pessoa);
+				$this->setFieldAttr('siape', 'readonly', $pessoa);
+				$this->setFieldAttr('telefone', 'readonly', $pessoa);
+				$this->setFieldAttr('celular', 'readonly', $pessoa);
+				//$this->setFieldAttr('numrg','readonly',$pessoa);
+				//$this->setFieldAttr('cpf','readonly',$pessoa);
+				//$this->setFieldAttr('telefone','readonly',$pessoa);
+				//$this->setFieldAttr('endereco','readonly',$pessoa);
+				//$this->setFieldAttr('bairro','readonly',$pessoa);
+				//$this->setFieldAttr('cep','readonly',$pessoa);
+				//$this->setFieldAttr('lkpMunicipio','readonly',$pessoa);
+				//$this->setFieldAttr('edtEstado','readonly',$pessoa);
+				$this->setFieldAttr('tipoTransporte', 'readonly', $all);
+				$this->setFieldAttr('tipoVeiculo', 'readonly', $all);
+				//$this->setFieldAttr('enderecoOrig','readonly',$all);
+				//$this->setFieldAttr('bairroOrig','readonly',$all);
+				//$this->setFieldAttr('cepOrig','readonly',$all);
+				//$this->setFieldAttr('lkpMunicipioOrig','readonly',$all);
+				//$this->setFieldAttr('edtEstadoOrig','readonly',$all);
+				//$this->setFieldAttr('dataSaidaOrig','readonly',$all);
+				//$this->setFieldAttr('horaSaidaOrig','readonly',$all);
+				//$this->setFieldAttr('referenciaOrig','readonly',$all);
+				//$this->setFieldAttr('enderecoDest','readonly',$all);
+				//$this->setFieldAttr('bairroDest','readonly',$all);
+				//$this->setFieldAttr('cepDest','readonly',$all);
+				//$this->setFieldAttr('lkpMunicipioDest','readonly',$all);
+				//$this->setFieldAttr('edtEstadoDest','readonly',$all);
+				//$this->setFieldAttr('referenciaDest','readonly',$all);
+				//$this->setFieldAttr('prevDataChegDest','readonly',$all);
+				//$this->setFieldAttr('prevHoraChegDest','readonly',$all);
+				//$this->setFieldAttr('justificativa', 'readonly', $all);
+				// $this->setFieldAttr('outrosPassageiros', 'readonly', $all);
+				//$this->setFieldAttr('quilometragemEst','readonly',$all);
+				//$this->setFieldAttr('valorEstimado','readonly',$all);
+				//$this->setFieldAttr('prevDataRetorno','readonly',$all);
+				//$this->setFieldAttr('prevHoraRetorno','readonly',$all);
+				//$this->setFieldAttr('qtdPassageiros', 'readonly', $all);
+				// $this->setFieldAttr('obs', 'readonly', $all);
+				//$this->SetFieldAttr('itinerario','readonly',$all);
+				//$this->SetFieldAttr('mtItinerario','readonly',$all);
+		}
+		function posCriada(){
+				$this->visible(true);
+
+				$this->setFieldAttr('linkItinerario', 'visible', FALSE);
+				$this->setFieldAttr('justificativa', 'readonly', TRUE);
+				$this->setFieldAttr('obs', 'readonly', TRUE);
+				$this->setFieldAttr('cpf', 'readonly', TRUE);
+				$this->setFieldAttr('outrosPassageiros', 'readonly', TRUE);
+				$this->setFieldAttr('qtdPassageiros', 'readonly', TRUE);
+		}
+
+		function btnSolicitar_click() {
+
+				global $MIOLO;
+				$data = $this->GetData();
+				//var_dump($data);exit;
+				// Testa se todos os campos foram preenchidos corretamente
+				//$mkDataSaidaOrig = mktime(0,0,0,substr($data->dataSaidaOrig,3,2),substr($data->dataSaidaOrig,0,2),substr($data->dataSaidaOrig,6,4));
+				//$mkPrevDataChegDest = mktime(0,0,0,substr($data->prevDataChegDest,3,2),substr($data->prevDataChegDest,0,2),substr($data->prevDataChegDest,6,4));
+				//$mkPrevDataRetorno = mktime(0,0,0,substr($data->prevDataRetorno,3,2),substr($data->prevDataRetorno,0,2),substr($data->prevDataRetorno,6,4));
+//Teste para informar erros
+
+				$objItinerario = $this->manager->getBusiness('adm', 'itinerario');
+				$quantidadeItinerario = $objItinerario->GetTotalItinerarioByRequisicao($this->objRequisicao->idRequisicao);
+
+
+				if (!$data->qtdPassageiros || !$data->qtdPassageiros < 0) {
+
+						$this->addError("Preencha a quantidade de passageiros!");
+
+						// $this->btnSalvar();
+				}
+				if ($quantidadeItinerario < 1) {
+						$this->AddError("É necessário adicionar pelo menos 1 Itinerário");
+						$this->btnCPF_click();
+				}
+				if (!$data->justificativa) {
+						$this->AddError("Preencha a justificativa ");
+						$this->btnCPF_click();
+				}
+				if (!$data->outrosPassageiros) {
+						$this->AddError("Preencha a Relação de Passageiros");
+						$this->btnCPF_click();
+				}
+				if (strlen($data->outrosPassageiros) > 300) {
+						$this->addError("A relação de passageiros não pode conter mais de 300 caracteres!");
+						$this->btnCPF_click();
+				}
+
+
+				$this->setFieldAttr('cpf', 'visible', FALSE);
+				$this->visible(true);
+				$this->setTitle("Confirmação da requisição de Veiculo");
+				$this->setData();
+				$this->setReadOnly();
+				$this->setButtonAttr('btnSalvar', 'visible', TRUE);
+				$this->setButtonAttr('btnCancelar', 'visible', TRUE);
+				$this->setButtonAttr('btnSolicitar', 'visible', FALSE);
+				$this->setButtonAttr('btnCPF', 'visible', FALSE);
+				$this->setButtonAttr('btnNextCPF', 'visible', FALSE);
+		}
+
+		function btnCancelar_click() {
+				/*
+				  $this->setData();
+				  $idUsuario = $this->manager->GetLogin()->idkey;
+
+				  // Se a primeira requisicao está sendo aberta.
+				  if (($this->objRequisicao->status == '1') && ($this->objRequisicao->idUsuarioRequisitante == $idUsuario) && ($controle = $this->getFormValue('controle') == null))
+				  {
+				  $this->visible(true);
+				  $this->setReadOnly(false,true);
+				  $this->setButtonAttr('btnCPF','visible',FALSE);
+				  $this->setButtonAttr('btnSolicitar','visible',TRUE);
+				  }
+				 *
+				 */
+				$this->btnCPF_click();
+		}
+
+		function setData() {
+				$data = $this->GetData();
+
+
+				//$this->setFieldAttr('valorEstimado','visible',TRUE);
+				//print_r($data);exit;
+
+				$tipoVeiculo = $this->manager->getBusiness('adm', 'tipoveiculo');
+				$tipoVeiculo->getById($data->tipoVeiculo);
+
+				//Calculando o numero de diárias e o valor estimado
+				//$diaChegada = substr($data->prevDataRetorno,0,2);
+				//$mesChegada = substr($data->prevDataRetorno,3,2);
+				//$anoChegada = substr($data->prevDataRetorno,6,4);
+				//$diaSaida = substr($data->dataSaidaOrig,0,2);
+				//$mesSaida = substr($data->dataSaidaOrig,3,2);
+				//$anoSaida = substr($data->dataSaidaOrig,6,4);
+				//$numeroDiarias = mktime(0,0,0,$mesChegada,$diaChegada,$anoChegada) - mktime(0,0,0,$mesSaida,$diaSaida,$anoSaida);
+				//$numeroDiarias = round($numeroDiarias/(60*60*24))+1;
+				// Diária do Motorista não tem para onibus ou caminhão
+				// if (($data->tipoVeiculo == '2') || ($data->tipoVeiculo == '3'))
+				//$data->valorEstimado = ($numeroDiarias * str_replace(',','.',$tipoVeiculo->valorFixo)) + (str_replace(',','.',$data->quilometragemEst) * str_replace(',','.',$tipoVeiculo->valorKm));
+				//else
+				//$data->valorEstimado = ($numeroDiarias * str_replace(',','.',$tipoVeiculo->valorFixo)) + (str_replace(',','.',$data->quilometragemEst) * str_replace(',','.',$tipoVeiculo->valorKm)) + ($numeroDiarias * 51.56);
+
+				$this->SetFieldValue('nome', $data->nome);
+				$this->SetFieldValue('siape', $data->siape);
+				$this->SetFieldValue('telefone', $data->telefone);
+				$this->SetFieldValue('celular', $data->celular);
+				$this->SetFieldValue('tipoTransporte', $data->tipoTransporte);
+				$this->SetFieldValue('tipoVeiculo', $data->tipoVeiculo);
+				$this->SetFieldValue('idPessoa', $data->idPessoa);
+				$this->SetFieldValue('justificativa', $data->justificativa);
+				$this->SetFieldValue('idUsuarioGestor', $data->idUsuarioGestor);
+				$this->SetFieldValue('outrosPassageiros', $data->outrosPassageiros);
+		}
+
+		public function btnSalvar_click() {
+
+				$itemRequisicao = $this->objRequisicao->getItem();
+				$this->objRequisicao->getUoRequisitante();
+				$idUsuario = $this->manager->GetLogin()->idkey;
+
+				$data = $this->getData();
+				$itemRequisicao->setData($data);
+				$this->objRequisicao->addItem($itemRequisicao);
+
+
+
+				// SALVANDO TUDO
+
+				try {
+						if ($this->objRequisicao->uoRequisitante->isGestorOf($idUsuario)) {
+								$requisita = $this->manager->getBusiness('adm', 'requisita');
+
+								/* -------------------------------------Declarando a requisição de veículo------------------------------ */
+
+								$objRequisicaoVeiculo = $this->manager->getBusiness('adm', 'requisicaoveiculo');
+								$objRequisicaoVeiculo = $objRequisicaoVeiculo->GetById($this->objRequisicao->idRequisicao);
+
+								/* ----------------------------------------------------------------------------------------------------------------- */
+								$requisita->GetById($this->objRequisicao->idTipoReq, $this->objRequisicao->idUoRequisitante, $this->objRequisicao->getAno());
+
+								if ($this->objRequisicao->uoRequisitante->temSaldoByRubrica($requisita->idRubrica, $itemRequisicao->valorEstimado)) {
+										$this->objRequisicao->beginTransaction();
+										$this->objRequisicao->setStatus('4');
+										$objRequisicaoVeiculo->status = '4';
+										$objRequisicaoVeiculo->update();
+										$this->objRequisicao->save();
+
+										$this->objRequisicao->getUoRequisitante();
+										$this->objRequisicao->uoRequisitante->setTransaction($this->objRequisicao->getTransaction());
+										//$this->objRequisicao->uoRequisitante->addPrevisaoDebito($requisita->idRubrica,$data->valorEstimado,$this->objRequisicao->getAno());
+										//$this->objRequisicao->Log(OP_UPD,"Requisicao ".$this->objRequisicao->idRequisicao.": adicao da previsao de ".$data->valorEstimado." na UO ".$this->objRequisicao->uoRequisitante->idUo);
+
+										$lancamentoInt = $this->manager->getBusiness('adm', 'lancamentoint');
+										$lancamentoInt->setTransaction($this->objRequisicao->getTransaction());
+										$lancamentoInt->tipoLancamento = '4';
+										$lancamentoInt->obs = "Adicao de previsao devido a requisicao feita pelo proprio gestor";
+										$lancamentoInt->data = date("d/m/Y");
+										//$lancamentoInt->valor = $data->valorEstimado;
+										$lancamentoInt->ano = date("Y");
+										$lancamentoInt->idUoRequisitante = $this->objRequisicao->idUoRequisitante;
+										$lancamentoInt->idUoExecutante = $this->objRequisicao->idUoExecutante;
+										$lancamentoInt->idRubrica = $requisita->idRubrica;
+										$lancamentoInt->idRequisicao = $this->objRequisicao->idRequisicao;
+										$lancamentoInt->save();
+										$lancamentoInt->Log(OP_INS, "Lançamento Interno numero " . $lancamentoInt->idLancamentoInt . " realizado com sucesso para a Requisicao " . $this->objRequisicao->idRequisicao);
+										$this->objRequisicao->endTransaction();
+
+										$this->objRequisicao->Log(OP_INS, "Requisicao " . $this->objRequisicao->idRequisicao . ": criada e automaticamente autorizada pelo gestor.");
+										$this->manager->information("Solicitação criada e autorizada. O número da requisição é " . $this->objRequisicao->idRequisicao . ".", $this->manager->getActionUrl('adm', 'main:requisicoes:find'));
+								} else {
+										$this->manager->information("Saldo insuficiente para esta rubrica.", $this->manager->getActionUrl('adm', 'main:requisicoes:find'));
+								}
+						} else {
+								/* -------------------------------------Declarando a requisição de veículo------------------------------ */
+
+								$objRequisicaoVeiculo = $this->manager->getBusiness('adm', 'requisicaoveiculo');
+								$objRequisicaoVeiculo = $objRequisicaoVeiculo->GetById($this->objRequisicao->idRequisicao);
+
+								/* ----------------------------------------------------------------------------------------------------------------- */
+								$this->objRequisicao->setStatus('2');
+								$objRequisicaoVeiculo->status = '2';
+								// 24-11-2011 - Daniel Bonfim
+								$cpf = $this->GetFieldValue('hiddenCpf');
+								$pessoa = $this->manager->getBusiness('common', 'pessoa');
+								$pessoa = $pessoa->GetById($objRequisicaoVeiculo->idPessoa);
+
+								//$this->objRequisicao->veiculo->idPessoa = $pessoa->idpessoa;
+								//$this->objRequisicao->save();
+								$this->objRequisicao->Log(OP_INS, "Requisicao " . $this->objRequisicao->idRequisicao . ": submetida a avaliação do gestor.");
+
+								if (($objRequisicaoVeiculo->tipoVeiculo == '2') || ($objRequisicaoVeiculo->tipoVeiculo == '4')) {
+										$this->manager->information("Solicitação submetida à avaliação do gestor. O número da requisição é " . $this->objRequisicao->idRequisicao . ". Atenção, a lista dos passageiros deve ser enviada ao setor de Transportes até 5 dias antes da viagem.", $this->manager->getActionUrl('adm', 'main:requisicoes:find'));
+								} else {
+										$this->manager->information("Solicitação submetida à avaliação do gestor. O número da requisição é " . $this->objRequisicao->idRequisicao . ".", $this->manager->getActionUrl('adm', 'main:requisicoes:find'));
+								}
+						}
+				} catch (Exception $e) {
+						$this->addError($e->getMessage());
+				}
+		}
+
+		public function linkItinerario_click() {
+				global $MIOLO;
+
+				$objPessoa = $this->manager->getBusiness('common', 'pessoa');
+				$objPessoa = $objPessoa->GetById($MIOLO->session->getValue('idPessoa'));
+				$objRequisicaoVeiculo = $this->manager->getBusiness('adm', 'requisicaoveiculo');
+				$objRequisicaoVeiculo = $objRequisicaoVeiculo->GetById($this->objRequisicao->idRequisicao);
+
+				$objRequisicaoVeiculo->tipoTransporte = $this->GetFormValue('tipoTransporte');
+				$objRequisicaoVeiculo->tipoVeiculo = $this->GetFormValue('tipoVeiculo');
+				$objRequisicaoVeiculo->quantidadePassageiros = $this->GetFormValue('qtdPassageiros');
+				$objRequisicaoVeiculo->nomePassageiros = $this->GetFormValue('outrosPassageiros');
+				$objRequisicaoVeiculo->justificativa = $this->GetFormValue('justificativa');
+				$objRequisicaoVeiculo->obs = $this->GetFormValue('obs');
+
+				try {
+						$objRequisicaoVeiculo->update();
+						$persistence = true;
+				} catch (Exception $ex) {
+						$persistence = true;
+						echo $ex;
+				}
+				if ($persistence) {
+						$go = $MIOLO->GetActionURL('adm', 'main:requisicoes', $this->objRequisicao->idRequisicao, array('form' => 'item', 'tipoReq' => 14));
+						$this->page->Redirect($go);
+				}
+		}
+
+		public function btnSalvareSolicitar_click() {
+				$itemRequisicao = $this->objRequisicao->getItem();
+				$data = $this->getData();
+				$data->cpf = str_replace(".", "", $data->cpf);
+				$data->cpf = str_replace("-", "", $data->cpf);
+
+				/*
+				  $pessoa = $this->manager->getBusiness('common','pessoa');
+				  $pessoa = $pessoa->GetByCpf($data->cpf);
+
+				  if  ( !$pessoa )
+				  {
+				  $pessoa = $this->manager->getBusiness('common','pessoa');
+				  $pessoa->nome = $data->nome;
+				  //$pessoa->numrg = $data->numrg;
+				  $pessoa->cpf = $data->cpf;
+				  $pessoa->telefone = $data->telefone;
+				  //$pessoa->endereco = $data->endereco;
+				  //$pessoa->bairro = $data->bairro;
+				  //$pessoa->cep = $data->cep;
+				  //$pessoa->idmunicipio = $data->idmunicipio;
+				  $pessoa->datanasc = "01/01/3000";
+				  $pessoa->idpais = "024";
+				  $pessoa->idpaisnascimento = "024";
+				  $pessoa->sexo = "I";
+				  $pessoa->save();
+				  $pessoa->Log(OP_INS,"Nova Pessoa criada. idPessoa: ".$pessoa->idpessoa);
+				  $data->idpessoa = $pessoa->idpessoa;
+				  }
+				 *
+				 */
+
+				// Adicionando o atributo prevDataHoraChegDest formado a partir dos atributos prevDataChegDest e prevHoraChegDest para o formato Timestamp
+				//$data->prevDataHoraChegDest = $data->prevDataChegDest." ".$data->prevHoraChegDest.":00";
+				//$data->dataHoraSaidaOrig = $data->dataSaidaOrig." ".$data->horaSaidaOrig.":00";
+				//$data->prevDataHoraRetorno = $data->prevDataRetorno." ".$data->prevHoraRetorno.":00";
+
+				$itemRequisicao->setData($data);
+				$this->objRequisicao->addItem($itemRequisicao);
+				$this->objRequisicao->setStatus('2');
+				try {
+						$this->objRequisicao->save();
+						$this->objRequisicao->Log(OP_INS, "Requisicao " . $this->objRequisicao->idRequisicao . ": submetida a avaliação do gestor.");
+
+						$requisicao = $this->manager->GetBusiness('adm', 'requisicao');
+						$login = $this->manager->GetLogin();
+						$usuario = $this->manager->GetBusiness('common', 'usuario');
+						$usuario->GetById($login->idkey);
+
+						$requisicao->idTipoReq = $this->objRequisicao->idTipoReq;
+						$requisicao->idUoRequisitante = $this->objRequisicao->idUoRequisitante;
+						$requisicao->idUoExecutante = $this->objRequisicao->idUoExecutante;
+						$requisicao->status = 1;
+						$requisicao->idUsuarioRequisitante = $login->idkey;
+						$requisicao->dataHora = date("d/m/Y H:i:s");
+						$requisicao->save();
+						$go = $this->manager->GetActionURL('adm', 'main:requisicoes', $requisicao->idRequisicao, array(
+								"form" => "item",
+								"idRequisicaoAntiga" => $this->objRequisicao->idRequisicao,
+								"requisita" => $requisicao->idTipoReq,
+								"idRequisicao" => $this->objRequisicao->idRequisicao,
+								"tipoTransporte" => $itemRequisicao->tipoTransporte,
+								"tipoVeiculo" => $itemRequisicao->tipoVeiculo,
+								//"enderecoOrig"=>$itemRequisicao->enderecoOrig,
+								//"bairroOrig"=>$itemRequisicao->bairroOrig,
+								//"idMunicipioOrig"=>$data->idMunicipioOrig,
+								//"lkpMunicipioOrig"=>$data->lkpMunicipioOrig,
+								//"edtEstadoOrig"=>$data->edtEstadoOrig,
+								//"cepOrig"=>$itemRequisicao->cepOrig,
+								//"referenciaOrig"=>$itemRequisicao->referenciaOrig,
+								//"dataSaidaOrig"=>$data->dataSaidaOrig,
+								//"horaSaidaOrig"=>$data->horaSaidaOrig,
+								//"enderecoDest"=>$data->enderecoDest,
+								//"bairroDest"=>$itemRequisicao->bairroDest,
+								//"idMunicipioDest"=>$data->idMunicipioDest,
+								//"lkpMunicipioDest"=>$data->lkpMunicipioDest,
+								//"edtEstadoDest"=>$data->edtEstadoDest,
+								//"cepDest"=>$itemRequisicao->cepDest,
+								//"referenciaDest"=>$itemRequisicao->referenciaDest,
+								//"prevDataChegDest"=>$data->prevDataChegDest,
+								//"prevHoraChegDest"=>$data->prevHoraChegDest,
+								//"quilometragemEst"=>$itemRequisicao->quilometragemEst,
+								//"valorEstimado"=>$itemRequisicao->valorEstimado,
+								"justificativa" => $itemRequisicao->justificativa,
+								"idUsuarioGestor" => $itemRequisicao->idUsuarioGestor,
+								"outrosPassageiros" => $itemRequisicao->outrosPassageiros,
+								//"prevDataRetorno"=>$data->prevDataRetorno,
+								//"prevHoraRetorno"=>$data->prevHoraRetorno,
+								"controle" => TRUE));
+
+
+
+						$this->page->Redirect($go);
+				} catch (Exception $e) {
+						$this->addError($e->getMessage());
+				}
+		}
+
+		public function btnNextCPF_click() {
+
+				$this->SetFieldAttr('nome', 'visible', TRUE);
+				//$this->SetFieldAttr('numrg','visible',TRUE);
+				$this->SetFieldAttr('telefone', 'visible', TRUE);
+				//$this->SetFieldAttr('endereco','visible',TRUE);
+				//$this->SetFieldAttr('bairro','visible',TRUE);
+				//$this->SetFieldAttr('cep','visible',TRUE);
+				//$this->SetFieldAttr('lkpMunicipio','visible',TRUE);
+				//$this->SetFieldAttr('idmunicipio','visible',TRUE);
+				//$this->SetFieldAttr('edtEstado','visible',TRUE);
+
+				$pessoa = $this->manager->getBusiness('common', 'pessoa');
+
+				// Deixa o campo CPF só com números
+				$cpf = $this->GetFieldValue('cpf');
+				$cpf = str_replace(".", "", $cpf);
+				$cpf = str_replace("-", "", $cpf);
+
+				$pessoa = $pessoa->GetByCpf($cpf);
+				if ($pessoa) {
+						$id = $pessoa->idpessoa;
+						$pessoa = $pessoa->GetById($id);
+						$this->setFieldPessoa($pessoa);
+						$this->setReadOnly(false);
+				} else {
+						$this->setReadOnly(false, false);
+						if (($this->getFormValue('btnCPF'))) {
+								$this->AddInfo('CPF não cadastrado! Por favor, insira os dados desta pessoa!');
+						}
+				}
+				$this->setButtonAttr('btnNextCPF', 'visible', FALSE);
+				$this->setButtonAttr('btnCancelar', 'visible', true);
+				$this->setButtonAttr('btnSolicitar', 'visible', true);
+		}
+
+		function visible($bool) {
+
+				$this->SetFieldAttr('nome', 'visible', $bool);
+				//$this->SetFieldAttr('numrg','visible',$bool);
+				$this->SetFieldAttr('telefone', 'visible', $bool);
+				//$this->SetFieldAttr('endereco','visible',$bool);
+				//$this->SetFieldAttr('bairro','visible',$bool);
+				//$this->SetFieldAttr('cep','visible',$bool);
+				//$this->SetFieldAttr('lkpMunicipio','visible',$bool);
+				//$this->SetFieldAttr('edtEstado','visible',$bool);
+				$this->SetFieldAttr('Finalidade', 'visible', $bool);
+				$this->SetFieldAttr('outrosPassageiros', 'visible', $bool);
+				$this->SetFieldAttr('tipoVeiculo', 'visible', $bool);
+				$this->SetFieldAttr('tipoTransporte', 'visible', $bool);
+				//$this->SetFieldAttr('enderecoOrig','visible',$bool);
+				//$this->SetFieldAttr('bairroOrig','visible',$bool);
+				//$this->SetFieldAttr('lkpMunicipioOrig','visible',$bool);
+				//$this->SetFieldAttr('edtEstadoOrig','visible',$bool);
+				//$this->SetFieldAttr('cepOrig','visible',$bool);
+				//$this->SetFieldAttr('referenciaOrig','visible',$bool);
+				//$this->SetFieldAttr('dataSaidaOrig','visible',$bool);
+				//$this->SetFieldAttr('horaSaidaOrig','visible',$bool);
+				//$this->SetFieldAttr('enderecoDest','visible',$bool);
+				//$this->SetFieldAttr('bairroDest','visible',$bool);
+				//$this->SetFieldAttr('lkpMunicipioDest','visible',$bool);
+				//$this->SetFieldAttr('edtEstadoDest','visible',$bool);
+				//$this->SetFieldAttr('cepDest','visible',$bool);
+				//$this->SetFieldAttr('referenciaDest','visible',$bool);
+				//$this->SetFieldAttr('prevDataChegDest','visible',$bool);
+				//$this->SetFieldAttr('prevHoraChegDest','visible',$bool);
+				//$this->SetFieldAttr('quilometragemEst','visible',$bool);
+				$this->SetFieldAttr('justificativa', 'visible', $bool);
+				$this->SetFieldAttr('painelViagem', 'visible', $bool);
+				$this->SetFieldAttr('outrosPassageiros', 'visible', $bool);
+				//$this->SetFieldAttr('dadosOrigem','visible',$bool);
+				//$this->SetFieldAttr('dadosDestino','visible',$bool);
+				//$this->SetFieldAttr('prevDataRetorno','visible',$bool);
+				//$this->SetFieldAttr('prevHoraRetorno','visible',$bool);
+				// 24-11-2011 - Daniel Bonfim
+				$this->SetFieldAttr('siape', 'visible', $bool);
+
+				$this->SetFieldAttr('celular', 'visible', $bool);
+				$this->SetFieldAttr('dadosViagem', 'visible', $bool);
+				$this->SetFieldAttr('qtdPassageiros', 'visible', $bool);
+				$this->SetFieldAttr('linkItinerario', 'visible', $bool);
+				$this->SetFieldAttr('obs', 'visible', $bool);
+
+				$this->SetFieldAttr('itinerario', 'visible', $bool);
+				// $this->SetFieldAttr('mtItinerario', 'visible',$bool);
+				if ($bool && !$this->flag) {
+						$this->AddField($this->grid);
+						$this->flag = true;
+				}
+		}
+
+		function btnAtender_click() {
+				$data = $this->getData();
+
+				$this->objRequisicao->getUoRequisitante();
+				$itemRequisicao = $this->objRequisicao->getItem();
+				$requisita = $this->manager->getBusiness('adm', 'requisita');
+				$requisita->GetById($this->objRequisicao->idTipoReq, $this->objRequisicao->idUoRequisitante, $this->objRequisicao->getAno());
+
+				if ($data->acaoGestorUoReq == '') {
+						$this->manager->Error("Você precisa selecionar uma ação a fazer (autorizar, devolver ou recusar).", '');
+				}
+
+				if ($this->objRequisicao->uoRequisitante->temSaldoByRubrica($requisita->idRubrica, $itemRequisicao->valorEstimado) || ($data->acaoGestorUoReq == '5') || ($data->acaoGestorUoReq == '6')) {
+						// Se selecionou recusar ou devolver
+						if (($data->acaoGestorUoReq == '5') || ($data->acaoGestorUoReq == '6')) {
+								if ($data->motivoRejeicao == '') {
+										$this->manager->Error("Você precisa informar o motivo.", '');
+								}
+						}
+
+						$this->setTitle("Confirmação do atendimento do Gestor da UO Requisitante");
+						$this->setData();
+						$this->setReadOnly();
+
+						$this->setFieldAttr('motivoRejeicao', 'readonly', TRUE);
+						$this->setFieldAttr('acaoGestorUoReq', 'readonly', TRUE);
+
+						$this->setButtonAttr('btnAtender', 'visible', FALSE);
+						$this->setButtonAttr('btnConfirmarAtendimento', 'visible', TRUE);
+						$this->setButtonAttr('btnCancelar', 'visible', TRUE);
+				} else {
+						$this->manager->information("Saldo insuficiente para esta rubrica.", $this->manager->getActionUrl('adm', 'main:requisicoes:find'));
+				}
+		}
+
+		function btnCPF_click() {
+
+				global $MIOLO;
+
+				$pessoa = $this->manager->getBusiness('common', 'pessoa');
+				$objRequisicaoVeiculo = $MIOLO->getBusiness('adm', 'requisicaoveiculo');
+				$objRequisicaoVeiculo = $objRequisicaoVeiculo->GetById($this->objRequisicao->idRequisicao);
+				// Deixa o campo CPF só com números
+				$cpf = $this->GetFieldValue('cpf');
+
+				$cpf = str_replace(".", "", $cpf);
+				$cpf = str_replace("-", "", $cpf);
+
+				$this->SetFieldValue('hiddenCpf', $cpf);
+
+				if ($objRequisicaoVeiculo->idPessoa) {
+						$pessoa = $pessoa->GetById($objRequisicaoVeiculo->idPessoa);
+				} else {
+						$pessoa = $pessoa->GetByCpf($cpf);
+				}
+				/* --------------------------Inicio da Gravação da Requisição caso não exista-------------------------- */
+
+
+				if (!$objRequisicaoVeiculo->idPessoa) {
+						$objRequisicaoVeiculo->idRequisicao = $this->objRequisicao->idRequisicao;
+						$objRequisicaoVeiculo->idPessoa = $pessoa->idpessoa;
+						$objRequisicaoVeiculo->status = '1';
+
+						try {
+								$objRequisicaoVeiculo->save();
+						} catch (Exception $ex) {
+
+								echo $ex;
+						}
+				}
+				/* ---------------------------------------------------------------------------------------------------------------- */
+
+				if ($pessoa) {
+						$id = $pessoa->idpessoa;
+						$pessoa = $pessoa->GetById($id);
+						$this->setFieldPessoa($pessoa);
+						$this->setReadOnly(false);
+						// 24-11-2011 - Daniel Bonfim
+						$this->visible(true);
+						$this->setButtonAttr('btnCPF', 'visible', FALSE);
+						$this->setFieldAttr('cpf', 'visible', FALSE);
+						$this->setButtonAttr('btnSolicitar', 'visible', true);
+				} else {
+						$this->setReadOnly(false, false);
+						if (($this->getFormValue('btnCPF'))) {
+								$this->AddInfo('CPF não cadastrado! Por favor, insira os dados desta pessoa!');
+						}
+				}
+		}
+
+		function setFieldPessoa($pessoa) {
+				$pessoa->retrieveAssociation('municipio');
+				$this->SetFieldValue('idPessoa', $pessoa->idpessoa);
+				$this->SetFieldValue('nome', $pessoa->nome);
+				//$this->SetFieldValue('numrg',$pessoa->numrg);
+				$this->SetFieldValue('telefone', $pessoa->telefone);
+				// 25-11-2011 - Daniel Bonfim
+				$this->SetFieldValue('celular', $pessoa->celular);
+				$this->SetFieldValue('siape', $pessoa->siape);
+				//$this->SetFieldValue('endereco',$pessoa->endereco);
+				//$this->SetFieldValue('bairro',$pessoa->bairro);
+				//$this->SetFieldValue('cep',$pessoa->cep);
+				//$this->SetFieldValue('lkpMunicipio',$pessoa->municipio->municipio);
+				//$this->SetFieldValue('idmunicipio',$pessoa->idmunicipio);
+				//$this->SetFieldValue('edtEstado',$pessoa->municipio->idUF);
+		}
+
+		public function btnConfirmarAtendimento_click() {
+				$itemRequisicao = $this->objRequisicao->getItem();
+				$data = $this->getData();
+
+				$proximaRequisicao = $this->manager->getBusiness('adm', 'requisicao', $this->objRequisicao->getProximaASerAtendida());
+
+
+				$itemRequisicao->setData($data);
+				$this->objRequisicao->addItem($itemRequisicao);
+				$this->objRequisicao->setidUsuarioGestor($data->idUsuarioGestor);
+				$this->objRequisicao->setStatus($data->acaoGestorUoReq);
+				$this->objRequisicao->setMotivoRejeicao($data->motivoRejeicao);
+
+
+				$objRequisicao->idUsuarioGestor = $usuario;
+				$this->objRequisicao->setDataHoraAutorizacao();
+				$this->objRequisicao->beginTransaction();
+
+				try {
+
+						if ($data->acaoGestorUoReq == '4') {
+								$requisita = $this->manager->getBusiness('adm', 'requisita');
+								$requisita->GetById($this->objRequisicao->idTipoReq, $this->objRequisicao->idUoRequisitante, $this->objRequisicao->getAno());
+
+								$this->objRequisicao->getUoRequisitante();
+								$this->objRequisicao->uoRequisitante->setTransaction($this->objRequisicao->getTransaction());
+
+
+								//$this->objRequisicao->uoRequisitante->addPrevisaoDebito($requisita->idRubrica,$data->valorEstimado,$this->objRequisicao->getAno());
+								//$this->objRequisicao->Log(OP_UPD,"Requisicao ".$this->objRequisicao->idRequisicao.": adicao da previsao de ".$data->valorEstimado." na UO ".$this->objRequisicao->uoRequisitante->idUo);
+
+								$lancamentoInt = $this->manager->getBusiness('adm', 'lancamentoint');
+								$lancamentoInt->setTransaction($this->objRequisicao->getTransaction());
+								$lancamentoInt->tipoLancamento = '4';
+								$lancamentoInt->obs = "Adicao de previsao devido a autorizacao da requisicao pelo gestor";
+								$lancamentoInt->data = date("d/m/Y");
+								//$lancamentoInt->valor = $data->valorEstimado;
+								$lancamentoInt->ano = date("Y");
+								$lancamentoInt->idUoRequisitante = $this->objRequisicao->idUoRequisitante;
+								$lancamentoInt->idUoExecutante = $this->objRequisicao->idUoExecutante;
+								$lancamentoInt->idRubrica = $requisita->idRubrica;
+								$lancamentoInt->idRequisicao = $this->objRequisicao->idRequisicao;
+								$lancamentoInt->save();
+								$lancamentoInt->Log(OP_INS, "Lançamento Interno numero " . $lancamentoInt->idLancamentoInt . " realizado com sucesso para a Requisicao " . $this->objRequisicao->idRequisicao);
+						}
+				} catch (Exception $e) {
+						$this->addError($e->getMessage());
+				}
+
+				if ($data->acaoGestorUoReq == '4')
+						$acao = "autorizada";
+				elseif ($data->acaoGestorUoReq == '5')
+						$acao = "devolvida";
+				elseif ($data->acaoGestorUoReq == '6')
+						$acao = "recusada";
+
+				$this->objRequisicao->save();
+				$this->objRequisicao->endTransaction();
+				$this->objRequisicao->Log(OP_UPD, "Requisicao " . $this->objRequisicao->idRequisicao . ": " . $acao . " pelo gestor.");
+
+				//Passa para a proxima requisicao a ser atendida
+				if ($proximaRequisicao->idRequisicao)
+						$action_voltar = $this->manager->getActionUrl('adm', 'main:requisicoes', $proximaRequisicao->idRequisicao, array("form" => "item", "tipoReq" => $proximaRequisicao->idTipoReq));
+				else
+						$action_voltar = $this->manager->getActionUrl('adm', 'main:requisicoes:find', '');
+
+				$this->manager->information("Requisição " . $acao . " com sucesso.", $action_voltar);
+		}
+
+		function btnExecutar_click() {
+				$data = $this->getData();
+				$k = new MKrono();
+
+				if (strlen(trim(Form::GetFormValue('dataSaida'))) != 10) {
+						$this->AddError('O campo Data Saída deve ser preenchido com uma data válida.');
+				} elseif (strlen(trim(Form::GetFormValue('dataChegada'))) != 10) {
+						$this->AddError('O campo Data Chegada deve ser preenchido com uma data válida.');
+				} elseif (Form::GetFormValue('dataSaida') > Form::GetFormValue('dataChegada')) {
+						$this->AddError('A data de saída não deve ser maior que a data de chegada.');
+				} elseif (Form::GetFormValue('odometroSaida') == '') {
+						$this->AddError('O campo odômetro saída deve ser preenchido.');
+				} elseif (Form::GetFormValue('odometroSaida') < 0) {
+						$this->AddError('O valor do campo odômetro de saída não deve ser negativo.');
+				} elseif (Form::GetFormValue('odometroChegada') == '') {
+						$this->AddError('O campo odômetro chegada deve ser preenchido.');
+				} elseif (Form::GetFormValue('odometroChegada') < 0) {
+						$this->AddError('O valor do campo odômetro de chegada não deve ser negativo.');
+				} elseif (strlen($this->GetFormValue('lkpVeiculo')) < 7) {
+						$this->addError("Você precisa definir o veículo utilizado.");
+						$this->btnCancelar_Click();
+				} else {
+						$this->setTitle("Confirmação de execução do Gestor da UO Executante");
+						$this->setData();
+						$this->setReadOnly();
+
+						$this->setFieldAttr('motivoRejeicao', 'readonly', TRUE);
+						$this->setFieldAttr('acaoGestorUoReq', 'readonly', TRUE);
+						$this->setFieldAttr('lkpMotorista', 'readonly', TRUE);
+						$this->setFieldAttr('lkpVeiculo', 'readonly', TRUE);
+						$this->setFieldAttr('odometroSaida', 'readonly', TRUE);
+						$this->setFieldAttr('odometroChegada', 'readonly', TRUE);
+						$this->setFieldAttr('quilometragemReal', 'readonly', TRUE);
+						$this->setFieldAttr('dataChegada', 'readonly', TRUE);
+						$this->setFieldAttr('horaChegada', 'readonly', TRUE);
+						$this->setFieldAttr('dataSaida', 'readonly', TRUE);
+						$this->setFieldAttr('horaSaida', 'readonly', TRUE);
+						//$this->setFieldAttr('valorReal','readonly',TRUE);
+						$this->setFieldAttr('ocorrencias', 'readonly', TRUE);
+
+						$this->setButtonAttr('btnExecutar', 'visible', FALSE);
+						$this->setButtonAttr('btnConfirmarExecucao', 'visible', TRUE);
+						$this->setButtonAttr('btnCancelar', 'visible', TRUE);
+				}
+		}
+
+		public function btnConfirmarExecucao_click() {
+				$cf = new MCurrencyFormatter();
+
+				$itemRequisicao = $this->objRequisicao->getItem();
+				$data = $this->getData();
+
+				$valorReal = $cf->toDecimal($data->valorReal);
+				//$valorEstimado = $cf->toDecimal($data->valorEstimado);
+				// Se ja os lançamentos já foram feitos então deve abortar a repetição da operação
+				//if ($this->objRequisicao->checkLancamento('5',$valorReal) && $this->objRequisicao->checkLancamento('7',$valorEstimado))
+				// {
+				// return true;
+				// }
+				/* -------------------------------------Declarando a requisição de veículo--------------------------------- */
+
+				$objRequisicaoVeiculo = $this->manager->getBusiness('adm', 'requisicaoveiculo');
+				$objRequisicaoVeiculo = $objRequisicaoVeiculo->GetById($this->objRequisicao->idRequisicao);
+
+				/* ----------------------------------------------------------------------------------------------------------------- */
+
+				$proximaRequisicao = $this->manager->getBusiness('adm', 'requisicao', $this->objRequisicao->getProximaASerExecutada());
+
+				// Gerando os campos dataHora de entrada e saída
+				$data->dataHoraChegadaGaragem = $data->dataChegada . " " . $data->horaChegada . ":00";
+				$data->dataHoraSaidaGaragem = $data->dataSaida . " " . $data->horaSaida . ":00";
+				$data->dataHoraAutExec = date("d/m/Y H:i:s");
+
+				$itemRequisicao->setData($data);
+				//------------------------------Inspeção de Veículo--------------------------------------------------------------
+				$objInspecao=$this->manager->getBusiness('adm','inspecaoveiculo');
+				$objInspecao->idRequisicao=$this->objRequisicao->idRequisicao;
+				// -----------------
+				$objInspecao->idComponente=1;
+				$objInspecao->status=$this->GetFormValue('nivelOleoMotor');
+				$objInspecao->obs=$this->GetFormValue('nivelOleoMotorObs');
+				$objInspecao->save();
+
+				// -----------------
+				$objInspecao=$this->manager->getBusiness('adm','inspecaoveiculo');
+				$objInspecao->idRequisicao=$this->objRequisicao->idRequisicao;
+				$objInspecao->idComponente=2;
+				$objInspecao->status=$this->GetFormValue('nivelOleoHidraulico');
+				$objInspecao->obs=$this->GetFormValue('nivelOleoHidraulicoObs');
+				$objInspecao->save();
+
+				// -----------------
+				$objInspecao=$this->manager->getBusiness('adm','inspecaoveiculo');
+				$objInspecao->idRequisicao=$this->objRequisicao->idRequisicao;
+				$objInspecao->idComponente=3;
+				$objInspecao->status=$this->GetFormValue('nivelAguaArref');
+				$objInspecao->obs=$this->GetFormValue('nivelAguaArrefObs');
+				$objInspecao->save();
+
+				// -----------------
+				$objInspecao=$this->manager->getBusiness('adm','inspecaoveiculo');
+				$objInspecao->idRequisicao=$this->objRequisicao->idRequisicao;
+				$objInspecao->idComponente=4;
+				$objInspecao->status=$this->GetFormValue('nivelAguaLimpeza');
+				$objInspecao->obs=$this->GetFormValue('nivelAguaLimpezaObs');
+				$objInspecao->save();
+
+				// -----------------
+				$objInspecao=$this->manager->getBusiness('adm','inspecaoveiculo');
+				$objInspecao->idRequisicao=$this->objRequisicao->idRequisicao;
+				$objInspecao->idComponente=5;
+				$objInspecao->status=$this->GetFormValue('bancosAssentos');
+				$objInspecao->obs=$this->GetFormValue('bancosAssentosObs');
+				$objInspecao->save();
+
+				// -----------------
+				$objInspecao=$this->manager->getBusiness('adm','inspecaoveiculo');
+				$objInspecao->idRequisicao=$this->objRequisicao->idRequisicao;
+				$objInspecao->idComponente=6;
+				$objInspecao->status=$this->GetFormValue('assoalho');
+				$objInspecao->obs=$this->GetFormValue('assoalhoObs');
+				$objInspecao->save();
+
+				// -----------------
+				$objInspecao=$this->manager->getBusiness('adm','inspecaoveiculo');
+				$objInspecao->idRequisicao=$this->objRequisicao->idRequisicao;
+				$objInspecao->idComponente=7;
+				$objInspecao->status=$this->GetFormValue('buzina');
+				$objInspecao->obs=$this->GetFormValue('buzinaObs');
+				$objInspecao->save();
+
+				// -----------------
+				$objInspecao=$this->manager->getBusiness('adm','inspecaoveiculo');
+				$objInspecao->idRequisicao=$this->objRequisicao->idRequisicao;
+				$objInspecao->idComponente=8;
+				$objInspecao->status=$this->GetFormValue('cintoSeguranca');
+				$objInspecao->obs=$this->GetFormValue('cintoSegurancaObs');
+				$objInspecao->save();
+
+				// -----------------
+				$objInspecao=$this->manager->getBusiness('adm','inspecaoveiculo');
+				$objInspecao->idRequisicao=$this->objRequisicao->idRequisicao;
+				$objInspecao->idComponente=9;
+				$objInspecao->status=$this->GetFormValue('espelhoRetrovisor');
+				$objInspecao->obs=$this->GetFormValue('espelhoRetrovisorObs');
+				$objInspecao->save();
+
+				// -----------------
+				$objInspecao=$this->manager->getBusiness('adm','inspecaoveiculo');
+				$objInspecao->idRequisicao=$this->objRequisicao->idRequisicao;
+				$objInspecao->idComponente=10;
+				$objInspecao->status=$this->GetFormValue('extintorIncendio');
+				$objInspecao->obs=$this->GetFormValue('extintorIncendioObs');
+				$objInspecao->save();
+
+				// -----------------
+				$objInspecao=$this->manager->getBusiness('adm','inspecaoveiculo');
+				$objInspecao->idRequisicao=$this->objRequisicao->idRequisicao;
+				$objInspecao->idComponente=11;
+				$objInspecao->status=$this->GetFormValue('macacoTriangulo');
+				$objInspecao->obs=$this->GetFormValue('macacoTrianguloObs');
+				$objInspecao->save();
+
+				// -----------------
+				$objInspecao=$this->manager->getBusiness('adm','inspecaoveiculo');
+				$objInspecao->idRequisicao=$this->objRequisicao->idRequisicao;
+				$objInspecao->idComponente=12;
+				$objInspecao->status=$this->GetFormValue('freioEstacionamento');
+				$objInspecao->obs=$this->GetFormValue('freioEstacionamentoObs');
+				$objInspecao->save();
+
+				// -----------------
+				$objInspecao=$this->manager->getBusiness('adm','inspecaoveiculo');
+				$objInspecao->idRequisicao=$this->objRequisicao->idRequisicao;
+				$objInspecao->idComponente=13;
+				$objInspecao->status=$this->GetFormValue('paraBrisa');
+				$objInspecao->obs=$this->GetFormValue('paraBrisaObs');
+				$objInspecao->save();
+
+				// -----------------
+				$objInspecao=$this->manager->getBusiness('adm','inspecaoveiculo');
+				$objInspecao->idRequisicao=$this->objRequisicao->idRequisicao;
+				$objInspecao->idComponente=14;
+				$objInspecao->status=$this->GetFormValue('portas');
+				$objInspecao->obs=$this->GetFormValue('portasObs');
+				$objInspecao->save();
+
+				// -----------------
+				$objInspecao=$this->manager->getBusiness('adm','inspecaoveiculo');
+				$objInspecao->idRequisicao=$this->objRequisicao->idRequisicao;
+				$objInspecao->idComponente=15;
+				$objInspecao->status=$this->GetFormValue('pneus');
+				$objInspecao->obs=$this->GetFormValue('pneusObs');
+				$objInspecao->save();
+
+				// -----------------
+				$objInspecao=$this->manager->getBusiness('adm','inspecaoveiculo');
+				$objInspecao->idRequisicao=$this->objRequisicao->idRequisicao;
+				$objInspecao->idComponente=16;
+				$objInspecao->status=$this->GetFormValue('farol');
+				$objInspecao->obs=$this->GetFormValue('farolObs');
+				$objInspecao->save();
+
+				// -----------------
+				$objInspecao=$this->manager->getBusiness('adm','inspecaoveiculo');
+				$objInspecao->idRequisicao=$this->objRequisicao->idRequisicao;
+				$objInspecao->idComponente=17;
+				$objInspecao->status=$this->GetFormValue('luzRe');
+				$objInspecao->obs=$this->GetFormValue('luzReObs');
+				$objInspecao->save();
+
+				// -----------------
+				$objInspecao=$this->manager->getBusiness('adm','inspecaoveiculo');
+				$objInspecao->idRequisicao=$this->objRequisicao->idRequisicao;
+				$objInspecao->idComponente=18;
+				$objInspecao->status=$this->GetFormValue('luzFreio');
+				$objInspecao->obs=$this->GetFormValue('luzFreioObs');
+				$objInspecao->save();
+
+				// -----------------
+				$objInspecao=$this->manager->getBusiness('adm','inspecaoveiculo');
+				$objInspecao->idRequisicao=$this->objRequisicao->idRequisicao;
+				$objInspecao->idComponente=19;
+				$objInspecao->status=$this->GetFormValue('piscaAlerta');
+				$objInspecao->obs=$this->GetFormValue('piscaAlertaObs');
+				$objInspecao->save();
+
+				// -----------------
+				$objInspecao=$this->manager->getBusiness('adm','inspecaoveiculo');
+				$objInspecao->idRequisicao=$this->objRequisicao->idRequisicao;
+				$objInspecao->idComponente=20;
+				$objInspecao->status=$this->GetFormValue('limpadorParabrisa');
+				$objInspecao->obs=$this->GetFormValue('limpadorParabrisaObs');
+				$objInspecao->save();
+
+				// -----------------
+				$objInspecao=$this->manager->getBusiness('adm','inspecaoveiculo');
+				$objInspecao->idRequisicao=$this->objRequisicao->idRequisicao;
+				$objInspecao->idComponente=21;
+				$objInspecao->status=$this->GetFormValue('setas');
+				$objInspecao->obs=$this->GetFormValue('setasObs');
+				$objInspecao->save();
+
+				// -----------------
+				$objInspecao=$this->manager->getBusiness('adm','inspecaoveiculo');
+				$objInspecao->idRequisicao=$this->objRequisicao->idRequisicao;
+				$objInspecao->idComponente=22;
+				$objInspecao->status=$this->GetFormValue('travamentoCapo');
+				$objInspecao->obs=$this->GetFormValue('travamentoCapoObs');
+				$objInspecao->save();
+
+
+				//--------------------------------------------------------------------------------------------------------------------
+				//Atribuições
+				$objRequisicaoVeiculo->dataHoraChegadaGaragem = $data->dataHoraChegadaGaragem;
+				$objRequisicaoVeiculo->dataHoraSaidaGaragem = $data->dataHoraSaidaGaragem;
+				//$objRequisicaoVeiculo->status = 'G';
+				$objRequisicaoVeiculo->odometroSaida = $data->odometroSaida;
+				$objRequisicaoVeiculo->odometroChegada = $data->odometroChegada;
+				$objRequisicaoVeiculo->dataHoraAutExec = $data->dataHoraAutExec;
+				$objRequisicaoVeiculo->ocorrencias = $data->ocorrencias;
+
+				$this->objRequisicao->addItem($itemRequisicao);
+				$this->objRequisicao->setStatus('G');
+
+				try {
+						$this->objRequisicao->beginTransaction();
+
+						$requisita = $this->manager->getBusiness('adm', 'requisita');
+						$requisita->GetById($this->objRequisicao->idTipoReq, $this->objRequisicao->idUoRequisitante, $this->objRequisicao->getAno());
+
+						$executa = $this->manager->getBusiness('adm', 'executa');
+						$executa->GetById($this->objRequisicao->idTipoReq, $this->objRequisicao->idUoExecutante, $this->objRequisicao->getAno());
+
+						// Remove a previsão de débito e adiciona o debito no orçamento da Uo requisitante
+						$this->objRequisicao->getUoRequisitante();
+						$this->objRequisicao->uoRequisitante->setTransaction($this->objRequisicao->getTransaction());
+
+						//$this->objRequisicao->uoRequisitante->addDebitoRemovePrevisao($requisita->idRubrica,$valorReal,$valorEstimado,$this->objRequisicao->getAno());
+						// $this->objRequisicao->Log(OP_UPD,"Requisição ".$this->objRequisicao->idRequisicao.": debito de ".$valorReal." na UO ".$this->objRequisicao->uoRequisitante->idUo);
+						//$this->objRequisicao->Log(OP_UPD,"Requisicao ".$this->objRequisicao->idRequisicao.": adicao da previsao de ".$valorEstimado." na UO ".$this->objRequisicao->uoRequisitante->idUo);
+						// Lançamento interno de retorno da previsão de débito
+						$lancamentoInt = $this->manager->getBusiness('adm', 'lancamentoint');
+						$lancamentoInt->setTransaction($this->objRequisicao->getTransaction());
+						$lancamentoInt->tipoLancamento = '7';
+						$lancamentoInt->obs = "Retorno de previsao feito na execucao";
+						$lancamentoInt->data = date("d/m/Y");
+						//$lancamentoInt->valor = $valorEstimado;
+						$lancamentoInt->ano = date("Y");
+						$lancamentoInt->idUoRequisitante = $this->objRequisicao->idUoRequisitante;
+						$lancamentoInt->idUoExecutante = $this->objRequisicao->idUoExecutante;
+						$lancamentoInt->idRubrica = $requisita->idRubrica;
+						var_dump($executa->idRubrica);
+						$lancamentoInt->idRequisicao = $this->objRequisicao->idRequisicao;
+						$lancamentoInt->save();
+						$lancamentoInt->Log(OP_INS, "Lançamento Interno numero " . $lancamentoInt->idLancamentoInt . " gerado com sucesso para a Requisicao " . $this->objRequisicao->idRequisicao . ".");
+
+						// Adiciona o credito na Uo Executante
+						$this->objRequisicao->getUoExecutante();
+						$this->objRequisicao->uoExecutante->setTransaction($this->objRequisicao->getTransaction());
+						$this->objRequisicao->uoExecutante->addCreditoExecutante($requisita->idRubrica, $valorReal, $this->objRequisicao->getAno());
+						$this->objRequisicao->Log(OP_UPD, "Requisição " . $this->objRequisicao->idRequisicao . ": credito de " . $valorReal . " na UO " . $this->objRequisicao->uoExecutante->idUo);
+
+						// Lançamento interno do crédito/débito
+						$lancamentoInt2 = $this->manager->getBusiness('adm', 'lancamentoint');
+						$lancamentoInt2->setTransaction($this->objRequisicao->getTransaction());
+						$lancamentoInt2->tipoLancamento = '5';
+						$lancamentoInt->obs = "Credito/debito feito na execucao.";
+						$lancamentoInt2->data = date("d/m/Y");
+						$lancamentoInt2->valor = $valorReal;
+						$lancamentoInt2->ano = date("Y");
+						$lancamentoInt2->idUoRequisitante = $this->objRequisicao->idUoRequisitante;
+						$lancamentoInt2->idUoExecutante = $this->objRequisicao->idUoExecutante;
+						$lancamentoInt2->idRubrica = $requisita->idRubrica;
+						$lancamentoInt2->idRequisicao = $this->objRequisicao->idRequisicao;
+						$lancamentoInt2->save();
+						$lancamentoInt2->Log(OP_INS, "Lançamento Interno numero " . $lancamentoInt2->idLancamentoInt . " realizado com sucesso para a Requisicao " . $this->objRequisicao->idRequisicao);
+						var_dump('ANTES');
+						$this->objRequisicao->save();
+						$objRequisicaoVeiculo->update();
+						$this->objRequisicao->endTransaction();
+						var_dump('DEPOIS');
+						$this->objRequisicao->Log(OP_UPD, "Requisicao " . $this->objRequisicao->idRequisicao . " executada com sucesso.");
+
+						//Passa para a proxima requisicao a ser executada
+						if ($proximaRequisicao->idRequisicao)
+								$action_voltar = $this->manager->getActionUrl('adm', 'main:requisicoes', $proximaRequisicao->idRequisicao, array("form" => "item", "tipoReq" => $proximaRequisicao->idTipoReq));
+						else
+								$action_voltar = $this->manager->getActionUrl('adm', 'main:requisicoes:find', '');
+
+						$this->manager->information("Requisicao executada com sucesso.", $action_voltar);
+				} catch (Exception $e) {
+						$this->addError($e->getMessage());
+				}
+		}
+
+		public function btnLiberar_click() {
+				$data = $this->getData();
+
+				$proximaRequisicao = $this->manager->getBusiness('adm', 'requisicao', $this->objRequisicao->getProximaASerExecutada());
+
+				/* -------------------------------------Declarando a requisição de veículo------------------------------ */
+
+				$objRequisicaoVeiculo = $this->manager->getBusiness('adm', 'requisicaoveiculo');
+				$objRequisicaoVeiculo = $objRequisicaoVeiculo->GetById($this->objRequisicao->idRequisicao);
+
+				/* ----------------------------------------------------------------------------------------------------------------- */
+
+				// Se não selecionou nada
+				if ($data->acaoGestorUoExec == '') {
+						$this->manager->Error("Você precisa selecionar uma ação a fazer (liberar ou recusar).", '');
+				}
+
+				if (($data->placa == '') and ($data->acaoGestorUoExec == '1')) {
+						$this->manager->Error("Você precisa definir o veículo a ser utilizado.", '');
+				} elseif ((trim(Form::GetFormValue('lkpMotorista')) == '') and ($data->acaoGestorUoExec == '1')) {
+						$this->manager->Error("Você precisa definir o motorista.", '');
+				} else {
+
+						// Se selecionou recusar
+						if ($data->acaoGestorUoExec == '2') {
+								if ($data->motivoRejeicao == '') {
+										$this->manager->Error("Você precisa informar o motivo.", '');
+								} else {
+										$this->objRequisicao->beginTransaction();
+										$requisita = $this->manager->getBusiness('adm', 'requisita');
+										$requisita->GetById($this->objRequisicao->idTipoReq, $this->objRequisicao->idUoRequisitante, $this->objRequisicao->getAno());
+
+										// Remove a previsão de débito e adiciona o debito no orçamento da Uo requisitante
+										$this->objRequisicao->getUoRequisitante();
+										$this->objRequisicao->uoRequisitante->setTransaction($this->objRequisicao->getTransaction());
+										// $this->objRequisicao->uoRequisitante->removePrevisaoDebito($requisita->idRubrica,$data->valorEstimado,$this->objRequisicao->getAno());
+										//$this->objRequisicao->Log(OP_UPD,"Requisicao ".$this->objRequisicao->idRequisicao.": remocao da previsao de ".$data->valorEstimado." na UO ".$this->objRequisicao->uoRequisitante->idUo);
+
+
+										$this->objRequisicao->setidUsuarioGestor($data->idUsuarioGestor);
+
+
+										$this->objRequisicao->setMotivoRejeicao($data->motivoRejeicao);
+										$this->objRequisicao->setStatus('A');
+										$objRequisicaoVeiculo->status = 'A';
+										$status = "recusada";
+
+										// Lançamento interno de retorno da previsão de débito
+										$lancamentoInt = $this->manager->getBusiness('adm', 'lancamentoint');
+										$lancamentoInt->setTransaction($this->objRequisicao->getTransaction());
+										$lancamentoInt->tipoLancamento = '7';
+										$lancamentoInt->obs = "Retorno de previsao devido a recusa pelo executor.";
+										$lancamentoInt->data = date("d/m/Y");
+										//$lancamentoInt->valor = $data->valorEstimado;
+										$lancamentoInt->ano = date("Y");
+										$lancamentoInt->idUoRequisitante = $this->objRequisicao->idUoRequisitante;
+										$lancamentoInt->idUoExecutante = $this->objRequisicao->idUoExecutante;
+										$lancamentoInt->idRubrica = $requisita->idRubrica;
+										$lancamentoInt->idRequisicao = $this->objRequisicao->idRequisicao;
+										$lancamentoInt->save();
+										$lancamentoInt->Log(OP_INS, "Lançamento Interno numero " . $lancamentoInt->idLancamentoInt . " realizado com sucesso para a Requisicao " . $this->objRequisicao->idRequisicao);
+								}
+						}
+
+						if ($data->acaoGestorUoExec == '2' or (($data->acaoGestorUoExec == '1') and $data->placa)) {
+								// Se selecionou liberar
+								if ($data->acaoGestorUoExec == '1') {
+										$this->objRequisicao->setStatus('7');
+										$objRequisicaoVeiculo->status = '7';
+										$status = "liberada";
+								}
+
+								try {
+										$itemRequisicao = $this->objRequisicao->getItem();
+										$itemRequisicao->setData($data);
+										$objRequisicaoVeiculo->placaVeiculo = $data->placa;
+										$objRequisicaoVeiculo->idMotorista = $data->idMotorista;
+
+										$this->objRequisicao->addItem($itemRequisicao);
+										$this->objRequisicao->save();
+
+
+										$objRequisicaoVeiculo->update();
+										$this->objRequisicao->endTransaction();
+										$this->objRequisicao->Log(OP_UPD, "Requisicao " . $this->objRequisicao->idRequisicao . " " . $status . " com sucesso.");
+
+										//Passa para a proxima requisicao a ser executada
+										if ($proximaRequisicao->idRequisicao)
+												$action_voltar = $this->manager->getActionUrl('adm', 'main:requisicoes', $proximaRequisicao->idRequisicao, array("form" => "item", "tipoReq" => $proximaRequisicao->idTipoReq));
+										else
+												$action_voltar = $this->manager->getActionUrl('adm', 'main:requisicoes:find', '');
+
+										if ($data->acaoGestorUoExec == '1') {
+												$action_rep = $this->manager->getActionURL('adm', 'main:requisicoes:reprequisicaoveiculo', '', array("req" => "{$objRequisicaoVeiculo->idRequisicao}"));
+												$action_grid=$this->manager->getActionURL('adm','main:requisicoes:find');
+												$this->manager->Information('Requisição liberado com sucesso!', $action_grid);
+												//	$this->manager->Confirmation("Requisição liberada com sucesso. Clique OK para imprimir a requisição e CANCELAR para voltar.", $action_rep, $action_voltar);
+										} else {
+												$this->manager->information("Requisição recusada.", $action_voltar);
+										}
+								} catch (Exception $e) {
+										$this->addError($e->getMessage());
+								}
+						}
+				}
+		}
+
+		function btnRecusar_click() {
+				$data = $this->getData();
+				if ($data->motivoRejeicao == '') {
+						$this->manager->Error("O motivo da Rejeição deve ser informado.", '');
+				}
+
+				$this->setTitle("Confirmação de recusa do Gestor da UO Executante");
+				$this->setData();
+				$this->setReadOnly();
+
+				$this->setFieldAttr('motivoRejeicao', 'readonly', TRUE);
+
+				$this->setButtonAttr('btnLiberar', 'visible', FALSE);
+				$this->setButtonAttr('btnRecusar', 'visible', FALSE);
+				$this->setButtonAttr('btnConfirmarRecusa', 'visible', TRUE);
+				$this->setButtonAttr('btnCancelar', 'visible', TRUE);
+		}
+
+		function btnAvaliar_click() {
+				$data = $this->getData();
+
+				// Se não selecionou o conceito
+				if ($data->conceito == '') {
+						$this->manager->Error("Você precisa conceituar o serviço.", '');
+				}
+
+				$this->setTitle("Confirmação de avaliação da requisição");
+				$this->setData();
+				$this->setReadOnly();
+
+				$this->setFieldAttr('conceito', 'readonly', TRUE);
+				$this->setFieldAttr('obs', 'readonly', TRUE);
+
+				$this->setButtonAttr('btnAvaliar', 'visible', FALSE);
+				$this->setButtonAttr('btnConfirmarAvaliacao', 'visible', TRUE);
+				$this->setButtonAttr('btnCancelar', 'visible', TRUE);
+		}
+
+		public function btnConfirmarAvaliacao_click() {
+				$itemRequisicao = $this->objRequisicao->getItem();
+				$data = $this->getData();
+
+				$itemRequisicao->setData($data);
+				$this->objRequisicao->addItem($itemRequisicao);
+				/* -------------------------------------Declarando a requisição de veículo------------------------------ */
+
+				$objRequisicaoVeiculo = $this->manager->getBusiness('adm', 'requisicaoveiculo');
+				$objRequisicaoVeiculo = $objRequisicaoVeiculo->GetById($this->objRequisicao->idRequisicao);
+
+				/* ----------------------------------------------------------------------------------------------------------------- */
+				try {
+						$this->objRequisicao->setStatus('G'); //Finalizada
+						$objRequisicaoVeiculo->status = 'G'; //Finalizada
+						$objRequisicaoVeiculo->update();
+						$this->objRequisicao->save();
+						$this->objRequisicao->endTransaction();
+						$this->objRequisicao->Log(OP_UPD, "Requisição " . $this->objRequisicao->idRequisicao . " avaliada com sucesso.");
+						$this->manager->information("Requisição avaliada com sucesso.", $this->manager->getActionUrl('adm', 'main:requisicoes:find'));
+				} catch (Exception $e) {
+						$this->addError($e->getMessage());
+				}
+		}
+
+		function btnRetornaExecucao_click() {
+				$this->setTitle("Confirmação de retorno de execução");
+				$this->setData();
+				$this->setReadOnly();
+
+				$this->setFieldAttr('idMotorista', 'readonly', TRUE);
+				$this->setFieldAttr('placa', 'readonly', TRUE);
+				$this->setFieldAttr('odometroSaida', 'readonly', TRUE);
+				$this->setFieldAttr('dataSaida', 'readonly', TRUE);
+				$this->setFieldAttr('horaSaida', 'readonly', TRUE);
+				$this->setFieldAttr('odometroChegada', 'readonly', TRUE);
+				$this->setFieldAttr('dataChegada', 'readonly', TRUE);
+				$this->setFieldAttr('horaChegada', 'readonly', TRUE);
+
+				//$this->setFieldAttr('valorReal','readonly',TRUE);
+				$this->setFieldAttr('ocorrencias', 'readonly', TRUE);
+
+				$this->setButtonAttr('btnRetornaExecucao', 'visible', FALSE);
+				$this->setButtonAttr('btnConfirmarRetorno', 'visible', TRUE);
+				$this->setButtonAttr('btnCancelar', 'visible', TRUE);
+		}
+
+		public function btnConfirmarRetorno_click() {
+				$cf = new MCurrencyFormatter();
+
+				$this->objRequisicao->retrieveAssociation('uoRequisitante');
+				$this->objRequisicao->retrieveAssociation('uoExecutante');
+
+				$itemRequisicao = $this->objRequisicao->getItem();
+				$data = $this->getData();
+
+				$valorAntigo = $cf->toDecimal($itemRequisicao->valorReal);
+				$valorAtual = $cf->toDecimal($data->valorReal);
+				$data->valorReal = $cf->toDecimal($data->valorReal); //atualiza valor real
+				$valorOp = ($valorAtual - $valorAntigo);
+
+				// Se ja os lançamentos já foram feitos então deve abortar a repetição da operação
+				if ($this->objRequisicao->checkLancamento('6', $valorAtual)) {
+						return true;
+				}
+
+				// Gerando os campos dataHora de entrada e saída
+				$data->dataHoraEntrada = $data->dataEntrada . " " . $data->horaEntrada . ":00";
+				$data->dataHoraSaida = $data->dataSaida . " " . $data->horaSaida . ":00";
+
+				$itemRequisicao->setData($data);
+				$this->objRequisicao->addItem($itemRequisicao);
+
+				try {
+						// Se a requisição já foi confirmada, então é necessário também um estorno no orçamento interno
+						if ($this->objRequisicao->status == 'E') {
+								$this->objRequisicao->beginTransaction();
+								$requisita = $this->manager->getBusiness('adm', 'requisita');
+								$requisita->GetById($this->objRequisicao->idTipoReq, $this->objRequisicao->idUoRequisitante, $this->objRequisicao->getAno());
+
+								$executa = $this->manager->getBusiness('adm', 'executa');
+								$executa->GetById($this->objRequisicao->idTipoReq, $this->objRequisicao->idUoExecutante, $this->objRequisicao->getAno());
+
+								$this->objRequisicao->getUoRequisitante();
+								$this->objRequisicao->uoRequisitante->setTransaction($this->objRequisicao->getTransaction());
+
+								$this->objRequisicao->getUoExecutante();
+								$this->objRequisicao->uoExecutante->setTransaction($this->objRequisicao->getTransaction());
+
+								// Defaz o lançamento financeiro da execução anterior
+								$this->objRequisicao->uoExecutante->removeCredito($requisita->idRubrica, $valorAntigo, $this->objRequisicao->getAno());
+								$this->objRequisicao->uoRequisitante->removeDebito($requisita->idRubrica, $valorAntigo, $this->objRequisicao->getAno());
+
+								// Faz o lançamento financeiro com o novo valor
+								$this->objRequisicao->uoRequisitante->addDebito($requisita->idRubrica, $valorAtual, $this->objRequisicao->getAno());
+								$this->objRequisicao->uoExecutante->addCredito($executa->idRubrica, $valorAtual, $this->objRequisicao->getAno());
+
+								$lancamentoInt = $this->manager->getBusiness('adm', 'lancamentoint');
+								$lancamentoInt->setTransaction($this->objRequisicao->getTransaction());
+								$lancamentoInt->tipoLancamento = '6'; //Estorno de Débito/Crédito
+								$lancamentoInt->obs = "Estorno de credito/debito feito pelo executante.";
+								$lancamentoInt->data = date("d/m/Y");
+								$lancamentoInt->valor = $valorAtual;
+								$lancamentoInt->ano = date("Y");
+								$lancamentoInt->idUoRequisitante = $this->objRequisicao->idUoRequisitante;
+								$lancamentoInt->idUoExecutante = $this->objRequisicao->idUoExecutante;
+								$lancamentoInt->idRubrica = $requisita->idRubrica;
+								$lancamentoInt->idRequisicao = $this->objRequisicao->idRequisicao;
+								$lancamentoInt->save();
+								$lancamentoInt->Log(OP_INS, "Lançamento Interno numero " . $lancamentoInt->idLancamentoInt . " realizado com sucesso para a Requisicao " . $this->objRequisicao->idRequisicao);
+								$this->objRequisicao->setStatus('H');
+								$this->objRequisicao->Log(OP_UPD, "Requisicao " . $this->objRequisicao->idRequisicao . ": Execução estornada com sucesso");
+						} else {
+								$this->objRequisicao->setStatus('9');
+								$this->objRequisicao->Log(OP_UPD, "Requisicao " . $this->objRequisicao->idRequisicao . ": Execução refeita com sucesso");
+						}
+
+						$this->objRequisicao->save();
+						$this->objRequisicao->endTransaction();
+						$this->manager->information("Requisição reexecutada com sucesso.", $this->manager->getActionUrl('adm', 'main:requisicoes:find'));
+				} catch (Exception $e) {
+						$this->addError($e->getMessage());
+				}
+		}
+
+		function setDataDadosRequisicao() {
+				$this->SetFieldValue('tipoTransporte', $this->GetFormValue('tipoTransporte'));
+				$this->SetFieldValue('tipoVeiculo', $this->GetFormValue('tipoVeiculo'));
+				$this->SetFieldValue('justificativa', $this->GetFormValue('justificativa'));
+				$this->SetFieldValue('idUsuarioGestor', $this->GetFormValue('idUsuarioGestor'));
+				$this->SetFieldValue('outrosPassageiros', $this->GetFormValue('outrosPassageiros'));
+		}
+
+		function setReadOnlyDadosRequisicao() {
+				$this->SetFieldAttr('tipoTransporte', 'readonly', TRUE);
+				$this->SetFieldAttr('tipoVeiculo', 'readonly', TRUE);
+				$this->SetFieldAttr('prevDataChegDest', 'readonly', TRUE);
+				$this->SetFieldAttr('prevHoraChegDest', 'readonly', TRUE);
+				$this->SetFieldAttr('justificativa', 'readonly', TRUE);
+				$this->SetFieldAttr('outrosPassageiros', 'readonly', TRUE);
+				$this->SetFieldAttr('valorEstimado', 'readonly', TRUE);
+		}
+
+//TAKA
+
+
+		function btnConsultarVeiculo_click() {
+				global $MIOLO;
+
+				if (strlen(trim($this->GetFieldValue('DataVeiculoConsulta'))) != 10) {
+						$this->AddError('Insira uma data válida no campo Data da Consulta.');
+				} else {
+						$report = new MJasperReport('sigaept');
+						$parameters['SUBREPORT_DIR'] = $MIOLO->GetConf('home.modules');
+						$parameters['pURL'] = $MIOLO->GetConf('home.url');
+						$parameters['int_pIdUsuario'] = $MIOLO->login->idkey;
+						$parameters['pDataIni'] = $this->GetFieldValue('DataVeiculoConsulta');
+						$report->Execute('adm', 'RelReqVeiculoPorData', $parameters);
+				}
+		}
+
+		public function btnAnular_click() {
+				$proximaRequisicao = $this->manager->getBusiness('adm', 'requisicao', $this->objRequisicao->getProximaASerExecutada());
+
+				$itemRequisicao = $this->objRequisicao->getItem();
+				$this->objRequisicao->addItem($itemRequisicao);
+				$requisita = $this->manager->getBusiness('adm', 'requisita');
+				$requisita->GetById($this->objRequisicao->idTipoReq, $this->objRequisicao->idUoRequisitante, $this->objRequisicao->getAno());
+				try {
+						$this->objRequisicao->retrieveAssociation('uoRequisitante');
+
+						if ($this->objRequisicao->status == '9' OR $this->objRequisicao->status == 'E') {
+								$this->objRequisicao->beginTransaction();
+
+								$this->objRequisicao->setStatus('A');
+								$this->objRequisicao->save();
+
+								$requisita = $this->manager->getBusiness('adm', 'requisita');
+								$requisita->GetById($this->objRequisicao->idTipoReq, $this->objRequisicao->idUoRequisitante);
+
+								$executa = $this->manager->getBusiness('adm', 'executa');
+								$executa->GetById($this->objRequisicao->idTipoReq, $this->objRequisicao->idUoExecutante);
+
+								$this->objRequisicao->getUoRequisitante();
+								$this->objRequisicao->uoRequisitante->setTransaction($this->objRequisicao->getTransaction());
+
+								$this->objRequisicao->getUoExecutante();
+								$this->objRequisicao->uoExecutante->setTransaction($this->objRequisicao->getTransaction());
+
+								// Defaz o lançamento financeiro da execução anterior
+								$this->objRequisicao->uoExecutante->removeCreditoExecutante($requisita->idRubrica, $itemRequisicao->valorReal, $this->objRequisicao->getAno());
+								$this->objRequisicao->uoRequisitante->removeDebito($requisita->idRubrica, $itemRequisicao->valorReal, $this->objRequisicao->getAno());
+
+								$lancamentoInt = $this->manager->getBusiness('adm', 'lancamentoint');
+								$lancamentoInt->setTransaction($this->objRequisicao->getTransaction());
+								$lancamentoInt->tipoLancamento = '6'; //Estorno de Débito/Crédito
+								$lancamentoInt->obs = "Estorno de credito/debito feito pelo executante.";
+								$lancamentoInt->data = date("d/m/Y");
+								$lancamentoInt->valor = $itemRequisicao->valorReal;
+								$lancamentoInt->ano = date("Y");
+								$lancamentoInt->idUoRequisitante = $this->objRequisicao->idUoRequisitante;
+								$lancamentoInt->idUoExecutante = $this->objRequisicao->idUoExecutante;
+								$lancamentoInt->idRubrica = $requisita->idRubrica;
+								$lancamentoInt->idRequisicao = $this->objRequisicao->idRequisicao;
+								$lancamentoInt->save();
+
+								$lancamentoInt->Log(OP_INS, "Lançamento Interno numero " . $lancamentoInt->idLancamentoInt . " realizado para a Requisicao " . $this->objRequisicao->idRequisicao . ", tipo: 6, valor: " . $itemRequisicao->valorReal);
+
+								$this->objRequisicao->endTransaction();
+						} else {
+								$this->objRequisicao->beginTransaction();
+
+								$this->objRequisicao->uoRequisitante->setTransaction($this->objRequisicao->getTransaction());
+								$this->objRequisicao->uoRequisitante->removePrevisaoDebito($requisita->idRubrica, $itemRequisicao->valorEstimado, $this->objRequisicao->getAno());
+
+
+								$this->objRequisicao->setStatus('A');
+								$this->objRequisicao->save();
+								$lancamentoInt2 = $this->manager->getBusiness('adm', 'lancamentoint');
+								$lancamentoInt2->setTransaction($this->objRequisicao->getTransaction());
+								$lancamentoInt2->tipoLancamento = '7';
+								$lancamentoInt->obs = "Retorno de previsao devido a anulacao do executante.";
+								$lancamentoInt2->data = date("d/m/Y");
+								// $lancamentoInt2->valor = $itemRequisicao->valorEstimado;
+								$lancamentoInt2->ano = date("Y");
+								$lancamentoInt2->idUoRequisitante = $this->objRequisicao->idUoRequisitante;
+								$lancamentoInt2->idUoExecutante = $this->objRequisicao->idUoExecutante;
+								$lancamentoInt2->idRubrica = $requisita->idRubrica;
+								$lancamentoInt2->idRequisicao = $this->objRequisicao->idRequisicao;
+								$lancamentoInt2->save();
+								$lancamentoInt2->Log(OP_INS, "Lançamento Interno numero " . $lancamentoInt2->idLancamentoInt . " feito com sucesso para a Requisicao " . $this->objRequisicao->idRequisicao);
+								$this->objRequisicao->endTransaction();
+						}
+
+
+						$this->objRequisicao->Log(OP_UPD, "Requisicao " . $this->objRequisicao->idRequisicao . ": anulada com sucesso pelo executor.");
+						if ($proximaRequisicao->idRequisicao)
+								$action_voltar = $this->manager->getActionUrl('adm', 'main:requisicoes', $proximaRequisicao->idRequisicao, array("form" => "item", "tipoReq" => $proximaRequisicao->idTipoReq));
+						else
+								$action_voltar = $this->manager->getActionUrl('adm', 'main:requisicoes:find', '');
+
+						$this->manager->information("Requisição anulada com sucesso.", $action_voltar);
+				} catch (Exception $e) {
+						$this->addError($e->getMessage());
+				}
+		}
+
+		public function btnEstornar_click() {
+				$this->objRequisicao->retrieveAssociation('uoRequisitante');
+				$this->objRequisicao->retrieveAssociation('uoExecutante');
+				$this->objRequisicao->beginTransaction();
+
+				$itemRequisicao = $this->objRequisicao->getItem();
+				$data = $this->getData();
+				$itemRequisicao->setData($data);
+				$this->objRequisicao->addItem($itemRequisicao);
+
+				try {
+						// Se a requisição já foi confirmada, então é necessário também um estorno no orçamento interno
+						if ($this->objRequisicao->status == 'E') {
+								$this->objRequisicao->uoRequisitante->setTransaction($this->objRequisicao->getTransaction());
+								$this->objRequisicao->uoExecutante->setTransaction($this->objRequisicao->getTransaction());
+
+								$requisita = $this->manager->getBusiness('adm', 'requisita');
+								$requisita->GetById($this->objRequisicao->idTipoReq, $this->objRequisicao->idUoRequisitante, $this->objRequisicao->getAno());
+								$idRubrica = trim($requisita->idRubrica);
+
+								$executa = $this->manager->getBusiness('adm', 'executa');
+								$executa->GetById($this->objRequisicao->idTipoReq, $this->objRequisicao->idUoExecutante, $this->objRequisicao->getAno());
+
+								// Defaz o lançamento financeiro da execução anterior
+								$this->objRequisicao->uoExecutante->removeCreditoExecutante($idRubrica, $itemRequisicao->valorReal, $this->objRequisicao->getAno());
+								$this->objRequisicao->uoRequisitante->removeDebito($idRubrica, $itemRequisicao->valorReal, $this->objRequisicao->getAno());
+
+								$lancamentoInt = $this->manager->getBusiness('adm', 'lancamentoint');
+								$lancamentoInt->setTransaction($this->objRequisicao->getTransaction());
+								$lancamentoInt->tipoLancamento = '6'; //Estorno de Débito/Crédito
+								$lancamentoInt->obs = "Estorno de credito/debito feito pelo executor.";
+								$lancamentoInt->data = date("d/m/Y");
+								$lancamentoInt->valor = $itemRequisicao->valorReal;
+								$lancamentoInt->ano = date("Y");
+								$lancamentoInt->idUoRequisitante = $this->objRequisicao->idUoRequisitante;
+								$lancamentoInt->idUoExecutante = $this->objRequisicao->idUoExecutante;
+								$lancamentoInt->idRubrica = $requisita->idRubrica;
+								$lancamentoInt->idRequisicao = $this->objRequisicao->idRequisicao;
+								$lancamentoInt->save();
+								$lancamentoInt->Log(OP_INS, "Lançamento Interno numero " . $lancamentoInt->idLancamentoInt . " realizado para a Requisicao " . $this->objRequisicao->idRequisicao);
+
+								$this->objRequisicao->setStatus('H');
+						}
+
+						$this->objRequisicao->save();
+						$this->objRequisicao->endTransaction();
+						$this->objRequisicao->Log(OP_UPD, "Requisicao " . $this->objRequisicao->idRequisicao . " estornada com sucesso");
+						$this->manager->information("Requisição estornada com sucesso.", $this->manager->getActionUrl('adm', 'main:requisicoes:find'));
+				} catch (Exception $e) {
+						$this->addError($e->getMessage());
+				}
+		}
+
+}
+
+?>

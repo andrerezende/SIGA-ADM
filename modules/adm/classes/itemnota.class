@@ -1,0 +1,154 @@
+<?
+class BusinessAdmItemNota extends Business
+{
+	public $idItemNota;
+	public $idNotaFiscal;
+	public $idEmpenhado;
+	public $quantidade;
+	public $valor;
+	
+    public $itens;
+    public $movimento;
+    public $movimentoServ;
+    public $movimentoserv;
+
+	function __construct($data = null)
+	{
+		parent::__construct('sigaept', $data);
+	}
+
+    function OnCreate($data)
+    {
+        if ($data)
+        {
+            $this->GetById($data);
+        }
+    }
+
+	function GetById($id)
+	{
+		$this->idItemNota = $id;
+		$this->retrieve();
+		return $this;
+	}
+
+	function GetByIdNota($idNota)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('idItemNota');
+		$criteria->addColumnAttribute('idNotaFiscal');
+		$criteria->addColumnAttribute('idEmpenhado');
+		$criteria->addColumnAttribute('quantidade');
+		$criteria->addColumnAttribute('valor');
+		$criteria->addCriteria('idNotaFiscal','=',"$idNota");
+		return $criteria->retrieveAsQuery();
+	}
+
+	function GetByIdNotaEmpenhado($idNota, $idEmpenhado)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('idItemNota');
+		$criteria->addColumnAttribute('idNotaFiscal');
+		$criteria->addColumnAttribute('idEmpenhado');
+		$criteria->addColumnAttribute('quantidade');
+		$criteria->addColumnAttribute('valor');
+		$criteria->addCriteria('idNotaFiscal','=',"$idNota");
+		$criteria->addCriteria('idEmpenhado','=',"$idEmpenhado");
+		return $criteria->retrieveAsQuery();
+
+		$this->idNotaFiscal = $idNota;
+		$this->idEmpenhado = $idEmpenhado;
+		$this->retrieve();
+		return $this;
+	}
+
+	function getEmpenhado()
+    {
+        if (!$this->empenhado) $this->retrieveAssociation('empenhado');
+        return $this->empenhado;
+    }
+    
+    function getItensReq($idRequisicao=null,$idMaterial=null)
+    {
+        $this->getEmpenhado();
+        if (!$this->empenhado->itemreq) $this->empenhado->retrieveAssociation('itemreq');
+        if ($this->empenhado->itemreq)
+        {
+            if ($idRequisicao && $idMaterial)
+            {
+                foreach ($this->empenhado->itemreq as $material)
+                {
+                    if ($material->idRequisicao == $idRequisicao && $material->idMaterial == $idMaterial)
+                    {
+                        return $material;
+                    }
+                }
+            }
+        }
+        return $this->empenhado->itemreq;
+    }
+
+    function isContabilizado()
+    {
+        $this->retrieveAssociation('empenhado');
+        $this->empenhado->retrieveAssociation('licitacao');
+        $cf = new MCurrencyFormatter();
+        if ($this->empenhado->licitacao->idTipoLicitacao == 1)
+        {
+            $this->retrieveAssociation('movimento');
+            if ($this->movimento)
+            {
+                $valorMovimento = 0;
+                foreach ($this->movimento as $movimento)
+                {
+                    $valorMovimento = $cf->toDecimal($valorMovimento) + $cf->toDecimal($movimento->valorTotal);
+                }
+                if (round($cf->toDecimal($valorMovimento),2) == round($cf->toDecimal($this->quantidade) * $cf->toDecimal($this->valor),2)) return true;
+            }
+            return false;
+        }
+        else
+        {
+            $this->retrieveAssociation('notaFiscal');
+            foreach ($this->notaFiscal->itens as $itemnota)
+            {
+                $total = $cf->toDecimal($total) + (round($cf->toDecimal($itemnota->quantidade) * $cf->toDecimal($itemnota->valor),2));
+            }
+            if (round($cf->toDecimal($total),2) == ($cf->toDecimal($this->notaFiscal->valor))) return true;
+            return false;
+        }
+    }
+
+    function getMovimento()
+    {
+        if (!$this->movimento) $this->retrieveAssociation('movimento');
+    }
+
+	function GetByNotaEmpenhado($nota, $idEmpenhado)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addCriteria('notaFiscal.notaFiscal','=',"'$nota'");
+		$criteria->addCriteria('idEmpenhado','=',"$idEmpenhado");
+		$cursor = $criteria->retrieveAsCursor();
+		return $cursor->getObject();
+	}
+
+	function GetValorTotalByIdEmpenhado($idEmpenhado)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('sum(valorItemNota*quantItemNota)');
+		$criteria->addCriteria('idEmpenhado','=',"$idEmpenhado");
+		$query = $criteria->retrieveAsQuery();
+		return $query->result[0][0];
+	}
+
+	function GetQuantidadeTotalByIdEmpenhado($idEmpenhado)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('sum(quantidade)');
+		$criteria->addCriteria('idEmpenhado','=',"$idEmpenhado");
+		$query = $criteria->retrieveAsQuery();
+		return $query->result[0][0];
+	}
+}
+?>

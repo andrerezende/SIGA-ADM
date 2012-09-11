@@ -1,0 +1,389 @@
+<?php
+define ('PAGE_ISPOSTBACK', '__ISPOSTBACK');
+
+class MPage extends MControl
+{
+    var $compliant;
+    var $styles;
+    var $styleCode;
+    var $scripts;
+    var $customScripts;
+    var $metas;
+    var $title;
+	var $action;
+	var $enctype;
+    var $isPostBack = false;
+	var $onload;
+	var $onsubmit;
+	var $onunload;
+	var $onfocus;
+    var $hasReport;
+	var $state;
+    var $jscode;
+    var $goto;
+    var $generateMethod = 'GenerateDefault';
+    var $theme;
+    var $cpaint; // to use AJAX
+    var $redirect = false;
+	var $file; // object to use with downloads
+
+    function __construct()
+    {   global $state;
+
+        parent::__construct('frm' . uniqid());
+        $this->compliant  = true;
+		$this->enctype    = '';
+      	$this->onsubmit   = new MStringList();
+      	$this->onload     = new MStringList(false);
+        $this->onunload   = new MStringList();
+        $this->onfocus    = new MStringList();
+      	$this->jscode     = new MStringList();
+      	$this->styles     = new MStringList(false);
+      	$this->styleCode  = new MStringList();
+      	$this->scripts    = new MStringList(false);
+      	$this->customScripts    = new MStringList(false);
+      	$this->metas      = new MStringList();
+        $this->title      = $this->manager->GetConf('theme.title');
+        $state            = new MState();
+        $this->state      = $state;
+//		$this->action     = $this->manager->history->Pop('context');
+		$this->action     = $this->manager->GetCurrentURL();
+        $this->isPostBack = (MIOLO::_REQUEST(PAGE_ISPOSTBACK) != '');
+        $back = $this->manager->history->Back('context');
+        $top = $this->manager->history->Top('context');
+//        $this->isPostBack = ($back === $top) && (MIOLO::_REQUEST(PAGE_ISPOSTBACK) != '');
+        $this->LoadViewState();
+        $this->LoadPostData();
+	}
+
+    function addStyle($url)
+    {   
+        $url = $this->manager->GetThemeURL($url);
+        $this->styles->add($url);            
+    }
+    
+    function addStyleURL($url)
+    {   
+        $this->styles->add($url);            
+    }
+
+    function addStyleCode($code)
+    {   
+      $this->styleCode->add($code);
+    }
+
+    function addScript($url)
+    {
+        $url = $this->manager->GetAbsoluteURL('scripts/' . $url);
+        $this->scripts->add($url);            
+    }
+    
+    function addScriptURL($url)
+    {
+        $this->customScripts->add($url);            
+    }
+
+    function insertScript($url)
+    {
+        $url = $this->manager->GetAbsoluteURL('scripts/' . $url);
+        $this->scripts->insert($url);            
+    }
+
+    function addMeta($name,$content)
+    {
+      $this->metas->add("<meta name=\"$name\" content=\"$content\">");
+    }
+    
+    function addHttpEquiv($name,$content)
+    {
+      $this->metas->add("<meta http-equiv=\"$name\" content=\"$content\">");
+    }
+    
+    function getStyles()
+    {
+        return $this->styles;
+    }
+
+    function getStyleCode()
+    {
+        return $this->styleCode;
+    }
+    
+    function setStyles($value)
+    {
+        $this->styles->items = is_array($value) ? $value : array($this->manager->GetThemeURL($value));
+    }
+
+    function getScripts()
+    {
+        return $this->scripts;
+    }
+    
+    function getCustomScripts()
+    {
+        return $this->customScripts;
+    }
+
+    function getMetas()
+    {
+        return $this->metas;
+    }
+
+    function getOnLoad()
+    {
+        return $this->onload;
+    }
+
+    function getOnSubmit()
+    {
+        return $this->onsubmit;
+    }
+
+    function GetOnUnLoad()
+    {
+      return $this->onunload;
+    }
+
+    function GetOnFocus()
+    {
+      return $this->onfocus;
+    }
+
+    function getJsCode()
+    {
+        return $this->jscode;
+    }
+
+    function getTitle()
+    {
+        return $this->title;
+    }
+    
+    function setTitle($title)
+    {
+        $this->title = $title;
+    }
+
+    function onSubmit($jscode)
+    {
+      $this->onsubmit->add($jscode);
+    }
+
+    function onLoad($jscode)
+    {
+      $this->onload->add($jscode);
+    }
+
+    function OnUnLoad($jscode)
+    {
+      $this->onunload->add($jscode);
+    }
+
+    function OnFocus($jscode)
+    {
+      $this->onfocus->add($jscode);
+    }
+
+    function addJsCode($jscode)
+    {
+      $this->jscode->add($jscode);
+    }
+
+    function isPostBack()
+    {  
+		return $this->isPostBack;
+    }
+
+    function setPostBack($postback)
+    {
+        $this->isPostBack = $postback;
+    }
+    
+	function setAction($action)
+	{
+		$this->action = $action;
+	}
+
+	function setEnctype($enctype)
+	{
+		$this->enctype = $enctype;
+	}
+
+	function setCompliant($value=true)
+	{
+		$this->compliant = $value;
+	}
+
+	function setFile($name,$content,$type,$length)
+	{
+        $this->file->name = $name;
+        $this->file->content = $content;
+        $this->file->type = $type;
+        $this->file->length = $length;
+	}
+
+    function request($vars, $component_name = '', $from='ALL')
+    {  
+        $value = '';
+        if ( ($vars != '') )
+        {
+           $value = MIOLO::_REQUEST($vars, $from);
+           if (!isset($value)) 
+           {
+              if (!$component_name)
+              {
+                $value = $this->state->get($vars);
+              }
+              else
+              {
+                $value = $this->state->get($vars, $component_name);
+              }
+           }
+        }
+        return $value;
+    }
+
+    function setViewState($var, $value, $component_name = '')
+    {
+        if (!$component_name)
+        {
+          $this->state->set($var, $value);
+        }
+        else
+        {
+          $this->state->set($var, $value, $component_name);
+        }
+    }
+
+    function getViewState($var, $component_name = '')
+    {
+        if (!$component_name)
+        {
+          return $this->state->get($var);
+        }
+        else
+        {
+          return $this->state->get($var, $component_name);
+        }
+    }
+
+    function loadViewState()
+    {
+        $this->state->LoadViewState();
+    }
+
+    function saveViewState()
+    {
+        $this->state->SaveViewState();
+    }
+
+    function loadPostData()
+    {
+       
+    }
+
+    function redirect($url)
+    { 
+         $this->manager->GetSession()->freeze();
+         $this->goto = str_replace('&amp;','&',$url);
+         $this->generateMethod = 'generateRedirect';
+    }
+
+    function forward($url)
+    { 
+         $this->isPostBack = false;
+         $this->goto = str_replace('&amp;','&',$url);
+         $this->manager->forward = $this->goto;
+         $this->manager->context->parseUrl($this->goto);
+    }
+
+    function insert($url)
+    { 
+         $this->goto = str_replace('&amp;','&',$url);
+         $context = clone $this->manager->context;
+         $this->manager->context->parseUrl($this->goto);
+         $this->manager->invokeHandler($this->manager->context->module,$this->manager->context->action);
+         $this->manager->context = $context;
+    }
+
+    function refresh()
+    { 
+       $this->OnLoad('document.' . $this->name . '.submit();'); 
+    }
+
+    function generate()
+    {
+	    return $this->{$this->generateMethod}();
+    }
+
+    function generateRedirect()
+    {
+	   header('Location:'.$this->goto);
+    }
+
+    function generateDefault()
+    {  
+       $this->theme = $this->manager->getTheme();
+       if (($themeLayout = $this->manager->_request('themelayout')) != '')
+       {
+            $this->manager->getTheme()->setLayout($themeLayout);
+       }
+       $this->saveViewState();
+       $this->manager->trace('MPage::generateDefault');
+       $this->addHttpEquiv('Content-Type','text/html; charset=UTF-8');
+       $this->addMeta('Generator','MIOLO Version '. MIOLO_VERSION . '; http://www.miolo.org.br');
+       $this->addStyle('m_common.css');
+       $this->addStyle('m_boxes.css');
+//       $this->insertScript('m_common.js');
+       $this->insertScript('m_compatibility.js');
+       $this->insertScript('m_miolo.js');
+       $this->insertScript('prototype/prototype.js');
+       if ($this->manager->getContext()->inDomain())
+       {
+           $this->onLoad("   miolo.setTitle('" . $this->title  . "');");
+       }
+       if (($windowId = $this->manager->_request('windowid')) != '')
+       {
+           $this->onLoad("   window.parent.miolo.windows.handle['{$windowId}'].onload();");
+       }
+       $this->theme->appendContent(new MHiddenField('__VIEWSTATE',$this->state->getViewState()),true);
+       $this->theme->appendContent(new MHiddenField('__ISPOSTBACK'),true);
+       $this->theme->appendContent(new MHiddenField('__EVENTTARGETVALUE'),true);
+       $this->theme->appendContent(new MHiddenField('__EVENTARGUMENT'),true);
+       $this->theme->appendContent(new MHiddenField('__FORMSUBMIT'),true);
+       return $this->painter->page($this); 
+    }
+
+    function generateAJAX()
+    {
+       $this->theme = $this->manager->getTheme();
+       $this->manager->trace('MPage::generateAJAX');
+//       $this->manager->trace($this->theme->generateElementInner('ajax'));
+       $this->manager->trace($this->cpaint->response_type);
+       if ($this->cpaint->response_type == 'TEXT')
+       {
+           $text = $this->theme->generateElementInner('ajax'); 
+          $this->cpaint->set_data($text);
+       } 
+       $this->cpaint->return_data();
+    }
+
+    function generateFile()
+    {
+       $response = $this->manager->response;
+	   $response->setContentType($this->file->type);
+       $response->setContentLength($this->file->length);
+       $response->setFileName($this->file->name);
+       $response->sendBinary($this->file->content); 
+    }
+
+    function generateDOMPdf()
+    {
+       $this->theme = $this->manager->getTheme();
+       $this->addHttpEquiv('Content-Type','text/html; charset=UTF-8');
+       $this->addStyle('m_common.css');
+       $this->addStyle('m_boxes.css');
+       return $this->painter->dompdf($this); 
+    }
+}
+?>

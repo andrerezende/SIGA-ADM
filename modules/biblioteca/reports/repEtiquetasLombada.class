@@ -1,0 +1,240 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+class repEtiquetasLombada extends MPDFReport
+{
+   var $img;
+   var $timestamp;
+   
+   function __construct()
+   {
+      global $MIOLO, $module, $page, $context, $self, $action, $perms; 
+      parent::__construct(NULL, NULL, 0, NULL, 'landscape', 'a4'); 
+      $ui = $MIOLO->GetUI();
+      $this->img = $ui->GetImageSrc('logonet.png','biblioteca');
+      $this->timestamp = date('d/m/Y G:i');
+      $this->pdf->ezStartPageNumbers(800,540, 10, 'rigth', 'Pagina: {PAGENUM}');
+      $this->pdf->ezSetMargins(100, 40, 20, 20);
+
+   }
+
+  function GeneratePageHeader()
+  {
+      $x0 = $this->pdf->left;
+      $x1 = $this->pdf->right;
+      $h = $this->pdf->getFontHeight(12);
+      $header = $this->pdf->openObject();
+      $this->pdf->saveState();
+
+		$x00=$this->pdf->left;
+		$hh = $this->pdf->getFontHeight(12);
+		$this->pdf->addText($x00, 800, 12, $this->manager->getConf('instituicao.sigla')." - ".$this->manager->getConf('instituicao.nome'));
+		$this->pdf->addText($x00, 800 - $hh, 12, $this->manager->getConf('theme.system'));
+
+/*
+      $this->pdf->addPngFromFile($this->img, 15, 510 + $x0, 50, 50);
+      $this->pdf->addText(70, 560, 12, 'CEFET-BA - Centro Federal de Educação Tecnológica da Bahia');
+      $this->pdf->addText(70, 560 -$h , 12, 'CGCO - Centro de Gestão do Conhecimento Organizacional');
+      $this->pdf->addText(70, 560 -$h -$h , 12, 'SIGA - Sistema Integrado de Gestão Acadêmica - Módulo Biblioteca');
+*/
+
+      $y = 550 - $h - $h - 5;
+      $this->pdf->SetColor(0.1,0.1,0.1);
+      $this->pdf->filledRectangle($x0, $y-20, $x1-30, 16 );
+      $this->pdf->SetColor(1,1,1);
+      $this->pdf->addText($x0 + 5, $y - 16, 12, 'Etiquetas de Lombada');
+      $this->pdf->restoreState();
+      $this->pdf->closeObject();
+      $this->pdf->addObject($header, 'all');
+
+  }
+        
+   function GeneratePageFooter()
+   {
+      $x0 = $this->pdf->left;
+      $x1 = $this->pdf->right;
+      $footer = $this->pdf->openObject();
+      $this->pdf->saveState();
+      $this->pdf->SetStrokeColor(0, 0, 0);
+      $this->pdf->line($x0, 28, $x1, 28);
+      $this->pdf->addText($x0, 19, 9, $this->timestamp . ' - CGCO/DSI');
+      $this->pdf->restoreState();
+      $this->pdf->closeObject();
+      $this->pdf->addObject($footer, 'all');
+   }
+
+   function gerarParaUMExemplar($x,$y,$width,$data)
+   {
+      global $MIOLO, $module;
+      $this->GeneratePageHeader();
+      $this->GeneratePageFooter();
+      $objEtiqueta = $MIOLO->GetBusiness($module,'etiquetaLombada');
+      
+      $height = 105;
+      
+      $this->pdf->setLineStyle(1,'','',array(3));   
+      $this->pdf->rectangle($x,$y,$width,$height);
+      $this->pdf->setLineStyle(1,'','',array(5,0)); 
+      $this->pdf->rectangle($x+3,$y+3,$width-6,$height-6);
+      $y = $y + 3 + $height - 2;
+      $tagsEscolhidas = explode('[-]',$data->listaTags);
+  
+      if($data->listaTags != '')
+      {
+         foreach($tagsEscolhidas as $tag)
+         {
+            $y = $y - 11 - 4 ;
+            $tags = explode('-',$tag);
+            $campo = $objEtiqueta->getDescricaoMarcByTag($tags[0]);
+            $valor = $objEtiqueta->getConteudoTag($data->idexemplar,$tags[0],$tags[1]) ;
+            $this->pdf->addText($x+12,$y,11,"<b>$campo</b> : <i>$valor</i>",0);      
+         }
+      }
+      if($data->NumeroTombo)
+      {
+         $y = $y - 11 - 4 ;
+         $campo = 'Numero do Tombo';
+         $valor = $objEtiqueta->getNumeroTomboExemplar($data->idexemplar);
+         $this->pdf->addText($x+12,$y,11,"<b>$campo</b> : <i>$valor</i>",0);
+         $id++;      
+      }
+      
+      if($data->VolumeExemplar)
+      {
+         $y = $y - 11 - 4 ;
+         $campo = 'Volume';
+         $valor = $objEtiqueta->getVolumeExemplar($data->idexemplar);
+         $this->pdf->addText($x+12,$y,11,"<b>$campo</b> : <i>$valor</i>",0);
+      }
+      $this->pdf->ezStream();
+   }  
+ 	
+   function gerarParaMuitosExemplares($x,$y,$width,$data,$lista)
+   {
+      global $MIOLO, $module;
+      $page = 1;
+      $yinicial = $y;
+      foreach($lista as $idexemplar)
+      {
+         $objEtiqueta = $MIOLO->GetBusiness($module,'etiquetaLombada');
+         
+         $height = 105;
+         
+         $this->pdf->setLineStyle(1,'','',array(3));   
+         $this->pdf->rectangle($x,$y,$width,$height);
+         $this->pdf->setLineStyle(1,'','',array(5,0)); 
+         $this->pdf->rectangle($x+3,$y+3,$width-6,$height-6);
+         $y = $y + 3 + $height - 2;
+         $tagsEscolhidas = explode('[-]',$data->listaTags);
+         $posicionaLetrasY = $y;
+         if($data->listaTags != '')
+         {           
+            foreach($tagsEscolhidas as $tag)
+            {
+               $posicionaLetrasY = $posicionaLetrasY - 11 - 4 ;
+               $tags = explode('-',$tag);
+               $campo = $objEtiqueta->getDescricaoMarcByTag($tags[0]);
+               $valor = $objEtiqueta->getConteudoTag($idexemplar[0],$tags[0],$tags[1]) ;
+               $this->pdf->addText($x+12,$posicionaLetrasY,11,"<b>$campo</b> : <i>$valor</i>",0);      
+            }
+         }
+         if($data->NumeroTombo)
+         {
+            $posicionaLetrasY = $posicionaLetrasY - 11 - 4 ;
+            $campo = 'Numero do Tombo';
+            $valor = $objEtiqueta->getNumeroTomboExemplar($idexemplar[0]);
+            $this->pdf->addText($x+12,$posicionaLetrasY,11,"<b>$campo</b> : <i>$valor</i>",0);
+            $id++;      
+         }
+         
+         if($data->VolumeExemplar)
+         {
+            $posicionaLetrasY = $posicionaLetrasY - 11 - 4 ;
+            $campo = 'Volume';
+            $valor = $objEtiqueta->getVolumeExemplar($idexemplar[0]);
+            $this->pdf->addText($x+12,$posicionaLetrasY,11,"<b>$campo</b> : <i>$valor</i>",0);
+         }
+         
+         $page++;
+         //posiciona próxima etiqueta de lombada
+         $y -= 215;
+         if($page > 4)
+         {
+            $page = 1;
+            $this->pdf->ezNewPage();
+            $y = $yinicial;
+         }
+      } 
+   }
+   
+   function gerarParaUMExemplarPeriodico($x,$y,$width,$data)
+   {
+      global $MIOLO, $module;
+      $this->GeneratePageHeader();
+      $this->GeneratePageFooter();
+      $objEtiqueta = $MIOLO->GetBusiness($module,'etiquetaLombada');
+      
+      $height = 105;
+      
+      $this->pdf->setLineStyle(1,'','',array(3));   
+      $this->pdf->rectangle($x,$y,$width,$height);
+      $this->pdf->setLineStyle(1,'','',array(5,0)); 
+      $this->pdf->rectangle($x+3,$y+3,$width-6,$height-6);
+      $y = $y + 3 + $height - 2;
+      $tagsEscolhidas = explode('[-]',$data->listaTags);
+  
+      if($data->listaTags != '')
+      {
+         foreach($tagsEscolhidas as $tag)
+         {
+            $y = $y - 11 - 4 ;
+            $tags = explode('-',$tag);
+            $campo = $objEtiqueta->getDescricaoMarcByTag($tags[0]);
+            $valor = $objEtiqueta->getConteudoTagPeriodico($data->idexemplar,$tags[0],$tags[1]) ;
+            $this->pdf->addText($x+12,$y,11,"<b>$campo</b> : <i>$valor</i>",0);      
+         }
+      }
+      if($data->NumeroTombo)
+      {
+         $y = $y - 11 - 4 ;
+         $campo = 'Numero do Tombo';
+         $valor = $objEtiqueta->getNumeroTomboExemplarPeriodico($data->idexemplar);
+         $this->pdf->addText($x+12,$y,11,"<b>$campo</b> : <i>$valor</i>",0);
+         $id++;      
+      }
+
+      if($data->TituloEdicao)
+      {
+         $y = $y - 11 - 4 ;
+         $campo = 'Titulo da Edicao';
+         $valor = $objEtiqueta->getTituloEdicaoPeriodico($data->idexemplar);
+         $this->pdf->addText($x+12,$y,11,"<b>$campo</b> : <i>$valor</i>",0);
+         $id++;      
+      }
+      $this->pdf->ezStream();
+   }   	   		
+}
+?>

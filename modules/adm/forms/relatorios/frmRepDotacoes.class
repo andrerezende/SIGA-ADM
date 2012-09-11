@@ -1,0 +1,200 @@
+<?
+class frmRepDotacoes extends Form
+{	
+	protected $lancamentoint;
+	protected $uo;
+
+    function __construct()
+    {
+        global $MIOLO;
+        $this->lancamentoint = $MIOLO->getBusiness('adm','lancamentoint');
+        $this->uo = $MIOLO->getBusiness('adm','uo');
+        $this->Form('Relação de Dotação');
+        $this->EventHandler();          
+    }
+
+	function CreateFields()
+	{		
+		$anos = $this->lancamentoint->getAnos();		
+
+		$opt = $this->uo->listUosOrdemNome();
+		$options['0'] = 'TODAS';
+		foreach($opt->result as $o)
+		{
+			$options[$o[0]] = $o[1];
+		}
+
+		$fields = array(
+			new Selection('selAno','','Selecione o Ano',$anos->result),
+			new Selection('selUO','','UO',$options),
+		);
+		$this->SetFields($fields);	
+		$buttons = Array
+		(
+			new FormButton('btnGerarRelatorioJasper', 'Gerar Relatório','pdf'),
+			//new FormButton('btnGerarRelatorio', 'Gerar Relatório','pdf'),
+			new FormButton('btnGerarCSV', 'Gerar Planilha')
+		);
+		$this->SetButtons($buttons);
+	}
+
+	function btnGerarRelatorio_click()
+	{	
+		$data = $this->getData();		
+		if($data->selAno == '')
+		{
+	    	$this->manager->Error('Favor Selecionar o Ano:');
+	    }
+	    else 
+		{
+			$report = new MEzPDFReport('2','landscape');		
+			$h  = $report->pdf->getFontHeight(10);
+	        $ui = $this->manager->GetUI();	        
+			$report->pdf->ezImage($ui->GetImage('','logonet.png'),5,50,'none','left',0);
+	        $report->pdf->addText(110,560       ,10,'UNIVERSIDADE FEDERAL DE JUIZ DE FORA');
+	        $report->pdf->addText(110,560-$h    ,10,'CENTRO DE GESTÃO DO CONHECIMENTO ORGANIZACIONAL - CGCO');
+	        $report->pdf->addText(110,560-(2*$h),10,'SISTEMA INTEGRADO DE GESTÃO ACADÊMICA - SIGA');
+	        $report->pdf->ezText('RELATÓRIO DE DOTAÇÕES - ANO DE '.$data->selAno,16,array('justification'=>'center'));
+	          
+	        $report->pdf->ezText('',20); 
+	        $options['textCol']      = array(0,0,0);
+		    $options['shaded']       = 1;
+		    $options['showLines']    = 0;
+		    $options['fontSize']     = 10;
+		    $options['width']        = 780;
+		    $options['xPos']         = 'left';
+		    $options['xOrientation'] = 'right';
+		    
+		    $ano = $data->selAno;		    					    
+		    $tipoLanc = $this->lancamentoint->getTipoLancamentoDotacaoComplementacao($ano,$data->selUO);
+		     
+		    foreach($tipoLanc->result as $val)
+		    {	
+		    	$data  = $val[0];
+		    	$idUo  = $val[1];
+    			$sigla = $this->lancamentoint->getSiglaByIduo($idUo)->result;		
+	    		$rubrica = $val[2];
+		    	
+		    	switch ( $val[3] )
+                {
+		    	    case 1:
+		    		$tipo = 'DOTAÇÃO INICIAL';
+                    break;
+
+                    case 2:
+                    $tipo = 'ANULAÇÃO DE CRÉDITO';
+                    break;                   
+
+                    case 3:  
+                    $tipo = 'ESTORNO DE CRÉDITO';
+                    break;
+                    
+                    case 4:  
+                    $tipo = 'PREVISÃO DE DÉBITO';
+                    break;
+                    
+                    case 5:  
+                    $tipo = 'DÉBITO/CRÉDITO';
+                    break;
+
+                    case 6:  
+                    $tipo = 'ESTORNO DE DÉBITO/CRÉDITO';
+                    break;
+                   
+                    case 7:  
+                    $tipo = 'RETORNO DA PREVISÃO DE DÉBITO';
+                    break;
+                   
+                    case 8:
+		    		$tipo = 'COMPLEMENTAÇÃO DE CRÉDITO';
+                    break;
+			    }
+                
+		    	$valor = 'R$ '.number_format(str_replace(',','.',$val[4]),2,',','');		    	
+    			$nome = $this->lancamentoint->getUsuario($val[5]);
+		    	$dataRel[] = array($data,$idUo,$sigla[0][0],$rubrica,$tipo,$valor,$nome);
+			}
+			
+			$cols = array('<b>DATA</b>','<b>COD-UO</b>','<b>SIGLA</b>','<b>RUBRICA</b>','<b>TIPO</b>','<b>VALOR</b>','<b>USUÁRIO</b>');			
+		    $report->pdf->ezTable($dataRel,$cols,'',$options);
+		    $report->Execute();
+		}
+    }
+	function btnGerarCSV_click()
+	{
+		$data = $this->getData();
+		$ano = $data->selAno;
+	    $tipoLanc = $this->lancamentoint->getTipoLancamentoDotacaoComplementacao($ano,$data->selUO);
+		$dataRel[] = array('DATA','COD-UO','SIGLA','RUBRICA','TIPO','VALOR','NOME');
+	    foreach($tipoLanc->result as $val)
+	    {	
+	    	$data  = $val[0];
+	    	$idUo  = $val[1];
+			$sigla = $this->lancamentoint->getSiglaByIduo($idUo)->result;		
+			$rubrica = $val[2];
+            
+            switch ( $val[3] )
+            {
+		    	case 1:
+		    	$tipo = 'DOTAÇÃO INICIAL';
+                break;
+
+                case 2:
+                $tipo = 'ANULAÇÃO DE CRÉDITO';
+                break;                   
+
+                case 3:  
+                $tipo = 'ESTORNO DE CRÉDITO';
+                break;
+                
+                case 4:  
+                $tipo = 'PREVISÃO DE DÉBITO';
+                break;
+                
+                case 5:  
+                $tipo = 'DÉBITO/CRÉDITO';
+                break;
+
+                case 6:  
+                $tipo = 'ESTORNO DE DÉBITO/CRÉDITO';
+                break;
+                
+                case 7:  
+                $tipo = 'RETORNO DA PREVISÃO DE DÉBITO';
+                break;
+                
+                case 8:
+		    	$tipo = 'COMPLEMENTAÇÃO DE CRÉDITO';
+                break;
+            }
+            
+            $valor = 'R$ '.number_format(str_replace(',','.',$val[4]),2,',','');
+   			$nome = $this->lancamentoint->getUsuario($val[5]);
+		   	$dataRel[] = array($data,$idUo,$sigla[0][0],$rubrica,$tipo,$valor,$nome);		    					
+		}
+		$tipoLanc->result = $dataRel;
+		$tipoLanc->getCSV("Dotações-".$ano);
+	}
+
+	function btnGerarRelatorioJasper_click()
+	{
+		global $MIOLO;
+
+		$report = new MJasperReport( 'sigaept' );
+		$parameters[ 'str_TITULO' ] = "DOTACAO";
+		$parameters[ 'int_IDUO' ] = $this->getFormValue( 'selUO' );
+		$parameters[ 'int_ANO' ] = $this->getFormValue( 'selAno' );
+		$parameters[ 'LOGO' ] = $MIOLO->GetConf( 'home.url' );
+		$parameters[ 'SUBREPORT_DIR' ] = $MIOLO->GetConf('home.modules').'/common/reports/';
+		$parameters[ 'int_IDUSUARIO' ] = $MIOLO->login->idkey;
+
+		if( $parameters[ int_IDUO ] == 0 ){
+			
+                $report->Execute( 'adm', 'DotacaoTodas', $parameters );
+                }else{
+
+		$report->Execute( 'adm', 'Dotacao', $parameters );
+                }
+	}
+}
+?>

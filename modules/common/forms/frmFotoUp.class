@@ -1,0 +1,81 @@
+<?
+class frmFotoUp extends MForm
+{
+	function __construct()
+    {   
+        parent::__construct('Upload de Foto');
+	    $this->EventHandler();
+	}
+
+    function CreateFields()
+	{  
+       $fields = array(
+           new MTextField('idfoto','','IdFoto'),
+           new MTextField('idpessoa','','IdPessoa'),
+		   new MFileField('filefoto','','File Foto'),
+       );
+	   $this->SetFields($fields);
+       $buttons = array(
+           new MButton('btnView', 'Ver foto'),
+           new MButton('btnPost', 'Gravar Foto'),
+       );
+	   $this->SetButtons($buttons);
+	}
+
+	function btnPost_click()
+	{
+		global $MIOLO;
+		
+		$data = $this->getData();
+		$db = $MIOLO->getDatabase('sigaept');
+        $s = new MSQL('idfoto','cm_foto',"idfoto={$data->idfoto}");
+        $q = $db->getQuery($s);
+		if ($q->eof)
+		{
+            $sql = new MSQL('idfoto,idpessoa,mimetype,foto','cm_foto');
+            $sql->bind(array(':idfoto',':idpessoa',':mimetype','EMPTY_BLOB()'));
+            $sql->insert();
+            $db->parse($sql);
+            $db->bind($sql,array(':idfoto'=>$data->idfoto, ':idpessoa'=>$data->idpessoa, ':mimetype'=>$_FILES['filefoto']['type']));
+            $db->execute($sql);
+        }
+
+		if ($_FILES['filefoto']['tmp_name'] != '')
+		{
+            $t = $db->getTransaction();
+            $t->begin();
+            $lob = oci_new_descriptor($db->conn->id, OCI_D_LOB);
+            $sql = new MSQL('foto','cm_foto',"idfoto={$data->idfoto} returning foto into :foto");
+            $sql->update(':EMPTY_BLOB()');
+            $db->parse($sql);
+            $db->bind($sql,array(':foto'=>array($lob,-1,OCI_B_BLOB)));
+            $db->execute($sql);
+            $lob->savefile($_FILES['filefoto']['tmp_name']);
+            $t->commit();
+        }
+
+		if ($data->idfoto != '')
+		{
+			$url = $MIOLO->getActionURL('common','fotodown',$data->idfoto); 
+            $image = new MImage('foto', 'Foto', $url, "height=\"120\" width=\"90\""); 
+            $this->addField($image);
+		}
+    }
+
+	function btnView_click()
+	{
+		global $MIOLO;
+		
+		$data = $this->getData();
+		$db = $MIOLO->getDatabase('sigaept');
+        $s = new MSQL('idfoto','cm_foto',"idfoto={$data->idfoto}");
+        $q = $db->getQuery($s);
+		if (!$q->eof)
+		{
+			$url = $MIOLO->getActionURL('common','fotodown',$data->idfoto); 
+            $image = new MImage('foto', 'Foto', $url, "height=\"120\" width=\"90\""); 
+            $this->addField($image);
+        }
+    }
+}
+?>

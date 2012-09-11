@@ -1,0 +1,139 @@
+<?
+MIOLO::Import('modules::common::controls::selectionpais');
+MIOLO::Import('modules::common::controls::selectionuf');
+MIOLO::Import('modules::common::controls::selectionsexo');
+MIOLO::Import('modules::common::controls::selectiongruposanguineo');
+MIOLO::Import('modules::common::controls::selectionestadocivil');
+MIOLO::Import('modules::common::controls::selectionnacionalidade');
+
+/**
+ * Formulário de edição de dados pessoais
+ */
+class frmPessoaDadosPessoais extends Form
+{
+	/**
+	 * Objeto pessoa
+	 * @access protected
+	 * @var BusinessRhPessoa
+	 */
+	protected $pessoa;
+	
+	public function __construct($pessoa)
+	{
+        $this->pessoa = $pessoa;
+		parent::__construct('Dados Pessoais');
+        $this->EventHandler();
+    }
+
+    public function CreateFields()
+    {
+		global $MIOLO, $action;
+
+	    $tabelaGeral = $MIOLO->GetBusiness('common','tabelageral');
+	    $etnias = $tabelaGeral->ListByTabela('RH_ETNIA');		
+		$et = $etnias->chunkResult();
+		asort($et);
+		reset($et);
+
+		$fields = array(
+			new MTextField('nome','','Nome',60),
+            array(
+			    new SelectionSexo('sexo','','Sexo'),
+				new MCalendarField('datanasc','','Data de Nascimento','15'),
+			    new SelectionGrupoSanguineo('gruposanguineo','','Grupo Sangüíneo'),
+            ),
+			new MHiddenField('idmunicipionascimento',''),	
+            new MLookupFieldValue('lkpNaturalidade','','Naturalidade',55),
+			new MTextField('nomepai','','Nome do Pai',60),
+			new MTextField('nomemae','','Nome da Mãe',60),
+			new SelectionEstadoCivil('idestadocivil','','Estado Civil'),
+			new SelectionNacionalidade('idpaisnacionalidade','','Nacionalidade'),
+			new SelectionPais('idpaisnascimento','','País de Nascimento'),
+			new MTextField('anochegbrasil','','Ano de chegada ao Brasil',4),
+			new MSelection('etnia','','Etnia', $et),
+		);
+
+		$this->SetFields($fields);
+        
+		$this->anochegbrasil->AddAttribute('maxlength','4');
+
+		$this->SetFieldAttr('lkpNaturalidade','module','rh');
+	    $this->SetFieldAttr('lkpNaturalidade','item','municipio');
+	    $this->SetFieldAttr('lkpNaturalidade','event', 'filler');
+   	    $this->SetFieldAttr('lkpNaturalidade','related', 'idmunicipionascimento,lkpNaturalidade');
+
+		$buttons = array(
+			new FormButton('btnSalvar','Enviar')
+		);
+		$this->SetButtons($buttons);
+		
+
+		$this->SetData();
+
+    }
+		
+	function SetData()  
+	{
+        global $MIOLO;
+		$this->pessoa->retrieveAssociation('municipio');
+        $data = $this->pessoa;
+        $this->SetFieldValue('nome', $data->nome);
+        $this->SetFieldValue('sexo', $data->sexo);
+        $this->SetFieldValue('nomepai', $data->nomepai);
+        $this->SetFieldValue('nomemae', $data->nomemae);
+        $this->SetFieldValue('datanasc', $data->datanasc);
+        $this->SetFieldValue('gruposanguineo', $data->gruposanguineo);
+        $this->SetFieldValue('idpaisnascimento', $data->idpaisnascimento);
+        $this->SetFieldValue('idpaisnacionalidade', $data->idpaisnacionalidade);
+        
+		$this->SetFieldValue('anochegbrasil', $data->anochegbrasil);
+        $this->SetFieldValue('idestadocivil', $data->idestadocivil);
+
+        $this->SetFieldValue('idmunicipionascimento', $data->idmunicipionascimento);
+
+		$this->SetFieldValue('lkpNaturalidade', $data->municipio->municipio . ' ['. trim($data->municipio->idUF) . ']');
+
+
+		$this->SetFieldValue('etnia', $data->raca);
+	}
+
+	function GetData()  
+	{
+        $data = $this->pessoa;
+		$data->nome                  = $this->GetFieldValue('nome');
+		$data->sexo                  = $this->GetFieldValue('sexo');
+		$data->gruposanguineo        = $this->GetFieldValue('gruposanguineo');
+		$data->datanasc              = $this->GetFieldValue('datanasc');
+        $data->idmunicipionascimento = $this->GetFieldValue('idmunicipionascimento');
+		$data->nomepai               = $this->GetFieldValue('nomepai');
+		$data->nomemae               = $this->GetFieldValue('nomemae');
+		$data->idestadocivil         = $this->GetFieldValue('idestadocivil');
+        $data->idpaisnascimento      = $this->GetFieldValue('idpaisnascimento');
+        $data->idpaisnacionalidade   = $this->GetFieldValue('idpaisnacionalidade');
+        $data->anochegbrasil         = $this->GetFieldValue('anochegbrasil');
+		$data->raca			         = $this->GetFieldValue('etnia');
+		return $data;
+	}
+
+    function Validate()
+    {
+        if ($this->GetFieldValue('gruposanguineo') == '-')
+        {
+            $this->AddError('Informar Grupo Sanguineo');
+            return FALSE;
+        }
+        return TRUE;
+    }
+
+	public function btnSalvar_click()
+	{
+        if ($this->validate())
+        {
+            $data = $this->GetData();
+    		$this->pessoa->SetData($data);
+	    	$this->pessoa->save();
+		    $this->AddInfo('Dados atualizados');
+        }
+	}
+}
+?>

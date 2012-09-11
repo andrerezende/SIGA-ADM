@@ -1,0 +1,176 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+class gridIntersticio extends MGrid
+{
+    function __construct()
+    {
+        global $MIOLO, $module, $page, $context, $self, $action, $perms, $state;
+        $mostrar = true;
+
+        $mes     = Form::GetFormValue('mes');
+        $ano     = Form::GetFormValue('ano');  
+        $idSetor = Form::GetFormValue('idSetor');
+
+        $columns = array(
+            new GridColumn('Matrícula','center', true,'5%'),
+            new GridColumn('Nome','left', true,'35%'),
+            new GridColumn('Setor','left', true, '20%'),
+            new GridColumn('Data para Progressão','center', true,'10%'),
+            new GridColumn('Classe/Ref Atual','left', true,'20%'),
+            new GridColumn('Classe/Ref Ascendente','left', true,'10%'),
+        );
+!
+        $objFuncionario = $MIOLO->GetBusiness('rh','funcionario');
+        $listaFuncAtivosPorSetor = $objFuncionario->listGeralParaRelatorio($idSetor);
+        var_dump(count($listaFuncAtivosPorSetor->result));
+        $vinculo = $MIOLO->getBusiness('rh','vinculo');
+        foreach ( $listaFuncAtivosPorSetor->result as $funcionario )
+        {   
+            $vinculo->getById($funcionario[1]);
+/* 
+            for ($i = 1; $i <= $this->DaysInMonth($ano, $mes); $i++)
+            {
+                if ( $i < 10 )
+                {
+                    $dia = "0".$i; // para não ter que usar o zerofill
+                }
+                else
+                {
+                    $dia = $i;
+                }
+                $dataProgressao = $dia."/".$mes."/".$ano;
+*/            
+                $dataProgressao="01/".$mes."/".$ano."";
+
+                try
+                {
+                      $ok=true;
+                    $ok = $vinculo->validaProgressaoParaRelatorio($dataProgressao);   
+                    
+                    if ($ok)
+                    {     
+
+                        $data = $vinculo->progressaoAutomatica();
+                        $classe = $MIOLO->getBusiness('rh','classe',$data->idClasse);
+                        $classe->getReferencias();
+                        $referencia = $classe->getReferencia($data->idReferencia);
+                        $provimento = $vinculo->getProvimentoAtual();
+                        $provimento->getClasse();
+                        $provimento->getReferencia();
+                        // Montando o array de dados para o grid / relatório
+                        $classeAtual = $provimento->classe->nome;
+                        $referenciaAtual = $provimento->referencia->nivelPadrao; // nível padrão
+                        $classeProg =  $classe->nome;
+                        $referenciaProg = $referencia->nivelPadrao;
+                        $classeRefAtuais =  $classeAtual."/".$referenciaAtual;
+                        $classeRefProg = $classeProg."/".$referenciaProg;
+                        $matricula =  $vinculo->idVinculo;
+                        $nome = $funcionario[2];
+                        $setor = $funcionario[7];
+                        var_dump($nome, $setor,$ok); 
+                        $rowData[] = Array(
+                                        'matricula'       => $matricula,
+                                        'nome'            => $nome,
+                                        'setor'           => $setor, 
+                                        'data'            => $dataProgressao,
+                                        'crcorrente'      => $classeRefAtuais,
+                                        'crfutura'        => $classeRefProg,
+                                        );
+                    }  
+
+                }
+                catch ( Exception $e )
+                {
+                    $this->AddError($e->getMessage());
+                }  
+//            }   
+  
+        }
+
+
+
+        $href_grid = $MIOLO->GetActionURL($module,$self);
+
+         /*
+            $data = $this->objVinculo->progressaoAutomatica();
+            $classe = $this->manager->getBusiness('rh','classe',$data->idClasse);
+            $classe->getReferencias();
+            $referencia = $classe->getReferencia($data->idReferencia);
+            
+            $provimento = $this->objVinculo->getProvimentoAtual();
+            $provimento->getClasse();
+            $provimento->getReferencia();
+          */
+
+
+
+        parent::__construct($rowData, $columns, $href_grid,15);
+        $this->SetTitle('Listagem de Interstícios para Progressão');
+        $this->SetClose(null);
+        $this->SetFilter(false);
+        $this->SetIndex(2);
+        $this->SetLinkType('hyperlink');
+    }
+
+    function GenerateFooter()
+    {
+        if (!$this->data) 
+        {
+            $footer[] = $this->GenerateEmptyMsg();
+        }
+        $footer[] = new Separator();
+        $footer[] = $this->GenerateControls();
+        return $footer;
+    }
+
+    function DaysInMonth( $Year, $MonthInYear )
+    {
+       if ( in_array ( $MonthInYear, array ( 1, 3, 5, 7, 8, 10, 12 ) ) )
+           return 31;
+
+       if ( in_array ( $MonthInYear, array ( 4, 6, 9, 11 ) ) )
+           return 30;
+
+       if ( $MonthInYear == 2 )
+           return ( checkdate ( 2, 29, $Year ) ) ? 29 : 28;
+
+       return false;
+    }
+
+    function getMes($a)
+    {
+      $Ames = array(
+            '01' => "Janeiro",
+            '02' => "Fevereiro",
+            '03' => "Março",
+            '04' => "Abril",
+            '05' => "Maio",
+            '06' => "Junho",
+            '07' => "Julho",
+            '08' => "Agosto",
+            '09' => "Setembro",
+            '10' => "Outubro",
+            '11' => "Novembro",
+            '12' => "Dezembro",
+        );
+        return $Ames[$a];
+    }
+
+}
+?>

@@ -1,0 +1,329 @@
+<?
+class frmUser extends MForm
+{
+	var $home;
+    var $objGrupo;
+    var $objUser;
+
+	function __construct()
+    {   global $MIOLO, $module, $action;
+
+        $this->home = $MIOLO->GetActionURL($module,$action);
+        $this->objGrupo = $MIOLO->GetBusiness($module,'group');
+        $this->objUser = $MIOLO->GetBusiness($module,'user');
+		parent::__construct('Users');
+        $this->SetWidth('65%');
+        $this->SetIcon($MIOLO->GetUI()->GetImage('admin','user1.png'));
+        $this->SetClose($MIOLO->GetActionURL('admin','main'));
+	    $this->EventHandler();
+	}
+
+    function CreateFields()
+    {   global $MIOLO;
+
+        $query = $this->objGrupo->ListAll();
+        $mtField = array(array('mtgrupo','Grupos','',$query->chunkResult()));
+        
+        $fields = array(
+            new MHiddenField('key',''),
+            new MTextLabel('txtIdUser','', 'Id'),
+            new MLookupTextField('lkpLogin','','Login',20),
+            new MPasswordField('edtPassword','','Senha',20),
+            new MHiddenField('hidIdPessoa',''),
+            new MTextField('edtNome','','Nome',50),
+            new MTextField('edtNick','','Nick',30),
+            new MMultiTextField2('mtfGrupos',NULL,'Grupos',$mtField,300,true,'vertical')
+        );
+        $this->SetFields($fields);
+
+        $this->SetFieldsVisible(false);
+
+        $this->SetFieldAttr('lkpLogin','module','admin');
+        $this->SetFieldAttr('lkpLogin','item','user');
+        $this->SetFieldAttr('lkpLogin','event', 'btnEdit:click');
+
+        $buttons = array(
+            new MButton('btnEdit',   'Editar'),
+            new MButton('btnNew',    'Incluir'),
+            new MButton('btnDelete', 'Excluir'),
+            new MButton('btnList',   'Relação')
+        );
+        $this->SetButtons($buttons);
+    }
+
+    function SetFieldsVisible($value)
+    {
+	   $this->SetFieldAttr('txtIdUser','visible',$value);
+	   $this->SetFieldAttr('edtPassword','visible',$value);
+	   $this->SetFieldAttr('hidIdPessoa','visible',$value);
+	   $this->SetFieldAttr('edtNome','visible',$value);
+	   $this->SetFieldAttr('edtNick','visible',$value);
+	   $this->SetFieldAttr('mtfGrupos','visible',$value);
+    }
+
+/*
+    GetData: obtém os valores fornecidos no formulario e cria um objeto FormData
+             cujos attributos têm o mesmo nome dos atributos do objeto que vai receber os valores.
+    A implementação default do GetData cria um objeto FormData cujos atributos têm
+    o mesmo nome dos campos do formulário.   
+*/
+	function GetData()
+	{
+        $data = new FormData();
+		$data->idUser = $this->GetFieldValue('key');
+		$data->idPessoa = $this->GetFieldValue('hidIdPessoa');
+		$data->login = $this->GetFieldValue('lkpLogin');
+		$data->password = $this->GetFieldValue('edtPassword');
+		$data->nick = $this->GetFieldValue('edtNick');
+		$data->nome = $this->GetFieldValue('edtNome');
+		$data->grupos = $this->GetFieldValue('mtfGrupos');
+        return $data;
+	}
+
+/*
+    SetData: obtém os valores fornecidos através do parâmetro $data (geralmente um
+             objeto de negócio) e preenche os campos do formulário.
+    A implementação default do SetData assume que os atributos do objeto $data têm
+    o mesmo nome dos campos do formulário.   
+*/
+	function SetData($data)
+	{
+		$this->SetFieldValue('key', $data->idUser);
+		$this->SetFieldValue('txtIdUser', $data->idUser);
+		$this->SetFieldValue('hidIdPessoa', $data->idPessoa);
+		$this->SetFieldValue('lkpLogin', $data->login);
+		$this->SetFieldValue('edtPassword', $data->password);
+		$this->SetFieldValue('edtNome', $data->nome);
+		$this->SetFieldValue('edtNick', $data->nick);
+        // $data->grupos é um array de objetos; GetAttribute percorre este array e obtem um array com 
+        // o atributo IdGrupo
+        $grupos = $this->GetAttribute($data->groups,'idGroup');//,'group'));
+
+        //terminei aqui
+        $this->mtfGrupos->SetCodeValue($grupos);
+	}
+
+	function btnPost_click()
+	{
+		global $MIOLO;
+
+        $key = $this->GetFieldValue('key');  // inclusão ou edição?
+        $objUser = $this->objUser;     // apenas um shortcut
+        if ($key != '')
+        {
+            $objUser->GetById($key); // se for edição, obtem os dados atuais do objeto
+        }
+        // seta os atributos do objeto com os valores dos campos do formulario
+		$objUser->SetData($this->GetData()); 
+        // os grupos devem ser tratados a parte, pois devem gerar um array de objetos
+        $grupos = $this->mtfGrupos->GetCodeValue();
+        foreach($grupos as $g)
+        {
+            $data->grupos[] = $g[0]; // obtém o idGrupo
+        }
+		$objUser->SetArrayGroups($data->grupos);
+
+        try
+        {
+            $cmd = array();
+            $sql = new Sql('','miolo_groupuser','iduser = ?');
+            
+            $cmd[] = $sql->Delete($objUser->idUser);
+            foreach($data->grupos as $grupo)
+            {
+                $sql = new Sql('idgroup, iduser','miolo_groupuser','');
+                $cmd[] = $sql->Insert(array($grupo,$objUser->idUser));
+            }
+            $ok = $objUser->ExecuteBatch($cmd);
+            $objUser->save();
+
+            /*create table miolo_groupuser (
+                   iduser                        integer        not null,
+                          idgroup        
+            */
+            $MIOLO->Information('Usuários atualizados com sucesso.', $this->home );
+        }
+        catch (EMioloException $e)
+        {
+            $this->AddError($e->getMessage());
+	    }
+	}
+
+	function btnList_click()
+	{   
+		global $MIOLO, $module, $action;
+
+        // limpa o formulário
+        $this->ClearFields();
+        $this->ClearButtons();
+        $this->defaultButton = false;
+ 
+        // define o campo para fazer o filtro
+        $fields = array(
+            array(
+               new MTextField('txtLogin','','Login',25),
+               new MButton('btnList','Relação')
+            )
+        );
+        $this->SetFields($fields);
+
+        // colunas do DataGrid
+        $columns = array(
+           new MDataGridColumn('iduser','Id','right', true, '10%',true),
+           new MDataGridColumn('login','Login','left', true, '20%',true, NULL, true,true),
+           new MDataGridColumn('name','Nome','left',true, '70%',true, NULL, true,true),
+        );
+
+        // link de referencia para o grid
+		$hrefDatagrid = $MIOLO->GetActionURL($module,$action,'', Array('event'=>'btnList_click'));
+
+        // valor definido como filtro
+        $login = MUtil::NVL($this->GetFieldValue('txtLogin'), '%');
+
+        // executa a query
+        $query = $this->objUser->ListByLogin($login);
+
+        // instancia o datagrid
+        $datagrid = new MDataGrid($query, $columns, $hrefDatagrid, 20);
+        $datagrid->SetTitle('Relação de Usuários');
+        $datagrid->SetClose($MIOLO->GetActionURL($module,$action));
+
+ 	    $href_edit = $MIOLO->GetActionURL($module,$action,'%0%',Array('event'=>'btnEdit:click'));
+	    $href_dele = $MIOLO->GetActionURL($module,$action,'%0%',Array('event'=>'btnDelete:click'));
+        $datagrid->AddActionUpdate($href_edit);
+	    $datagrid->AddActionDelete($href_dele);
+        // coloca o datagrid no formulário
+		$this->AddField($datagrid);
+	}
+
+	function btnEdit_click($sender, $key='')
+	{   
+        global $item;
+
+        $login = $this->GetFieldValue('lkpLogin');
+        // verifica se está sendo executado através do evento do grid
+        $item = ($key != '') ? $key : $item;
+        if ($item != '')
+        {
+            $this->objUser->GetById($item);
+        }		
+        else
+        {
+            $this->objUser->GetByLogin($login);
+        }		
+        if ($this->objUser->idUser)
+        {
+            // coloca os dados do objeto nos campos do formulário
+            $this->SetData($this->objUser);
+            // exibe os campos
+            $this->SetFieldsVisible(true);
+            $this->SetFieldAttr('lkpLogin','readonly',true);
+            $this->SetFieldValue('key',$this->objUser->idUser);
+            $this->AddButton(new MButton('btnCancel', 'Cancelar', $this->home));
+            $this->SetButtonAttr('btnEdit','name','btnPost');
+            $this->SetButtonAttr('btnPost','label','Gravar');
+            $this->SetButtonAttr('btnNew','visible', false);
+            $this->AddValidator(new RequiredValidator('edtPassword'));
+        }
+        else
+        {
+            $this->AddError("Usuário [$login] não encontrado!");
+        }
+	}
+
+	function btnCancel_click()
+	{   
+        $this->SetFieldValue('lkpLogin','');
+    }
+
+	function btnNew_click($sender)
+	{   
+        $data = new FormData();
+        $data->login = $this->GetFieldValue('lkpLogin');
+        if ($data->login != '')
+        {
+            $this->SetData($data);
+            $this->SetFieldsVisible(true);
+            $this->SetFieldAttr('txtIdUser','visible',false);
+            $this->SetFieldAttr('lkpLogin','readonly',true);
+            $this->AddButton(new MButton('btnCancel', 'Cancelar', $this->home));
+            $this->SetButtonAttr('btnEdit','name','btnPost');
+            $this->SetButtonAttr('btnPost','label','Gravar');
+            $this->SetButtonAttr('btnNew','visible', false);
+            $this->AddValidator(new RequiredValidator('edtPassword'));
+            $this->AddValidator(new RequiredValidator('lkpNome'));
+        }
+        else
+        {
+            $this->AddError("Por favor, informe o login para novo usuário!");
+        }
+	}
+
+	function btnDelete_click($sender, $key='')
+	{   
+		global $MIOLO, $module, $item, $self, $action, $url;
+
+        $objUser = $this->objUser;
+        $login = $this->GetFieldValue('lkpLogin');
+        // verifica se está sendo executado através do evento do grid
+        $item = ($key != '') ? $key : $item;
+        if ($item != '')
+        {
+            $objUser->GetById($item);
+        }		
+        else
+        {
+            $objUser->GetByLogin($login);
+        }		
+        if ($objUser->idUser)
+        {
+            $conf = $this->GetFormValue('conf');
+	        if ( $conf == 'sim')
+	        {
+                try
+                {
+                     $objUser->Delete();
+                     $MIOLO->Prompt(Prompt::Information("Usuário [$objUser->login] excluído com sucesso.",$this->home));
+                }
+                catch (EMioloException $e)
+                {
+		             $MIOLO->Prompt(Prompt::Information( $objUser->GetErrors(),$this->home));
+                }
+	        }
+	        elseif ( $conf == 'nao')
+            {
+	            $MIOLO->Prompt(Prompt::Information('Exclusão cancelada.',$this->home));
+            }
+	        else
+	        {
+		        $action_sim = $MIOLO->GetActionURL($module,$action,$objUser->idUser, array('event'=>'btnDelete:click','conf'=>'sim'));
+		        $action_nao = $MIOLO->GetActionURL($module,$action,$objUser->idUser, array('event'=>'btnDelete:click','conf'=>'nao'));
+	            $MIOLO->Prompt(Prompt::Question("Confirma a exclusão do usuário [$objUser->login]?", $action_sim, $action_nao));
+            }
+        }
+        else
+        {
+            $this->AddError("Usuário [$login] não encontrado!");
+        }
+	}
+
+    function GetAttribute($array, $attr)
+    {
+        $rs = array();
+        if (!is_null($array))
+        {
+            foreach($array as $c)
+            {
+                //if(is_array($attr))
+                //{
+                //    $rs[] = array($c->$attr[0]);//,$c->$attr[1]);
+                //}
+                //else
+                    $rs[] = $c->$attr;
+            }
+       }
+        return $rs;
+    }
+}
+
+?>

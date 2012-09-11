@@ -1,0 +1,412 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+class frmImportacaoMarc extends MForm 
+{
+    var $objObra;
+    var $objEtiqueta;
+    var $objEditora;
+    var $objAutor;
+    var $objAssunto;
+
+    protected $erro, $info, $mime_content_type, $hashmd5;
+    function __construct()
+    {
+	global $MIOLO,$module;
+
+        parent::__construct('Carregamento do arquivo de importação Marc para livros');
+        $this->SetClose($this->manager->GetActionURL('biblioteca', 'main:importacaoMarc'));
+        $this->EventHandler();
+	
+    } 
+
+    function CreateFields()
+    {
+	global $MIOLO,$module;
+
+	$this->objObra = $MIOLO->GetBusiness($module,'obra');
+	$this->objEtiqueta = $MIOLO->GetBusiness($module,'etiqueta');
+	$this->objEditora = $MIOLO->GetBusiness($module,'editora');
+	$this->objAutor = $MIOLO->GetBusiness($module,'autor');
+	$this->objAssunto = $MIOLO->GetBusiness($module,'assunto');
+	
+        $ui = $this->manager->getUI();
+	$fields = array
+        (
+            new MText('txtObs','Envie apenas arquivos com extensão \'.txt\' ou \'.zip\'.'),
+            new MText('txtTuto','Clique <a href=/index.php?module=common&action=html:files:utilizandoImportacaoMARC.pdf> aqui</a> para ver um tutorial sobre como utilizar esta funcionalidade'),
+            //new MLink('txtTuto','Clique aqui para ver um tutorial sobre como utilizar esta funcionalidade','/files/utilizandoImportacaoMARC.pdf',$text = NULL, $target = '_self' ),
+            new MFileField('fileMarc','','Arquivo MARC'),
+        );
+        $this->SetFields($fields);
+
+        $buttons = array
+        (
+            new MButton('btnEnviar','Enviar'),
+        );
+        $this->SetButtons($buttons);
+    } 
+
+    function btnEnviar_click()
+    {
+        $login = $this->manager->getLogin();
+        $filename = $_FILES['fileMarc']['tmp_name'];  
+        // verifica se algum arquivo foi especificado
+        if ( $filename != '' )
+        {
+            // verifica o tipo de conteúdo do arquivo
+            $type = $_FILES['fileMarc']['type'];
+            if (stripos($type, 'text') !== false)
+            {
+                $this->mime_content_type = 'text';
+            }
+            else
+            {
+                if (stripos($type, 'zip') !== false)
+                {
+                    $this->mime_content_type = 'zip';
+                }
+            }
+            
+            if ( ($this->mime_content_type == 'text') or ($this->mime_content_type == 'zip') )
+            {
+                //verifica se o arquivo foi gravado no servidor e se não está em branco
+                if ( (file_exists($filename)) and (filesize($filename) > 0) )
+                {
+                    $mensagem = $this->btnEnviar2($filename, $login);
+                }
+                else
+                {
+                    $this->erro[] = "Erro ao carregar o arquivo ou arquivo vazio.";
+                }
+            }
+            else
+            {
+                $this->erro[] = "O arquivo não é do tipo 'txt' ou 'zip'.";
+            }
+        }
+        else
+        {
+            $this->erro[] = "Arquivo não informado.";
+        }
+
+        $this->ErroSucesso($mensagem);
+    } // btnEnviar_click
+
+    function GetData()
+    {
+        $data = new FormData();
+        $data->titulo = null;
+        $data->subtitulo = null;
+        $data->autor = null;
+        $data->edicao = null;
+        $data->localdepublicacao = null;
+        $data->editora = null;
+        $data->datadepublicacao = null;
+        $data->descfisica = null;
+        $data->idgenero = 1;
+        $data->keygenero = null;
+        $data->edicao = null;
+        return $data;
+    }
+    function btnEnviar2($filename, $login)
+    {
+	if ($this->mime_content_type == 'zip')
+        {
+            $r = exec("unzip -xo $filename -d /tmp",$m_resultados,$resultado);
+
+            $arqUnZip       =      str_replace('inflating: ','',$r       );   //limpa resultado para obter o nome do arquivo gerado
+            $arqUnZip       = trim(str_replace('Archive: '  ,'',$arqUnZip));
+            $arrRegistros   = file     (      $arqUnZip);
+            $hashmd5        = hash_file('md5',$arqUnZip);
+            $tamanhoArquivo = filesize (      $arqUnZip);
+        }
+        else
+        {
+            $arrRegistros   = file     (      $filename);
+            $tamanhoArquivo = filesize (      $filename);
+            $hashmd5        = hash_file('md5',$filename);
+        }
+
+/*        $arquivoTabela = $this->manager->getBusiness('common','arquivo');
+        $arquivoTabela = $arquivoTabela->GetByMD5($hashmd5);*/
+        $modules = $this->manager->getConf('home.modules');
+        $destino = '/biblioteca/files/'; //sub-diretório para o txt
+    	$teste = rand(0,100);
+        // copiar o arquivo para o local apropriado (caso haja espaço)
+        if ( $tamanhoArquivo < disk_free_space($modules.$destino) )
+        {
+
+	        $fileNameTxt = "marc_{$teste}.txt";
+	        if ($this->mime_content_type == 'zip')
+	        { //zip apagar na origem
+	                copy($arqUnZip ,                 $modules.$destino . $fileNameTxt);
+	                $this->hashmd5 = hash_file('md5',$modules.$destino . $fileNameTxt);
+	                //exec("gzip -f9 "  .              $modules.$destino . $fileNameTxt);
+	        }
+	        else
+	        {  //move
+	                copy($filename ,                 $modules.$destino . $fileNameTxt);
+	                $this->hashmd5 = hash_file('md5',$modules.$destino . $fileNameTxt);
+	                //exec("gzip -f9 "  .              $modules.$destino . $fileNameTxt);
+	        }
+	        $arquivo = file(trim($modules.$destino.$fileNameTxt)); //Comando necessário para abertura do arquivo
+		$quantidadeLivros = sizeof($arquivo);
+//		var_dump($arquivo);
+		for ($posArray=0 ; $posArray<$quantidadeLivros ; $posArray++)
+		{
+			$livro = $arquivo[$posArray]; //"Transforma" o array em string
+			$lider = substr($livro,0,24); //Retira-se o líder
+			$sair = false;
+			$i=0;
+			while ($sair==false)//Aqui localiza-se o fim da seção de diretórios e se obtém a quantidade de diretórios do livro
+			{
+				if ($livro[$i]=='^') 
+				{
+					$fimDiretorios = $i;
+					$qtdDiretorios = ($fimDiretorios-24)/12;
+					$sair = true;
+				}
+				$i++;
+			}
+			try
+			{
+				$idobra = $this->objObra->criaObraImportacao();
+				$this->objObra->saveCamposFixosImportacao($idobra,1,$lider);
+			}
+			catch (Exception $e)
+			{
+			        $this->addError($e->getMessage());
+		        }
+			$tags = array();
+			for ( $i=24; $i<$fimDiretorios; $i+=12 )
+			{
+				$diretorio = substr( $livro , $i , 12 ); //extração do diretório
+				$etiqueta = substr($diretorio,0,3); //extração da etiqueta
+				$tamanho = intval(substr($diretorio,3,4)); //extração do tamanho do conteúdo a ser inserido
+				$inicio = intval(substr($diretorio,7,5)) + $fimDiretorios; //descobre-se onde encontra-se o conteudo
+				$conteudo = str_replace("^", "", substr($livro,$inicio,$tamanho)); /*extrai-se o conteudo e retira-se o ^, 
+						que tem função de separador de conteúdos*/
+				$x=0;
+				$idetiqueta = $this->objEtiqueta->GetIdByTag($etiqueta);
+				$idetiqueta = $idetiqueta->result[0][0];
+				//echo $diretorio.'<br>';
+//				if (($etiqueta != '001') && ($etiqueta != '006') && ($etiqueta != '008'))
+				if (($etiqueta > '009'))
+				{
+					$assuntos = array();
+					$indicadorAssunto1=NULL;
+					$indicadorAssunto2=NULL;
+					array_push($tags,$etiqueta);
+					$ocorrencia = 0;
+					for ( $j=1; $j<count($tags) ; $j++)
+					{	
+						if ($tags[$j]==$etiqueta) $ocorrencia++;
+					}
+					while ($x<$tamanho)/*varrendo o conteúdo em busca de subcampos*/
+					{
+						if ($conteudo[$x]=="$")
+						{	
+							$subcampo = $conteudo[$x+1];
+							$tam = 0;			
+							$comeco = $x+2;
+							$x+=2;
+							while (($conteudo[$x]!="$") && ($x<$tamanho))
+							{ 
+								$tam++;
+								$x++;
+							}
+							$valor = substr($conteudo,$comeco,$tam);
+							switch ($etiqueta)
+							{
+								case '245': 	if ($subcampo=='a') $titulo = $valor;
+										if ($subcampo=='b') $subtitulo = $valor;
+										break;
+								case '100': 	if ($subcampo=='a') 
+										{
+											if ((substr_count($valor,',')==0)) 
+											{
+												$valor = explode(" ",$valor,2);
+												$prenome = $valor[0];
+												$nome = $valor[1];
+												$consulta = $this->objAutor->GetIdAutorImportacao($prenome,$nome);	
+											}
+											else 
+											{
+												$valor = explode(", ",$valor,2);
+												$prenome = $valor[1];
+												$nome = $valor[0];
+												$consulta = $this->objAutor->GetIdAutorImportacao($prenome,$nome);	
+											}
+											if ($consulta==NULL)
+											{
+												try
+												{
+													$autor = $this->objAutor->InsertImportacao($prenome,$nome);
+												}
+												catch (Exception $e)
+												{
+												        $this->addError($e->getMessage());
+											        }
+											}
+											else $autor=$consulta;
+										}
+										break;
+								case '250': 	if ($subcampo=='a')$edicao = $valor;
+										break;
+								case '260': 	if ($subcampo=='a') $localdepublicacao = $valor;
+										if ($subcampo=='b')
+										{
+											$ideditora = $this->objEditora->getIdByDesc($valor);	
+											if ($ideditora==NULL)
+											{
+												try
+												{
+													$ideditora = $this->objEditora->InsertImportacao($valor);
+												}
+												catch (Exception $e)
+												{
+												        $this->addError($e->getMessage());
+											        }
+											}
+										}
+										if ($subcampo=='c') $datadepublicacao = $valor;
+										break;
+								case '902': 	if ($subcampo=='a') $genero = $valor;
+										break;
+								case '300': 	if ($subcampo=='a') $descfisica = $valor;
+										break;
+							}
+							if (($etiqueta>='600')and($etiqueta<'699'))
+							{
+								array_push($assuntos,array($subcampo,$valor));
+							}
+							try
+							{
+								$this->objObra->saveMaterialImportacao($idobra,$idetiqueta,$subcampo,$valor,$ocorrencia);
+							}
+							catch (Exception $e)
+							{
+							        $this->addError($e->getMessage());
+						        }
+						}
+						else
+						{	
+							if ($conteudo[$x+2]=="$") 
+							{
+								$indicador1=$conteudo[$x];
+								if (($etiqueta>='600')and($etiqueta<'699'))
+								{
+									$indicadorAssunto1 = $indicador1;
+								}	
+								//echo $indicador1 . 'indicador1<br>'; 
+							}
+							if ($conteudo[$x+1]=="$") 
+							{
+								$indicador2=$conteudo[$x];
+								if (($etiqueta>='600')and($etiqueta<'699'))
+								{
+									$indicadorAssunto2 = $indicador2;
+								}
+								//echo $indicador2 . 'indicador2<br>'; 
+							}
+							$x++;
+						}
+						if ($assuntos<>NULL)
+						{
+							$controle = $this->objAssunto->importacaoAssunto($assuntos,$etiqueta);	
+							if ($controle==FALSE)
+							{
+								$idetiqueta = $this->objEtiqueta->GetIdByTag($etiqueta)->result[0][0];
+								$ocorrenciaAssunto = $this->objAssunto->GetLastNumAssunto($idetiqueta)+1;
+								for ($x=0 ; $x<count($assuntos) ; $x++)
+								{
+									$idassunto = $this->objAssunto->InsertImportacao($idetiqueta, $assuntos[$x][0],$assuntos[$x][1],1,$ocorrenciaAssunto, NULL);
+								}
+								if ($indicadorAssunto1<>NULL) $this->objAssunto->saveIndicador($idetiqueta, NULL,$indicadorAssunto1,1,$ocorrenciaAssunto, NULL ,1);
+								if ($indicadorAssunto2<>NULL) $this->objAssunto->saveIndicador($idetiqueta, NULL,$indicadorAssunto2,1,$ocorrenciaAssunto, NULL ,2);
+								$this->objAssunto->saveAssuntoObra($idassunto,$idobra,$ocorrencia,$idetiqueta);
+							}
+							else
+							{
+								$idetiqueta = $this->objEtiqueta->GetIdByTag($etiqueta)->result[0][0];
+								$idassunto = $this->objAssunto->getIdAssuntoAtualizado($idetiqueta, $controle);
+								$this->objAssunto->saveAssuntoObra($idassunto,$idobra,$ocorrencia,$idetiqueta);
+							}
+						}
+							
+					}
+					//echo $conteudo;
+					if ($indicador1!=NULL) $this->objObra->saveIndicadorImportacao($idobra,$idetiqueta,$ocorrencia,1,$indicador1);
+					if ($indicador2!=NULL) $this->objObra->saveIndicadorImportacao($idobra,$idetiqueta,$ocorrencia,2,$indicador2);
+				
+				}
+				else
+				{
+					$this->objObra->saveCamposFixosImportacao($idobra,$idetiqueta,$conteudo);
+				}
+			}
+			$this->objObra->atualizaObraImportacao ($idobra,$titulo,$subtitulo,$autor,$edicao,$localdepublicacao,$ideditora,$datadepublicacao,$genero,$descfisica);
+			$numerodaobra = $this->objObra->getNumeroByIdobra ($idobra)->result[0][0];
+			$mensagem[$posArray] = 'Obra '.$titulo.' criada com sucesso com o número '.$numerodaobra;
+		}
+		unlink($modules.$destino.$fileNameTxt);		
+	}
+	        // caso não tenha espaço em disco
+        else
+        {
+        $this->erro[] = "O arquivo não pode ser armazenado no servidor. Entre em contato com administrador de sistemas imediatamente.";
+        }
+	return $mensagem;
+    }
+                
+     
+    // btnEnviar2
+
+    function ErroSucesso($mensagem)
+    {
+        if ( count($this->erro) > 0 )
+        {
+            foreach ( $this->erro as $e )
+            {
+                $this->addError($e);
+            }
+        }
+        else
+        {
+            //$this->info[] = "Arquivo enviado com sucesso! <br> Código de verificação do arquivo <b>texto:</b> $this->hashmd5";
+   		$this->info[] = $mensagem;
+        }
+        if ( count($this->info) > 0 )
+        {
+            foreach ( $this->info as $i )
+            {
+                $this->addInfo($i);
+            }
+        }
+    }
+}
+?>

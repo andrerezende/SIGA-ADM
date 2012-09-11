@@ -1,0 +1,67 @@
+<?php
+class gridNovoMaterial extends MDataGrid
+{
+	function __construct()
+	{
+		global $MIOLO, $module, $page, $context, $self, $action, $perms, $state;
+		$hrefMaterial = $MIOLO->getActionURL('adm','novomaterial:main','#0#',array("form"=>"dados"));
+		$idUsuario = $MIOLO->GetLogin()->idkey;
+		$perms = $MIOLO->getPerms();
+
+		$columns = array(
+			new MDataGridColumn('datapedido','Data','center',false,'10%'),
+			new MDataGridColumn('idNovoMaterial','idNovoMaterial','left',false,'',false),
+			new MDataGridHyperlink('descricao','Material',$hrefMaterial,'45%',true),
+			new MDataGridColumn('status','Status','center','center','15%',true,array("1"=>"PEDIDO DE CADASTRO","2"=>"EM ANÁLISE","3"=>"CADASTRADO","4"=>"CANCELADO")),
+			new MDataGridColumn('codmaterial','Código','center','false','10%'),
+			new MDataGridColumn('descricaodetalhada','Observação','center','false','20%')
+		);
+
+		//Valores dos filtros
+		$filterDesc = Form::GetFormValue('descricao');
+		$filterNum  = Form::GetFormValue('idnovomaterial');
+		$filterSta  = Form::GetFormValue('status');
+		$filterDat  = Form::GetFormValue('datapedido');
+		$filterUo   = Form::GetFormValue('idUoReq',0);
+		$filterAtivo = Form::GetFormValue('ativo');
+		//
+
+		$this->AddFilterText('adm','Material',$material);
+
+		$novoMaterial = $MIOLO->GetBusiness('adm','novomaterial');
+		$gestor = $MIOLO->GetBusiness('adm','gestor');
+		$executor = $MIOLO->GetBusiness('adm','executor');
+
+		//Testa permissão e escolhe o tipo de busca de acordo com tal permissão
+		if ($perms->CheckAccess('adm_cadastromaterial',A_EXECUTE)) {
+			$query = $novoMaterial->listConsultaForExec(strtoupper("'%$filterDesc%'"), $filterNum,$filterSta, $filterDat, $filterUo,$filterAtivo);
+		}
+		else if ($gestor->isGestorOf($idUsuario)) {
+			$query = $novoMaterial->listConsultaForGestor(strtoupper("'%$filterDesc%'"), $filterNum, $filterSta, $filterDat, $filterUo);
+		}
+		else {
+			$query = $novoMaterial->listConsulta(strtoupper("'%$filterDesc%'"),$filterNum, $filterSta, $filterDat,$idUsuario);
+		}
+		
+
+		$hrefGrid = $MIOLO->GetActionURL($module,$self);
+		parent::__construct($query, $columns, $hrefGrid,15);
+		$this->SetFilter(false);
+		$this->SetIndex(1);
+		$this->SetLinkType('hyperlink');
+		//action excluir
+		if ($perms->CheckAccess('adm_cadastromaterial',A_EXECUTE)){
+			$delAction = $MIOLO->getActionURL('adm','novomaterial:delete','#0#',array("form"=>"dados","idnovomaterial"=>"#0#"));
+			$this->AddActionDelete($delAction);
+		}
+	}
+	function GenerateFooter()
+	{
+		if (!$this->data)
+		$footer[] = $this->GenerateEmptyMsg();
+		$footer[] = new Separator();
+		$footer[] = $this->GenerateControls();
+		return $footer;
+	}
+}
+?>

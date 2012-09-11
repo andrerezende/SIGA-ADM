@@ -1,0 +1,187 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+MIOLO::Import('extensions::class.phpmailer.php','PHPMailer'); 
+
+class frmEnviaEmail extends MForm
+
+{
+	var $objEmprestimo;
+	var $objReserva;
+	
+	function __construct()
+    {   
+    	global $MIOLO, $action, $module, $item;
+    	$this->objEmprestimo = $MIOLO->GetBusiness($module,'emprestimo');
+    	$this->objReserva = $MIOLO->GetBusiness($module,'reserva');
+		parent::__construct('Envio de e-mails para pessoas com alguma pendência com a Biblioteca');
+	    $this->eventHandler();
+	    $this->SetClose($this->manager->GetActionURL($module, 'main:circulacao:emprestimo'));
+	}
+
+    function createFields()
+	{  
+                   	
+		$fields = Array(
+					new Text('','Por favor, escolha uma das opções abaixo:'),
+					new MSpacer(1),
+					new MRadioButton('radio', 'emprestimosPendentes', '', false, _M('Pessoas com exemplares pendentes')),
+					new MRadioButton('radio', 'multasPendentes', '', false, _M('Pessoas com multas pendentes')),
+					new MRadioButton('radio', 'reservasAtendidas', '', false, _M('Pessoas com reservas atendidas'))				
+					);                
+		                
+	   $this->SetFields($fields);
+	   
+       $buttons = array(
+       		 new MButton('btnEnvia','Enviar E-Mails')           
+       );
+       
+	   $this->SetButtons($buttons);
+	   
+    }
+
+  function btnEnvia_click()
+    {
+    	global $MIOLO, $action, $module, $item;
+    	$escolha = $this->GetFormValue('radio');
+    	
+    	if ($escolha == 'emprestimosPendentes')
+    	{    	
+      		$this->objEmprestimo = $MIOLO->GetBusiness($module,'emprestimo');
+    		$query = $this->objEmprestimo->SelectUsuariosComExemplaresPendentes();
+        	 	
+       		$time = $this->manager->getSysTime();
+       		$ipaddress = $_SERVER['REMOTE_ADDR'];
+      
+      		//adicionando destinatarios
+      		$i = 0;
+       		foreach ($query->chunkResult() as $nome => $email)
+       		{
+       			$i++;      				
+       	   		$mail = new PHPMailer();
+       	   		$mail->IsSMTP(); // telling the class to use SMTP
+           		$mail->Host = "smtp.ufjf.br"; // SMTP server
+           		$mail->From = 'siga@ufjf.edu.br';	
+	       		$mail->FromName = 'SIGA - Sistema Integrado de Gestão Acadêmica';	
+       	   		$mail->IsHTML(true); // envio como HTML se 'true'
+	   	   		$email = trim(strtolower($email));
+    	    	if ($email) 
+        		{
+        			$mail->AddAddress($email);
+    	       		//$mail->AddBcc($email);
+        	   		
+           		}
+
+           		$mail->Subject = 'Pendência com a Biblioteca UFJF';
+       	   		$mail->Body = "Caro(a) $nome, <br> <br> O SIGA informa que há empréstimo(s) pendente(s) em seu nome no sistema de Biblioteca. <br> Por favor, consulte as pendências em http://siga.ufjf.br/ e regularize sua situação. <br> Obrigado.";
+       	   			            
+	       		$mail->Send();
+	       		
+    	   	}
+    	   	if($i>0){
+    	   	$this->AddJsCode("alert('E-mails enviados com sucesso!')");}
+    	   	else{$this->AddJsCode("alert('Todos os usuários com empréstimos pendentes já foram comunicados!')");}
+       	}
+       	
+       	
+       	elseif ($escolha == 'multasPendentes')
+       	{
+       		$this->objEmprestimo = $MIOLO->GetBusiness($module,'emprestimo');
+    		$query = $this->objEmprestimo->SelectUsuariosComMultasPendentes();
+        	 	
+       		$time = $this->manager->getSysTime();
+       		$ipaddress = $_SERVER['REMOTE_ADDR'];
+      
+      		//adicionando destinatarios
+      		$i = 0;       		
+       		foreach ($query->chunkResult() as $nome => $email)
+       		{
+       			$i++;       				
+       	   		$mail = new PHPMailer();
+       	   		$mail->IsSMTP(); // telling the class to use SMTP
+           		$mail->Host = "smtp.ufjf.br"; // SMTP server
+           		$mail->From = 'siga@ufjf.edu.br';	
+	       		$mail->FromName = 'SIGA - Sistema Integrado de Gestão Acadêmica';	
+       	   		$mail->IsHTML(true); // envio como HTML se 'true'	
+	   	   		
+	   	   		$email = trim(strtolower($email));
+    	    	if ($email) 
+        		{
+        			$mail->AddAddress($email);
+    	       		//$mail->AddBcc($email);
+        	   	}
+
+           		$mail->Subject = 'Pendência com a Biblioteca UFJF';
+       	   		$mail->Body = "Caro(a) $nome, <br> <br> O SIGA informa que há multa(s) pendente(s) em seu nome no sistema de Biblioteca. <br> Por favor, consulte as pendências em http://siga.ufjf.br/ e regularize sua situação. <br> Obrigado.";
+       	   	    $mail->Send();
+	       		}
+       		if($i>0){
+    	   	$this->AddJsCode("alert('E-mails enviados com sucesso!')");}
+    	   	else{$this->AddJsCode("alert('Todos os usuários com multas pendentes já foram comunicados!!')");}
+       	}       	
+       	elseif ($escolha == 'reservasAtendidas')
+       	{
+       		$this->objReserva= $MIOLO->GetBusiness($module,'reserva');
+    		$query = $this->objReserva->SelectUsuariosComReservasAtendidas();	
+       		$time = $this->manager->getSysTime();
+       		$ipaddress = $_SERVER['REMOTE_ADDR'];
+      
+      		//adicionando destinatarios
+      		$i = 0;       		
+       		foreach ($query->chunkResult() as $nome => $email)
+       		{  
+       			$i++;      				
+       	   		$mail = new PHPMailer();
+       	   		$mail->IsSMTP(); // telling the class to use SMTP
+           		$mail->Host = "smtp.ufjf.br"; // SMTP server
+           		$mail->From = 'siga@ufjf.edu.br';	
+	       		$mail->FromName = 'SIGA - Sistema Integrado de Gestão Acadêmica';	
+       	   		$mail->IsHTML(true); // envio como HTML se 'true'
+	   	   		$email = trim(strtolower($email));
+    	    	if ($email) 
+        		{
+        			$mail->AddAddress($email);
+	        		//$mail->AddBcc($email);
+        	   	}
+				$mail->Subject = 'Reserva na Biblioteca UFJF';
+       	   		$mail->Body = "Caro(a) $nome, <br> <br> O SIGA informa que há reserva(s) atendida(s) em seu nome no sistema de Biblioteca. <br> Por favor, consulte as reservas em http://siga.ufjf.br/ . <br> Obrigado.";   
+	       		$mail->Send();
+	       		}
+       		$this->objReserva->mudaParaComunicada();
+       		if($i>0){
+    	   	$this->AddJsCode("alert('E-mails enviados com sucesso!')");}
+    	   	else{$this->AddJsCode("alert('Todos os usuários com reservas atendidas já foram comunicados!!')");}
+       		
+       	} else
+       	{
+       	 $this->AddJsCode("alert('Selecione uma das opções')");
+       	}
+       	
+       		       
+    }   
+}
+
+?>

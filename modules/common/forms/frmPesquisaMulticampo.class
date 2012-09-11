@@ -1,0 +1,276 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?
+
+/*
+  
+   Uma imagem vale por mil palavras...
+
+   hierarquia de classes:
+
+                                  FORM
+                                    |
+                                    |
+                                 PESQUISA  (frmPesquisa.class)
+                                    |
+                                    |
+   -----------------------------------------------------------------------------
+           |                    |                    |                  |
+           |                    |                    |                  |
+    Pesquisa Simples    Pesquisa Multicampo  Percorrer indices  Pesquisa Numérica
+
+
+
+ Para configurar os campos da Pesquisa Simples, acesse etc/pesquisa.xml
+
+*/
+
+MIOLO::IMPORT('modules::biblioteca::forms::frmPesquisa');
+
+class frmPesquisaMulticampo extends frmPesquisa 
+{
+	var $objMulticampo;
+	var $objUnidade;
+	var $objGenero;
+
+    function frmPesquisaMulticampo()  // construtor da Classe
+    {
+		global $MIOLO,$module;
+
+		// Título do Formulário
+		$this->Form('Pesquisa Multicampo');
+
+		//Chama o CreateFileds, etc.
+		$this->EventHandler();
+
+		//Botão "enviar" não aparece
+		$this->defaultButton = false;
+		
+		// Botão 'fechar', direcionando para o handler biblioteca/main/
+		$this->SetClose($this->manager->GetActionURL($module, 'main'));
+	}
+   
+    function CreateFields()
+    { 
+		global $module,$MIOLO, $action;
+
+		$camposPesquisa = $this->GetCamposPesquisa();
+		
+		$this->objMulticampo = $MIOLO->GetBusiness($module,'pesquisamulticampo');
+		$this->objUnidade = $MIOLO->GetBusiness($module,'unidade');
+		$this->objGenero = $MIOLO->GetBusiness($module,'genero');
+		
+		$opU = $this->objUnidade->ListUnidade();
+		$opG = $this->objGenero->ListGenero();
+		$optionsU['0'] = 'Todas';
+		$optionsG['0'] = 'Todos';
+		foreach($opU->result as $o)
+		{
+			$optionsU[$o[0]] = $o[1];
+		}
+		foreach($opG->result as $o)
+		{
+			$optionsG[$o[0]] = $o[1];
+		}
+
+		$OperadorValues = array (
+			array ('OU','UNION'),
+			array ('E','INTERSECT'),
+			array ('NÃO','EXCEPT'),
+		);
+		
+		// Campos que aparecem no formulário
+		$fields = Array (
+
+		    new Selection('selConsultarPor_1','','Consultar por'),
+    			new TextLabel('Atenção:','As palavras não são acentuadas.', 'Atenção'),
+			new TextField('edtConsulta_1','','Busca',50),
+			new MSeparator,
+			new RadioButtonGroup('radOperador','',$OperadorValues,'INTERSECT','','horizontal'),
+			new MSeparator,
+		    new Selection('selConsultarPor_2','','Consultar por'),
+			new TextLabel('Atenção:','As palavras não são acentuadas.', 'Atenção'),
+			new TextField('edtConsulta_2','','Busca',50),
+			new MSeparator,
+
+///			new Text('txtObs', 'Use as teclas CTRL e SHIFT para escolher mais de uma unidade ou material'),
+///			new MSpacer(1),
+///			array(
+///				new MMultiSelection('mslUnidade',array('0'),'Unidades',$optionsU,'','',16),
+///				new MMultiSelection('mslGenero',array('0'),'Tipos de Material',$optionsG,'','',16),
+///			),
+			new Selection('selUnidade','','Unidades'),
+			new Selection('selGenero','','Tipos de Material'),
+		);
+
+		// Insere os campos
+		$this->SetFields($fields);
+
+		$sel = $this->MontaSelection($camposPesquisa);
+
+		// Inserindo os dados do formulario
+		$this->SetFieldAttr('selConsultarPor_1','options', $sel);
+  	    $this->SetFieldAttr('selConsultarPor_2','options', $sel);
+		$this->SetFieldAttr('selConsultarPor_2','value', 'Autor');
+  	    $this->SetFieldAttr('selUnidade','options', $optionsU);
+  	    $this->SetFieldAttr('selGenero','options', $optionsG);
+
+
+		// Botões que aparecem no formulário
+		$buttons = Array(
+			new FormButton('btnConsultar', 'Consultar'),
+			new FormButton('btnVoltar', 'Nova Pesquisa', $MIOLO->GetActionURL($module = $module, $action = $action)),
+   		);
+
+		//Insere os Botões
+		$this->SetButtons($buttons);
+		$this->SetButtonAttr('btnVoltar','visible',false);
+
+		//Definindo o foco
+		if (!($this->GetFieldValue('edtConsulta_1')))
+		{
+			$this->page->onLoad("MIOLO_GetElementById('edtConsulta_1').focus();");
+		}
+	}
+
+    // pega os dados que estão no formulário   
+    function GetData()
+    {
+        $data = new FormData();
+        $data->Unidade = $this->GetFormValue('selUnidade');
+		$data->Genero = $this->GetFormValue('selGenero');
+		$data->ConsultarPor_1 = $this->GetFormValue('selConsultarPor_1');
+		$data->Consulta_1 = trim($this->GetFormValue('edtConsulta_1'));
+		$data->Operador = $this->GetFormValue('radOperador');
+		$data->ConsultarPor_2 = $this->GetFormValue('selConsultarPor_2');
+		$data->Consulta_2 = trim($this->GetFormValue('edtConsulta_2'));
+		return $data;
+    }
+
+    function SetData($data)
+    {
+        $this->SetFieldValue('selUnidade',$data->Unidade);
+		$this->SetFieldValue('selGenero',$data->Genero);
+		$this->SetFieldValue('selConsultarPor_1',$data->ConsultarPor_1);
+		$this->SetFieldValue('edtConsulta_1',$data->Consulta_1);
+		$this->SetFieldValue('radOperador',$data->Operador);
+		$this->SetFieldValue('selConsultarPor_2',$data->ConsultarPor_2);
+		$this->SetFieldValue('edtConsulta_2',$data->Consulta_2);
+    }
+
+/*
+	function MontaSelection($camposPesquisa)
+	{
+		// Prepara os termos para uma caixa de seleção (Consultar Por)
+		$sel = array();
+
+		foreach ($camposPesquisa as $c)
+		{
+			if ($c[3])  // se o campo é buscável
+			{
+				array_push($sel, array($c[0],$c[0]));
+			}
+		}
+		return $sel;
+	}
+*/
+	function btnConsultar_click($sender,$tipo=null)
+	{ 
+		global $MIOLO, $module, $action;
+
+		//esconde botoes e campos
+		$this->SetFieldAttr('selConsultarPor_1','readonly',true);
+		$this->SetFieldAttr('edtConsulta_1','readonly',true);
+		$this->SetFieldAttr('radOperador','readonly',true);
+		$this->SetFieldAttr('selConsultarPor_2','readonly',true);
+		$this->SetFieldAttr('edtConsulta_2','readonly',true);
+		$this->SetFieldAttr('selUnidade','readonly',true);
+		$this->SetFieldAttr('selGenero','readonly',true);
+		$this->SetButtonAttr('btnConsultar','visible',false);
+
+		// mostra botao voltar
+		$this->SetButtonAttr('btnVoltar','visible',true);
+
+		$camposPesquisa = $this->GetCamposPesquisa();
+
+        $tipo = $this->GetFormValue('tipo');
+		if($tipo == 'multi') //se for passado o parametro, usuario clicou no botão voltar
+		{
+	        $unidade = $this->GetFormValue('unidade');
+			$genero = $this->GetFormValue('genero');
+			$consultarpor1 = $this->GetFormValue('consultarpor1');
+			$consulta1 = $this->GetFormValue('consulta1');
+			$operador = $this->GetFormValue('operador');
+			$consultarpor2 = $this->GetFormValue('consultarpor2');
+			$consulta2 = $this->GetFormValue('consulta2');
+
+			$data = new FormData();
+			$data->Unidade = $unidade;
+			$data->Genero = $genero;
+			$data->ConsultarPor_1 = $consultarpor1;
+			$data->Consulta_1 = $consulta1;
+			$data->Operador = $operador;
+			$data->ConsultarPor_2 = $consultarpor2;
+			$data->Consulta_2 = $consulta2;
+
+			$this->SetData($data);
+		}
+		else
+		{
+			$data = $this->GetData();
+		}
+
+		if ( ($data->Consulta_1 <> null) OR ($data->Consulta_2 <> null) )
+		{
+			if ( ($data->Unidade != null) AND ($data->Genero != null) )
+			{
+				$busca = array();
+				if ($data->Consulta_1 <> null) $busca[] = $data->Consulta_1;
+				if ($data->Consulta_2 <> null) $busca[] = $data->Consulta_2;
+				$data->busca = $busca;
+
+				$query = $this->objMulticampo->Listar($data, $camposPesquisa);
+
+				if ($query)
+				{
+					$this->MontaDataGrid($camposPesquisa,$query,'multi',$data);		
+				}
+				else
+				{
+					$MIOLO->Prompt(Prompt::Error('Sua pesquisa por "' . $data->Consulta_1 . '" e/ou "' . $data->Consulta_2 . '" não retornou nenhum resultado.<br><br>
+				Sugestões:<br><br> 
+					- Certifique-se de que todas as palavras estejam escritas corretamente.<br><br>
+					- Tente palavras-chave diferentes.<br><br>
+					- Tente palavras-chave mais genéricas.<br><br>
+					- Em caso de dúvida, consulte a pessoa responsável pelo atendimento na sua biblioteca.<br>', $MIOLO->GetActionURL($module, $action)));
+				}
+			}
+			else
+			{
+				$MIOLO->Prompt(Prompt::Error("Por favor, selecione pelo menos uma Unidade da Biblioteca, e/ou um tipo de material", $MIOLO->GetActionURL($module, $action)));
+			}
+		}
+		else
+		{
+			$MIOLO->Prompt(Prompt::Error("Por favor, preencha o campos necessários para a busca.", $MIOLO->GetActionURL($module, $action)));
+		}
+	}
+}
+?>

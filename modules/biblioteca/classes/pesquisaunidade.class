@@ -1,0 +1,81 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+MIOLO::IMPORT('modules::biblioteca::classes::pesquisa');
+
+class BusinessBibliotecaPesquisaUnidade extends Pesquisa
+{
+	var $objPesquisaSimples;
+
+	function BusinessBibliotecaPesquisaUnidade($data = null)
+	{
+	  $this->Business('sigaept', $data);
+	}
+
+
+	function Listar($data, $camposPesquisa, $unidade=false)
+	{
+		global $MIOLO, $module, $perms;
+/*
+		$this->getEtiquetas($camposPesquisa);
+		foreach ($this->etiquetas as $etiqueta)
+		{
+			foreach($etiqueta as $key=>$subcampo)
+			{
+				// verifica se campo aparece no datagrid: propriedade "true"
+		    	if ($subcampo[2])
+			    {
+                    $inShow .= (($inShow != '') ? ',' : '(') . '(' . $subcampo[0] . ',' . "'$key')";  
+		        }
+	        }
+		}
+		$inShow .= (($inShow != '') ? ')' : '');
+*/
+
+		$campos2 = $this->GetCamposByTitulo('Grid',$camposPesquisa);
+		foreach ($campos2 as $campo_subcampo)
+		{
+			$inShow .= (($inShow != '') ? ',' : '(') . '(' . $campo_subcampo[0] . ',' . "'" . $campo_subcampo[1] . "')";  
+		}
+		$inShow .= (($inShow != '') ? ')' : '');
+
+		//se usuario tiver perfil de BIB_PRECATALOGACAO, não haverá restrições. Se não tiver, só retornam obras com campo 852 (classificação, idetiqueta 189) preenchido.
+		if($perms->CheckAccess('BIB_PRECATALOGACAO',A_ACCESS,false))
+		{
+			$sql = new sql("distinct mm.idobra,mm.idetiqueta,mm.subcampo,mm.conteudo,o.numerodaobra", "bt_obra o,bt_material mm,bt_exemplar e", "(mm.idobra = o.idobra) AND (o.idobra = e.idobra) AND (e.idunidade = " . $data->Unidade . ") AND (mm.idetiqueta,mm.subcampo) IN $inShow", "mm.idobra,mm.idetiqueta,mm.subcampo");
+		}
+		else
+		{
+			$sql = new sql("distinct mm.idobra,mm.idetiqueta,mm.subcampo,mm.conteudo,o.numerodaobra", "bt_obra o,bt_material mm,bt_exemplar e", "(mm.idobra = o.idobra) AND (o.idobra = e.idobra) AND (e.idunidade = " . $data->Unidade . ") AND (mm.idetiqueta,mm.subcampo) IN $inShow AND o.idobra in (SELECT distinct idobra FROM bt_material WHERE idetiqueta = 189 and subcampo='a')", "mm.idobra,mm.idetiqueta,mm.subcampo");
+		}
+
+		$this->objPesquisaSimples = $MIOLO->GetBusiness($module,'pesquisasimples');
+		$query = $this->objPesquisaSimples->Listar($data, $camposPesquisa,null,null,$sql);
+
+		return $query;
+	}
+}
+?>

@@ -1,0 +1,503 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+/**
+ * Formulário de edição de Licencas e Afastamentos do Vínculo
+ */
+class frmVinculoLicAfast extends Form
+{
+	protected $licAfast;
+    protected $ocorr; //ocorrencias que podem ser manipuladas pelo usuario
+    protected $ocorrencias; //ocorrencias de direito do servidor selecionado
+
+    function __construct($licAfast)
+    {
+		$this->licAfast = $licAfast;
+        parent::__construct('Dados da Licença/Afastamento');
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+        $auth = $this->manager->getAuth();
+        $perms = $this->manager->getPerms();
+
+        $this->licAfast->retrieveAssociation('vinculo');
+        $this->licAfast->vinculo->retrieveAssociation('funcionario');
+        $sexo = $this->licAfast->vinculo->funcionario->pessoa->sexo;
+        $restricaoSexo = ( $sexo == 'M' ) ? 1 : 3;
+
+       	$tabelaGeral = $this->manager->GetBusiness('common','tabelageral');
+	   	$query = $tabelaGeral->ListByTabela('RH_TIPOLICENCA');
+
+		$this->licAfast->vinculo->getProvimentos();
+
+		$provimento = $this->licAfast->vinculo->GetProvimentoAtual();
+
+		if ( $this->licAfast->vinculo->emEstagioProbatorio() ) 
+		{
+			$query2 = $this->licAfast->listOcorrEstagio($provimento->idSituacao,$sexo);
+		}
+		else
+		{
+			$query2 = $this->licAfast->ListOcorrByRegimeJur($provimento->idSituacao,$sexo);
+		}
+		if(!$query2->result)
+        	{
+	          $idVinculo = $this->licAfast->vinculo->funcionario->GetVinculoByIdFuncionario($this->licAfast->vinculo->funcionario->idFuncionario);
+	          $url = $this->manager->GetActionURL('rh','main:vinculo',$idVinculo);
+	          $this->manager->information("Não há ocorrencias disponíveis para esta operação.",$url);
+	        }
+        
+        if ( $perms->isAdmin() || $perms->isMemberOf('','RH_GESTOR') ) 
+        {
+            $this->ocorrencias = $query2->chunkResult(0,1,TRUE);
+            $this->ocorr = $this->ocorrencias;
+        }
+        else
+        {
+            $tipoLicAfast = $this->manager->getBusiness('rh','tipolicafast');
+            $this->ocorr = $tipoLicAfast->getArrayOcorrenciasByGrupo($auth->login->groups);
+
+            if ( is_array($this->ocorr) )
+            {
+                foreach ( $query2->chunkResult(0,1,TRUE) as $key=>$value )
+                {
+                    if ( array_key_exists($key,$this->ocorr) )
+                    {
+                        $this->ocorrencias[$key] = $value;
+                    }
+                }
+            }
+        }
+
+        
+    $idCidCategoria = new MLookupTextField('idCidCategoria','','Cód. categoria',15);
+    $cidCategoria = new MTextField('cidCategoria','','Categoria','60');
+
+    $idCidSubCategoria = new MTextField('idCidSubCategoria','','Cód. sub-categoria',15);
+    $cidSubCategoria = new MTextField('cidSubCategoria','','Sub-Categoria','63');
+
+    $aControlGroup = array( 
+                            $idCidCategoria,
+                            $cidCategoria,
+                            $idCidSubCategoria,
+                            $cidSubCategoria
+                           );
+
+    $this->licAfast->retrieveAssociation('publicacao');
+    
+		$fields = array(
+            new MTextField('ocorrencia','','Ocorrência',50),
+			new MSelection('idOcorrencia','','Ocorrência',$this->ocorrencias),
+            new MCalendarField('dataInicio',date('d/m/Y'),'Data de início','10','DD/MM/YYYY'),
+            new MCalendarField('dataFim','','Data final','10','DD/MM/YYYY'),
+			new MMultiLineField('motivo','','Motivo',25,5,40,'Máx. 500 caracteres'),
+			new MHiddenField('idPublicacao'),
+			new MLookupFieldValue('numero','','Publicação',50),
+			new MSelection('tipoLicenca','','Tipo de Licença',$query->ChunkResult()),
+            new MBaseGroup( 'cid', 'Categorias Cid', $aControlGroup, 'horizontal', 'css' ),
+            new MHiddenField('restricaoSexo',$restricaoSexo)
+        );
+		
+        $this->SetFields($fields);
+
+        $this->setFieldAttr('cid','showLabel',TRUE);
+	   	$this->SetFieldAttr('numero','module','rh');
+		$this->SetFieldAttr('numero','item','publicacao');
+		$this->SetFieldAttr('numero','event','btnPublicacao_click');
+		//$this->SetFieldAttr('numero','related','idPublicacao,null,numero');
+		$this->SetFieldAttr('dataInicio','readonly',$this->licAfast->isPersistent());
+        $this->setfieldattr('ocorrencia','visible',false);
+        $this->setfieldattr('ocorrencia','readonly',true);
+        $this->setfieldattr('dataInicio','visible',false);
+        $this->setFieldAttr('dataFim','visible',false);
+        $this->setFieldAttr('tipoLicenca','visible',false);
+        $this->setFieldAttr('numero','visible',false);
+        $this->setFieldAttr('motivo','visible',false);
+        $this->setFieldAttr('cid','visible',false);
+
+
+        $idCidCategoria->module = 'rh';
+        $idCidCategoria->item = 'cid';
+        $idCidCategoria->event = 'filler';
+        $idCidCategoria->filter = 'restricaoSexo,idCidCategoria';
+        $idCidCategoria->related = 'idCidCategoria,cidCategoria,idCidSubCategoria,cidSubCategoria';
+        
+        $cidCategoria->readonly = true;
+        $cidSubCategoria->readonly = true;
+        
+		$buttons = array(
+            new MButton('btnPost','Enviar'),
+			new MButton('btnSalvar','Enviar'),
+			new MButton('btnExcluir','Excluir')
+            );
+		$this->SetButtons($buttons);
+        $this->setButtonAttr('btnPost','visible',$this->licAfast->vinculo->isAtivo());
+		$this->SetButtonAttr('btnExcluir','visible',$this->licAfast->isPersistent() && $perms->checkAccess('rh_licafast',A_ACCESS));
+        $this->setButtonAttr('btnSalvar','visible',false);
+
+		$validators = array(
+			new DateDMYValidator('dataInicio','','required'),
+			new DateDMYValidator('dataFim')
+			);
+
+		$this->SetValidators($validators);
+
+	    if ( $this->licAfast->isPersistent() )
+        {
+            $this->btnPost_click();
+    		$this->SetData();	
+        }
+    }
+
+    function btnPost_click()
+    {
+        $perms = $this->manager->getPerms();
+        $idOcorrencia = $this->getFormValue('idOcorrencia');
+
+        $this->setFieldAttr('idOcorrencia','readonly',true);
+        
+        $this->setFieldAttr('dataInicio','visible',true);
+        $this->setFieldAttr('dataFim','visible',true);
+        $this->setFieldAttr('numero','visible',true);
+        $this->setFieldAttr('motivo','visible',true);
+        
+        $this->setFieldAttr('tipoLicenca','visible',$this->licAfast->isTipo('PROGRAMATREINAMENTO',$idOcorrencia));
+        $this->setFieldAttr('cid','visible',($this->licAfast->isTipo('SAUDE',$idOcorrencia) && $perms->checkAccess('rh_cid',A_ACCESS)) );
+
+        $this->setButtonAttr('btnPost','visible',false);
+        $this->setButtonAttr('btnSalvar','visible',$perms->checkAccess('rh_licafast',A_ACCESS));
+    }
+
+	function SetData()
+	{
+        $this->licAfast->retrieveAssociation('ocorrencia');
+		$this->SetFieldValue('dataInicio',$this->licAfast->dataInicio);
+		$this->SetFieldValue('dataFim',$this->licAfast->dataFim);
+		$this->SetFieldValue('motivo',$this->licAfast->motivo);
+		$this->SetFieldValue('tipoLicenca',$this->licAfast->tipoLicenca);
+		$this->SetFieldValue('idPublicacao',$this->licAfast->idPublicacao);
+		if ($this->licAfast->publicacao)
+            {
+				$this->SetFieldValue('numero',$this->licAfast->publicacao->diplomaLegal->descricao.' '.$this->licAfast->publicacao->numero.' de '.$this->licAfast->publicacao->data.' - '.$this->licAfast->publicacao->autoridade);
+            }
+		$this->SetFieldValue('idOcorrencia',$this->licAfast->idOcorrencia);
+
+        if ( $this->licAfast->isTipo("CESSAO") || $this->licAfast->isTipo("FERIAS") )
+        {
+            $this->setFieldValue('ocorrencia',$this->licAfast->idOcorrencia.' - '.$this->licAfast->ocorrencia->descricao);
+            $this->setFieldAttr('ocorrencia','visible',true);
+            $this->setFieldAttr('idOcorrencia','visible',false);
+            $this->setButtonAttr('btnExcluir','visible',false);
+            $this->setButtonAttr('btnPost','visible',false);
+            $this->setButtonAttr('btnSalvar','visible',false);
+        }
+
+        //apenas o usuario que criou a licença pode excluí-la
+        if ( ! array_key_exists($this->licAfast->idOcorrencia,$this->ocorr) )
+        {
+            $this->setFieldValue('ocorrencia',$this->licAfast->idOcorrencia.' - '.$this->licAfast->ocorrencia->descricao);
+            $this->setFieldAttr('ocorrencia','visible',true);
+            $this->setFieldAttr('idOcorrencia','visible',false);
+            $this->setButtonAttr('btnExcluir','visible',false);
+            $this->setButtonAttr('btnPost','visible',false);
+            $this->setButtonAttr('btnSalvar','visible',false);
+        }
+
+		if ( $this->licAfast->isTipo("SAUDE",$data->idOcorrencia) )
+        {
+            $this->licAfast->getCid();
+    		$this->SetFieldValue('idCidCategoria',$this->licAfast->idCidCategoria);
+		    $this->SetFieldValue('idCidSubCategoria',$this->licAfast->idCidSubCategoria);
+		    $this->SetFieldValue('cidSubCategoria',$this->licAfast->cid->descricao);
+		    $this->SetFieldValue('cidCategoria',$this->licAfast->cid->categoria->descricao);
+
+        }
+        $this->setButtonAttr('btnPost','visible',false);
+        //$this->setButtonAttr('btnSalvar','visible',false);
+		
+	}
+	public function btnSalvar_click()
+	{
+		$update = $this->licAfast->isPersistent();
+		$data = $this->GetData();
+        $data->idCidCategoria = strtoupper($data->idCidCategoria);
+        $data->idCidSubCategoria = strtoupper($data->idCidSubCategoria);
+		$this->licAfast->SetData($data);
+		$this->licAfast->idGrupoOcorrencia = '03'; //Grupo de Ocorrencia LicAfast
+		if ( $this->Validate() )
+		{
+			try
+			{
+				$this->licAfast->save();
+                $op = $update ? OP_UPD : OP_INS;
+                $this->licAfast->log($op,"vinculo: ".$this->licAfast->idVinculo." data de inicio: ".$this->licAfast->dataInicio." data fim: ".$this->licAfast->dataFim." grupo ocorrencia: ".$this->licAfast->idGrupoOcorrencia." ocorrencia: ".$this->licAfast->idOcorrencia);
+	        	$go = $this->manager->getActionURL('rh','main:vinculo',$this->licAfast->idVinculo, array('form'=>'licAfast'));
+				if ($update)
+				{
+	    	   	    $this->manager->information('Licença/Afastamento atualizada com sucesso.', $go );
+				}
+				else	
+				{
+	    	   	    $this->manager->information('Licença/Afastamento inserida com sucesso.', $go );
+				}
+			}
+			catch ( ESimpleRnException $e )
+			{
+				$this->AddError($e->getMessage());
+                $this->btnPost_click();
+            }
+            catch ( ECancelaFeriasException $e )
+			{
+				$oid = $e->getOid();
+				$varsCommon = $this->dataToArray($data);
+                $varsCommon['id'] = 'new';
+				
+			    $varsSim = $varsCommon;
+				$varsNao = $varsCommon;
+					
+				$varsSim['oid'] = $oid;
+				$varsSim['event'] = 'excluirFerias';
+					
+				$varsNao['event'] = 'btnPost:click';
+					
+				$action_sim = $this->manager->getActionURL('rh','main:vinculo',$this->licAfast->idVinculo,$varsSim);
+					
+				$action_nao = $this->manager->getActionURL('rh','main:vinculo',$this->licAfast->idVinculo,$varsNao);
+		   			
+				$this->manager->question("Com a inclusão dessa licença/afastamento as férias serão canceladas. Confirma a exclusão das férias?",$action_sim,$action_nao);
+					
+			}
+            catch ( EExtrapolaPrazoException $e )
+			{
+				$oid = $e->getOid();
+				$varsCommon = $this->dataToArray($data);
+                $varsCommon['id'] = 'new';
+				
+			    $varsSim = $varsCommon;
+				$varsNao = $varsCommon;
+					
+				$varsSim['oid'] = $oid;
+				$varsSim['event'] = 'saveForced';
+                
+				$varsNao['event'] = 'btnPost:click';
+					
+				$action_sim = $this->manager->getActionURL('rh','main:vinculo',$this->licAfast->idVinculo,$varsSim);
+					
+				$action_nao = $this->manager->getActionURL('rh','main:vinculo',$this->licAfast->idVinculo,$varsNao);
+		   			
+				$this->manager->question("A inclusão dessa licença extrapola o prazo das licenças de saúde. Deseja incluir mesmo assim?",$action_sim,$action_nao);
+					
+			}
+            catch ( EAfastamentoEstagioException $e )
+			{
+				$oid = $e->getOid();
+				$varsCommon = $this->dataToArray($data);
+                $varsCommon['id'] = 'new';
+				
+			    $varsSim = $varsCommon;
+				$varsNao = $varsCommon;
+					
+				$varsSim['oid'] = $oid;
+				$varsSim['event'] = 'saveForced';
+                
+				$varsNao['event'] = 'btnPost:click';
+					
+				$action_sim = $this->manager->getActionURL('rh','main:vinculo',$this->licAfast->idVinculo,$varsSim);
+					
+				$action_nao = $this->manager->getActionURL('rh','main:vinculo',$this->licAfast->idVinculo,$varsNao);
+		   			
+				$this->manager->question("O servidor se encontra em estágio probatório. Deseja incluir a licença mesmo assim?",$action_sim,$action_nao);
+					
+			}
+		}
+        else
+        {
+            $this->btnPost_click();
+        }
+	}
+
+	function btnExcluir_click()
+	{
+		$action_sim = $this->manager->getActionURL('rh','main:vinculo',$this->licAfast->idVinculo,array('form'=>'licAfast','id'=>$this->licAfast->dataInicio,'conf'=>'sim','event'=>'btnExcluir:click'));
+		$action_nao = $this->manager->getActionURL('rh','main:vinculo',$this->licAfast->idVinculo,array('form'=>'licAfast','id'=>$this->licAfast->dataInicio));
+
+		$conf = $this->GetFormValue('conf');
+
+		if ($conf == 'sim')
+		{
+            
+            if ( $this->licAfast->semOnus() )
+            {
+                if ( $averbacao = $this->licAfast->vinculo->getAverbacaoByPeriodo($this->licAfast->dataInicio,$this->licAfast->dataFim) )             
+                {
+                    $this->addError("Não é possível excluir a licença/afastamento. Existe averbação de tempo lançada para o mesmo período."); 
+                    $err = TRUE;
+                }
+            }
+            if ( ! $err )
+            {
+                try
+                {
+                    $this->licAfast->delete();
+                    $this->licAfast->log(OP_DEL,"vinculo: ".$this->licAfast->idVinculo." data de inicio: ".$this->licAfast->dataInicio." data fim: ".$this->licAfast->dataFim." grupo ocorrencia: ".$this->licAfast->idGrupoOcorrencia." ocorrencia: ".$this->licAfast->idOcorrencia);
+                    $this->manager->information('Licença/Afastamento excluída com sucesso',$this->manager->GetActionURL('rh','main:vinculo',$this->licAfast->idVinculo,array('form'=>'licAfast')));
+                }
+                catch ( Exception $e )
+                {
+                    $this->manager->error($e->getMessage());
+                }
+            }
+					
+	   }
+	   else
+	   {
+		   $this->manager->question("Tem certeza que deseja excluir a Licença/Afastamento?",$action_sim,$action_nao);
+		}
+	}
+
+	function Validate()
+	{
+		/**
+		 * valida entrada de dados
+		 */
+		$k = new MKrono();
+		
+		$data = $this->getData();
+
+		if ( $data->dataFim == '' )
+		{
+			//verifica se é obrigatório informar data de fim da licença
+			if ( $this->licAfast->isTipo("PRAZOMAXIMO",$data->idOcorrencia) )
+			{
+				$this->AddError('É obrigatório informar a data final para este tipo de licença.');
+			}
+		}
+		else
+		{
+
+			$diff = $k->daysDiff($data->dataInicio, $data->dataFim);
+			if ( $diff < 0 )
+			{
+				$this->addError('A data de início não pode ser maior que a data final da licença.');
+			}
+		}
+		if ( $this->licAfast->isTipo("SAUDE",$data->idOcorrencia) )
+        {
+            if ( $data->idCidCategoria )
+            {
+                $cidCategoria = $this->manager->getBusiness('rh','cidcategoria');
+                $cidCategoria->getById(strtoupper($data->idCidCategoria));
+                if ( ! $cidCategoria->isPersistent() )
+                {
+                    $this->addError('Código da categoria CID inválido. Dica: use a lupa para obter códigos CID válidos!');
+                }
+                else
+                {   
+                    $cidCategoria->getSubCategorias();
+                    $cidSubCategoria = $cidCategoria->getSubCategoria(strtoupper($data->idCidSubCategoria));
+                    if ( ! $cidSubCategoria->isPersistent() )
+                    {
+                        $this->addError('Código da sub-categoria inválido ou não informado para a categoria CID escolhida. Dica: use a lupa para obter códigos CID válidos!');
+                    }
+                }
+            }
+            /* OBRIGATORIADE CID SUSPENSA TEMPORARIAMENTE
+            else
+            {
+                $this->addError('É obrigatório informar a categoria e sub-categoria CID para esse tipo de licença. Dica: use a lupa para obter códigos CID válidos!');
+            }
+            */
+        }
+        if ( $k->compareDate($data->dataInicio,'<',$this->licAfast->vinculo->dataExercicio) )
+        {
+            $this->addError("A data de início da licença/afastamento não pode ser inferior à data de exercício do servidor. Data de exercício do servidor: ".$this->licAfast->vinculo->dataExercicio); 
+        }
+		return (!$this->hasErrors());
+	}
+
+	function excluirFerias()
+	{
+		$data = $this->getData();
+		$oid = $this->getFormValue('oid');
+		$vinculo = $this->licAfast->vinculo;
+		$vinculo->getLicAfasts();
+		$licFerias = $vinculo->getLicAfast($oid);
+        
+        $ferias = $this->manager->getBusiness('rh','ferias');
+
+		try
+		{
+            $ferias->getByVinculoDataInicio($vinculo->idVinculo,$licFerias->dataInicio);
+            $ferias->delete();
+            $ferias->log(OP_INS,"vinculo: ".$this->licAfast->idVinculo." data de inicio: ".$ferias->dataInicio." data fim: ".$ferias->dataFim." grupo ocorrencia: ".$this->licAfast->idGrupoOcorrencia." ocorrencia: ".$this->licAfast->idOcorrencia. "obs: ferias removidas por motivo de lancamento de licenca de saude");
+			$vars = $this->dataToArray($data);
+			$vars['event'] = 'btnSalvar:click';	
+			$vars['id'] = 'new';
+			$goTo = $this->manager->getActionURL('rh','main:vinculo',$this->licAfast->idVinculo,$vars);
+			$this->page->redirect($goTo);
+		}
+		catch ( Exception $e )
+		{
+			$this->manager->error("Informe o seguinte erro à equipe do CGCO: ".$e->getMessage());
+		}
+	}
+    
+    
+    function saveForced()
+    {
+		$data = $this->GetData();
+		$this->licAfast->SetData($data);
+		$this->licAfast->idGrupoOcorrencia = '03'; //Grupo de Ocorrencia LicAfast
+		try
+		{
+			$this->licAfast->saveForced();
+		    $update = $this->licAfast->isPersistent();
+            $op = $update ? OP_UPD : OP_INS;
+            $this->licAfast->log(OP_INS,"vinculo: ".$this->licAfast->idVinculo." data de inicio: ".$this->licAfast->dataInicio." data fim: ".$this->licAfast->dataFim." grupo ocorrencia: ".$this->licAfast->idGrupoOcorrencia." ocorrencia: ".$this->licAfast->idOcorrencia." obs: licença incluída de forma forçada. ");
+        	$go = $this->manager->getActionURL('rh','main:vinculo',$this->licAfast->idVinculo, array('form'=>'licAfast'));
+   	   	    $this->manager->information('Licença incluída de forma forçada', $go );
+        }
+		catch ( Exception $e )
+		{
+			$this->manager->error("Informe o seguinte erro à equipe do CGCO: ".$e->getMessage());
+		}
+    }
+
+	function dataToArray($data)
+    {
+		foreach ( $data as $attr => $value )
+		{
+			$varsCommon[$attr] = $value;
+		}
+		$varsCommon['form'] = 'licAfast';
+		return $varsCommon;
+	}
+	
+	function btnPublicacao_click($sender=NULL,$key)
+	{
+		$publicacao = $this->manager->getBusiness('rh','publicacao',$key);
+		$this->setFieldValue('numero',$publicacao->diplomaLegal->descricao.' '.$publicacao->numero.' de '.$publicacao->data.' - '.$publicacao->autoridade);
+		$this->setFieldValue('idPublicacao',$key);
+		$this->btnPost_click();
+	}
+
+}
+?>

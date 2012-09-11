@@ -1,0 +1,93 @@
+<?
+class frmPatrimonioTransferir extends MForm
+{
+
+	protected $objPatrimonio;
+
+    function __construct($objPatrimonio)
+    {
+		$this->objPatrimonio = $objPatrimonio;
+        parent::__construct('Transferir Item');
+		$this->SetClose(null);
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+		global $MIOLO;
+
+		$fields = array
+			(
+				new MLookupTextField('setor','','Setor de Destino',50),
+				new MHiddenField('idSetor'),
+				new MLookupTextField('dependencia','','Dependência de Destino',50),
+				new MHiddenField('idDependencia'),
+				new MCalendarField('dataMovimento',date('d/m/Y'),'Data',20),
+			);
+
+        $this->SetFields($fields);
+		$this->page->addJsCode(file_get_contents(dirname(__FILE__) . '/../../ui/js/mask.js'));
+		$this->SetFieldAttr('setor','module','common');
+		$this->SetFieldAttr('setor','item','setor');
+		$this->SetFieldAttr('setor','related','idSetor,setor');
+		$this->SetFieldAttr('dependencia','module','adm');
+		$this->SetFieldAttr('dependencia','item','dependencia');
+		$this->SetFieldAttr('dependencia','related','idDependencia,dependencia');
+		$this->SetFieldAttr('dependencia','filter','dependencia,idSetor,setor');
+		$this->dataMovimento->addAttribute('onBlur', 'makeMask(this, \'##/##/####\');');
+		$this->dataMovimento->addAttribute('onKeyUp', 'makeMask(this, \'##/##/####\');');
+
+		$buttons = array
+			(
+        	   new MButton('btnSalvar', 'Transferir')
+            );
+		$this->SetButtons($buttons);
+
+		$validators = array
+			(
+				new MRequiredValidator('idSetor'),
+				new MRequiredValidator('setor'),
+		    );
+		$this->SetValidators($validators);
+    }
+
+	public function btnSalvar_click()
+	{
+		$setorOrigem = $this->objPatrimonio->idSetor;
+		$dependenciaOrigem = $this->objPatrimonio->idDependencia;
+		$this->objPatrimonio->SetData($this->GetData());
+
+        $data = $this->GetData();
+		$this->objPatrimonio->idDependencia = ($data->idDependencia) ? ($data->idDependencia) : null;
+		$movimentoPat = $this->manager->GetBusiness('adm','movimentopat');
+		$novoIdNumeroTermo = $movimentoPat->GetTermoFormatado($movimentoPat->GetNextIdTermo());
+		$movimentoPat->numeroTermo = $novoIdNumeroTermo . '/' . date('Y');
+		$movimentoPat->tipoMovimento = '2';
+		$movimentoPat->idItemPatrimonio = $this->objPatrimonio->idItemPatrimonio;
+		$movimentoPat->idSetorOrigem = $setorOrigem;
+		$movimentoPat->idSetorDestino = $data->idSetor;
+		$movimentoPat->idDependenciaOrigem = $dependenciaOrigem;
+		$movimentoPat->idDependenciaDestino = ($data->idDependencia) ? ($data->idDependencia) : null;
+
+		$movimentoPat->dataMovimento = $data->dataMovimento;
+
+                // 01-11-2011 - Daniel Bonfim
+                $auth = $this->manager->auth;
+                $idUsuario = $auth->login->idkey;
+
+                $movimentoPat->idUsuario = $idUsuario;
+
+		try
+		{
+			$this->objPatrimonio->save();
+        	$movimentoPat->save();
+			$this->objPatrimonio->Log(OP_UPD,"Item transferido: " . $this->objPatrimonio->idItemPatrimonio);
+			$this->addInfo("Item Transferido com Sucesso.");
+		}
+		catch (Exception $e)
+		{
+			$this->addError($e->getMessage());
+		}
+	}
+ }
+?>

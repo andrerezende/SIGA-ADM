@@ -1,0 +1,155 @@
+<?php
+
+class BusinessCommonGrupo extends MBusiness  implements IGroup
+{
+    var $idGrupo;
+	var $grupo;
+    var $acesso; // array
+    var $usuarios;  // array
+    var $dataAcesso; 
+
+    function __construct($data=null)
+    {
+       parent::__construct('common',$data);
+    }
+
+	function SetData($data)
+	{
+		$this->idGrupo = $data->idGrupo;
+		$this->grupo = strtoupper($data->grupo);        
+        $this->dataAcesso = $data->acesso;
+	}
+
+    function GetById($id)
+    {
+        $this->idGrupo = $id; 
+        $this->retrieve();
+        $this->retrieveAssociation('acesso');
+        return $this;
+    }
+
+    function GetByGroup($grupo)
+    {
+        $grupo = strtoupper($grupo);
+        $criteria =  $this->getCriteria();
+        $criteria->addCriteria('grupo','=', "'$grupo'");
+        $this->retrieveFromCriteria($criteria);
+        $this->retrieveAssociation('acesso');
+        return $this;
+    }    
+    
+    function Delete()
+    {
+        parent::delete();
+        $this->Log(OP_DEL,"idgrupo = $this->idGrupo");
+    }
+
+	function ListAll()
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->addOrderAttribute('grupo');
+        return $criteria->retrieveAsQuery();
+    }
+
+    function ListUsuariosByIdGrupo($idGrupo)
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->setDistinct(true);
+        $criteria->AddColumnAttribute('usuarios.login');
+        $criteria->AddColumnAttribute('grupo');
+        $criteria->AddColumnAttribute('usuarios.pessoa.nome');
+        $criteria->addCriteria('idGrupo','=', "$idGrupo");
+        $criteria->addOrderAttribute('usuarios.login');
+        return $criteria->retrieveAsQuery();
+    }
+
+    function ListAcessoByIdGrupo($idGrupo)
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->AddColumnAttribute('acesso.idTransacao');
+        $criteria->AddColumnAttribute('acesso.direito');
+        $criteria->AddColumnAttribute('acesso.transacao.transacao');
+        $criteria->addCriteria('idGrupo','=', "$idGrupo");
+        $criteria->addOrderAttribute('acesso.transacao.transacao');
+        return $criteria->retrieveAsQuery();
+    }
+
+    function SetAcesso($acesso)
+    {
+        $this->acesso = NULL;
+        if (count($acesso))
+        {
+            foreach($acesso as $a)
+            {
+                $this->acesso[] = $obj = $this->_miolo->GetBusiness('common','acesso');
+                $obj->idGrupo = $this->idGrupo;
+                $obj->idTransacao = $a[0];
+                $obj->direito = $a[1];
+            }
+        }
+    }   
+    
+    function getAcesso($idTransacao)
+    {
+        if ( $this->acesso != NULL )
+        {
+            foreach ( $this->acesso as $acesso )
+            {
+                if ( $acesso->idTransacao == $idTransacao )
+                {
+                    return $acesso;
+                }
+            }
+        }
+
+        $acesso = $this->_miolo->getBusiness('common','acesso');
+        $acesso->idGrupo = $this->idGrupo;
+        return $acesso;
+        
+    }
+
+    function listByModule($module)
+    {
+        //metodo para encapsular a listagem de grupos por modulo
+        $criteria = $this->getCriteria();
+        
+        switch(strtoupper($module))
+        {
+            case 'BIBLIOTECA':
+                $criteria->addCriteria('grupo','LIKE',"'BIB%'");
+                break;
+
+            default:
+                break;
+        }
+        return $criteria->retrieveAsQuery();
+    }
+
+    function isGroupModule($module)
+    {
+        //metodo para encapsular se o grupo é de um módulo específico
+
+        
+        switch(strtoupper($module))
+        {
+            case 'BIBLIOTECA':
+                return substr($this->grupo,0,3) == 'BIB';
+                break;
+                
+            default:
+                break;
+            
+        }
+        return FALSE;
+    }
+    
+    function ListByGroup($group='')
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->addCriteria('grupo','LIKE', "'$group%'");
+        $criteria->addOrderAttribute('grupo');
+        return $criteria->retrieveAsQuery();
+    }
+
+}
+?>

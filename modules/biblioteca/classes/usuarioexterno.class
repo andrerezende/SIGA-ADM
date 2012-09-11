@@ -1,0 +1,160 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+class BusinessBibliotecaUsuarioexterno extends Business
+{
+
+	var $idusuarioexterno;
+	var $nome;
+	var $telefone;
+	var $nascimento;
+	var $identidade;
+	
+	function __construct($data=null)
+	{
+       parent::__construct('sigaept',$data);
+	}
+	
+	function SetData($data)
+	{
+		$this->idusuario = $data->idusuario;
+		$this->nome = $data->nome;
+		$this->identidade = $data->numrg;
+		$this->nascimento = $data->nascimento;
+		$this->telefone = $data->telefone;
+		
+	}
+
+	function GetById($idusuario)
+	{
+
+		$sql = new sql("u.idusuario,u.nome,u.numrg,to_char(u.datanasc,'dd/mm/yyyy') as datanasc,u.telefone,u.endereco,u.bairro,u.cep,u.idmunicipio,m.municipio",'bt_usuarioexterno u, cm_municipio m','u.idusuario = ? and u.idmunicipio=m.idmunicipio' );
+		$query = $this->Query($sql,$idusuario);
+
+		return $query->GetRowObject();
+	}
+
+	function GetByRG($rg)
+	{
+		$sql = new sql('idusuario,nome', 'bt_usuarioexterno', 'numrg = ?');
+		$query = $this->Query($sql,$rg);
+		return $query->result[0][0];
+	}
+	
+	
+	/**
+	 * Tive que criar novamente por questões de compatibilidade
+	 *
+	 * @param unknown_type $rg
+	 * @return unknown
+	 */
+	function GetByRG2($rg)
+	{
+		$sql = new sql('idusuario,nome', 'bt_usuarioexterno', 'numrg = ?');
+		$query = $this->Query($sql,$rg);
+		return $query->result;
+	}
+
+	function Insert($data)
+	{
+		//existe usuario
+		if ($data->idusuario)
+		{
+			$sql = new sql('numrg,nome,telefone,datanasc,endereco,bairro,cep,idmunicipio','bt_usuarioexterno', 'idusuario = ?');
+
+			$values = array($data->identidade,$data->nome,$data->telefone,$data->nascimento,$data->endereco,$data->bairro,$data->cep,$data->idmunicipio,$data->idusuario);
+		
+			$ok = $this->Execute($sql->Update($values));
+
+			if ( $ok )
+	        {
+		       $ok = $data->idusuario;
+			}
+		}
+		//nao existe usuario
+		else
+		{
+			$sql = new sql('idusuario,numrg,nome,telefone,datanasc,endereco,bairro,cep,idmunicipio','bt_usuarioexterno');
+
+			$novo_codigo = $this->_db->GetNewId('seq_cm_usuario');
+		
+			$values = array($novo_codigo,$data->identidade,$data->nome,$data->telefone,$data->nascimento,$data->endereco,$data->bairro,$data->cep,$data->idmunicipio);
+		
+			$ok = $this->Execute($sql->Insert($values));
+
+			if ( $ok )
+	        {
+		       $ok = $novo_codigo;
+			}
+		}
+
+	return $ok;
+	}
+
+	public function excluir($idUsuario)
+	{
+		$sql = new sql('','bt_usuarioexterno','idusuario = ?');
+		$ok = $this->Execute($sql->Delete($idUsuario));
+
+		return $ok;
+	}
+	
+	/* Verifica se o usuário é externo */
+	public function isUsuarioExterno( $id )
+	{
+		$sql = new sql( '*', 'bt_usuarioexterno', 'idusuario = ?' );
+		$query = $this->Query( $sql, $id );
+		
+		if( $query->result )
+			return true;
+		else
+			return false;
+			
+	}
+
+
+	/* Retorna a data a partir de quando o usuário (externo) pode realizar
+	 * empréstimos
+	 */ 
+	function getDataPermissaoEmprestimoUE( $idusuario )
+	{
+		$sql = new sql( 'datapermissaoemprestimo','bt_usuarioexterno', 'idusuario = ?' );
+		$query = $this->Query( $sql, $idusuario );
+
+		return $query->result[ 0 ][ 0 ];
+	}
+	
+	/* Atualiza a data a partir de quando o usuário (externo) pode realizar
+	 * empréstimos
+	 */
+	function updateDataPermissaoEmprestimoUE( $idusuario, $novaData )
+	{
+		$sql = new sql( 'datapermissaoemprestimo','bt_usuarioexterno', 'idusuario = ?' );
+		$values = array( $novaData, $idusuario );
+		$ok = $this->Execute( $sql->Update( $values ) );
+	}
+}
+?>

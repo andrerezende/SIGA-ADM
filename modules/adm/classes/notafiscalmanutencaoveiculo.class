@@ -1,0 +1,140 @@
+<?
+class BusinessAdmNotaFiscalManutencaoVeiculo extends Business
+{
+    public $idNotaFiscal;
+    public $placa;
+    public $idEmpresa;
+    public $data;
+    public $valorTotal;
+    public $idPrevRevisao;
+ 
+    public $manutencoes;   
+    public $veiculo;
+    public $empresa;
+    public $previsao;
+        
+    function __construct($data=NULL)
+    {
+        $this->Business('sigaept',$data);
+    }
+    function GetById($id)
+    {
+		$this->idNotaFiscal = $id;
+		$this->retrieve();
+    }
+    function setData($data)
+    {
+		$this->idEmpresa = $data->idEmpresa;
+		$this->idPrevRevisao = $data->idPrevRevisao;
+		$this->placa = $data->placa;
+        $this->data = $data->data;
+		$this->valorTotal = $data->valorTotal;
+    }
+    function getData()
+    {
+		$data->data = $this->data;
+		$data->valorTotal = $this->valorTotal;
+		return $data;
+    }
+    function addManutencao($data)
+    {
+       $this->manutencoes[] = $data;
+    	
+    }
+    function getManutencoes()
+    {
+        $this->retrieveAssociation('manutencoes');
+        if ($this->manutencoes != NULL)
+        {
+            if (!is_array($this->manutencoes))
+            {
+		$this->manutencoes = array($this->manutencoes);  
+            }
+        }
+	return $this->manutencoes;
+		
+    }
+    function setVeiculo($id)
+    {
+		$this->idVeiculo = $id;
+    }
+    function getVeiculo()
+    {
+        $this->retrieveAssociation('veiculo');
+    }
+    function setEmpresa($id)
+    {
+		$this->idEmpresa = $id;
+    }
+    function getEmpresa()
+    {
+		global $MIOLO;
+		$this->empresa = $MIOLO->GetBusiness('adm','empresamanutencaoveiculo',$this->idEmpresa);
+		//$this->retrieveAssociation('empresa');
+    }
+    function setPrevRevisao($id)
+    {
+    	$this->idPrevRevisao = $id;
+    }
+    function getPrevRevisao()
+    {
+    	return $this->idPrevRevisao;
+    }
+    function listAll()
+    {
+        global $MIOLO;
+        
+		$criteria =  $this->getCriteria();
+        $criteria->addOrderAttribute('idNotaFiscal');
+		$criteria->addColumnAttribute('idNotaFiscal');
+		$criteria->addColumnAttribute('placa');
+		$criteria->addColumnAttribute('empresa.nome');
+		$criteria->addColumnAttribute('valorTotal');
+		$criteria->addColumnAttribute('data');
+		$criteria->addCriteria('empresa.idEmpresa','=', 'idEmpresa');
+        return $criteria->retrieveAsQuery();
+    }
+    function getManutencao($id)
+    {
+        if ( $this->manutencoes == NULL )
+        {
+    		$this->retrieveAssociation('manutencoes');
+        }
+        
+        if ($this->manutencoes != NULL)
+        {
+            foreach ( $this->manutencoes as $m )
+            {
+                if ( $m->idManutencao == $id )
+                    return $m;
+            }
+        }
+        
+        return null;
+    }
+    function DeleteManutencao($id,$url)
+    {
+		global $MIOLO;
+        $objManutencao = $this->getManutencao($id);
+		try
+		{
+			$this->valorTotal = $this->valorTotal - $objManutencao->valor;
+			$objManutencao->Delete();		
+			$this->Update();
+			$msg = "Manutenção excluida com sucesso.";
+			$MIOLO->Information($msg,$MIOLO->GetActionURL('adm',$url,$this->idNotaFiscal));
+	}
+	catch(Exception $e)
+	{
+		$this->manager->Error($e->getMessage());
+	}
+	
+    }
+    function relManutencoes()
+    {
+		$sql = new MSql("r.idrequisicao, p.nome, r.enderecoorig, m.municipio as origem, r.enderecodest, m2.municipio as destino, (r.odometrocheg - r.odometrosaida) as KMRodados, (r.odometrocheg - r.odometrosaida)* v.valorkm as Gasto","ad_itemreqveiculo r, cm_municipio m, cm_municipio m2, cm_pessoa p, ad_veiculo v", 'p.idpessoa = r.idpessoa AND m.idmunicipio = r.idmunicipioorigem AND m2.idmunicipio = r.idmunicipiodestino AND v.placa = r.placa');
+		$query = $this->Query($sql);
+		return $query;
+    }	
+}
+?>

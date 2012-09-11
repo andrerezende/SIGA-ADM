@@ -1,0 +1,107 @@
+<?
+MIOLO::Import('modules::common::controls::selectionuf');
+MIOLO::Import('modules::rh::controls::selectionref');
+/**
+ * Formulário de edição de contato de pessoa
+ */
+class frmPessoaContato extends Form
+{
+	/**
+	 * Objeto pessoa
+	 * @access protected
+	 * @var BusinessDetestePessoa
+	 */
+	protected $pessoa;
+	
+	public function __construct($pessoa)
+	{
+		global $MIOLO, $module, $item;
+
+        $this->pessoa = $pessoa;
+		parent::__construct('Contato');
+        $this->EventHandler();
+	}
+
+    public function CreateFields()
+    {
+        $perms = $this->manager->getPerms();
+		$fields = array(
+			new MTextField('endereco','','Endereço',60),
+			new MTextField('bairro','','Bairro',60),
+            new MLookupFieldValue('municipio','','Cidade',40),
+			new MTextField('cep','','CEP',12),
+			array(
+				new MTextField('telefone','','Telefone',18),
+				new MTextField('celular','','Celular',18),
+				new MTextField('email','','Email',50),
+				
+			),
+            new MHiddenField('idMunicipio'),
+		);
+		$this->SetFields($fields);
+		$validators = array(
+			new MMaskValidator('cep','','99999999','required'),
+		);
+		$this->SetValidators($validators);
+		
+        $this->SetFieldAttr('municipio','module','rh');
+	    $this->SetFieldAttr('municipio','item','municipio');
+	    $this->SetFieldAttr('municipio','event', 'filler');
+   	    $this->SetFieldAttr('municipio','related', 'idMunicipio,municipio');
+
+		$this->cep->AddAttribute('maxlength','8');
+        $this->SetData();
+		$buttons = array(
+			new FormButton('btnSalvar','Enviar')
+		);
+		$this->SetButtons($buttons);
+        $this->setButtonAttr('btnSalvar','visible',$perms->checkAccess('rh_pessoas',A_ACCESS));
+    }
+
+	function SetData()  
+	{
+        $this->pessoa->retrieveAssociation('municipio');
+        $data = $this->pessoa;
+        $this->SetFieldValue('endereco', $data->endereco);
+        $this->SetFieldValue('bairro', $data->bairro);
+        $this->SetFieldValue('municipio', $data->municipio->municipio . ' ['. trim($data->municipio->idUF) . ']');
+        $this->SetFieldValue('telefone', $data->telefone);
+        $this->SetFieldValue('celular', $data->celular);
+        $this->SetFieldValue('email', $data->email);
+        $this->setFieldValue('idMunicipio',$data->idmunicipio);
+		$this->setFieldValue('cep',$data->cep);
+	}
+
+	function GetData()  
+	{
+        $data = $this->pessoa;
+		$data->endereco = $this->GetFieldValue('endereco');
+		$data->bairro   = $this->GetFieldValue('bairro');
+		$data->cidade   = $this->GetFieldValue('cidade');
+		$data->telefone = $this->GetFieldValue('telefone');
+		$data->celular  = $this->GetFieldValue('celular');
+		$data->email    = $this->GetFieldValue('email');
+		$data->cep		= $this->GetFieldValue('cep');
+		return $data;
+	}
+
+	/**
+	 * btnSalvar click
+	 */
+	public function btnSalvar_click()
+	{
+		$this->pessoa->SetData($this->GetData());
+        $this->pessoa->idmunicipio = $this->getFormValue('idMunicipio');
+        try 
+        {
+    		$this->pessoa->save();
+            $this->pessoa->log(OP_UPD,"Atualização dos dados de contato. Id pessoa: ".$this->pessoa->idpessoa." Via rh");
+			$this->AddInfo('Dados atualizados');
+        }
+        catch ( Exception $e )
+        {
+            $this->addError($e->getMessage());
+        }
+	}
+}
+?>

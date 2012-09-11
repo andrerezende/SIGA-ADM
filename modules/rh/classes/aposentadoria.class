@@ -1,0 +1,424 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+
+//class BusinessRhAposentadoria //extends MBusiness
+class Aposentadoria //extends MBusiness
+{
+
+    public $objVinculo, $licafast,
+           $k,
+           $EC20         = '16/12/1998',  //data da Emenda Constitucional número 20 (EC20)
+           $EC20seguinte = '17/12/1998';  //dia seguinte à data da Emenda Constitucional número 20 (EC20)
+
+    public $tempoparaaposentar1    , //tempo mínimo de serviço necessário para aposentadoria
+           $idadeparaaposentar1    , //idade mínima do servidor ao aposentar-se. Se o servidor não tiver a idade em uma
+                                     //certa data, a data prevista de aposentadoria é prolongada até tal idade mínima
+           $idademinimasemredutor  , //idade mínima do servidor ao aposentar-se de modo que ele não tenha redução
+                                       //salarial. Cada antecipação de um ano corresponde a uma redução percentual
+           $porcentagemabonodocente, //abono aplicado à averbação e ao tempo de serviço na UFJF, quando
+                                       //o servidor é docente, e quando for interessante aplicar o abono
+           $tempoacumpriraposEC201 ,
+
+           $idadeparaaposentar3    ,
+           $tempoparaaposentar2    , //tempo mínimo de serviço necessário para aposentadoria
+           $idadeparaaposentar2    ; //idade mínima do servidor ao aposentar-se. Se o servidor não tiver a idade em uma
+                                       //certa data, a data prevista de aposentadoria é prolongada até tal idade mínima
+
+    protected $tempoSP20 = 20, $tempoSP25 = 25, $tempoSP10 = 10,
+              $tempoCA10 = 10, $tempoCA15 = 15, $tempoCA5  =  5;
+
+    protected $dataExercicionoCargoAtual , $tempoCA;
+
+    public $previsaoTS2 , $previsaoID2 , $previsaoTS3 , $previsaoID3,
+           $previsaoSP20, $previsaoCA10,
+           $previsaoSP25, $previsaoCA15,
+           $previsaoSP10, $previsaoCA5;
+
+    public $tempocontado;
+    public $licencaemDobro;
+
+
+    function __construct($objVinculo)
+    {
+        global $MIOLO;
+
+        //parent::__construct('ufjf',NULL);
+        $this->k = new MKrono();
+
+        $this->objVinculo = $objVinculo;
+        $this->DefineIdadeetempoparaaposentar();
+        $this->objVinculo->retrieveAssociation('licAfast');
+
+        $this->licafast = $MIOLO->getBusiness('rh','licafast');
+
+$provimento = $MIOLO->getBusiness('rh','provimento');
+$this->dataExercicionoCargoAtual = $provimento->inicionoCargoAtual($this->objVinculo->idVinculo);
+$faltasCA  = $this->licafast->ContaFaltasnoIntervalo           ($this->objVinculo->licAfast, $this->dataExercicionoCargoAtual, date('d/m/Y')); //faltas até hoje
+$licSemRem = $this->licafast->ContaLicSemRemuneracaonoIntervalo($this->objVinculo->licAfast, $this->dataExercicionoCargoAtual, date('d/m/Y')); //até hoje
+$this->tempoCA = $this->k->daysDiff($this->dataExercicionoCargoAtual, date('d/m/Y')) + 1 - $faltasCA - $licSemRem;
+                 $faltatempoCA = ($this->tempoCA5 * 365) - $this->tempoCA;
+        $this->previsaoCA5  = $this->k->operation('+',date('d/m/Y'),$faltatempoCA.'%D');
+
+$this->licencaemDobro();
+        //$this->funcionario = $MIOLO->GetBusiness('rh','funcionario',$this->vinculo->idFuncionario);
+
+        //$this->__construct2();
+
+    } // __construct
+
+
+    function __construct2()//(&$f ields)
+    {
+        //nao pode pois frmVincApos precisa da matriz ff1;  $this->ff1();
+
+        //EXEC FF1 sem interessar retrurno;
+        //exzec prevQ1
+    } // __construct2
+
+    
+    function PrevisaoQuadro1()//(&$f ields)
+    {
+        //PARA alongar tempo A CUMPRIRI A PARTIR DE 
+        $faltas    = $this->licafast->ContaFaltasnoIntervalo           ($this->objVinculo->licAfast, $this->EC20seguinte,date('d/m/Y') );
+        $licSemRem = $this->licafast->ContaLicSemRemuneracaonoIntervalo($this->objVinculo->licAfast, $this->EC20seguinte,date('d/m/Y') );
+
+        //alonga novamente a previsão devido a faltas e ou licenças
+        $this->tempoacumpriraposEC201  = $this->tempoacumpriraposEC201 + $faltas + $licSemRem;
+
+        //$fields[] = array( new MLabel('Tempo a cumprir a partir de ' . $EC20seguinte    ),
+        //                   new MLabel($this->tempoacumpriraposEC201 . ' dias','blue',TRUE) );
+$return['tempoacumpriraposEC201'] = $this->tempoacumpriraposEC201;
+
+        $previsaodeaposentadoria = $this->k->operation('+',$this->EC20seguinte,$this->tempoacumpriraposEC201.'%D');
+
+        //data em que o servidor terá a idade mínima para aposentar-se
+        $dataidadeparaaposentar = $this->k->operation('+',$this->objVinculo->funcionario->pessoa->datanasc,
+                                                                    $this->idadeparaaposentar1.'%Y');
+
+        //se o servidor não tiver a idade mínima para aposentar-se na data de aposentadoria ora prevista,        //a data prevista é prolongada até tal idade mínima
+          if ( $this->k->CompareDate($previsaodeaposentadoria, '<', $dataidadeparaaposentar) )
+          {
+              $previsaodeaposentadoria = $dataidadeparaaposentar;
+          }
+//$fields[] = array( new MLabel('Previsão de aposentadoria a partir de'),
+//                             new MLabel($previsaodeaposentadoria,'red',TRUE ) );
+$return['previsaodeaposentadoria'] = $previsaodeaposentadoria;
+
+        //idade mínima do servidor ao aposentar-se de modo que ele não tenha redução        //salarial. Cada antecipação de um ano corresponde a uma redução percentual
+          $dataidademinimasemredutor = $this->k->operation('+',$this->objVinculo->funcionario->pessoa->datanasc,
+                                                               $this->idademinimasemredutor.'%Y');
+          $diferenca = $this->k->daysDiff($previsaodeaposentadoria , $dataidademinimasemredutor);
+          if ($diferenca > 0)
+          {
+              if ( $this->k->CompareDate($previsaodeaposentadoria, '>', '01/01/2006') )
+              {
+                  $reducao = ceil($diferenca/365) * 5;
+              }
+              else
+              {
+                  $reducao = ceil($diferenca/365) * 3.5;
+              }              
+              //$fields[] = array( new MLabel('Redução de'),
+              //                   new MLabel( $reducao . ' %','blue',TRUE ) );
+              $return['reducao'] = $reducao;
+          }
+
+          return $return;
+    } // P revisaoQuadro1
+
+
+    function DefineIdadeetempoparaaposentar()
+    { /*tvz embutir tais var em seus Quadros*/
+        if ($this->objVinculo->funcionario->pessoa->sexo == 'M')
+        {
+            $this->tempoparaaposentar1     = 35;
+            $this->idadeparaaposentar1     = 53;
+            $this->idadeparaaposentar3     = 60;
+            $this->idademinimasemredutor   = 60;
+            $this->porcentagemabonodocente = 0.17;
+            if ($this->objVinculo->isDOC12())             //docente do primeiro e ou segundo grau
+            {
+                $this->tempoparaaposentar2 = 30;
+                $this->idadeparaaposentar2 = 55;
+            }
+            else
+            {
+                $this->tempoparaaposentar2 = 35;
+                $this->idadeparaaposentar2 = 60;
+            }
+        }
+        else
+        {
+            $this->tempoparaaposentar1     = 30;
+            $this->idadeparaaposentar1     = 48;
+            $this->idadeparaaposentar3     = 55;
+            $this->idademinimasemredutor   = 55;
+            $this->porcentagemabonodocente = 0.20;
+            if ($this->objVinculo->isDOC12())             //docente do primeiro e ou segundo grau
+            {
+                $this->tempoparaaposentar2 = 25;
+                $this->idadeparaaposentar2 = 50;
+            }
+            else
+            {
+                $this->tempoparaaposentar2 = 30;
+                $this->idadeparaaposentar2 = 55;
+            }
+        }
+    } // D efineIdadeetempoparaaposentar
+
+
+    function ff23() //Mostra_CalculoQuadro23
+    {
+        $dataExercicio = $this->objVinculo->dataExercicio;
+$return['faltasExercicio'] = $this->licafast->ContaFaltasnoIntervalo     ($this->objVinculo->licAfast, $dataExercicio, date('d/m/Y')); //faltas até hoje
+        $licSemRem = $this->licafast->ContaLicSemRemuneracaonoIntervalo($this->objVinculo->licAfast, $dataExercicio, date('d/m/Y')); //até hoje
+$return['tempoUFJFaimprimir'] = $this->k->daysDiff($dataExercicio, date('d/m/Y')) + 1 - $return['faltasExercicio'] - $licSemRem;
+
+        $averbacoes = $this->ContaAverbacoes();          //  ContaAverbacoes( averb paralelo falta data ini fin )
+$return['averbacaoinsalubridade'] = $averbacoes['averbacaoinsalubridade'];
+$return['averbadoaimprimir']      = $averbacoes['averbacaodocente'] + $averbacoes['averbacaonaodocente'];
+          $averbacaoSP            = $averbacoes['averbacaoSP'];
+
+        $tempoSP  = $return['tempoUFJFaimprimir'] + $averbacaoSP; //tvz tenha se tornado inutil desde o uso de tempoSP()
+
+        $faltatempoSP = ($this->tempoSP20 * 365) - $tempoSP;
+                      $this->previsaoSP20 = $this->k->operation('+',date('d/m/Y'),$faltatempoSP.'%D');
+        $faltatempoSP = ($this->tempoSP25 * 365) - $tempoSP;        //falta considerar que podem haver dois períodos (com um afastamento qualquer no meio) e nao existiria NO TEMPO ATUAL averbacao SP;
+                      $this->previsaoSP25 = $this->k->operation('+',date('d/m/Y'),$faltatempoSP.'%D');
+        $faltatempoSP = ($this->tempoSP10 * 365) - $tempoSP;
+                      $this->previsaoSP10 = $this->k->operation('+',date('d/m/Y'),$faltatempoSP.'%D');
+
+        $faltatempoCA = ($this->tempoCA10 * 365) - $this->tempoCA;
+        $this->previsaoCA10  = $this->k->operation('+',date('d/m/Y'),$faltatempoCA.'%D');
+        $faltatempoCA = ($this->tempoCA15 * 365) - $this->tempoCA;
+        $this->previsaoCA15  = $this->k->operation('+',date('d/m/Y'),$faltatempoCA.'%D');
+
+$this->tempocontado = $return['tempoUFJFaimprimir'] + $return['averbadoaimprimir'] + $return['averbacaoinsalubridade'] + $this->licencaemDobro;
+    return $return;
+
+    } // ff23
+
+
+    function ff2()//CalculoQuadro2()  ///******************************
+    {
+        $return['faltaparatempoparaaposentar2'] = ( ($this->tempoparaaposentar2 * 365) - $this->tempocontado );
+
+        $this->previsaoTS2 = $this->k->operation('+',date('d/m/Y'),$return['faltaparatempoparaaposentar2'].'%D');
+
+        $this->previsaoID2 = $this->k->operation('+',$this->objVinculo->funcionario->pessoa->datanasc,$this->idadeparaaposentar2.'%Y');
+
+    return $return;
+    } // ff2
+
+    function ff3() //CalculoQuadro3()    
+    {
+        $hoje = date('d/m/Y');
+        $nasc = $this->objVinculo->funcionario->pessoa->datanasc;
+        $tempomaisidadeparaaposentar = $this->tempoparaaposentar1 + $this->idadeparaaposentar3;
+        $anostempocontado = floor($this->tempocontado / 365);
+
+        $idade = $this->k->daysDiff($nasc, $hoje);
+        $anosidade        = floor($idade / 365);
+        $anosfalta = $tempomaisidadeparaaposentar - $anostempocontado - $anosidade;
+        $dif = (($anostempocontado + $anosfalta) * 365) - $this->tempocontado;
+        $this->previsaoTS3 = $this->k->operation('+', $hoje, $dif.'%D');
+
+        $dif = $anosidade + $anosfalta;
+        $this->previsaoID3 = $this->k->operation('+', $nasc, $dif.'%Y');
+    } // CalculoQuadro3
+
+    function ff1()//CalculoQuadro1()  ///******************************
+    {
+        $dataExercicio = $this->objVinculo->dataExercicio;
+        $averbacoes = $this->ContaAverbacoes(); 
+          $averbacaodocente       = $averbacoes['averbacaodocente'];
+          $averbacaonaodocente    = $averbacoes['averbacaonaodocente'];
+          $return['averbacaoinsalubridade'] = $averbacoes['averbacaoinsalubridade'];
+        if ( $this->k->CompareDate($dataExercicio, '>=', $this->EC20) )  //ingresso a partir da EC20
+        {
+            $return['tempoUFJFec20aimprimir'] = 0;
+            $return['averbadoaimprimir']      = $averbacaodocente + $averbacaonaodocente;
+        }
+        elseif (! $this->objVinculo->isDocente())
+        {
+            $return['faltasEC20'] = $this->licafast->ContaFaltasnoIntervalo($this->objVinculo->licAfast, $dataExercicio, $this->EC20); //faltas até a EC20
+            $licSemRem  = $this->licafast->ContaLicSemRemuneracaonoIntervalo($this->objVinculo->licAfast, $dataExercicio, $this->EC20); //até a EC20
+            $return['tempoUFJFec20aimprimir'] = $this->k->daysDiff($dataExercicio, $this->EC20) + 1 - $return['faltasEC20'] - $licSemRem;
+            $return['averbadoaimprimir']      = $averbacaodocente + $averbacaonaodocente;
+        }
+        else                                                     //docente com ingresso antes de EC20
+        {
+            $return['faltasEC20'] = $this->licafast->ContaFaltasnoIntervalo($this->objVinculo->licAfast, $dataExercicio, $this->EC20); //faltas até a EC20
+            $licSemRem  = $this->licafast->ContaLicSemRemuneracaonoIntervalo($this->objVinculo->licAfast, $dataExercicio, $this->EC20); //até a EC20
+            $tempoUFJFec20 = $this->k->daysDiff($dataExercicio, $this->EC20) + 1 - $return['faltasEC20'] - $licSemRem;
+
+            $tempoabonado    = floor( ($tempoUFJFec20 + $averbacaodocente) * (1 + $this->porcentagemabonodocente) );
+            $temponaoabonado =         $tempoUFJFec20 + $averbacaodocente + $averbacaonaodocente;
+
+            //compensa considerar somente os tempos de docente, com abono (ignora-se tempo não docente)
+            if ($tempoabonado > $temponaoabonado)
+            {
+                $return['abonotempoUFJF'] = floor( $tempoUFJFec20    * $this->porcentagemabonodocente );
+                $return['abonoaverbado']  = floor( $averbacaodocente * $this->porcentagemabonodocente );
+                $return['tempoUFJFec20aimprimir'] = $tempoUFJFec20    + $return['abonotempoUFJF'];
+                $return['averbadoaimprimir']      = $averbacaodocente + $return['abonoaverbado'];
+            }
+            //compensa considerar os tempos como não docente, sem abono (o averbado não docente, muito alto, é considerado)
+            else
+            {
+
+                $return['tempoUFJFec20aimprimir'] = $tempoUFJFec20;
+                $return['averbadoaimprimir']      = $averbacaodocente + $averbacaonaodocente;
+            }
+        }
+///**/$return['l icencaemDobro'] = $this->L icencaemDobro();
+$return['tempocontadoEC20'] = $return['tempoUFJFec20aimprimir'] + $return['averbadoaimprimir'] + $return['averbacaoinsalubridade'] + $this->licencaemDobro;//$return['l icencaemDobro'];
+/**/$return['faltaparatempoparaaposentar1'] = ( ($this->tempoparaaposentar1 * 365) - $return['tempocontadoEC20'] );
+/**/$return['pedagio'] = ceil($return['faltaparatempoparaaposentar1'] * 0.2);
+
+$this->tempoacumpriraposEC201 = ($return['faltaparatempoparaaposentar1'] + $return['pedagio']);
+
+return $return;
+    } // ff1
+//$return  = ff1(); //retorno da fun acima
+//APOS RETORNAR O VETOR, uSa-lO EM t[]   ici le devien, passé par le suitE
+
+
+
+    function ContaAverbacoes()
+    {
+        global $MIOLO;
+
+/*
+
+vide linha  314 
+OBJETIVO: as averb e desar podem ser atuais, paralelas com UFJF, podem perpassar a EC20 ...
+
+VER COM MAURO:
+se as averb e desarv sao contadas pelo totalDias
+entao como testar prazos ate ec20 ou apos ec20 ou etc????????????
+*/
+        $this->objVinculo->retrieveAssociation('averbacoes');
+        if (! $this->objVinculo->averbacoes)
+        {
+            return array('averbacaodocente'=>0, 'averbacaonaodocente'=>0, 'averbacaoinsalubridade'=>0, 'averbacaoSP'=>0);
+        }
+
+        $desaverbacao = $MIOLO->getBusiness('rh','desaverbacao');
+
+        //para cada averbação encontrada:
+          //soma em separado as averbações de docente e não docente
+          //verifica se há desaverbações correspondentes
+        foreach ($this->objVinculo->averbacoes as $averbacao)
+        {
+            if ( in_array($averbacao->tipoTempo, array('FAR','TGU','SPF','SPE','SPM','SDF')) )
+            {
+                $averbacaoSP            = $averbacaoSP + $averbacao->totalDias;
+                $sumdesaverbacao        = $desaverbacao->sumDesaverbacoesbyAverbacao($averbacao->idAverbacao);
+                $averbacaoSP            = $averbacaoSP- $sumdesaverbacao;
+            }
+            if ($averbacao->tipoTempo == 'AJD')
+            {
+                $averbacaoinsalubridade = $averbacaoinsalubridade + $averbacao->totalDias;
+                $sumdesaverbacao        = $desaverbacao->sumDesaverbacoesbyAverbacao($averbacao->idAverbacao);
+                $averbacaoinsalubridade = $averbacaoinsalubridade - $sumdesaverbacao;
+            }
+            elseif ( in_array($averbacao->tipoTempo, array('DOC_IMF','DOC_MAG')) )
+            {
+                $averbacaodocente       = $averbacaodocente + $averbacao->totalDias;
+                $sumdesaverbacao        = $desaverbacao->sumDesaverbacoesbyAverbacao($averbacao->idAverbacao);
+                $averbacaodocente       = $averbacaodocente - $sumdesaverbacao;
+            }
+            else
+            {
+                $averbacaonaodocente    = $averbacaonaodocente + $averbacao->totalDias;
+                $sumdesaverbacao        = $desaverbacao->sumDesaverbacoesbyAverbacao($averbacao->idAverbacao);
+                $averbacaonaodocente    = $averbacaonaodocente - $sumdesaverbacao;
+            }
+        }
+
+        return array('averbacaodocente'      =>$averbacaodocente      ,
+                     'averbacaonaodocente'   =>$averbacaonaodocente   ,
+                     'averbacaoinsalubridade'=>$averbacaoinsalubridade,
+                     'averbacaoSP'           =>$averbacaoSP           );
+    } // C ontaAverbacoes
+
+        
+
+    function LicencaemDobro()
+    {
+        $limitelei = '15/10/1996';           //data limitada pela lei que extinguiu o direito a licença-prêmio
+        $limiteleimenos5 = $this->k->operation('-',$limitelei,'1825%D');
+
+        //conta cada período de direito
+        $quinquenios = 0;
+        $inicio = $this->objVinculo->dataExercicio;
+        while (TRUE)
+        {
+            $termino = $this->k->operation('+',$inicio,'1825%D');
+            if ( $this->k->CompareDate($termino,'>', $limitelei) ) //data da extinção da licença-prêmio
+            {
+                break;   //a contagem fica restrita à data de extinção
+            }
+            else
+            {
+                $quinquenios ++;
+                $ultimoquinqueniotermino = $termino; //guarda data do último período considerado, para posterior teste
+                $inicio = $this->k->operation('+',$termino,'1%D');
+            }
+        } // while
+
+        if ($quinquenios == 0)
+        {
+            return;  //ingresso com menos de cinco anos da lei
+        }
+ if (!$this->objVinculo->licAfast)
+               $this->objVinculo->licAfast = array();
+        foreach ($this->objVinculo->licAfast as $licAfast)  //conta os dias já usufruídos
+        {
+            if ( $licAfast->idGrupoOcorrencia.$licAfast->idOcorrencia == '3103' )
+            {
+                $usufruido = $usufruido + $this->k->daysDiff($licAfast->dataInicio,$licAfast->dataFim) + 1;
+            }
+        }
+        //calcula a quantidade de dias de direito (quinquenios vezes 90 dias), menos os dias já usufruídos
+        $direito = ($quinquenios * 90) - $usufruido;
+        if ($direito == 0)
+        {
+            return;  //já usufruiu tudo
+        }
+
+        //busca a quantidade de faltas dentro do intervalo desde o ingresso até a data do último período considerado
+        $faltasquinquenio = $this->licafast->ContaFaltasnoIntervalo($this->objVinculo->licAfast, $this->objVinculo->dataExercicio, $ultimoquinqueniotermino);
+        //cada falta atrasa o último quinquenio em 90 dias, 
+
+        $terminoatrasado = $this->k->operation('+',$ultimoquinqueniotermino,$faltasquinquenio.'%M');
+        if ( $this->k->CompareDate($terminoatrasado,'>', $limitelei) ) //data da extinção da licença-prêmio
+        {
+            $direito = $direito - 90;  //cada falta atraso o último quinquenio em 90 dias, 
+        }
+
+$this->licencaemDobro = $direito * 2;
+//        return $direito * 2;  //o direito é dobrado para fins de aposentadoria
+    } // L icencaemDobro
+
+}
+?>

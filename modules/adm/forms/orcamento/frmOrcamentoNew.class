@@ -1,0 +1,126 @@
+<?php
+class frmOrcamentoNew extends Form
+{
+    function __construct()
+    {
+        $this->Form('Incluir Novo Orçamento');
+        $this->EventHandler();
+    }
+
+	function CreateFields()
+    {
+		global $MIOLO,$module;
+
+		$tabelaGeral = $MIOLO->GetBusiness('common','tabelageral');
+		$Instituicao = $MIOLO->GetBusiness('common','instituicao');		
+		$options = $tabelaGeral->ListByTabela('AD_TIPOORC','item1');
+		$optionsUG = $Instituicao->listUG();
+		
+		$fields = array
+		(
+			new TextField('ano',date("Y"),'Ano','10'),
+			new TextField('esfera','','Esfera','3'),
+			new LookupTextField('idptr','','PTR',20),
+			new LookupTextField('idfonte','','Fonte',20),
+			new LookupTextField('idrubrica','','Rubrica',20),
+			new Selection('tipoorc','','Tipo',$options->result,false),
+			new Selection('ug','','UG',$optionsUG->result,false),			
+			new TextField('valor','','Valor','10'),
+		);
+		$this->SetFields($fields);
+		$this->SetFieldAttr('idptr','module',$module);
+		$this->SetFieldAttr('idptr','item','Ptr');
+		$this->SetFieldAttr('idptr','event','filler');
+		$this->SetFieldAttr('idptr','related','idptr');
+		$this->SetFieldAttr('idfonte','module',$module);
+		$this->SetFieldAttr('idfonte','item','Fonte');
+		$this->SetFieldAttr('idfonte','event','filler');
+		$this->SetFieldAttr('idfonte','related','idfonte');
+		$this->SetFieldAttr('idrubrica','module',$module);
+		$this->SetFieldAttr('idrubrica','item','Rubrica');
+		$this->SetFieldAttr('idrubrica','event','filler');
+		$this->SetFieldAttr('idrubrica','related','idrubrica');
+	      
+	   $buttons = array
+		   (
+        	  new FormButton('btnNew', 'Cadastrar Orçamento')
+           );
+		$this->SetButtons($buttons);
+
+		$validators = array
+			(
+			   new RequiredValidator('ano'),
+			   new RequiredValidator('idptr'),
+			   new RequiredValidator('idfonte'),
+			   new RequiredValidator('idrubrica'),
+			);
+		$this->SetValidators($validators);
+    }
+
+
+    function btnNew_click()
+    {
+        $data = $this->GetData();
+		$cf = new MCurrencyFormatter();
+		$data->valor = $cf->toDecimal($data->valor);
+
+		$orcamento = $this->manager->GetBusiness('adm','orcamento');
+		$orcamentoHist = $this->manager->GetBusiness('adm','orcamentohist');
+
+		$data->data = $orcamento->_db->CharToTimestamp(date('d/m/Y H:i:s'));
+		$orcExiste = $orcamento->GetByClassOrcamentaria($data->ano, $data->idptr, $data->idfonte, $data->idrubrica, $data->esfera,$data->ug);
+
+		if($orcExiste->result == null)
+		{
+			$data->dotacao = ":0";
+			$data->suplementacao = ":0";
+			$data->bloqueio = ":0";
+			$data->anulacao = ":0";
+			$data->pago = ":0";
+			  switch ($data->tipoorc)
+        {
+            case 1:
+                $data->dotacao = $data->valor;
+                break;
+            case 2:
+                $data->suplementacao = $data->valor;
+                break;
+            case 3:
+                $data->bloqueio = $data->valor;
+                break;
+            case 4:
+                $data->anulacao = $data->valor;
+                break;
+        }
+			$orcamento->SetData($data);
+			$orcamento->ug = $data->ug;
+			//var_dump($orcamento->ug);			
+			try
+			{
+				$orcamento->save();
+				$orcamento->Log(OP_INS,"Novo orcamento criado: " . $orcamento->idOrcamento);
+			}
+			catch (Exception $e)
+			{
+				$this->addError($e->getMessage());
+			}
+		}
+		$orcExiste = $orcamento->GetByClassOrcamentaria($data->ano, $data->idptr, $data->idfonte, $data->idrubrica, $data->esfera,$data->ug);
+		$data->idorcamento = $orcExiste->result[0][0];
+
+		$orcamentoHist->SetData($data);
+		try
+		{
+			$orcamentoHist->save();
+			$orcamento->Log(OP_INS,"Novo orcamentohist criado");
+			$go = $this->manager->GetActionURL('adm','main:orcamento:find',$orcamentoHist->idOrcamento);
+			$this->page->Redirect($go);
+		}
+		catch (Exception $e)
+		{
+			$this->addError($e->getMessage());
+		}
+
+	}
+ }
+?>

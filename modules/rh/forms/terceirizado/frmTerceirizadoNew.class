@@ -1,0 +1,352 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+MIOLO::Import('modules::rh::controls::linkpessoa');
+MIOLO::Import('modules::common::controls::selectionpais');
+MIOLO::Import('modules::common::controls::selectionuf');
+MIOLO::Import('modules::common::controls::selectionsexo');
+MIOLO::Import('modules::common::controls::selectionnacionalidade');
+class frmTerceirizadoNew extends Form
+{
+    var $pessoa;
+
+    function frmTerceirizadoNew()
+    {
+        $this->Form('Incluir Novo Terceirizado');
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+        $fields = array(
+            $nome = new MTextField('nome','','Nome',55),
+            $dataNascimento = new MCalendarField('datanasc','','Data de Nascimento'),
+            $cpf = new MTextField('cpf','','CPF',14,'No formato: 999.999.999-99'),
+        );
+        $this->SetFields($fields);
+        
+        $nome->addAttribute('maxlength',55);
+        $dataNascimento->addAttribute('maxlength',10);
+        $cpf->addAttribute('maxlength',14);
+        
+        $validators = array(
+            new MCpfValidator('cpf','','required'),
+            new MRequiredValidator('nome','','required'),
+            new MRequiredValidator('datanasc','','required'),
+        );
+        $this->SetValidators($validators);
+        
+        $buttons = array(
+            new MButton('btnPost1', 'Enviar'),
+            new MButton('btnPost2', 'Incluir Terceirizado'),
+			new MButton('btnVoltar','Voltar'),
+        );
+        $this->SetButtons($buttons);
+        $this->setButtonAttr('btnPost2','visible',FALSE);
+		$this->setButtonAttr('btnVoltar','visible',FALSE);
+    }
+    
+    function btnPost1_click()
+    {
+
+		$tabelaGeral = $this->manager->GetBusiness('common','tabelageral');
+		$query1 = $tabelaGeral->ListIten1Item2FromTabela('RH_ESCOLARIDADE');
+		$escolaridade = $query1->result;
+		$query2 = $tabelaGeral->ListIten1Item2FromTabela('RH_TITULACAO');
+		$titulacao = $query2->result;
+		$arrEscolaridades = array_merge($escolaridade,$titulacao);
+		
+		$objJornada = $this->manager->GetBusiness('rh','jornada');
+		$query = $objJornada->listAll();
+		$jornadas = $query->chunkResult();
+		asort($jornadas);
+		$objEscala = $this->manager->GetBusiness('rh','escala');
+		$query = $objEscala->listAll();
+		$escalas = $query->chunkResult();
+		asort($escalas);
+		//$arrJE = array_merge($jornadas,$escalas);
+		$arrJE = ($jornadas + $escalas);
+		$objFuncao = $this->manager->GetBusiness('rh','funcaoterceirizado');
+		$query = $objFuncao->listAll();
+		$funcoes = $query->chunkResult();	
+		
+        $newFields = array(
+			new SelectionSexo('sexo','','Sexo'),
+			new MHiddenField('idmunicipionascimento',''),
+			new LookupTextField('lkpNaturalidade','','Naturalidade',40),
+			$cep = new TextField('cep','','CEP',8),
+			new SelectionPais('idpaisnascimento','','País de nascimento'),
+			new SelectionNacionalidade('idpaisnacionalidade','','Nacionalidade'),
+			new MSelection('escolaridade','','Escolaridade',$arrEscolaridades),
+			new MHiddenField('idInstituicao'),  
+			new MLookupFieldValue('instituicao','','Instituição',55),  
+			new MHiddenField('idpessoa'),			
+			new MSelection('idJornada','','Jornada',$arrJE, TRUE),
+			new MSelection('idFuncao','','Função',$funcoes),
+			new MLookupFieldValue('lkpLocal','','Local de Trabalho',70),
+			new MHiddenField('idLocalTerceirizado'),
+        );
+        
+        $this->addFields($newFields);
+        $this->setFieldAttr('sexo','visible',FALSE);
+
+        $this->SetFieldAttr('instituicao','module','common');
+        $this->SetFieldAttr('instituicao','item','instituicao');
+        $this->SetFieldAttr('instituicao','event','filler');
+        $this->SetFieldAttr('instituicao','related','idInstituicao,null,instituicao');         
+		
+        $this->SetFieldAttr('lkpLocal','module','rh');
+   	 	$this->SetFieldAttr('lkpLocal','item','local');
+  	 	$this->SetFieldAttr('lkpLocal','event','filler');
+    	$this->SetFieldAttr('lkpLocal','related','idLocalTerceirizado,lkpLocal,null,null');
+		
+		$this->SetFieldAttr('lkpNaturalidade','module','rh');
+		$this->SetFieldAttr('lkpNaturalidade','item','municipio');
+		$this->SetFieldAttr('lkpNaturalidade','event', 'filler');
+		$this->SetFieldAttr('lkpNaturalidade','related', 'idmunicipionascimento,lkpNaturalidade');
+    	        
+        $data = $this->getData();
+        $cpf = str_replace('-','',str_replace('.','',$data->cpf));
+        $pessoa = $this->manager->GetBusiness('common','pessoa');
+        $pessoa = $pessoa->getByCpf($cpf);
+        
+		//verifica se cpf existe e se pessoa está cadastrada em terceirizados
+        if ( $pessoa->idpessoa )
+        {
+				if ( $pessoa->isTerceirizado())
+				{
+					
+					$this->addInfo("Pessoa já está cadastrada em nosso banco de dados de Terceirizados.");
+					$this->setFieldValue('nome',$pessoa->nome);
+				    $this->setFieldValue('datanasc',$pessoa->datanasc);
+				    $this->setFieldValue('idpessoa',$pessoa->idpessoa);
+					$this->setFieldAttr('instituicao','visible',FALSE);
+					$this->setFieldAttr('escolaridade','visible',FALSE);
+					$this->setFieldAttr('idJornada','visible',FALSE);
+					$this->setFieldAttr('idFuncao','visible',FALSE);
+					$this->setFieldAttr('lkpLocal','visible',FALSE);
+					$this->setFieldAttr('lkpNaturalidade','visible',FALSE);
+					$this->setFieldAttr('cep','visible',FALSE);
+					$this->setFieldAttr('idpaisnascimento','visible',FALSE);
+					$this->setFieldAttr('idpaisnacionalidade','visible',FALSE);
+					$this->setButtonAttr('btnPost2','visible',FALSE);
+					$this->setButtonAttr('btnVoltar','visible',TRUE);
+				}
+				else
+				{
+		            $this->addInfo("Uma pessoa com esse CPF foi encontrada em nosso banco de dados. Confira se as informações estão corretas.<br>Ao final, clique no botão Incluir Terceirizado.");
+					$this->setFieldValue('nome',$pessoa->nome);
+		            $this->setFieldValue('datanasc',$pessoa->datanasc);
+		            $this->setFieldValue('idpessoa',$pessoa->idpessoa);
+		            $this->setFieldAttr('nome','readonly',TRUE);
+		            $this->setFieldAttr('datanasc','readonly',FALSE);
+					$this->setButtonAttr('btnPost2','visible',TRUE);
+				}
+        }
+		//verifica se nome e data de nascimento existem
+        else
+        {
+            $pessoa = $this->manager->GetBusiness('common','pessoa');  
+            $pessoa = $pessoa->GetByNomeDataNasc($data->nome, $data->datanasc);
+            if ( $pessoa->idpessoa )
+            {
+                $this->addInfo("Uma pessoa com esse nome e data de nascimento foi encontrada em nosso banco de dados. Confira se as informações estão corretas.<br>Ao final, clique no botão Incluir Terceirizado.");
+                $this->setFieldValue('nome',$pessoa->nome);
+                $this->setFieldValue('datanasc',$pessoa->datanasc);
+                $this->setFieldValue('idpessoa',$pessoa->idpessoa);
+                $this->setFieldAttr('nome','readonly',TRUE);
+                $this->setFieldAttr('datanasc','readonly',FALSE);
+				$this->setButtonAttr('btnPost2','visible',TRUE);
+            }
+			//novo terceirizado 
+            else
+            {
+                $this->setFieldAttr('sexo','visible',TRUE);
+                $validators = array(
+                    new MRequiredValidator('nome'),
+                    new MRequiredValidator('datanasc'),
+					new MRequiredValidator('instituicao','','required'),
+					new MRequiredValidator('sexo','','required'),					
+		            new MRequiredValidator('lkpNaturalidade','','required'),
+		            new MMaskValidator('cep','','99999999','required'),
+		            new MRequiredValidator('idpaisnascimento','','required'),
+					new MRequiredValidator('idpaisnacionalidade','','required'),
+			        new MRequiredValidator('escolaridade','','required'),
+					new MRequiredValidator('idJornada','','required'),
+					new MRequiredValidator('idFuncao','','required'),
+					new MRequiredValidator('lkpLocal','','required'),
+                );
+				$this->setButtonAttr('btnPost2','visible',TRUE);
+            }
+        }
+		$cep->AddAttribute('maxlength','8');
+        $this->setFieldAttr('cpf','readonly',TRUE);
+        $this->SetValidators($validators);
+        $this->setButtonAttr('btnPost1','visible',FALSE);        
+    }
+
+    
+    function btnPost2_click()
+    {   
+        $terceirizado = $this->manager->GetBusiness('rh','terceirizado');
+        $provimento = $this->manager->GetBusiness('rh','provterceirizado');
+
+        $terceirizado->idTerceirizado = $idTerceirizado;
+        $terceirizado->idPessoa = Form::GetFormValue('idpessoa');
+		$terceirizado->nome = Form::GetFormValue('nome');
+		$terceirizado->cpf = Form::GetFormValue('cpf');
+		$terceirizado->datanasc = Form::GetFormValue('datanasc');
+		
+        $escolaridade = $terceirizado->escolaridade = trim(Form::GetFormValue('escolaridade'));
+        $provimento->dataInicio = date('d/m/Y');
+        $local = $provimento->idLocalTerceirizado = Form::GetFormValue('idLocalTerceirizado');
+        $funcao = $provimento->idFuncaoTerceirizado = Form::GetFormValue('idFuncao');
+		
+		$srtjornada = strlen(Form::GetFormValue('idJornada'));
+		switch ($srtjornada) {
+		    case 1:
+				$provimento->idJornada = '0';
+		        $jornada = '0';
+		        break;
+		    case 2:
+		        $jornada = $provimento->idJornada = Form::GetFormValue('idJornada');
+		        break;
+		    case 4:
+				$provimento->idEscala = Form::GetFormValue('idJornada');
+				$provimento->idJornada = '0';
+				$jornada = '0';
+		        break;
+		}
+
+        $provimento->idOcorrenciaTerceirizado = '1';
+        $instituicao = $provimento->idInstituicaoTerceirizado = Form::GetFormValue('idInstituicao');
+
+		$provimento->retrieveAssociation('localTerceirizado');
+		//$provimento->localTerceirizado->retrieveAssociation('setor');
+		
+        if ( is_null($instituicao) or empty($instituicao) )
+        {
+            $erro[] = "Selecione a Instituição";
+        }             
+/*        if ( is_null($escolaridade) or empty($escolaridade) )
+        {
+            $erro[] = "Selecione a Escolaridade";
+        }        */
+        if ( is_null($jornada) )
+        {
+            $erro[] = "Selecione a Jornada";
+        }
+        if ( is_null($funcao) or empty($funcao) )
+        {
+            $erro[] = "Selecione a Função";
+        } 
+        if ( is_null($local) or empty($local) )
+        {
+            $erro[] = "Selecione o Local de Trabalho";
+        }        
+   
+        if ( count($erro) > 0 )
+        {
+            foreach ( $erro as $e )
+            {
+                $this->addError($e);
+            }
+            $this->btnPost1_click();
+        }
+        else
+        {  
+	        $errPessoa = FALSE;
+	        $msg = "Terceirizado incluído com sucesso. Por favor, lembre-se de completar os demais dados desta pessoa.";
+	        if (!$terceirizado->idPessoa)
+	        {
+	            $data = $this->getData();
+	            $pessoa = $this->manager->GetBusiness('common','pessoa');
+	            try 
+	            {
+	                $pessoa->createNew($data);
+	                $terceirizado->idPessoa = $pessoa->idpessoa;
+
+					//usuario
+					$datausuario->idpessoa = $terceirizado->idPessoa;
+					$usuario = $this->manager->GetBusiness('common','usuario');
+					$dataNasc = str_replace('/','',$terceirizado->datanasc);
+					$datausuario->password = substr($dataNasc,0,4).substr($dataNasc,-2);
+					$datausuario->passMD5 = md5($datausuario->password);
+					$datausuario->idsetor = $provimento->localTerceirizado->idsetor;
+					$datausuario->login = substr($terceirizado->cpf,0,3).substr($terceirizado->cpf,4,3).substr($terceirizado->cpf,8,3).substr($terceirizado->cpf,12,2);
+					
+					//extrai primeiro nome que será o nick
+					$separa = explode(" ", $terceirizado->nome);					
+					$datausuario->nick = $separa[0];
+					$usuario->setData($datausuario);
+					$usuario->save();
+	            }
+	            catch ( Exception $e )
+	            {
+	                $this->addError($e->getMessage());
+	                $errPessoa = TRUE;
+	            }
+	        }
+	        if (!$errPessoa)
+	        {
+	            try
+	            {
+	                $terceirizado->save();
+	        		$provimento->idTerceirizado = $terceirizado->idTerceirizado;
+	                $provimento->save();
+	                $go = $this->manager->GetActionURL('rh','main:terceirizado',$terceirizado->idTerceirizado);
+	                $this->manager->information($msg,$go);
+	            }
+	            catch ( Exception $e )
+	            {
+	                $this->addError($e->getMessage());
+	                $this->btnPost1_click();
+	            }
+	        }
+        }
+    }
+
+	function btnVoltar_click()
+    {
+        $this->btnCancelar_click();
+    }
+	
+	function btnCancelar_click()
+    {
+        $this->setFieldValue('nome','');
+        $this->setFieldValue('datanasc','');
+        $this->setFieldValue('cpf','');
+		//$this->setFieldValue('idpessoa','');
+    }
+    
+    function getData()
+    {
+        $data->cpf = $this->getFormValue('cpf');
+        $data->nome = strtoupper($this->getFormValue('nome'));
+        $data->idpessoa = $this->getFormValue('idpessoa');
+        $data->datanasc = $this->getFormValue('datanasc');
+		$data->sexo = $this->getFormValue('sexo');
+		$data->cep = $this->getFormValue('cep');
+        $data->idpaisnascimento = $this->getFormValue('idpaisnascimento');
+		$data->idmunicipionascimento = $this->getFormValue('idmunicipionascimento');
+		$data->idpaisnacionalidade = $this->getFormValue('idpaisnacionalidade');
+        return $data;
+    }
+ }
+?>

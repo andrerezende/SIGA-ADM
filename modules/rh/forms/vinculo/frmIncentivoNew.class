@@ -1,0 +1,280 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmIncentivoNew extends MForm
+{
+    /**
+     * Objeto Vinculo
+     * @access protected
+     * @var BusinessRhVinculo
+     */
+    protected $objVinculo;    
+    protected $objIncentivo;
+    protected $fase;
+
+    function __construct($objVinculo)
+    {
+        $this->objVinculo = $objVinculo;
+        parent::__construct('Incentivo à Qualificação');
+        //$this->defaultButton = TRUE;
+        $this->EventHandler();
+    }
+    
+    function CreateFields()
+    {
+        global $MIOLO;
+       
+        $perms = $MIOLO->getPerms();
+
+        $funcionario = $this->objVinculo->getFuncionario();
+        $formacao = $MIOLO->getBusiness('rh', 'histformacao');
+        $formacao->idFuncionario = $funcionario->idFuncionario;
+        $formacao = $formacao->getArrayFormacoes();
+
+        $incentivo = $MIOLO->getBusiness('rh', 'histincentivo');
+        $incentivo->idVinculo = $this->objVinculo->idVinculo;
+        $incentivo = $incentivo->getArrayFormacoes();
+
+                
+        $tiposRelacao = array(
+            array('DIRETA', 'D'),
+            array('INDIRETA', 'I')
+        );
+        
+
+        $newFields = array(
+            new MSpacer('1'),
+            array (new MSelection('qualificacao', '', 'Escoha uma qualificação', $this->getQualificacaoOptions())),
+            new MSpacer('1'),
+            $relacao = new MRadioButtonGroup('relacao', 'Relação com a área de conhecimento', $tiposRelacao ,'I', '', 'vertical', 'css'),
+            new MSpacer('1'),
+        );
+
+        $newValidators = array(
+            new MRequiredValidator('formacoes'),
+            new MRequiredValidator('relacao')
+
+        );
+
+        $buttons = array(
+            new MButton('btnCheckNewIncentivo', 'Verificar possibilidade para concessão de novo incentivo'),
+        );
+
+        $this->SetFields($newFields);
+        $this->SetButtons($buttons);
+        $this->SetValidators($newValidators);
+    }
+
+    function createFields2() {
+
+        $tiposRelacao = array(
+            array('DIRETA', 'D'),
+            array('INDIRETA', 'I')
+        );
+
+        $qualificacaoFields = $this->createDetalhes($this->objIncentivo->getQualificacao());
+        
+        $fields = array(
+            new MSpacer('1'),
+            $themeBox = new MThemeBox("Dados da {$this->objIncentivo->getTipoQualificacao()} associada ao incentivo:", $qualificacaoFields),
+            new MSpacer('1'),
+            array(
+                $nivelClassificacao = new MTextField('nivel', $this->objIncentivo->percQualificacao->nivelClassificacao,'Nível',3, '', '', true),
+                $nivelEscolaridade = new MTextField('nivelEscolaridade', $this->objIncentivo->percQualificacao->escolaridadePCCTAE->descricao,'Nível de escolaridade formal',50, '', '', true),
+                $percentualAplicado = new MTextField('percentualAplicado', $this->objIncentivo->percentualAplicado,'Percentual (%)',10, '', '', true),
+                $dataIncentivo = new MTextField('dataIncentivo', $this->objIncentivo->dataIncentivo,'Data Incentivo',10, '', '', true),
+            ),
+            new MSpacer('1'),
+            $relacao = new MRadioButtonGroup('relacao', 'Relação com a área de conhecimento', $tiposRelacao ,$this->objIncentivo->relacao, '', 'vertical', 'css'),
+            new MSpacer('1'),
+        );
+    
+        $buttons = array(
+            new MButton('btnConceder', 'Conceder novo incentivo')
+        );
+
+        $hiddens = array(
+            new MHiddenField('h_idHistFormacao', $this->objIncentivo->idHistFormacao),
+            new MHiddenField('h_idHistTitulacao', $this->objIncentivo->idHistTitulacao),
+            new MHiddenField('h_dataIncentivo', $this->objIncentivo->dataIncentivo),
+            new MHiddenField('h_relacao', $this->objIncentivo->relacao),
+            new MHiddenField('h_percentualAplicado', $this->objIncentivo->percentualAplicado),
+            new MHiddenField('h_idPercQualificacao', $this->objIncentivo->idPercQualificacao),
+        );
+
+        $relacao->addAttribute('readonly', 'true');
+        $relacao->addAttribute('disable', 'true');
+        $relacao->addAttribute('readonly', 'true');
+        foreach ($relacao->GetControls() as $control) $control->setReadOnly(true);
+
+        $themeBox->showLabel = true;
+        $nivelClassificacao->setJsHint( _M('Nível de classificação') );
+        $nivelEscolaridade->setJsHint( _M('Nível de escolaridade formal superior ao previsto para o exercício do cargo') );
+        $relacao->setJsHint( _M('Relação com a área de conhecimento') );
+        $percentualAplicado->setJsHint( _M('Percentual aplicado') );
+        $dataIncentivo->setJsHint( _M('Data de Concessão do Incentivo') );
+
+        $this->SetFields($fields);
+        $this->AddFields($hiddens);
+        $this->SetButtons($buttons);
+
+        
+    }
+
+    function createDetalhes($objQualificacao) {
+
+        if ($objQualificacao->idHistFormacao) {
+            //Objeto de histformacao
+            $qualificacao = $objQualificacao->formacao->formacao . " - " . $objQualificacao->escolaridadePCCTAE->descricao;
+            $nomeCurso = $objQualificacao->nomeCurso;
+        } else {
+            //Objeto de histtitulacao
+            $qualificacao = $objQualificacao->getTitulacao() . ' - ' . $objQualificacao->escolaridadePCCTAE->descricao;
+            $nomeCurso = $objQualificacao->nomecurso;
+        }
+            $fields = array(
+                new Label("<b>Formação:</b> " . $qualificacao),
+                new MSPacer('0'),
+                new Label("<b>Nome do curso:</b> " . $nomeCurso),
+                new MSPacer('0'),
+                new Label("<b>Instituição:</b> " . $objQualificacao->entidade),
+                new MSPacer('0'),
+                new Label("<b>Data de conclusão:</b> " . $objQualificacao->dataFim),
+                new MSPacer('0'),
+            );
+
+        return $fields;
+
+    }
+
+    function getQualificacaoOptions() {
+        global $MIOLO;
+
+        $funcionario = $this->objVinculo->getFuncionario();
+
+        $formacao = $MIOLO->getBusiness('rh', 'histformacao');
+        $formacao->idFuncionario = $funcionario->idFuncionario;
+        $formacao = $formacao->getArrayFormacoes();
+
+        $titulacao = $MIOLO->getBusiness('rh', 'histtitulacao');
+        $titulacao->idFuncionario = $funcionario->idFuncionario;
+        $titulacao = $titulacao->getArrayTitulacoes();
+        
+        $incentivo = $MIOLO->getBusiness('rh', 'histincentivo');
+        $incentivo->idVinculo = $this->objVinculo->idVinculo;
+        $incentivoF = $incentivo->getArrayFormacoes();
+        $incentivoT = $incentivo->getArrayTitulacoes();
+
+        if ((is_array($formacao)) || (is_array($titulacao))) {
+            //Preparando Array de Formações        
+            if (is_array($formacao)) {
+                if (is_array($incentivoF)) {
+                    $formacoes = array_diff_key($formacao, $incentivoF);
+                } else {
+                    $formacoes = $formacao;
+                }
+                //foreach($formacoes as $idHistFormacao => $descricao) $ArrayFormacoes[] = array($idHistFormacao, $descricao);
+                foreach($formacoes as $idHistFormacao => $descricao) 
+                    $ArrayFormacoes[] = new MOption( "F$idHistFormacao", "F$idHistFormacao", $descricao, false,"F$idHistFormacao");
+            }
+            //Preparando Array de Titulações
+            if (is_array($titulacao)) {
+                if (is_array($incentivoT)) {
+                    $titulacoes = array_diff_key($titulacao, $incentivoT);
+                } else {
+                    $titulacoes = $titulacao;
+                }
+                //foreach($titulacoes as $idHistTitulacao => $descricao) $ArrayTitulacoes[] = array($idHistTitulacao, $descricao);
+                foreach($titulacoes as $idHistTitulacao => $descricao)
+                    $ArrayTitulacoes[] = new MOption( "T$idHistTitulacao", "T$idHistTitulacao", $descricao, false,"T$idHistTitulacao");
+            }
+
+        } else {
+            $linkEscolaridades = new MLink('','aqui',$MIOLO->GetActionURL('rh',"main:vinculo:", $this->objVinculo->idVinculo, array('form' => 'formacoes', 'id' => 'new')));
+            $linkPosGraduacoes = new MLink('','aqui',$MIOLO->GetActionURL('rh',"main:vinculo:", $this->objVinculo->idVinculo, array('form' => 'titulacoes', 'id' => 'new')));
+			$detalhes = "<br>Para cadastrar uma escolaridade clique " . $linkEscolaridades->generate();
+            $detalhes .= "<br>Para cadastrar uma pós-graduação clique " . $linkPosGraduacoes->generate();
+            throw new EDataNotFoundException('<br>Não existem formacoes ou titulações cadastradas para esse funcionário.' . $detalhes);
+        }
+
+        //Criando OptionGroup
+        if (is_array($ArrayFormacoes)) $optGroup[] = new MOptionGroup('F', 'Até o nível superior', $ArrayFormacoes);
+        if (is_array($ArrayTitulacoes)) $optGroup[] = new MOptionGroup('T', 'Pós Graduações', $ArrayTitulacoes);
+        if (is_array($optGroup)) return $optGroup;
+        else throw new EDataNotFoundException('<br>Todas as formacoes e titulações desse funcionário já foram utilizadas para concessão de incentivo à qualificação.');
+    }
+   
+
+    function btnCheckNewIncentivo_click() {
+    global $MIOLO;
+        
+
+        $objIncentivo = $MIOLO->getBusiness('rh', 'histincentivo');
+        $objIncentivo->idVinculo = $this->objVinculo->idVinculo;
+
+        $idQualificacao = $this->getFormValue('qualificacao');
+        $type = substr($idQualificacao, 0, 1);
+        $idQualificacao = substr($idQualificacao,1,strlen($idQualificacao));
+
+        if ($type == 'F') {
+            $histQualificacao = $MIOLO->getBusiness('rh', 'histformacao', $idQualificacao);    
+        } else if ($type == 'T') {
+            $histQualificacao = $MIOLO->getBusiness('rh', 'histtitulacao', $idQualificacao);
+        } else throw new EDataNotFoundException('<br>Qualificação inválida!<br> Por favor selecione uma qualificação.');
+
+        $relacao = $this->getFormValue('relacao');
+        $this->objIncentivo = $objIncentivo->checkExistsNewIncentivo($histQualificacao, $relacao);
+
+        if ($this->objIncentivo) {
+
+            $this->setButtonAttr('btnCheckNewIncentivo','visible',false);
+
+            $this->createFields2();
+        } else {
+    
+            $this->addInfo('Não existe nenhum novo incentivo disponível para essa qualificacao e relação. Por favor, verifique se já não existe um incentivo com percentual maior.');
+            
+        }
+        
+    }
+
+    function btnConceder_click() {
+    global $MIOLO;
+
+        $objIncentivo = $MIOLO->getBusiness('rh', 'histincentivo');
+        $objIncentivo->idVinculo = $this->objVinculo->idVinculo;
+
+        $idHistFormacao = $this->getFormValue('h_idHistFormacao');
+        $idHistTitulacao = $this->getFormValue('h_idHistTitulacao');
+
+        if ($idHistFormacao) $objIncentivo->idHistFormacao = $idHistFormacao;
+        else if ($idHistTitulacao) $objIncentivo->idHistTitulacao = $idHistTitulacao;
+        
+        $objIncentivo->dataIncentivo = $this->getFormValue('h_dataIncentivo');
+        $objIncentivo->relacao = $this->getFormValue('h_relacao');
+        $objIncentivo->percentualAplicado = $this->getFormValue('h_percentualAplicado');
+        $objIncentivo->idPercQualificacao = $this->getFormValue('h_idPercQualificacao');
+        $objIncentivo->save();
+        
+        $action = $MIOLO->GetActionURL('rh','main:vinculo',$this->objVinculo->idVinculo, array('form'=>'incentivo','id'=> $objIncentivo->idHistIncentivo));
+	    $MIOLO->Information('Incentivo à qualificacao cadastrado com sucesso.', $action);
+
+    }
+}
+?>

@@ -1,0 +1,110 @@
+<?
+class BusinessAdmRequisita extends Business
+{
+    public $idTipoReq;
+    public $idUo;
+    public $idRubrica;
+    public $ano;
+    public $ativo;
+
+    public $tipoReq;
+    public $uo;
+    public $rubrica;
+
+    function __construct($data = null)
+    {
+        parent::__construct('sigaept', $data);
+    }
+
+    function GetById($idTipoReq,$idUo,$ano=null)
+    {
+        if($ano==null)
+        {
+			/* Removida a referencia			
+            $sql = new MSql('anoref','ad_controle');
+            $ano = $this->Query($sql)->result[0][0];
+			*/
+			$ano = Date('Y');
+        }
+        $this->idTipoReq = $idTipoReq;
+        $this->idUo = $idUo;
+        $this->ano = $ano;
+        $this->retrieve();
+        return $this;
+    }
+
+    function ListByUo($idUo)
+    {
+        $ano = date("Y");
+        $criteria =  $this->getCriteria();
+        $criteria->addColumnAttribute('idTipoReq');
+        $criteria->addColumnAttribute('tipoReq.descricao');
+        $criteria->addCriteria('idUo','=', $idUo);
+        $criteria->addCriteria('ano','=', $ano);
+        $criteria->addCriteria('ativo','=',"'S'");
+        $criteria->addOrderAttribute('tipoReq.descricao');
+        return $criteria->retrieveAsQuery();
+    }
+    
+    function jaExiste($idtiporeq,$iduo)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addCriteria('idTipoReq','=', "$idtiporeq");
+        $criteria->addCriteria('idUo','=', "$iduo");
+        return $criteria->retrieveAsQuery()->result;
+    }
+    
+    function preencheMultPorIdUo($iduo)
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->addCriteria('idUo','=', "$iduo");
+        $cursor = $criteria->retrieveAsCursor();
+       
+        while($requisita = $cursor->getObject())
+        {
+            $v[] = array($requisita->tipoReq->descricao);           
+        }
+        return $v;
+    }
+    
+    function deleteByIdUo($iduo)
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->addCriteria('idUo','=', "$iduo");
+        $cursor = $criteria->retrieveAsCursor();
+        
+        while($requisita = $cursor->getObject())
+        {
+            $requisita->delete();
+        }
+    }
+
+    function getTipoReq()
+    {
+        $this->retrieveAssociation('tipoReq');
+    }
+    
+    //Tiago Macedo 29/05/201listAllGestor()2
+    function listAllGestorAtivoByUO($uo)
+    {
+        $sql = new sql("u.idusuario, u.login", "ad_gestor g INNER JOIN cm_usuario u on g.idusuario = u.idusuario");
+        $sql->SetWhere("g.datafim = '0001-01-01 BC' and iduo = $uo");
+        $sql->SetOrderBy("u.login");
+        $sql->SetGroupBy("u.idusuario, u.login");
+        $query = $this->Query($sql);        
+        return $query;
+    }
+    
+    function selAllGestor($uo)
+    {
+        $gestores = $this->listAllGestorAtivoByUO($uo)->chunkResult();
+        return array_combine($gestores,$gestores);
+    }   
+    
+    function selAllByIdGestor($uo)
+    {
+        $gestores = $this->listAllGestorAtivoByUO($uo)->chunkResult();
+        return $gestores;
+    } 
+}	
+?>

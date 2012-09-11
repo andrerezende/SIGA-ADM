@@ -1,0 +1,130 @@
+<?
+class frmRepItensLicitacaoByFornecedor extends Form
+{
+	/*------------------------------------------------
+
+	Construtor()
+
+	------------------------------------------------*/
+	function __construct()
+	{   
+		// nome do formulário
+		parent::__construct('Relatório de Itens de Licitação por Fornecedor');
+		// eventos
+		$this->EventHandler();
+	}
+	
+	Function CreateFields()
+	{
+		global $MIOLO,$module,$item,$self;
+		$objLicitacao = $MIOLO->GetBusiness($module,'licitacao');
+
+		$fields = Array(
+			new Separator('<b>Informe a Licitação:</b>'),
+			new LookupTextField('lkpLicitacao','','Número da Licitação',20),
+			new HiddenField('status','2') //Participantes Definidos
+		);
+		$this->SetFields($fields);
+		$this->SetFieldAttr('lkpLicitacao','module',$module);
+		$this->SetFieldAttr('lkpLicitacao','item','Licitacao');
+		$this->SetFieldAttr('lkpLicitacao','event','btnListaFornecedores:click');
+		$this->SetFieldAttr('lkpLicitacao','filter','status,lkpLicitacao');
+
+		$buttons = Array(
+	        	new FormButton('btnListaFornecedores','Listar Fornecedores')
+		);
+		$this->SetButtons($buttons);
+	}
+	
+	/*------------------------------------------------
+
+	Método btnListaFornecedores_click()
+
+	------------------------------------------------*/
+	function btnListaFornecedores_click($key='')
+	{
+		global $MIOLO,$module,$page,$self,$item, $theme;
+
+		$objLicitacao = $MIOLO->GetBusiness($module,'licitacao');
+
+		$item = ($key != '') ? $key : $item;		
+		$numero = $this->GetFormValue('lkpLicitacao');
+		if ($numero)
+			$idlicitacao = $objLicitacao->GetIdBynumero($numero);
+		else
+			$idlicitacao = $item;	
+		
+		$list = $objLicitacao->ListParticipantesByLicitacao($idlicitacao);
+		//var_dump($idlicitacao);
+                $columns = array(
+			   new GridColumn('idparticipante','left',true,'0%',false),
+			   new GridColumn('Nome','left',true,'80%',true)
+                );
+                $grid = new Grid($list, $columns, $this->listURL,15,0);
+
+                $grid->SetTitle('Relação de Fornecedores Convidados para esta Licitação');
+	 	$href_edit = $MIOLO->GetActionURL($module,'main:repItensLicitacaoByFornecedor','%0%_%2%', array('event'=>'btnConfirmaFornecedor:click'));
+                $grid->AddActionText('alt','Imprimir Convite',$href_edit);
+		$theme->SetContent($grid);
+
+	}
+
+	/*------------------------------------------------
+
+	btnConfirmaFornecedor_click()
+
+	------------------------------------------------*/
+	function btnConfirmaFornecedor_click()
+	{
+		global $MIOLO,$module,$item;
+
+		$item = explode("_",$item);
+		$idParticipante = trim($item[0]);
+		$idLicitacao = trim($item[1]);
+	
+		$objLicitacao = $MIOLO->GetBusiness($module,'licitacao');
+		$participante = $objLicitacao->GetInstituicaoByIdParticipante($idParticipante);
+
+		$fields = Array(
+			new Separator('<b>Estes são os dados do fornecedor selecionado:</b>'),
+			new TextLabel('nome','Empresa: '.$participante->nome),
+			new TextLabel('endereco','Endereço: '.$participante->rua.', '.$participante->numero),
+			new TextLabel('bairro','Bairro: '.$participante->bairro),
+			new TextLabel('cidade','Cidade: '.$participante->municipio),
+			new TextLabel('estado','Estado: '.$participante->uf),
+			new TextLabel('cep','CEP: '.$participante->cep),
+			new TextLabel('telefone','Telefone: '.$participante->telefone),
+			new HiddenField('idLicitacao',$idLicitacao),
+			new HiddenField('idParticipante',$idParticipante)
+		);
+		$this->SetFields($fields);
+
+		$buttons = Array(
+	        	new FormButton('btnReport','Imprimir Convite')
+		);
+		$this->SetButtonAttr('btnListaFornecedores','visible',false);
+		$this->SetButtons($buttons);
+
+	}
+
+	function btnReport_click()
+	{
+		global $MIOLO,$module,$item;
+
+		$idLicitacao = $this->GetFormValue('idLicitacao');
+		$idParticipante = $this->GetFormValue('idParticipante');
+
+		// identifica o idsetor (almoxarifado) do operador
+		$login = $MIOLO->GetLogin();
+		$usuario = $MIOLO->GetBusiness('common','usuario');
+		$usuario->GetById($login->idkey);
+		$idsetoralmox = $usuario->GetSetorProvimento();
+			
+		$ui = $MIOLO->GetUI();
+
+	  	$report = $ui->GetReport($module,'repItensLicitacaoByFornecedor',array('idLicitacao'=>$idLicitacao,'idParticipante'=>$idParticipante));
+
+  		$report->Generate();	
+	}
+}
+?>

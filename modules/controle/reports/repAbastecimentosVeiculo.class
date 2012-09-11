@@ -1,0 +1,258 @@
+<?php
+class repAbastecimentosVeiculo extends MPDFReport
+{
+		var $timestamp;
+        var $img;
+        var $level = array();
+        var $resultado = array();
+        var $titulo;
+
+        function __construct($data)
+        {
+        	global $MIOLO, $module, $page, $context, $self, $action, $perms;
+	
+	        parent::__construct(NULL, NULL, 55);
+		
+		
+			switch ($data->op)
+			{
+				//Anual
+				case '0':
+					
+					$ano = $data->ano;
+					$this->titulo = "Abastecimentos do ano de ".$ano;
+					$objVeiculo = $MIOLO->GetBusiness('adm','veiculo');
+					$resultVeiculos = $objVeiculo->listAll();
+					$result = $resultVeiculos->result;
+					if(!$ano)
+						$ano = date('Y');
+						
+					//00 -> Placa
+					//05 -> Modelo
+					if ($result)
+					{
+						$x = 0;
+						$r =	 $result;
+						$objReport = $MIOLO->GetBusiness('controle','report');
+						$resultado = array();
+						while ($r[$x] <> null)
+						{	
+							$placa = $r[$x][0];
+							$modelo = $r[$x][5];
+							$abastecimentos = $objReport->listAbastecimentosVeiculoPorAno($placa,$ano);
+							if ($abastecimentos->result)
+							{
+								$media = $objReport->mediaAbastecimentos($abastecimentos->result);
+								$valorTotal = $objReport->valorTotalAbastecimentos($abastecimentos->result);
+								$resultado[$x][0] = $placa;
+								$resultado[$x][1] = $modelo;
+								$resultado[$x][2] = $media["abastecimentos"];
+								$resultado[$x][3] = $valorTotal;
+								$resultado[$x][4] = $media["coeficiente"];
+							}
+							else
+							{
+								$resultado[$x][0] = $placa;
+								$resultado[$x][1] = $modelo;
+								$resultado[$x][2] = '0';
+								$resultado[$x][3] = '0';
+								$resultado[$x][4] = '0';
+							}
+							$x ++;	
+							$placa = null;
+						}
+					}
+				break;
+				//Mensal
+				case '1':
+					
+					$mes = explode("-",$data->mes);
+					$nomeMes = ($mes[0]);
+					$mes = ($mes[1]);
+					$ano = $data->ano;
+					
+					$objVeiculo = $MIOLO->GetBusiness('adm','veiculo');
+					$resultVeiculos = $objVeiculo->listAll();
+					$result = $resultVeiculos->result;
+					$this->titulo = "Abastecimentos ".$nomeMes." / ".$ano;
+					if ($result)
+					{
+						$x = 0;
+						$r = $result;
+						$objReport = $MIOLO->GetBusiness('controle','report');
+						$resultado = array();
+						while ($r[$x] <> null)
+						{
+							$placa = $r[$x][0];
+							$modelo = $r[$x][5];
+							$manutencoes = $objReport->listAbastecimentosVeiculoPorAnoMes($placa,$ano,$mes);
+							if ($manutencoes->result)
+							{
+								$media = $objReport->mediaManutencoes($manutencoes->result);
+								$valorTotal = $objReport->valorTotalManutencoes($manutencoes->result);
+								$resultado[$x][0] = $placa;
+								$resultado[$x][1] = $modelo;
+								$resultado[$x][2] = $media["manutencoes"];
+								$resultado[$x][3] = $valorTotal;
+								$resultado[$x][4] = $media["coeficiente"];
+							}
+							else
+							{
+								$resultado[$x][0] = $placa;
+								$resultado[$x][1] = $modelo;
+								$resultado[$x][2] = '0';
+								$resultado[$x][3] = '0';
+								$resultado[$x][4] = '0';
+							}
+							$x ++;	
+							$placa = null;
+						}
+					}
+
+				break;
+				case '2':
+					
+					$this->titulo = "Relatorio geral de Abastecimentos";
+					$objVeiculo = $MIOLO->GetBusiness('adm','veiculo');
+					$resultVeiculos = $objVeiculo->listAll();
+					$result = $resultVeiculos->result;
+					if ($result)
+					{
+						$x = 0;
+						$r = $result;
+						$objReport = $MIOLO->GetBusiness('controle','report');
+						$resultado = array();
+						while ($r[$x] <> null)
+						{	
+							$placa = $r[$x][0];
+							$modelo = $r[$x][5];
+							$manutencoes = $objReport->listAbastecimentosVeiculoGeral($placa);
+							if ($manutencoes->result)
+							{
+								$media = $objReport->mediaManutencoes($manutencoes->result);
+								$valorTotal = $objReport->valorTotalManutencoes($manutencoes->result);
+								$resultado[$x][0] = $placa;
+								$resultado[$x][1] = $modelo;
+								$resultado[$x][2] = $media["manutencoes"];
+								$resultado[$x][3] = $valorTotal;
+								$resultado[$x][4] = $media["coeficiente"];
+							}
+							else
+							{
+								$resultado[$x][0] = $placa;
+								$resultado[$x][1] = $modelo;
+								$resultado[$x][2] = '0';
+								$resultado[$x][3] = '0';
+								$resultado[$x][4] = '0';
+							}
+							$x ++;	
+							$placa = null;
+						}
+					}
+
+				break;
+			}
+			    
+			$ui = $MIOLO->GetUI();
+			$this->img = $ui->GetImageSrc('logonet.png','biblioteca');
+		        $this->timestamp = date('d/m/Y G:i');
+	        	$this->pdf->ezStartPageNumbers(520, 800, 10, 'rigth', 'Pagina: {PAGENUM}');
+			$this->pdf->ezSetMargins(100, 30, 30, 30);
+	          	$this->GeneratePageHeader();
+	           	$this->GeneratePageFooter();
+            
+			$columns = array(
+	                new MPDFReportColumn('A', '<b><i>Placa</i></b>', 'left', false, 20, true),
+	                new MPDFReportColumn('B', '<b><i>Modelo</i></b>', 'left', false, 20, true),
+	                new MPDFReportColumn('C', '<b><i>Abastecimentos</i></b>', 'left', false, 20, true),
+			new MPDFReportColumn('D', '<b><i>Valor Total</i></b>', 'left', false, 20, true),
+			new MPDFReportColumn('E', '<b><i>Media</i></b>', 'left', false, 20, true),
+                             );
+
+     
+	        $sum1 = array(
+	                new MPDFReportColumn('texto', 'texto', 'right', false, 70, true),
+	                new MPDFReportColumn('valor', 'valor', 'right', false, 20, true)
+		            );
+
+	        $this->SetWidth(100);
+	        $this->SetColumns($columns);
+	        $colDetail = $this->columns;
+			$this->SetColumns($sum1);
+            $colSum1 = $this->columns;
+            // gera o report
+            $this->GenerateGroupHeader(1, $this->level);
+            $this->columns = $colDetail; 
+            $this->GenerateData($resultado);
+            $this->SetOption('showHeadings', 0);
+            $this->SetOption('showLines', 1);
+            $this->columns = $colSum1;
+            $this->GenerateData($summary1[0]);
+    
+        }
+
+        function GenerateGroupHeader()
+        {
+            $this->pdf->SetStrokeColor(0, 0, 0);
+            $x0 = $this->pdf->left;
+          
+            $this->pdf->ezSetDy(-32, 'makeSpace');
+            $y = $this->pdf->y;
+            //$this->pdf->addText($x0, $y + 19, 10, 'Periodo: ' .$this->dataInicio.' a '.$this->dataFim);
+           
+          
+        }
+
+        function GeneratePageHeader()
+        {
+            $x0 = $this->pdf->left;
+            $x1 = $this->pdf->right;
+            $h = $this->pdf->getFontHeight(12);
+            $header = $this->pdf->openObject();
+            $this->pdf->saveState();
+
+			$x00=$this->pdf->left;
+			$hh = $this->pdf->getFontHeight(12);
+			$this->pdf->addText($x00, 800, 12, $this->manager->getConf('instituicao.sigla')." - ".$this->manager->getConf('instituicao.nome'));
+			$this->pdf->addText($x00, 800 - $hh, 12, $this->manager->getConf('theme.system'));
+
+            $y = 800 - $h - $h - 5;
+            $this->pdf->SetColor(0.1,0.1,0.1);
+            $this->pdf->filledRectangle($x0, $y-20, $x1-30, 16 );
+            $this->pdf->SetColor(1,1,1);
+            $this->pdf->addText($x0 + 5, $y - 16, 12,$this->titulo);
+            $this->pdf->restoreState();
+            $this->pdf->closeObject();
+            $this->pdf->addObject($header, 'all');
+        }
+
+        function GeneratePageFooter()
+        {
+       		$x0 = $this->pdf->left;
+         	$x1 = $this->pdf->right;
+	        $footer = $this->pdf->openObject();
+          	$this->pdf->saveState();
+            $this->pdf->SetStrokeColor(0, 0, 0);
+            $this->pdf->line($x0, 28, $x1, 28);
+            $this->pdf->addText($x0, 19, 9, $this->timestamp . ' - SIGA');
+            $this->pdf->restoreState();
+            $this->pdf->closeObject();
+            $this->pdf->addObject($footer, 'all');
+        }
+
+        function GenerateData($data)
+        {
+        
+        	$this->pdf->ezSetDy(-5);
+            $this->SetData($data);
+            $this->rawdata = $this->GenerateTableData();
+            $this->GenerateBody($this->rawdata);
+        }
+
+        function Generate()
+        {
+	        $this->SetOutput();
+            $this->Execute();
+        }
+    }
+?>

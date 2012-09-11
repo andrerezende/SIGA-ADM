@@ -1,0 +1,73 @@
+<?
+class frmRepLancamentosPorUO extends MForm
+{
+	protected $bolsa;
+
+    function __construct()
+    {
+        global $MIOLO;
+        parent::__construct('Relatório Dotações Por UO');
+        $this->EventHandler();
+    }
+
+	function CreateFields()
+	{
+	    global $MIOLO;
+		$uo = $this->manager->getbusiness('adm','uo');
+        $login = $this->manager->getlogin();
+        $idusuario = $login->idkey;
+
+        if ( $MIOLO->getPerms()->isMemberOf($MIOLO->getLogin()->id,'adm_adminorcamento') or $MIOLO->getPerms()->isAdmin())
+	    {
+	       $uo = $uo->listUosOrdemNome();
+	    }
+	    else
+	    {
+	       $uo = $uo->listUosByGestor($idusuario);
+	    }
+
+        $fields = Array(
+            new MSelection('idUO','','UO Req.',$uo->result,false),
+            //new LookupTextField('lkpUO', '', 'UO', 60),
+            //new MHiddenField('idUO'),
+			new MCalendarField('dataInicio','','Data Inicial',10,'informe a data inicial do relatório.'),
+			new MCalendarField('dataFim','','Data Final',10,'informe a data final do relatório.'),
+		);
+		$this->SetFields($fields);
+		/*
+		$this->SetFieldAttr('lkpUO','module','adm');
+		$this->SetFieldAttr('lkpUO','item','Uo');
+		$this->SetFieldAttr('lkpUO','event','filler');
+		$this->SetFieldAttr('lkpUO','related', 'idUO,lkpUO');
+		*/
+		$buttons = Array (new FormButton('btnGerarRelatorio', 'Gerar Relatório','pdf'));
+		$this->SetButtons($buttons);
+	}
+
+	function btnGerarRelatorio_click()
+	{
+		global $MIOLO;
+		$data = $this->getData();
+		if($data->dataInicio == '' || $data->dataFim == '')
+		{
+	    	$this->addError('Favor Selecionar as Datas de Início e Término do Relatório.');
+	    }
+	    else
+	    {
+	        if ($data->idUO == '')
+	        {
+	            $this->addError('Por favor selecione a UO.');
+	        }
+	        else
+	        {
+                $report = new MJasperReport('sigaept');
+                $parameters['str_DATA_INI'] = $this->getFieldValue('dataInicio');
+                $parameters['str_DATA_FIM'] = $this->getFieldValue('dataFim');
+                $parameters[int_IDUO] = $this->getFieldValue('idUO');
+                $parameters['str_SUBREPORT_DIR'] = $this->manager->getConf('home.modules') . "/common/reports/";
+                $report->Execute('adm', 'LancamentosPorUO', $parameters);
+	        }
+	    }
+	}
+}
+?>

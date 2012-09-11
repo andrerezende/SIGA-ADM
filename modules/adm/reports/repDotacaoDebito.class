@@ -1,0 +1,160 @@
+<?php
+class repDotacaoDebito extends PDFReport
+{
+	var $img;
+	var $timestamp;
+	
+
+	function __construct()
+	{
+		global $MIOLO, $module, $page, $context, $self, $action, $perms;
+
+		$selAno = Form::GetFormValue('selAno');
+        $selRubrica = Form::GetFormValue('selRubrica');	
+	    $selUo = Form::GetFormValue('selUo');
+
+		//var_dump($selAno);
+		
+		parent::__construct(NULL, NULL, 55);
+	    
+		$ui = $MIOLO->GetUI();
+        $this->img = $ui->GetImageSrc('logo_siga.png',$module);
+
+		$this->SetOption('showLines',0);
+		$this->timestamp = date('d/m/Y G:i');
+
+		
+		$this->pdf->ezStartPageNumbers(580, 800, 10, 'rigth', 'Página: {PAGENUM}/{TOTALPAGENUM}');
+		$this->pdf->ezSetMargins(50, 30, 30, 30);
+		$this->SetOption('fontSize',8);
+		
+		$objOrcamentoInterno = $MIOLO->GetBusiness($module,'orcamentointerno');
+			    
+	    $consulta = $objOrcamentoInterno->getDotacaoDebito($selAno,$selRubrica,$selUo)->result;
+	   	
+	    //var_dump($consulta);
+	    if (is_array($consulta))
+        {
+            foreach ( $consulta as $n )
+            {
+            
+                $siglaUo = $n[0];
+                $rubrica = $n[1];
+                $ano = $n[2];			
+                
+                $credito = number_format(str_replace(',','.',$n[3]),2,',','.');
+                $debito = number_format(str_replace(',','.',$n[4]),2,',','.');
+                $previsaodeb = number_format(str_replace(',','.',$n[5]),2,',','.');			    
+                
+                //echo "<pre>";
+                //var_dump($n);
+                
+                $v1 = str_replace(",",".",$n[3]); // 2500
+                $v2 = str_replace(",",".",$n[4]); // 1333,37
+                $v3 = str_replace(",",".",$n[5]); // 600   		
+                $saldo = $v1-($v2+$v3);			
+                $saldo = number_format(str_replace(',','.',$saldo),2,',','.');
+                        
+                //$totalOutros += $outros;
+                $data[] = array($siglaUo,$rubrica,$credito,$debito,$previsaodeb,$saldo);					
+            }
+        }
+        else
+        {
+            $data[] = array("Nenhum registro encontrado.");
+        }		
+	
+		$columns = array(
+				new PDFReportColumn('sigla','<b><i>SIGLA</b></i>','left',true,20,true,null,true),
+				new PDFReportColumn('rubrica','<b><i>RUBRICA</b></i>','left',true,10,true,null,true),				
+				new PDFReportColumn('credito','<b><i>CREDITO</b></i>','right',true,15,true,null,true),
+				new PDFReportColumn('debito','<b><i>DEBITO</b></i>','right',true,15,true,null,true),
+				new PDFReportColumn('previsaodebito','<b><i>PREVISÃO DÉBITO</b></i>','right',true,15,true,null,true),
+				new PDFReportColumn('saldo','<b><i>SALDO</b></i>','right',true,15,true,null,true),				
+			);
+			
+							
+
+		$this->SetColumns($columns);
+  
+	    
+	    $this->GeneratePageHeader($selAno);
+		$this->GeneratePageFooter();
+	    
+		
+		if ( $data == NULL )  
+		{			
+			
+			$this->GenerateDatanull();
+			
+		}
+		else 
+		{
+			$this->GenerateData($data);
+	    	
+		}
+
+	}
+
+	function GeneratePageHeader($selAno)
+	{
+		global $MIOLO;
+			
+		$x0 = $this->pdf->left;
+		$h = $this->pdf->getFontHeight(12);
+
+		$x00=$this->pdf->left;
+		$hh = $this->pdf->getFontHeight(12);
+		$this->pdf->addText($x00, 800, 12, $this->manager->getConf('instituicao.sigla')." - ".$this->manager->getConf('instituicao.nome'));
+		$this->pdf->addText($x00, 800 - $hh, 12, $this->manager->getConf('theme.system'));		
+
+/*$this->pdf->addPngFromFile($this->img, 10, 730 + $x0, 100, 54);
+		$this->pdf->addText(110,800,12,'UFJF - Universidade Federal de Juiz de Fora');
+		$this->pdf->addText(110,800-$h,12,'CGCO - Centro de Gestão do Conhecimento Organizacional');
+		$this->pdf->addText(110,800-$h-$h,12,'SIGA - Sistema Integrado de Gestão Acadêmica');		
+*/		
+		$this->pdf->addText(110,800-$h-$h-$h,12,'Relação de Dotação e Débito');
+		$this->pdf->addText(110,800-$h-$h-$h-$h,12,'Ano: '.$selAno);
+
+		
+		
+		$this->pdf->ezSetY(800-$h-$h-$h-$h-$h-$h-$h);
+	}
+
+	function GeneratePageFooter()
+	{
+		$x0 = $this->pdf->left;
+        $x1 = $this->pdf->right;
+        $footer = $this->pdf->openObject();
+        $this->pdf->saveState();
+        $this->pdf->SetStrokeColor(0, 0, 0);
+        $this->pdf->line($x0, 28, $x1, 28);
+        $this->pdf->addText($x0, 19, 9, $this->timestamp . ' - CGCO/DSI');
+        $this->pdf->restoreState();
+        $this->pdf->closeObject();
+        $this->pdf->addObject($footer, 'all');    		
+
+	}
+
+	function GenerateData($data)
+	{
+		$this->pdf->ezSetDy(20);
+		$this->SetData($data);
+		$this->rawdata = $this->GenerateTableData();
+		$this->GenerateBody($this->rawdata);
+	}
+	function GenerateDataNULL()
+	{
+		$this->pdf->ezSetDy(-12);
+		$h = $this->pdf->getFontHeight(12);		
+		$this->pdf->addTextWrap(0,800-12*$h,600,11,' NÃO FORAM ENCONTRADOS DADOS RELATIVOS À CONSULTA SOLICITADA ', 'center');
+		
+	}
+
+	function Generate()
+	{
+		$this->SetOutput();
+		$this->Execute();
+	}	
+}
+?>

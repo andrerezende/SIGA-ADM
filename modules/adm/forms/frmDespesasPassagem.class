@@ -1,0 +1,103 @@
+<?
+class frmDespesasPassagem extends Form
+{
+	var $objPassagem;
+   
+   function __construct()
+   {
+ 	  global $MIOLO, $module, $self;
+ 	  $this->Form('Despesas - Passagem');
+ 	  $this->EventHandler();
+   }
+
+	function CreateFields()
+	{
+		global $MIOLO,$module,$self, $action, $auth;
+
+		$this->objPassagem = $MIOLO->GetBusiness($module,'empresapassagem');
+		$tabelaGeral = $this->manager->getBusiness('common','tabelageral');
+
+		$contagem = $this->objPassagem->countAtivas();
+
+		if(!$contagem){
+			$MIOLO->Information('Não existem empresas de passagem cadastradas no sistema.',$MIOLO->GetActionUrl($module,'main:reports'));
+		}
+		else
+		{
+			$lista = $this->objPassagem->ListAllEmpresas();       
+			$tipos = $tabelaGeral->listByTabela('AD_TIPOTRANSPORTE');
+			    
+
+			for ($i=0; $i<count($lista->result); $i++){
+				$options[$lista->result[$i][0]] = $lista->result[$i][1];
+			}
+
+			$fields = array(
+				new Selection('selPassagem','','Passagem',$options,false),
+				new CalendarField('dtInicio','','A partir de'),
+				new CalendarField('dtFim','','Até'),
+				new MSelection('tipoPassagem','','Tipo',$tipos->result),
+		    
+			);
+			$this->SetFields($fields);
+
+			$buttons = array(
+				new FormButton('btnPost', 'Gerar Relatório', 'PDF'),
+				new MButton('btnGerarCSV','Gerar Planilha'),
+			);
+			$this->SetButtons($buttons);
+		}
+	}
+
+   function btnPost_click()
+   {
+	 global $MIOLO, $module;
+
+	 $ui = $MIOLO->GetUI();
+     $report = $ui->GetReport($module,'repDespesasPassagem');
+     $report->Generate();
+   }
+   function btnGerarCSV_click()
+	{
+		global $MIOLO, $module, $self, $action, $perms;	
+		
+		$passagem = $this->GetFormValue('selPassagem');
+		$dataInicio = $this->GetFormValue('dtInicio');
+		$dataFim = $this->GetFormValue('dtFim');
+		$tipoPassagem = $this->GetFormValue('tipoPassagem');
+		
+		$objItemPassagem = $MIOLO->GetBusiness($module,'itempassagem');
+		$objPassagem = $MIOLO->GetBusiness($module,'empresapassagem');
+		$tabelaGeral = $this->manager->getBusiness('common','tabelageral');
+		$descTipoPassagem = $tabelaGeral->GetDescricao('AD_TIPOTRANSPORTE',$tipoPassagem);
+		
+		$query = $objItemPassagem->RepDespesasPassagem($passagem, $dataInicio, $dataFim, $tipoPassagem);
+		
+		$descTipoPassagem = $descTipoPassagem->result[0][0];
+		$nomePassagem = $objPassagem->GetById($passagem)->nome;
+						
+		if($query->result[0][0] <> null)
+		{
+
+			$query->SetOrder('idrequisicao');
+			
+			$total = 0;
+
+			foreach($query->result as $row){
+				$total += floatval(str_replace(',','.',$row[5]));
+				$row[5] = 'R$ ' . number_format(str_replace(',','.',$row[5]),2,',','.');
+				$data[] = $row;
+			}
+    
+			$resultAux[] = array('Nº REQ','UNIDADE','NOME CONVIDADO','DATA','FATURA','VALOR TOTAL');
+			foreach ($query->result as $result)		  
+	    	{
+	    		$resultAux[] = array($result[0],$result[1],$result[2],$result[3],$result[4],$result[5]);		
+	    	}
+	    				    
+		    $query->result = $resultAux;
+			$query->getCSV("DespesasPassagem.$nomePassagem"); 
+		}
+		}
+}
+?>

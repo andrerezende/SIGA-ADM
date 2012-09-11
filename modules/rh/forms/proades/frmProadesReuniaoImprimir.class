@@ -1,0 +1,200 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmProadesReuniaoImprimir extends MForm
+{
+    private $reuniao;
+    private $proades;
+	function __construct($reuniao)
+	{
+        $MIOLO = MIOLO::getInstance();
+		$this->reuniao = $reuniao;
+		$this->proades = $MIOLO->getBusiness('rh','proades');
+        $this->proades->getById($this->reuniao->idProades);
+		parent::__construct('Imprimir Ata');
+		$this->EventHandler();
+	}
+    
+	function CreateFields()
+	{
+        $fields = array(
+            new MText("","<ul>
+                <li>Ata &eacute; um documento que registra resumidamente e com clareza as ocorr&ecirc;ncias, delibera&ccedil;&otilde;es, resolu&ccedil;&otilde;es e decis&otilde;es de reuni&otilde;es.</li>
+                <li>Dever&aacute; ser preenchida pela Coordena&ccedil;&atilde;o Setorial de Avalia&ccedil;&atilde;o.</li>
+                <li>Ao final, dever&aacute; ser impressa, assinada e anexada ao respectivo processo.</li>
+                </ul>
+            ")
+
+        ); 
+        
+        $this->SetFields($fields);		
+
+        $buttons = array(
+                new MButton('btnImprimir','Imprimir Ata','pdf')
+            );
+        $this->setButtons($buttons);
+
+		$this->SetShowPostButton(FALSE);
+	}
+
+    function btnImprimir_click()
+    {
+        $reuniao = $this->reuniao;
+        $ordem = array(
+                1=>"Primeira",
+                2=>"Segunda",
+                3=>"Terceira"
+            );
+
+        $setor = $this->manager->getBusiness('common','setor');
+        $setor->getById($this->proades->idSetor);
+
+//      report
+        $report = new MEzPDFReport('2','portrait');
+        //$report->pdf->ezSetCmMargins(8.5,2.5,3.5,2.5);
+//      text report
+        $report->pdf->ezText('UNIVERSIDADE FEDERAL DE JUIZ DE FORA',8);
+        $report->pdf->ezText($ordem[$reuniao->numero].' Reuniao',8);
+        $report->pdf->ezText("Unidade: $setor->nome",8);
+
+//      table report
+        $options['textCol'] = array(0,0,0);
+        $options['shaded'] = 0;
+        $options['showLines'] = 0;
+        $options['fontSize'] = 8;
+        $options['maxWidth'] = 480;
+        $options['xPos'] = 'left';
+        $options['xOrientation'] = 'right';
+        $cols = array('','');
+
+        $dataRel[] = array("Data: $reuniao->data");
+        $dataRel[] = array("Local: $reuniao->local");
+        $dataRel[] = array('Inicio:'.$reuniao->inicio.":00");
+        $dataRel[] = array('Termino:'.$reuniao->termino.":00");
+        $dataRel[] = array();
+        $dataRel[] = array('Compareceram a reuniao:');
+        $dataRel[] = array();
+        $presentes = $reuniao->listPresentes();
+        if ( ! $presentes->eof() )
+        {
+            foreach ( $presentes->result as $rs )
+            {
+                $dataRel[] = array($rs[2]);
+            }
+        }
+        $naoAusentes = $reuniao->getPresentes();
+        if ( is_array($naoAusentes) )
+        {
+            foreach ( $naoAusentes as $presente )
+            {
+                $dataRel[] = array($presente);
+            }
+        }
+        $dataRel[] = array("");
+        $dataRel[] = array('Nao compareceram (com justificativa):');
+        $qryJustificados = $reuniao->listAusentesComJustificativa();
+        if ( ! $qryJustificados->eof() )
+        {
+            foreach ( $qryJustificados->result as $rs )
+            {
+                $dataRel[] = array($rs[1]);
+            }
+        }
+        else
+        {
+            $dataRel[] = array("-");
+        }
+        $dataRel[] = array("");
+        $dataRel[] = array('Nao compareceram (sem justificativa):');
+        $qryJustificados = $reuniao->listAusentesSemJustificativa();
+        if ( ! $qryJustificados->eof() )
+        {
+            foreach ( $qryJustificados->result as $rs )
+            {
+                $dataRel[] = array($rs[1]);
+            }
+        }
+        else
+        {
+            $dataRel[] = array("-");
+        }
+
+        $dataRel[] = array("");
+        $dataRel[] = array('Resultados Parciais ');
+        $qryResultado = $reuniao->listResultados();
+        if ( ! $qryResultado->eof() )
+        {
+            $tabelaGeral = $this->manager->getBusiness('common','tabelageral');
+            $query = $tabelaGeral->listByTabela('RH_RESULTREUNIAO');
+            foreach ( $query->result as $result )
+            {
+                $resultados[$result[0]] = $result[1];
+            }
+            foreach ( $qryResultado->result as $rs )
+            {
+                $dataRel[] = array($rs[1]." - ".$resultados[$rs[2]]);
+            }
+        }
+
+        $dataRel[] = array("");
+        $dataRel[] = array('Fatores Dificultadores');
+        $qryFatores = $reuniao->listFatores();
+        if ( ! $qryFatores->eof() )
+        {
+            foreach ( $qryFatores->result as $rs )
+            {
+                $fatores[$rs[2]][] = $rs[1];
+            }
+            foreach ( $fatores as $key => $val )
+            {
+                $dataRel[] = array($key.": ".implode(',',$val));
+            }
+        }
+
+        $dataRel[] = array("");
+        $dataRel[] = array('Assuntos Tratados');
+        $reuniao->retrieveAssociation('assuntos');
+        if ( is_array($reuniao->assuntos) )
+        {
+            $i = 1;
+            foreach ( $reuniao->assuntos as $assunto )
+            {
+                $dataRel[] = array($i." - ".$assunto->assunto);
+                $i++;
+            }
+        }
+        $dataRel[] = array('');
+        $dataRel[] = array('Encaminhamentos dados');
+        $reuniao->retrieveAssociation('encaminhamentos');
+        if ( is_array($reuniao->encaminhamentos) )
+        {
+            $i = 1;
+            foreach ( $reuniao->encaminhamentos as $encaminhamento )
+            {
+                $dataRel[] = array($i." - ".$encaminhamento->encaminhamento);
+                $i++;
+            }
+        }
+        $dataRel[] = array('');
+        $report->pdf->ezTable($dataRel,$cols,'',$options);
+//      report
+        $report->Execute();
+    }
+}
+?>

@@ -1,0 +1,171 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?
+class frmPesquisaTermo extends Form
+{
+	var $objPesquisaCatalog;
+	var $objSimples;
+	
+	function frmPesquisaTermo()  // construtor da Classe
+    {
+		global $MIOLO,$module;
+
+		// Título do Formulário
+		$this->Form('Pesquisa Termo Específico');
+
+		//Chama o CreateFileds, etc.
+		$this->EventHandler();
+
+		//Botão "enviar" não aparece
+		$this->defaultButton = false;
+		
+		// Botão 'fechar', direcionando para o handler biblioteca/main/
+		$this->SetClose($this->manager->GetActionURL($module, 'main'));
+	}
+   
+    function CreateFields()
+    {
+		global $module,$MIOLO;
+
+		// Campos que aparecem no formulário
+		$fields = Array (
+			new TextLabel('Atenção:','As palavras não são acentuadas.', 'Atenção'),
+			new TextField('edtConsulta','','Busca',50),
+			new CheckBox('chkboxMaiusculas','1','Maiúsculas/Minúsculas',false),
+		);
+
+		// Insere os campos
+		$this->SetFields($fields);
+        $this->labelWidth = '16';
+
+		// Botões que aparecem no formulário
+		$buttons = Array(
+			new FormButton('btnConsultar', 'Consultar'),
+			new FormButton('btnVoltar', 'Nova Pesquisa', $MIOLO->GetActionURL($module = $module, $action = $action)),
+   		);
+
+		//Insere os Botões
+		$this->SetButtons($buttons);
+		$this->SetButtonAttr('btnVoltar','visible',false);
+
+		//Definindo o foco
+		if (!($this->GetFieldValue('edtConsulta')))
+		{
+			$this->page->onLoad("MIOLO_GetElementById('edtConsulta').focus();");
+		}
+	}
+
+	// pega os dados que estão no formulário   
+	function GetData()
+	{
+		$data = new FormData();
+		$data->Consulta = trim($this->GetFormValue('edtConsulta'));
+		$data->Maiusculas = $this->GetFormValue('chkboxMaiusculas');
+		return $data;
+	}
+
+	function btnConsultar_click($sender)
+	{
+		global $MIOLO, $module, $self, $theme, $action, $page;
+
+		//esconde botoes e campos
+		$this->SetFieldAttr('edtConsulta','readonly',true);
+		$this->SetFieldAttr('chkboxMaiusculas','visible',false);
+		$this->SetButtonAttr('btnConsultar','visible',false);
+
+		// mostra botao voltar
+		$this->SetButtonAttr('btnVoltar','visible',true);
+
+		$data = $this->GetData();
+
+		if ($data->Consulta != null)
+		{
+			if($data->Maiusculas != null)
+			{
+				$this->AddField(new HiddenField('chkboxMaiusculas'));
+				$this->SetFieldValue('chkboxMaiusculas','1');
+			}
+			$this->SetFieldValue('edtConsulta',$data->Consulta);
+
+			$this->objSimples = $MIOLO->GetBusiness($module,'pesquisasimples');
+			$data->Consulta = $this->objSimples->RetirarCaracteresEspeciais($data->Consulta);
+
+			$this->objPesquisaCatalog = $MIOLO->GetBusiness($module,'pesquisatermo');
+			$query = $this->objPesquisaCatalog->PesquisaCatalog($data->Consulta,$data->Maiusculas);
+
+			if ($query) // Monta o DataGrid	
+			{
+				$columns = array(
+					new DataGridColumn("numerodaobra","Obra",'center',true,'10%',true,null,true),
+					new DataGridColumn("tag","Etiqueta",'center',true,'10%',true,null,true),
+					new DataGridColumn("ocorrencia","Ocorrência",'center',true,'10%',true,null,true),
+					new DataGridColumn("subcampo","Subcampo",'center',true,'10%',true,null,true),
+					new DataGridColumn("linha","Linha",'center',true,'10%',true,null,true),
+					new DataGridColumn("conteudo","Termo",'left',false,'42%',true,null,true),
+				);
+
+				$href_datagrid = $MIOLO->GetActionURL($module,$self,'', Array('event'=>'btnConsultar_click'));
+				$page->SetAction($href_datagrid);
+
+				$datagrid = new DataGrid2($query, $columns, $href_datagrid,20);
+				$datagrid->SetTitle('Resultado da Pesquisa');
+				$datagrid->SetLinkType('linkbutton');
+				$datagrid->SetWidth('99%');
+
+				$href_edit = $MIOLO->GetActionURL($module, 'main:catalogacao:catalogacao', '%7%', Array('event'=>'PesquisaCatalog','selEtiqueta'=>'%6%','txtOcorrencia'=>'%2%'));
+				$datagrid->AddActionIcon('Editar', 'edit', $href_edit);
+
+				$theme->InsertContent($datagrid);
+
+				//adiciona recurso Ir Para
+				$fieldsIr = array(
+					new MText('',"<BR>Ir para a página:&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp"),
+					new MTextField('edtIr', '', " ", 5),
+					new MButton('btnIr', 'Ir'),
+				);
+				$this->AddField($fieldsIr);
+			}
+			else
+			{
+				$MIOLO->Prompt(Prompt::Error('Sua pesquisa por "' . $data->Consulta . '" não retornou nenhum resultado.<br><br>
+				Sugestões:<br><br> 
+					- Certifique-se de que todas as palavras estejam escritas corretamente.<br><br>
+					- Tente palavras-chave diferentes.<br><br>
+					- Tente palavras-chave mais genéricas.<br><br>
+					- Em caso de dúvida, consulte a pessoa responsável pelo atendimento na sua biblioteca.<br>', $MIOLO->GetActionURL($module, $action)));
+			}
+		}
+		else
+		{
+			$MIOLO->Prompt(Prompt::Error("Por favor, preencha o campo de busca.", $MIOLO->GetActionURL($module, $action)));
+		}
+	}
+
+	function btnIr_click()
+	{
+		global $MIOLO, $module, $action;
+
+		$pagina = $this->GetFormValue('edtIr');
+		$data = $this->GetData();
+		$go = $MIOLO->GetActionURL($module, $action, '', array('event'=>'btnConsultar_click', 'pn_page'=>$pagina, 'chkboxMaiusculas'=>$data->Maiusculas, 'edtConsulta'=>$data->Consulta, 'campoPag'=>'1'));
+		$this->page->redirect($go);
+	}
+}
+?>

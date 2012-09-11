@@ -1,0 +1,178 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class BusinessRhProgMeritoMagistSup extends MBusiness
+{
+    var $idVinculo;		 // INT
+	var $dataInicio;	 // DATE
+	var $dataInicioToMax;// DATE
+
+
+	function __construct($data=null)
+	{
+		parent::__construct('sigaept',$data);
+	}
+
+
+    function OnCreate($data)
+    {
+        if (empty($data))
+        {
+//            $this->initialize();
+        }
+        else
+        {
+            $this->GetById($data);
+        }
+    }
+
+
+	function SetData($data)
+	{
+		$this->dataInicio	= $data->dataInicio;
+		$this->idVinculo	= $data->idVinculo;
+	}
+
+
+	function GetById($id)
+	{
+		$this->idVinculo = $id;
+		$this->retrieve();
+		return $this;
+	}
+
+
+	// Retorna a última (com maior data início) progressão por mérito
+	// desde que tenha uma data menor ou igual a data informada - 18meses.
+	function ListByDateBefore($date)
+	{
+        $krono = new MKrono();
+		
+		$date = $krono->InvertDate($date);
+
+		$criteria = $this->getCriteria();
+
+		// Colunas
+        $criteria->addColumnAttribute('idVinculo','Matricula');
+		$criteria->addColumnAttribute('max(dataInicio)','DataInicio');
+		$criteria->addColumnAttribute('vinculo.funcionario.pessoa.nome','Nome');
+
+		//Critério
+		$criteria->addCriteria('dataInicio','<=',"'{$date}'");
+
+		// Agrupamento
+		$criteria->addGroupAttribute('idVinculo');
+		$criteria->addGroupAttribute('vinculo.funcionario.pessoa.nome');
+
+		// Ordenação
+		$criteria->addOrderAttribute('vinculo.funcionario.pessoa.nome');
+		
+		// Executa
+		$query = $criteria->retrieveAsQuery();	
+
+		// Retorno
+        return $query;
+		
+	}
+
+
+	function getProximasProgressoes($dataAntes,$dataHoje,$categoria)
+    {
+		global $MIOLO;
+
+		$query = $this->ListByDateBefore($dataAntes);
+
+		$vinculo = $MIOLO->getBusiness('rh','vinculo'); 
+
+		$proximasProgressoes = Array();
+
+		if( is_array($query->result) )
+		{
+		   //var_dump($query->result);
+		   //exit(0);
+		   
+		   foreach( $query->result as $result ) 
+		   {
+				$idVinculo            = $result[0];			 
+				$dataUltimaProgressao = $result[1];
+
+				// retorna false ou um array com dados da progressão
+				$podeProgredir = $vinculo->podeProgredir($idVinculo,$dataAntes,$dataUltimaProgressao,$dataHoje,$categoria);
+
+				// $podeProgredir pode ser um array de dados
+				if( $podeProgredir != false )
+				{
+					//var_dump("Pode progredir");
+					//exit(0);
+					
+					$provimento = $MIOLO->getBusiness('rh','provimento');
+					$q = $provimento->GetDadosByVinculoData($idVinculo,$dataUltimaProgressao);
+
+					$vinculo = $this->_miolo->getBusiness('rh','vinculo',$idVinculo);
+					$vinculo->getProvimentos();
+					$provimentoAtual = $vinculo->getProvimentoAtual();
+
+					// aparece na listagem quem: NÃO é aposentado 
+					if (  !$vinculo->isAposentado() )
+					{
+						// aparece na listagem quem: é ativo
+						if ( $vinculo->isAtivo() )
+						{
+							// aparece na listagem quem: NÃO é excluído por cancelamento
+							if ( !($provimentoAtual->idGrupoOcorrencia == '2' and $provimentoAtual->idOcorrencia == '27') ) 
+							{
+								$classe = $this->_miolo->getBusiness('rh','classe',$q[3]);
+								// aparece na listagem quem: NÃO está em final de carreira
+								if ( !($classe->nome == "TITULAR") )
+								{
+									$next = $provimentoAtual->getNextReferencia();
+									$classe->getReferencias();
+									$referencia = $classe->getReferencia($next);
+
+									$provimentoAtual->getClasse();
+									$provimentoAtual->getReferencia();
+
+									$nivel = $provimentoAtual->referencia->nivelPadrao;
+
+									
+									//$result[4] = $podeProgredir[1];			// dias a descontar							
+									$result[5] = $q[0] . ' ' . $nivel;						// classe anterior
+									$result[6] = $q[0] . ' ' . $referencia->nivelPadrao;// nivel  anterior
+									$result[7] = $podeProgredir[0];			// vigencia
+
+									//Elimina a coluna da "Data da Ultima Progressao"
+									unset($result[1]);									
+
+									$proximasProgressoes[] = $result;
+								}  // titular = fim de carreira
+							} // excluído cancelamento por duplicidade
+						} // ativo
+					} // aposentado
+				} // pode progredir
+			} // foreach
+		} // if is_array
+
+		$query->result = $proximasProgressoes;
+
+		return $query;
+
+    }// método getProximasProgressoes
+
+}
+?>

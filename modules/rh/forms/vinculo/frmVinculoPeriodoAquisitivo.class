@@ -1,0 +1,422 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+MIOLO::Import('modules::rh::controls::linkperiodoaquisitivo');
+
+class frmVinculoPeriodoAquisitivo extends MForm
+{
+    /**
+     * Objeto periodoaquisitivo
+     * @access protected
+     * @var BusinessRhPeriodoAquisitivo
+     */
+    protected $periodoaquisitivo;
+
+    public $krono;
+
+    function __construct($objPeriodoAquisitivo)
+    {
+        global $MIOLO;
+        $this->periodoaquisitivo = $objPeriodoAquisitivo;
+        $this->krono = new MKrono();
+
+        if ( !$this->periodoaquisitivo->isPersistent() )
+            parent::__construct('Novo Período Aquisitivo');
+        else {
+            $ano = $this->krono->getYear($this->periodoaquisitivo->dataInicio);
+            parent::__construct("Períodos Aquisitivos: $ano");
+        }
+
+
+        $this->SetClose($MIOLO->GetActionURL('rh','main:vinculo',$this->periodoaquisitivo->idVinculo, array('form'=>'periodoaquisitivo')));
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+        global $MIOLO;
+        $perms = $MIOLO->getPerms();
+        $login = $MIOLO->getLogin();
+
+        try
+        {
+
+          if (!$this->periodoaquisitivo->isPersistent())
+              $this->periodoaquisitivo->openPeriodoAquisitivo();
+
+
+        }
+        catch ( ESimpleRnException $e )
+        {
+                $MIOLO->Error($e->getMessage(),$MIOLO->GetActionURL('rh','main:vinculo',$this->periodoaquisitivo->idVinculo,array('form'=>'periodoaquisitivo')));
+        }
+
+/*
+        $comentarios = array (
+            new Text('comentario1','<b>Atenção:</b>'),
+            new Text('comentario2','Utilize o pequeno calendário ao lado do campo para selecionar datas <b>válidas</b>,'),
+            new Text('comentario3','ou digite a data no formato <b>DD/MM/AAAA</b>. Por exemplo: <b>31/12/2005</b>.'),
+            new Text('comentario4','Estes campos são preenchidos <b>automaticamente</b> pelo sistema de acordo com os dados do funcionário.')
+        );
+*/
+
+        $fldDataInicio      = new MCalendarField('dataInicio','','Início',15);
+        $fldDataFim         = new MCalendarField('dataFim','','Fim',15);
+        $fldTotalDias       = new TextField('totalDias', '', 'Dias', '4');
+        $fldFaltas          = new TextField('faltas','','Faltas','4');
+        $fldObs             = new MultiLineField('obs','','Observação',25,5,40,'Máx. 500');
+        $fldDataPrescricao  = new MCalendarField('dataPrescricao','','Prescrição',15);
+        //$chkBox = new CheckBox('check','','Atenção',false,'Marque esta este campo caso o servidor tenha direito a férias, periodo aquisitivo, mesmo não tenha 12 meses de trabalhos cumpridos na UFJF, mas que os tenha cumprido em outro lugar.');
+        $chkBox = new CheckBox('check','','',false,'');
+        $fields = array(
+            new Spacer('10px'),
+//            $comentarios,
+//            new Spacer('20px'),
+            $fldDataInicio,
+            $fldDataFim,
+            new Spacer('10px'),
+            $fldTotalDias,
+            $fldFaltas,
+            new Spacer('10px'),
+            $fldObs,
+            new Spacer('10px'),
+            $fldDataPrescricao,
+            new Spacer('10px'),
+            $chkBox
+        );
+
+        $this->SetFields($fields);
+
+        $fldTotalDias->AddAttribute('maxlength','3');
+        $fldFaltas->AddAttribute('maxlength','3');
+        $fldObs->AddAttribute('maxlength','500');
+
+        $this->SetData();
+
+        $url = $MIOLO->GetActionURL('rh','main:vinculo',$this->periodoaquisitivo->idVinculo,array('form'=>'ferias','dtInicioPerAq'=>$this->periodoaquisitivo->dataInicio, "exec"=>"formularioferias",'dtInicioFerias'=>''));
+
+
+
+
+// TESTAR SE PODE HAVER LANCAMENTO DE FÈRIAS !!!
+
+
+
+
+
+        $buttons = array(
+//          new FormButton('btnTeste','Testar'),
+            new FormButton('btnSalvar','Enviar'),
+            new FormButton('btnExcluir','Excluir'),
+            new FormButton('btnFerias','Marcação de Férias', $url)
+
+        );
+
+/**/
+        //if ( ($this->periodoaquisitivo->isPersistent()) AND ($this->periodoaquisitivo->permiteFerias()) )
+        if ( ($this->periodoaquisitivo->isPersistent()) AND (TRUE) )
+            array_push($buttons, new FormButton('btnFerias','Marcação de Férias', $url));
+
+        $ultimo = $this->periodoaquisitivo->UltimoPeriodo();
+
+        if ( ($ultimo) )
+            array_push($buttons, new FormButton('btnExcluir','Excluir'));
+
+
+        //if ( ($this->periodoaquisitivo->isPersistent()) AND ($this->periodoaquisitivo->permiteFerias()) )
+        if ( ($this->periodoaquisitivo->isPersistent()) AND (TRUE) )
+            $buttons = array(
+                new FormButton('btnSalvar','Enviar'),
+                new FormButton('btnExcluir','Excluir'),
+                new FormButton('btnFerias','Marcação de Férias', $url)
+            );
+        else
+            $buttons = array(
+                new FormButton('btnSalvar','Enviar'),
+                new FormButton('btnExcluir','Excluir')
+            );
+/**/
+        $this->SetButtons($buttons);
+
+        $this->SetButtonAttr('btnSalvar' ,'visible',(!$this->periodoaquisitivo->isPersistent() && $perms->checkAccess('rh_periodo_aquisitivo',A_ACCESS)  ));
+        $this->SetButtonAttr('btnExcluir','visible',($this->periodoaquisitivo->isPersistent() && $this->periodoaquisitivo->UltimoPeriodo() && $perms->checkAccess('rh_periodo_aquisitivo',A_ACCESS)));
+      $this->SetButtonAttr('btnFerias' ,'visible',($this->periodoaquisitivo->isPersistent() && $this->periodoaquisitivo->permiteFerias() && $perms->checkAccess('rh_ferias',A_ACCESS) && $this->periodoaquisitivo->getTotalDias() > $this->periodoaquisitivo->getDiasUsufruidos()));
+
+        $permiteFerias = $this->periodoaquisitivo->permiteFerias();
+
+        //verificacao de acesso para usuarios da secretaria. Regra: só é permitido a marcação de férias e visualização dos dados se o usuario estiver lotado no mesmo setor do servidor.
+
+        $provimento = $this->periodoaquisitivo->vinculo->getProvimentoAtual();
+        if ( $provimento )
+        {
+            if ( $perms->isMemberOf($login,'RH_SECRETARIA') && ( !$perms->isAdmin() ) )
+            {
+                $usuario = $MIOLO->getBusiness('common','usuario');
+                $usuario->getById($login->idkey);
+
+                $vinculoUsuario = $this->manager->getBusiness('rh','vinculo');
+                $vinculoUsuario->getById($usuario->login);
+
+                $vinculoUsuario->getProvimentos();
+                $provimentoUsuario = $vinculoUsuario->getProvimentoAtual();
+
+                $idSetor = $provimentoUsuario->idSetor;
+
+                if ( ! $idSetor )
+                {
+                    $idSetor = $usuario->idSetor;
+                }
+
+                /*
+                if ( ! $provimentoUsuario )
+                {
+                    $this->manager->Error('Seu usuário não está apto a fazer transações no SIGA-RH.');
+                }
+                */
+
+                $setor = $MIOLO->getBusiness('common','setor');
+                $setor->getById($idSetor);
+
+                $setorPai = $MIOLO->getBusiness('common','setor');
+                $setorPai->getById($setor->idPaiSetor);
+
+                $idSetorPai = ( ( $setorPai->idSetor == 1 ) || ( $setorPai->idSetor == 0 ) ) ? $setor->idSetor : $setorPai->idSetor;
+                $setoresFilhos = $setor->getSetoresFilhos($idSetorPai);
+
+                $mesmoSetor = in_array($provimento->idSetor,$setoresFilhos);
+
+                if ( $mesmoSetor || $perms->isAdmin() )
+                {
+                    // ********************* VISIBILIDADE DO BOTÃO DE MARCAÇÃO DE FÉRIAS ******************************* //
+                    $this->SetButtonAttr('btnFerias' ,'visible',($this->periodoaquisitivo->isPersistent() && $this->periodoaquisitivo->permiteFerias() && $perms->checkAccess('rh_ferias',A_ACCESS) && $this->periodoaquisitivo->getTotalDias() > $this->periodoaquisitivo->getDiasUsufruidos()));
+
+
+                    //$this->setFieldAttr('btnFerias','visible',TRUE);
+                }
+                else
+                {
+                    $this->setFieldAttr('btnFerias','visible',FALSE);
+                }
+            }
+        }
+        else
+        {
+            $this->setFieldAttr('btnFerias','visible',FALSE);
+        }
+
+        /*
+		// abrindo para o Marquinhos (RH_CADASTRO) marcar férias sem restrição
+		if ( $perms->isMemberOf($login,'RH_CADASTRO') )
+		{
+			$this->setFieldAttr('btnFerias','visible',TRUE);
+		}
+		*/
+
+        $validators = array(
+            new RequiredValidator('dataInicio'),
+            new RequiredValidator('dataFim'),
+            new RequiredValidator('dataPrescricao')
+        );
+        $this->SetValidators($validators);
+        $this->SetFieldAttr('check','visible',false);
+
+         if ($this->periodoaquisitivo->isPersistent())
+             $this->SetReadOnly();
+
+    }
+
+
+/**
+* Method SetReadOnly()
+* This method allows or not the modify of data into the fields
+*
+*/
+    function SetReadOnly()
+    {
+        $this->SetFieldAttr('dataFim','readonly',true);
+        $this->SetFieldAttr('faltas','readonly',true);
+        $this->SetFieldAttr('dataPrescricao','readonly',true);
+        $this->SetFieldAttr('dataInicio','readonly',true);
+        $this->SetFieldAttr('totalDias','readonly',true);
+        $this->SetFieldAttr('obs','readonly',true);
+
+    }
+
+
+/**
+* Method SetData()
+* This method set the data into this form, from PeriodoAquisitivo class
+*
+*/
+    function SetData()
+    {
+
+        if ($this->periodoaquisitivo->status!=0)
+            $this->SetReadOnly();
+
+        $this->SetFieldValue('dataFim',       $this->periodoaquisitivo->dataFim);
+        $this->SetFieldValue('totalDias',     $this->periodoaquisitivo->totalDias);
+        $this->SetFieldValue('dataInicio',    $this->periodoaquisitivo->dataInicio);
+        $this->SetFieldValue('faltas',        $this->periodoaquisitivo->faltas);
+        $this->SetFieldValue('obs',           $this->periodoaquisitivo->obs);
+        $this->SetFieldValue('dataPrescricao',$this->periodoaquisitivo->dataPrescricao);
+
+    }
+
+/**
+* Method GetData()
+* This method get input data from this form to PeriodoAquisitivo class
+*
+*/
+    function GetData()
+    {
+        $data = new FormData();
+        $data->dataInicio       = $this->GetFieldValue('dataInicio');
+        $data->dataFim          = $this->GetFieldValue('dataFim');
+        $data->totalDias        = $this->GetFieldValue('totalDias');
+        $data->faltas           = $this->GetFieldValue('faltas');
+        $data->obs              = $this->GetFieldValue('obs');
+        $data->dataPrescricao   = $this->GetFieldValue('dataPrescricao');
+        //$data->diasUsufruidos   = 0;
+        return $data;
+    }
+
+
+    public function btnFerias_click()
+    {
+        $go = $this->manager->getActionURL('rh','main:vinculo',$this->periodoaquisitivo->idVinculo, array('form'=>'frmVinculoLancarFerias'));
+        $this->setAction($go);
+        //$this->page->Redirect($go);
+    }
+/*
+    public function btnTeste_click()
+    {
+        var_dump($this->periodoaquisitivo->FeriasFuturas());
+        $this->periodoaquisitivo->ApagaFeriasFuturas();
+        var_dump($this->periodoaquisitivo->FeriasFuturas());
+    }
+*/
+
+/**
+* Method btnSalvar_click()
+* @access public
+* This method record all new input data by GetData method
+* @exception $e
+*
+*/
+    public function btnSalvar_click()
+    {
+        global $MIOLO;
+
+        $update = $this->periodoaquisitivo->isPersistent();
+        $this->periodoaquisitivo->SetData($this->GetData());
+
+        if(is_null($update))
+        {
+            $this->periodoaquisitivo->setDiasUsufruidos(0);
+        }
+
+        try
+        {
+
+        if ($this->check->checked)
+        {
+            $this->periodoaquisitivo->save(true);
+        }
+        else
+            {
+                $op = $update ? OP_UPD : OP_INS;
+                $this->periodoaquisitivo->save();
+                $this->periodoaquisitivo->log($op,"vinculo: ".$this->periodoaquisitivo->idVinculo." data de inicio: ".$this->periodoaquisitivo->dataInicio." data fim: ".$this->periodoaquisitivo->dataFim);
+            }
+
+                $go = $this->manager->getActionURL('rh','main:vinculo',$this->periodoaquisitivo->idVinculo, array('form'=>'periodoaquisitivo'));
+
+            if ($update)
+            {
+                $this->manager->information('Período Aquisitivo atualizado com sucesso.', $go );
+
+            }
+            else
+            {
+                $this->manager->information('Período Aquisitivo inserido com sucesso.', $go );
+            }
+
+        }
+
+        catch ( ESimpleRnException $e )
+        {
+                //$this->AddError($e->getMessage());
+                $MIOLO->Error($e->getMessage(),$MIOLO->GetActionURL('rh','main:vinculo',$this->periodoaquisitivo->idVinculo,array('form'=>'periodoaquisitivo')));
+
+        }
+
+        catch (Exception $e)
+        {
+            $MIOLO->Error($e->getMessage(),$MIOLO->GetActionURL('rh','main:vinculo',$this->periodoaquisitivo->idVinculo,array('form'=>'periodoaquisitivo')));
+            //$this->AddError($this->periodoaquisitivo->GetErrors());
+        }
+    }
+
+    function btnExcluir_click()
+    {
+        global $MIOLO;
+
+        $action_sim =   $MIOLO->GetActionURL('rh','main:vinculo',$this->periodoaquisitivo->idVinculo,array('form'=>'periodoaquisitivo','id'=>$this->periodoaquisitivo->dataInicio,'exec'=>'editarperiodo','conf'=>'sim','event'=>'btnExcluir:click'));
+        $action_nao = $MIOLO->GetActionURL('rh','main:vinculo',$this->periodoaquisitivo->idVinculo,array('form'=>'periodoaquisitivo','id'=>$this->periodoaquisitivo->dataInicio));
+
+        $conf = $this->GetFormValue('conf');
+
+        $perm = null;
+
+        $perm = $this->periodoaquisitivo->getThisPerAqFerias();
+
+        if ($perm == null)
+        {
+            if ($conf == 'sim')
+            {
+                try
+                {
+                    $this->periodoaquisitivo->Delete();
+                    $this->periodoaquisitivo->log(OP_DEL,"vinculo: ".$this->periodoaquisitivo->idVinculo." data de inicio: ".$this->periodoaquisitivo->dataInicio." data fim: ".$this->periodoaquisitivo->dataFim);
+
+                    $MIOLO->Information('Período Aquisitivo excluído com sucesso',$MIOLO->GetActionURL('rh','main:vinculo',$this->periodoaquisitivo->idVinculo,array('form'=>'periodoaquisitivo')));
+                }
+                catch ( Exception $e )
+                {
+                    $MIOLO->Error("Informe o seguinte erro à equipe do CGCO: ".$e->getMessage());
+                }
+
+            }
+            else
+            {
+                $MIOLO->Question("Tem certeza que deseja excluir o período aquisitivo com a seguinte data de ínicio:  ".$this->periodoaquisitivo->dataInicio."?",$action_sim,$action_nao);
+            }
+
+        }
+        else
+        {
+                $MIOLO->Error("Exclusão não permitida. Férias já marcadas para o periodo aquisitivo.",$MIOLO->GetActionURL('rh','main:vinculo',$this->periodoaquisitivo->idVinculo,array('form'=>'periodoaquisitivo')));
+        }
+
+
+    }
+
+}
+?>

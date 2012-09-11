@@ -1,0 +1,159 @@
+<? 
+
+class frmDefExclusao extends Form
+{
+	var $objBolsista;
+	
+	function __construct()
+	{
+		global $MIOLO, $module, $page, $self;
+        
+        $urlBase = $MIOLO->getActionUrl($module,$self);
+        $page->setAction($urlBase);
+        
+		$this->objBolsista = $MIOLO->GetBusiness($module,'bolsista');
+		
+		parent::Form("Define Data de Exclusão");
+
+		$this->SetClose($MIOLO->GetActionURL($module,'main:sispag'));
+		$this->EventHandler();
+	}
+	
+	function CreateFields()
+	{
+		global $MIOLO, $page, $self, $module, $action, $item, $context, $history;
+		$ui = $this->manager->getUI();
+		
+		if( !$this->objBolsista->DesTravado() )
+		{
+			$MIOLO->Information('Sistema Travado!',true);
+			return;
+		}
+		
+		//$grid = $ui->getGrid('adm','gridDefDataExclusao', NULL);
+		
+		$base1 = array(
+				new TextField('mesano','','Data',16),
+				new Selection('idbolsa','','Bolsa'),
+          		new MSpacer('8px'),
+		);
+
+		$fields = array(
+			new Separator('Dados de definição da data de exclusão'),
+			new BaseGroup('bg1','', $base1,'horizontal','none'),
+			new HiddenField('estado','insert'),
+			//$grid,
+		);
+		$this->SetFields($fields);
+		$this->setFieldAttr('bg1','showLabel',true);
+
+		$login = $MIOLO->auth->GetLogin();
+		
+		$bolsa = $MIOLO->GetBusiness($module,'cadastrobolsa');
+		$query = $bolsa->ListAll($login->idkey,'paga');
+
+		$this->SetFieldAttr('idbolsa','options',($query->result) ? $query->result : Array('vazio'=>'vazio'));
+		
+		$buttons = array(
+			new FormButton('btnPost','Enviar'),
+		);
+		$this->SetButtons($buttons);
+
+		$validators = array(
+			new RequiredValidator('mesano'),
+		);
+		$this->SetValidators($validators);
+	} 
+	
+	function SetData($data)
+	{
+		$this->SetFieldValue('mesano',$data->mesano);
+		$this->SetFieldValue('idbolsa',$data->idbolsa);
+	}
+
+	function btnPost_click()
+	{
+		global $MIOLO, $module, $page;
+		
+		$mesano  = $this->GetFormValue('mesano');
+		$idbolsa = $this->GetFormValue('idbolsa');
+				
+		$msgErroMesAno = $this->FormatMesAno($mesano);
+
+        if( $msgErroMesAno == 'ok' )
+        {
+			$aux_data = explode ('/', $mesano);
+			$dia = $aux_data[0];
+			$mes = $aux_data[1];
+			$ano = $aux_data[2];
+			
+			$linkVoltar = $MIOLO->GetActionURL($module,'main:frmDefExclusao');
+			$mesAnoAtual = $this->objBolsista->verificaMesAnoAtual($dia, $mes, $ano);
+			if ( $mesAnoAtual )
+			{
+				if (!is_null($idbolsa))
+				{
+					$retorno = $this->objBolsista->DefDataExclusao($idbolsa, $dia, $mes, $ano);
+					$separa = explode('@', $retorno);
+					$qtdade = $separa[0];
+					$fechou = $separa[1];
+
+					if ($fechou) 
+					{
+						if ($qtdade > 0)
+						{
+							$this->AddInfo("$qtdade data(s) definida(s) com sucesso.");
+						}
+						else
+						{
+							$this->AddInfo("Procedimento efetuado. Os bolsistas ja tem a data definida ou pagamento efetuado no mes escolhido");
+						}
+					}
+					else 
+					{
+						$MIOLO->Information("Erro no procedimento.");
+					}
+				}
+				else 
+				{
+					$MIOLO->Information("A Bolsa deve ser informada.");
+				}	
+			}
+			else 
+			{
+				$MIOLO->Information("Data inválida. Só é aceito mês e ano atual e dia igual ou maior que o atual.");
+			}
+        }
+        else 
+        {
+			$MIOLO->Error($msgErroMesAno,$action);
+        }
+	}
+		
+	function FormatMesAno($mesano) // private
+	{
+		$msg = 'ok';
+
+		$vet = explode('/',$mesano);
+		
+		if( strlen($mesano)!=10 )
+		{
+			$msg = 'O campo Data deve ter exatamente 10 caracteres. Exemplo 01/01/2006.';
+		}
+		elseif( (count($vet)!=3) || (!is_numeric($vet[0]) || !is_numeric($vet[1]) || !is_numeric($vet[2]) ) )
+		{
+			$msg = 'o campo Data deve ter o seguinte formato: dd/mm/yyyy.';
+		}
+		elseif( ($vet[1]>12 ) || ($vet[1]<1) )
+		{
+			$msg = 'Mês inválido.';
+		}
+		elseif( ($vet[0]>31 ) || ($vet[0]<1) )
+		{
+			$msg = 'Dia inválido.';
+		}
+		return $msg;
+	}
+}
+
+?>

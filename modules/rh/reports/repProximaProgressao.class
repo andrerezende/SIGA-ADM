@@ -1,0 +1,170 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class repProximaProgressao extends MPDFReport
+{
+
+  function __construct($data)
+  {
+    global $MIOLO, $module, $page, $context, $self, $action, $perms;
+
+    parent::__construct(null, null, 55, null, 'portrait', 'a4');
+
+    $ui = $MIOLO->GetUI();
+
+    $this->pdf->ezSetMargins(30, 30, 30, 30);
+
+    switch ($data->categoria)
+    {
+      case '0':
+        $progmerito = $MIOLO->getBusiness('rh', 'progmerito');
+        $query = $progmerito->getProximasProgressoes($data->dataAntes, $data->dataHoje,
+          $data->categoria);
+        break;
+      case '1':
+        $progmerito = $MIOLO->getBusiness('rh', 'progmeritomagistsup');
+        $query = $progmerito->getProximasProgressoes($data->dataAntes, $data->dataHoje,
+          $data->categoria);
+        break;
+    }
+
+    if (is_array($query->result))
+    {
+      //var_dump($query->result);
+      //exit(0);
+
+      foreach ($query->result as $oRecord)
+      {
+        // a ordem da matriz row é imperativo
+        $row[] = $oRecord[0]; // idVinculo
+        //$row[] = $oRecord[1]; // dataInicio do ultimo provimento com prog. merito
+        $row[] = $oRecord[2]; // nome do servidor
+        //$row[] = $oRecord[4]; // dias a descontar
+        $row[] = $oRecord[5]; // classe anterior
+        $row[] = $oRecord[6]; // classe atual (prox)
+
+        $row[] = $oRecord[7]; // vigencia
+
+        $query->moveNext();
+
+        $dataRel[] = $row;
+
+        unset($row);
+      }
+
+      //$this->GenerateHeader();
+
+      //$this->GeneratePageHeader();
+
+      $columns = array( //				new PDFReportColumn('idVinculo','Matrícula','center',true,8,true,null,true),
+        //				new PDFReportColumn('dataInicio','Início','center',false,10,false,null,false),
+      //				new PDFReportColumn('nome','Nome','left',true,35,true,null,true),
+      //				new PDFReportColumn('dias','DaD','left',false,5,false,null,false),
+      //				new PDFReportColumn('classeA','Classe Anterior','center',true,12,true,null,true),
+      //				new PDFReportColumn('nivelA','Nível Anterior','center',true,12,true,null,true),
+      //				new PDFReportColumn('classeB','Classe Atual','center',true,10,true,null,true),
+      //				new PDFReportColumn('nivelB','Nível Atual','center',true,10,true,null,true),
+      //				new PDFReportColumn('vigencia','Vigência','center',true,10,true,null,true),
+
+      new PDFReportColumn('idVinculo', 'Matrícula', 'center', true, 8, true, null, true),
+        /*new PDFReportColumn('dataInicio', 'Início', 'center', false, 10, false, null, false),*/
+        new PDFReportColumn('nome', 'Nome', 'left', true, 35, true, null, true), 
+				/*new PDFReportColumn('dias', 'DaD', 'left', false, 5, false, null, false),*/ 
+				new PDFReportColumn('classeA', 'Situação Anterior', 'center', true, 22, true, null, true),
+        //				new PDFReportColumn('nivelA','Nível Anterior','center',true,12,true,null,true),
+
+      new PDFReportColumn('classeB', 'Situação Atual', 'center', true, 22, true, null, true),
+        //				new PDFReportColumn('nivelB','Nível Atual','center',true,10,true,null,true),
+
+      new PDFReportColumn('vigencia', 'Vigência', 'center', true, 10, true, null, true), );
+      $this->SetColumns($columns);
+
+      $colDetail = $this->columns;
+
+      $this->SetOption('fontSize', 7);
+      $this->SetOption('showHeadings', 1);
+      $this->SetOption('showLines', 1);
+
+      $this->GenerateData($dataRel);
+
+      //$this->GeneratePageFooter();
+
+      //$this->GenerateFooter();
+    }
+  }
+
+  function Generate() // método padrão, sempre executado
+
+  {
+    $this->SetOutput();
+    $this->Execute();
+  }
+
+  function GenerateData($data)
+  {
+    $this->pdf->ezSetDy(-5);
+    $this->SetData($data);
+    $this->rawdata = $this->GenerateTableData();
+    $this->GenerateBody($this->rawdata);
+  }
+
+  function GenerateHeader()
+  {
+    $this->pdf->ezText("MINISTÉRIO DA EDUCAÇÃO", 8, array('justification' =>
+      'center'));
+    $this->pdf->ezText("INSTITUTO FEDERAL", 10, array('justification' =>
+      'center'));
+    $this->pdf->ezText(" ", 9, array('justification' => 'left'));
+    $this->pdf->ezText("PRÓ-REITORIA DE RECURSOS HUMANOS", 10, array('justification' =>
+      'center'));
+    $this->pdf->ezText(" ", 8, array('justification' => 'left'));
+    $this->pdf->ezText("PORTARIA Nº " . $numeroPartaria . ", DE " . $diaPortaria .
+      " DE " . $mesPortaria . " DE " . $anoPortaria . ".", 10, array('justification' =>
+      'center'));
+    $this->pdf->ezText(" ", 9, array('justification' => 'left'));
+    $this->pdf->ezText("	A Pró-Reitoria de Recursos Humanos, no uso da competência que lhe foi delegada através da Portaria nº 551, de 04 de outubro de 2006, resolve: ",
+      8, array('justification' => 'justify'));
+    $this->pdf->ezText(" ", 9, array('justification' => 'left'));
+    $this->pdf->ezText("	Conceder Progressão por Mérito, no mês de " . $mesProgressao .
+      " de " . $anoProgressao .
+      ", de acordo com a Lei nº 11.091, de 12 de janeiro de 2005, artigo 10-A, aos servidores abaixo relacionados:",
+      8, array('justification' => 'justify'));
+  }
+
+  function GeneratePageHeader()
+  {
+  }
+
+  function GeneratePageFooter()
+  {
+  }
+
+  function GenerateFooter()
+  {
+    $this->pdf->ezText(" ", 9, array('justification' => 'left'));
+    $this->pdf->ezText(" ", 9, array('justification' => 'left'));
+    $this->pdf->ezText("Gessilene Zigler Foine", 8, array('justification' =>
+      'center'));
+    $this->pdf->ezText("Pró-Reitoria de Recursos Humanos", 8, array('justification' =>
+      'center'));
+  }
+
+}
+
+?>

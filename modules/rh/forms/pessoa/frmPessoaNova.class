@@ -1,0 +1,201 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+/**
+ * Formulário para criar uma nova pessoa
+ */
+MIOLO::Import('modules::rh::controls::linkpessoa');
+MIOLO::Import('modules::common::controls::selectionpais');
+MIOLO::Import('modules::common::controls::selectionuf');
+MIOLO::Import('modules::common::controls::selectionsexo');
+ 
+class frmPessoaNova extends Form
+{
+    /**
+     * Objeto pessoa
+     * @access protected
+     * @var BusinessCommonPessoa
+     */
+    protected $pessoa;
+
+
+    /**
+     * Step constants
+     */
+    const STEP_CRIA_PESSOA      = 3;
+    
+    public function __construct()
+    {
+        global $MIOLO, $page, $item;
+        $this->pessoa  = $MIOLO->GetBusiness('common','pessoa');
+        
+
+        parent::__construct('Incluir Pessoa');
+        $this->SetClose($MIOLO->GetActionURL('rh','main'));
+        $this->SetIcon($MIOLO->GetUI()->GetImage('rh','pessoa_mini.png'));
+    }    
+    
+    public function CreateFields()
+    {
+        $fields = array(
+            new HiddenField('step',self::STEP_CRIA_PESSOA),
+            array(
+                new TextField('nome','','Nome',40),
+                new SelectionSexo('sexo','','Sexo'),
+            ),
+            new CalendarField('datanasc','','Data de nascimento'),
+            new LookupTextField('lkpNaturalidade','','Naturalidade',40),
+            new HiddenField('idmunicipio'),
+            new TextField('cep','','CEP',20),
+            new SelectionPais('idpaisnascimento','','País de nascimento'),
+            new SelectionPais('idpais','','Nacionalidade'),
+        );
+        $this->SetFields($fields);
+
+        $buttons = array(
+            //new FormButton('btnVerificar','Verificar'),
+            //new FormButton('btnContinue','Continuar'),
+            new FormButton('btnCreate','Criar'),
+        );
+        $this->SetButtons($buttons);
+        $this->defaultButton = false;
+
+        $this->SetFieldAttr('lkpNaturalidade','module','rh');
+        $this->SetFieldAttr('lkpNaturalidade','item','municipio');
+        $this->SetFieldAttr('lkpNaturalidade','event', 'filler');
+        $this->SetFieldAttr('lkpNaturalidade','related', 'idmunicipio,lkpNaturalidade');
+        
+        //:TODO:
+        $validators = array();
+        
+        $this->EventHandler();
+        //$this->CheckStep();
+    }
+    public function SetPessoa($pessoa)
+    {
+        $this->pessoa = $pessoa;
+    }
+    protected function setIdPessoa($idPessoa)
+    {
+        global $MIOLO;
+        $this->pessoa->GetById($idPessoa);
+        if(!$this->pessoa->IsPersistent())
+        {
+            $MIOLO->Assert('Texto',false);
+        }
+    }
+
+    /**
+     * GetData method
+     * @var FormData
+     */
+    public function GetData()
+    {
+        $data = new FormData();
+        foreach($this as $c)
+        {
+            if ($c instanceof Control)
+            {
+                $name = strtolower($c->GetName());
+                $data->$name = $this->GetFieldValue($name);
+            } 
+        }
+       return $data;
+    }
+     public function SetData($data)
+     {
+        foreach($this as $c)
+        {
+            if ($c instanceof Control)
+            {
+               $name = strtolower($c->GetName());
+                 if(!empty($name)) $this->SetFieldValue($name, $data->$name) ;
+            } 
+        }
+     }
+
+    /**
+     * Step check
+     */
+    /*
+    protected function CheckStep()
+    {
+        global $MIOLO;
+        $data = $this->GetData();
+
+        $this->SetFieldAttr('sexo','visible',false);
+        $this->SetFieldAttr('datanasc','visible',false);
+        $this->SetFieldAttr('idpaisnascimento','visible',false);
+        $this->SetFieldAttr('lkpNaturalidade','visible',false);
+        $this->SetFieldAttr('cep','visible',false);
+        $this->SetFieldAttr('idpais','visible',false);
+        $this->SetButtonAttr('btnVerificar','visible',false);
+        $this->SetButtonAttr('btnContinue','visible',false);
+        $this->SetButtonAttr('btnCreate','visible',false);
+        switch($data->step)
+        {
+            case self::STEP_PEDE_NOME:
+                $this->SetButtonAttr('btnVerificar','visible',true);
+            break;
+            case self::STEP_LISTA_PARECIDOS:
+                $this->SetButtonAttr('btnVerificar','visible',true);
+                $this->SetButtonAttr('btnContinue','visible',true);
+            break;
+            case self::STEP_PEDE_DADOS:
+                $this->SetButtonAttr('btnCreate','visible',true);
+                $this->SetFieldAttr('sexo','visible',true);
+                $this->SetFieldAttr('datanasc','visible',true);
+                $this->SetFieldAttr('lkpNaturalidade','visible',true);
+                $this->SetFieldAttr('idmunicipio','visible',true);
+                $this->SetFieldAttr('cep','visible',true);
+                $this->SetFieldAttr('idpais','visible',true);
+                $this->SetFieldAttr('sexo','visible',true);
+                $this->SetFieldAttr('idpaisnascimento','visible',true);
+                $this->SetFieldAttr('cep','visible',true);
+                $this->SetFieldAttr('idpais','visible',true);
+                $this->SetFieldValue('step',self::STEP_CRIA_PESSOA);
+            break;
+            case self::STEP_CRIA_PESSOA:
+                $this->SetFieldValue('step',self::STEP_CRIA_PESSOA);
+            break;
+        }
+    }
+    */
+
+    /**
+     * btnCreate click
+     */
+    public function btnCreate_click()
+    {
+        global $MIOLO, $page;
+        
+        $this->pessoa->SetData($this->GetData());
+        $this->pessoa->save();
+        if($this->pessoa->CheckError())
+        {
+            $errors = $this->pessoa->GetErrors();
+            $this->MIOLO->Error($errors);
+        }
+        else
+        {
+            $page->GoTo($MIOLO->GetActionURL('rh','main:pessoa',$this->pessoa->idpessoa));
+        }
+    }
+}
+?>

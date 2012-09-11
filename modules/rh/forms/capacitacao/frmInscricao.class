@@ -1,0 +1,290 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmInscricao extends MFormAjax
+{
+    var $siape;
+    var $candidato;
+    var $modulo;
+    var $dadosPessoais;
+    var $dadosFuncionais;
+    var $novo;
+    var $back;
+    var $aTurno;
+    var $aAmbiente;
+
+	function __construct($siape)
+    {   global $MIOLO, $action, $modulo;
+
+       $inscricao = MForm::GetFormValue('inscricao');
+       $modulo = MForm::GetFormValue('modulo');
+       $key = MForm::GetFormValue('key');
+       $this->modulo = $MIOLO->GetBusiness('rh','capacitacaomodulo', $modulo);
+       $this->candidato = $MIOLO->GetBusiness('rh','capacitacaoinsc', $inscricao);
+       $this->candidato->idvinculo = $siape;
+       $this->novo = ($this->candidato->inscricao === '');
+       parent::__construct('Formulário de Inscrição em Eventos de Capacitação');
+       $this->box->AddStyle('width',"85%");
+       $this->box->AddStyle('padding',"10px");
+	   $this->eventHandler();
+	}
+
+    function CreateFields()
+	{  global $MIOLO, $action, $page, $modulo;
+
+        // include the client (javascript) code in the page 
+        $url = $this->manager->getActionURL('rh','modules:forms:capacitacao:frmInscricao.js'); 
+        $this->page->addScriptURL($url);
+
+       $candidato = $this->candidato;
+
+       $textoInsc = new MLabel($this->novo ? 'Nova Inscrição' : 'Número de Inscrição: ' . $candidato->inscricao,true);
+
+       $inscricao = new MHiddenField('inscricao', $candidato->inscricao);
+       $key = new MHiddenField('key', $candidato->key);
+
+// curso/modulo
+        $aTurno = array("M"=>"Manhã","T"=>"Tarde","N"=>"Noite");	
+        $amodulos = $this->modulo->listCursoModuloAberto();
+
+        $hamodulosAbertos = count($amodulos);
+        if ($hamodulosAbertos)
+        {
+	    	foreach($amodulos as $n=>$c)
+		    {
+			   $opt = array(); 
+			   foreach($c as $c1)
+			   {
+                  $opt[] = new MOption( $c1[2], $c1[2], $c1[0].'&nbsp;-&nbsp;'.$aTurno[$c1[1]], false);
+			   }
+               $optGroup[] = new MOptionGroup($c[2],'Curso: '.$n,$opt);
+		    }
+            $fmodulo = new MSelection('idmodulo',$this->candidato->idmodulo,'Curso/Módulo',$optGroup);
+
+            $fmodulo->AddAttribute('onChange',"javascript:ajaxBtnModulo.call();");
+        }
+        else
+        {
+            $fmodulo = new MLabel('Nenhum modulo aberto.','red',true);
+        }
+
+      
+// dados pessoais
+       $this->dadosPessoais = $dadosPessoais = $this->candidato->getDadosPessoais();      
+       $fHiddenSiape = new MHiddenField('siape',$dadosPessoais->siape);
+       $fSiape = new MTextLabel('lsiape',$dadosPessoais->siape,'Siape');
+       $fNome = new MTextLabel('nome',$dadosPessoais->nome,'Nome');
+       $fEndereco = new MTextLabel('endereco',$dadosPessoais->endereco,'Endereço');
+       $fEmail = new MTextField('email',$dadosPessoais->email,'e-mail',40);
+       $fCPF = new MTextLabel('cpf',$dadosPessoais->cpf,'CPF');
+       $fSpace = new MTextLabel('space','&nbsp;','&nbsp;');
+
+// dados funcionais
+       $ambiente = $this->manager->getBusiness('rh','ambiente');
+       $this->aAmbiente = $ambiente->listAll()->chunkResult();
+       //$this->aTurno = array("manha"=>"Manhã","tarde"=>"Tarde","noite"=>"Noite");
+       $this->dadosFuncionais = $dadosFuncionais = $this->candidato->getDadosFuncionais();      
+       $fCategoria = new MTextLabel('categoria',$dadosFuncionais->categoria,'Categoria');
+       $fCargo = new MTextLabel('cargo',$dadosFuncionais->cargo,'Cargo');
+       $fUnidade = new MTextLabel('unidade',$dadosFuncionais->unidade,'Unidade');
+       $fTelefone = new MTextField('telefone',$this->candidato->telefone,'Telefone',10);
+//       $fTurno = new MSelection('turno',trim($this->candidato->turno),'Turno de trabalho',$this->aTurno);
+//       $fAmbiente = new MSelection('ambiente',$this->candidato->ambiente,'Ambiente de Trabalho',$this->aAmbiente);;
+       $fAmbiente = new MTextLabel('ambiente',$dadosFuncionais->ambiente,'Ambiente de Trabalho');
+
+// avisos
+       $fAvisos = new MTextLabel('avisos','Caso você possua necessidades especiais para participação no curso, por favor entre em contato com a Coordenação de Capacitação/PRORH, pelo telefone 2102-3937.','Avisos');
+        
+// justificativa
+       $fJustificativa = new MMultiLineField('justificativa',$this->candidato->justificativa,'Justificativa (justificar a relevância do modulo para a UFJF e para o servidor)',70,3,90);
+ 
+// form
+       $spacer = new MSpacer('8px');
+       $fChoicemodulo = $hamodulosAbertos ? new MButtonAjax('btnmodulo','Exibir dados do módulo','dadosmodulo','idmodulo','ajaxBtnmodulo') : $spacer;
+
+       $fDadosmodulo = new MDiv('dadosmodulo');
+       $fDadosmodulo->width = '400px';
+       $g1a = new MHContainer('',array($fmodulo)); 
+//       $g1b = new MHContainer('',array($fChoicemodulo)); 
+       $g1c = new MHContainer('',array($fDadosmodulo)); 
+       $g1 = new MBaseGroup('g1','&nbsp;Curso/Módulo&nbsp;',array($g1a,$g1b,$g1c),'vertical');
+       $g2a = new MHContainer('',array($fHiddenSiape,$fSiape,$fSpace,$fNome)); 
+       $g2b = new MHContainer('',array($fEndereco)); 
+       $g2c = new MHContainer('',array($fCPF,$fSpace,$fEmail)); 
+       $g2 = new MBaseGroup('g2','&nbsp;Dados pessoais&nbsp;',array($g2a,$g2b,$g2c),'vertical');
+       $g2->showLabel = true;
+       $g3a = new MHContainer('',array($fCategoria,$fSpace,$fCargo)); 
+       $g3b = new MHContainer('',array($fUnidade,$fSpace,$fTelefone)); 
+//       $g3c = new MHContainer('',array($fTurno,$fSpace,$fAmbiente)); 
+       $g3c = new MHContainer('',array($fAmbiente)); 
+       $g3 = new MBaseGroup('g3','&nbsp;Dados funcionais&nbsp;',array($g3a,$g3b,$g3c),'vertical');
+       $g3->showLabel = true;
+       $g4a = new MHContainer('',array($fJustificativa)); 
+       $g4 = new MBaseGroup('g4','',array($g4a),'vertical');
+       $g4->showLabel = true;
+       $g5a = new MHContainer('',array($fAvisos)); 
+       $g5 = new MBaseGroup('g5','',array($g5a),'vertical');
+       $g5->showLabel = true;
+
+
+       $fields = Array(
+          $g1, $spacer,
+          $g2, $spacer,
+          $g3, $spacer,
+          $g5, $spacer,
+          $g4, $spacer,
+//          $spacer,
+       );
+	   $this->SetFields($fields);
+
+       $validators = array(
+           new MCompareValidator('ambiente','','!=','','s','required',"Campo \"Ambiente de Trabalho\" deve ser informado."),
+           new MCompareValidator('telefone','','!=','','s','required',"Campo \"Telefone\" deve ser informado."),
+           new MCompareValidator('justificativa','','!=','','s','required',"Campo \"Justificativa\" deve ser informado."),
+       );
+
+       $this->SetValidators($validators);
+
+       $buttons = Array(
+           new MButton('btnPost', 'Continuar'),
+       );
+	   $this->SetButtons($buttons);
+  
+       if ($this->candidato->inscricao != '')
+       {
+           $this->addButton(new MButton('btnPrint', 'Imprimir','PDF'));
+
+       }
+ 	}
+
+    function StripChars()
+    {
+       foreach ( $this->GetFieldList() as $f )
+       {
+           if ( $f->name )
+           {
+               $f->value = str_replace("'","", $f->value);
+               $f->value = str_replace("\"","", $f->value);
+               $f->value = str_replace("\\","", $f->value);
+               $f->value = str_replace("#","", $f->value);
+               $f->value = str_replace("%","", $f->value);
+               $f->value = str_replace("$","", $f->value);
+               $f->value = str_replace("&","", $f->value);
+               $f->value = str_replace("!","", $f->value);
+               $f->value = str_replace("*","", $f->value);
+           }
+       }
+    }
+
+	function btnPost_click()
+	{  
+	   global $MIOLO;
+	   $modulo = $MIOLO->GetBusiness('rh','capacitacaomodulo');
+
+       	   $this->StripChars();
+           $candidato = $this->candidato;
+
+	   $candidato->idvinculo = $this->getFormValue('siape');
+	   $candidato->idmodulo = $this->getFieldValue('idmodulo');		
+	   $candidato->turno = $modulo->getTurno($candidato->idmodulo);		
+	   $candidato->dadosPessoais->email = $this->getFieldValue('email');		
+	   $candidato->telefone = $this->getFieldValue('telefone');		
+	   $candidato->ambiente = $this->getFieldValue('ambiente');		
+	   $candidato->justificativa = $this->getFieldValue('justificativa');	
+           $candidato->status = 'P';  // pendente
+	   $candidato->ts = $this->manager->getSysTime();	
+
+        try
+        {
+
+           $modulo = $this->manager->getBusiness('rh','capacitacaomodulo',$candidato->idmodulo);
+
+           if ($candidato->podeMatricular())
+           {
+               $excedente = $modulo->isFull();
+
+               if ($excedente)
+               {
+                    $candidato->status = 'E';  // excedente
+
+                    $label = new MLabel('Inscrito como EXCEDENTE','red',true);
+               }
+
+               $candidato->save();
+
+               $this->page->setAction($this->manager->GetActionURL('rh','main:capacitacao:formulario','', array('modulo'=>$candidato->idmodulo, 'inscricao'=>$candidato->inscricao,'siape'=>$candidato->idvinculo)));
+//             $go = "miolo.doPostBack('btnPrint:click',''); miolo.doShowPDF();";
+               $go = $this->manager->getActionURL('rh','main:capacitacao'); 
+               $chefia = new MLabel('Contatar chefia imediata ou alguém por ele indicado para anuência no SIGA.','blue',true);
+               $this->manager->Information( 'Inscrição:[' . $candidato->inscricao . '] para o SIAPE [' . $candidato->idvinculo . '] - Nome: ['. $this->dadosPessoais->nome .'].<br>Dados cadastrados com sucesso.<br><br>' . ($excedente? $label->generate() . '<br><br>' : '') . $chefia->generate(), $go);
+             }
+           else
+           {
+               $this->AddError('Erro no cadastramento/alteração das informações.<br>Inscrição não permitida, considerando que já existe inscrição em data/horário coincidentes.');
+           }
+       }
+       catch (EMioloException $e)
+       {
+           $this->AddError('Erro no cadastramento/alteração das informações.<br>Verifique se já existe inscrição neste modulo/evento para este funcionário.');
+       }
+    }
+
+    function btnPrint_click()
+    {
+        $report = new MDOMPDFreport();
+        $fileName = $this->manager->GetModulePath('rh', 'reports/formCapacitacao.html') ;
+
+		$params = new stdClass(); 
+        $params->inscricao    = $this->candidato->inscricao; 
+        $params->nomemodulo     = $this->modulo->nome; 
+        $params->modulo     = $this->modulo->modulo; 
+        $params->periodo     = "{$this->modulo->datainicio} a {$this->modulo->datafim} - de {$this->modulo->horainicio} a {$this->modulo->horafim}"; 
+        $params->ts     = $this->candidato->ts; 
+        $params->idvinculo     = $this->candidato->idvinculo; 
+        $params->nome     = $this->dadosPessoais->nome; 
+        $params->endereco     = $this->dadosPessoais->endereco; 
+        $params->cpf     = $this->dadosPessoais->cpf; 
+        $params->email    = $this->dadosPessoais->email; 
+        $params->categoria     = $this->dadosFuncionais->categoria; 
+        $params->cargo     = $this->dadosFuncionais->cargo; 
+        $params->unidade     = $this->dadosFuncionais->unidade; 
+        $params->telefone    = $this->candidato->telefone; 
+        $params->ambiente     = $this->aAmbiente[trim($this->candidato->ambiente)]; 
+        $params->turno   = $this->aTurno[trim($this->candidato->turno)]; 
+        $params->justificativa = $this->candidato->justificativa; 
+
+        $report->GenerateFile($fileName, $params);
+    }
+
+    function ajaxBtnModulo($args)
+    {
+        $idmodulo = $args->value;
+        $this->modulo->GetById($idmodulo);
+        $fields[] = new MLabel('Período: <b>'. $this->modulo->datainicio . ' a ' . $this->modulo->datafim . '</b>',true);
+        $fields[] = new MLabel('Horário: <b>'. $this->modulo->horainicio . ' a ' . $this->modulo->horafim . '</b>',true);
+        $fields[] = new MLabel('Vagas: <b>'. $this->modulo->vagas . '</b>' . '  -  Inscritos:  <b>' . $this->modulo->getCountInscritos() . '</b>',true);
+        $fields[] = new MLabel('Carga Horária: <b>'. $this->modulo->cargahoraria . ' horas' . '</b>',true);
+        $fields[] = new MLabel('Local: <b>'. $this->modulo->local . '</b>',true);
+        $fields[] = new MLabel('Dias da semana: <b>'. $this->modulo->diasemana . '</b>',true);
+        $fields[] = new MLabel('Observações: <b>'. $this->modulo->observacoes . '</b>',true);
+        $grp = new MBaseGroup('grpmodulo','',$fields,'vertical','none');
+        $this->manager->getTheme()->setAjaxContent($grp);
+    }
+}
+?>

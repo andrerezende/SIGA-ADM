@@ -1,0 +1,419 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+class frmCatalogacaoFichaVar extends MForm
+{
+    public $subficha;
+    public $ficha;
+    public $periodico;
+    public $etiqueta;
+
+	var $objSimples;
+
+    function __construct($subficha)
+    {
+       $this->subficha = $subficha;
+       parent::__construct($subficha->titulo);
+       
+       // Botão 'fechar', direcionando para o handler biblioteca/main/catalogacao/periodicos
+		$this->SetClose($this->manager->GetActionURL($module, 'main:catalogacao:periodicos'));
+    }
+
+
+    function CreateFields() 
+    {
+            
+        $this->periodico = $this->manager->getBusiness('biblioteca','periodico');
+        $this->periodico->GetById($this->subficha->idPeriodico);
+        $this->ficha = $this->manager->getBusiness('biblioteca','ficha');
+        $this->etiqueta = $this->manager->getBusiness('biblioteca','etiqueta');
+        $etiqueta = $this->etiqueta->GetByFichaCatalogacaoVar($this->subficha->idficha,$this->subficha->idsubficha);
+
+		$array = array( 
+              new MHiddenField('hidFieldList',''),
+              new MHiddenField('idEtiqueta',''),
+              array(
+//            new MSelection('selEtiqueta','','Etiqueta', $etiqueta->chunkResultMany(0,array(1,2),'S','&nbsp;')),
+		      new MSelection('selEtiqueta','','Etiqueta'),
+              new MTextField('txtOcorrencia','','Ocorrência',3),
+              new MButton('btnEdit','Editar'),
+              new MButton('btnChoose','Outra etiqueta'),
+              new MTextLabel('lblRep','Obs: Usar o campo Ocorrência apenas para etiquetas repetitivas [r]',' ', 'blue')
+              )
+        );
+        $this->setFields($array);
+        
+        $tipo = $this->getFormValue('tipo');
+		if ($tipo == 'indice')
+		{
+		   $buttons = array(
+           new MButton('btnPost', '<b>Gravar</b>'),
+		   //new MButton('btnVoltarPesq','<b>Voltar</b>')
+		   );		   
+           
+	       $this->SetButtons($buttons);
+	       //$this->SetFieldAttr('btnChoose','visible', false);
+	       //$this->SetbuttonAttr('btnChoose','visible',false);
+		}
+				
+		if($this->GetFieldValue('txtOcorrencia') == null)
+		{
+			$this->setFieldValue('txtOcorrencia','1');
+		}
+
+		$this->SetFieldAttr('selEtiqueta','options', $etiqueta->chunkResultMany(0,array(1,2),'S','&nbsp;'));
+		//$this->SetFieldAttr('selEtiqueta','options', $etiqueta->chunkResultMany(0,array(1,2),'S','&nbsp;'));
+		$this->setFieldAttr('btnChoose','visible',false);
+        $this->defaultButton = false;
+
+		//se vier da pesquisa por termo específico
+		if($this->GetFormValue('event') == 'PesquisaCatalog')
+		{
+			$this->btnEdit_click();
+		}
+	}
+
+
+    function addInputFields($idEtiqueta, $ocorrencia,$tag)
+    {
+    	//$this->setButtonAttr('btnPost','visible',false);   	   	
+        $this->setFieldAttr('btnEdit','visible',false);
+        $this->setFieldAttr('lblRep','visible',false);
+        $this->setFieldAttr('btnChoose','visible',true);
+        $this->setFieldAttr('selEtiqueta','readonly',true);
+        $this->setFieldAttr('txtOcorrencia','readonly',true);
+        $fList = '';
+
+        $obj = new MDummy();
+        $fields = new MHContainer();
+        $indicadores = $this->etiqueta->getIndicadores($idEtiqueta);
+		$listaIndicadores = array();
+		foreach ($indicadores as $i=>$ind)
+        {
+            if ($ind != 0)
+            { 
+                $obj->indicador = $i;
+                $obj->idopcao = $this->etiqueta->getOpcao('IN' . $i);
+                $field = $this->ficha->getInputFieldInd($this->subficha->idsubficha, $obj);
+                $fList .= ($fList != '' ? ',' : '') . $field->getName();
+                $field->formMode = 2;
+                $indicador = $this->periodico->getIndicador($idEtiqueta,$i,$ocorrencia);
+                if (!$indicador->eof)
+                {
+                    $field->setValue($indicador->fields('conteudo'));
+                }
+                $fields->addControl($field);
+
+				//lista para validators
+				$listaIndicadores[] = $field->getName();
+            }
+        } 
+        $this->addField($fields);
+
+		//validators
+		for($i = 0; $i < count($listaIndicadores); $i++)
+		{
+			$this->AddValidator(new RequiredValidator($listaIndicadores[$i]));
+		}
+
+        $campo = $this->ficha->getCampo($this->subficha->idficha,$this->subficha->idsubficha, $idEtiqueta, $ocorrencia);
+        while (! $campo->eof)
+        {
+            $obj = $campo->getRowObject();
+            $field = $this->ficha->getInputFieldVar($this->subficha->idsubficha,$obj,$tag);
+            $fList .= ($fList != '' ? ',' : '') . $field->getName();
+            $field->formMode = 2;
+            $material = $this->periodico->getMaterial($idEtiqueta,$obj->subcampo,$ocorrencia);
+			if (!$material->eof)
+            {
+                if ($field->className == 'mmultitextfield3')
+                {
+                    $array = $material->chunkResultMany(0,array(1,2),'');
+                    $field->setCodeValue($array);
+                }
+                else
+                {
+                    $field->setValue($material->fields('conteudo'));
+                }
+            }
+            $this->addField($field);
+            $campo->moveNext(); 
+        } 
+        
+        $this->setFieldValue('hidFieldList', $fList);
+        $this->setFieldValue('idEtiqueta', $idEtiqueta);
+        
+		$tipo = $this->getFormValue('tipo');
+        
+		if ($tipo != 'indice')
+        {
+		   $buttons = array(
+           new MButton('btnPost', '<b>Gravar</b>'),
+		   //new MButton('btnVoltarPesq','<b>Voltar</b>')
+           );
+           $this->SetButtons($buttons);
+                      
+        }
+		//$this->setButtonAttr('btnVoltarPesq','visible',false);
+		
+		//$this->setButtonAttr('btnVoltarPesq','visible',false);
+		//$this->setButtonAttr('btnPost','visible',false);
+    }
+
+
+    function btnEdit_click()
+    {
+		global $MIOLO, $module, $self, $theme, $action, $page;
+	
+		
+		$idEtiqueta = $this->getFormValue('selEtiqueta');
+		$etiqueta = $this->etiqueta->GetById($idEtiqueta);
+		$tag = $etiqueta->tag;
+
+		$ocorrencia = MUtil::NVL($this->getFormValue('txtOcorrencia'),'0');
+		$etiqueta = $this->etiqueta->getById($idEtiqueta);
+
+		if ($this->etiqueta->temRepeticoes)
+		{
+                        if ($ocorrencia == '0')
+                        {
+                                $this->AddError('Em etiquetas com repetições deve-se informar o número da ocorrência.');
+                                return;
+                        }
+		}
+		else
+	        {
+		    $ocorrencia = '1';
+                    $this->SetFieldValue('txtOcorrencia', '1');
+                }
+		$this->addInputFields($idEtiqueta, $ocorrencia, $tag);
+
+		$tipo = $this->getFormValue('tipo');
+		if ($tipo == 'indice')
+		{
+			$consultarpor = $this->getFormValue('consultarpor');
+			$filtro = $this->getFormValue('filtro');
+			$consulta = $this->getFormValue('consulta');
+			$termo = $this->getFormValue('termo');
+			$unidade = $this->getFormValue('unidade');
+			$tipo = $this->getFormValue('tipo');
+			$page = $this->getFormValue('page');
+	
+			$endereco = $MIOLO->GetActionURL($module, 'main:pesquisaindice', $filtro, Array('event'=>'PesquisaDetalhada','consultarpor'=>$consultarpor,'consulta'=>$consulta,'termo'=>$termo,'unidade'=>$unidade,'tipo'=>$tipo,'page'=>$page));
+		
+			//$this->setButtonAttr('btnVoltarPesq','visible',true);
+			$this->setButtonAttr('btnVoltarPesq','action',$endereco);
+		}
+
+		//valores defaults
+		$sub = $this->subficha->idsubficha;
+		if($tag == '040')
+		{
+			if($this->GetFieldValue($sub . '_27_a') == '')
+			{
+				$this->SetFieldValue($sub . '_27_a', 'IFBA');
+			}
+		}
+		if($tag == '100')
+		{
+			if($this->GetFieldValue($sub . '_IND_1') == '')
+			{
+				$this->SetFieldValue($sub . '_IND_1', '1');
+			}
+			if($this->GetFieldValue($sub . '_IND_2') == '')
+			{
+				$this->SetFieldValue($sub . '_IND_2', ' ');
+			}
+		}
+		if($tag == '245')
+		{
+			if($this->GetFieldValue($sub . '_IND_2') == '')
+			{
+				$this->SetFieldValue($sub . '_IND_2', '0');
+			}
+		}
+		if($tag == '490')
+		{
+			if($this->GetFieldValue($sub . '_IND_1') == '')
+			{
+				$this->SetFieldValue($sub . '_IND_1', '0');
+			}
+		}
+		if($tag == '600')
+		{
+			if($this->GetFieldValue($sub . '_IND_2') == '')
+			{
+				$this->SetFieldValue($sub . '_IND_2', '4');
+			}
+		}
+		if($tag == '610')
+		{
+			if($this->GetFieldValue($sub . '_IND_2') == '')
+			{
+				$this->SetFieldValue($sub . '_IND_2', '4');
+			}
+		}
+		if($tag == '611')
+		{
+			if($this->GetFieldValue($sub . '_IND_2') == '')
+			{
+				$this->SetFieldValue($sub . '_IND_2', '4');
+			}
+		}
+		if($tag == '630')
+		{
+			if($this->GetFieldValue($sub . '_IND_2') == '')
+			{
+				$this->SetFieldValue($sub . '_IND_2', '4');
+			}
+		}
+		if($tag == '650')
+		{
+			if($this->GetFieldValue($sub . '_IND_1') == '')
+			{
+				$this->SetFieldValue($sub . '_IND_1', '#');
+			}
+			if($this->GetFieldValue($sub . '_IND_2') == '')
+			{
+				$this->SetFieldValue($sub . '_IND_2', '4');
+			}
+		}
+		if($tag == '651')
+		{
+			if($this->GetFieldValue($sub . '_IND_2') == '')
+			{
+				$this->SetFieldValue($sub . '_IND_2', '4');
+			}
+		}
+		if($tag == '700')
+		{
+			if($this->GetFieldValue($sub . '_IND_2') == '')
+			{
+				$this->SetFieldValue($sub . '_IND_2', '#');
+			}
+		}
+		if($tag == '711')
+		{
+			if($this->GetFieldValue($sub . '_IND_2') == '')
+			{
+				$this->SetFieldValue($sub . '_IND_2', '#');
+			}
+		}
+    }
+
+
+    function btnChoose_click()
+    {
+		//default para os campos
+		$this->setFieldValue('txtOcorrencia','1');
+
+		if($this->GetFormValue('selEtiqueta') != null)
+		{
+			$default = $this->etiqueta->GetByTag(substr($this->GetFormValue('selEtiqueta'), 0, 3));
+			$this->SetFieldValue('selEtiqueta',$default->idEtiqueta);
+		}
+    }
+
+
+    function btnPost_click()
+    {
+        global $MIOLO, $module;
+
+        $this->objSimples = $MIOLO->GetBusiness($module,'pesquisasimples');
+
+        $idEtiqueta = $this->getFieldValue('idEtiqueta');
+        $tag = $this->getFieldValue('selEtiqueta');
+        $ocorrencia = MUtil::NVL($this->getFieldValue('txtOcorrencia'),'1');
+
+        //deleta todos os materiais dessa obra, etiqueta, ocorrencia
+        $this->periodico->deleteMaterial($idEtiqueta,$ocorrencia);
+
+        $etiqueta_vazia = true;
+        $fields = explode(',',$this->getFieldValue('hidFieldList'));
+        foreach($fields as $field)
+        {
+
+//			if (!is_null($value = $this->page->request($field)))
+//			{
+                $value = $this->page->request($field);
+                $campo = explode('_',$field);
+                if ($campo[0] == $this->subficha->idsubficha)
+                {
+                if (is_array($value))
+                {
+                        foreach($value as $i=>$v)
+                        {
+                                $t = explode('] [',$v);
+                                $linha = substr($t[0],1);
+                                $conteudo = substr($t[1],0,strlen($t[1])-1);
+                                $conteudo = trim($this->objSimples->RetirarCaracteresEspeciais($conteudo));
+                                if($conteudo != null)
+                                {
+                                $this->periodico->saveMaterial($this->periodico->idPeriodico,$idEtiqueta, $ocorrencia, $campo[2], $linha, $conteudo, $tag);
+                                        $etiqueta_vazia = false;
+                                }
+                        }
+                }
+                else
+                {
+                if ($campo[1] == "IND")
+                {
+                        $this->periodico->saveIndicador($idEtiqueta, $ocorrencia, $campo[2], $value, $tag);
+                        }
+                else
+                {
+                        if($value != null)
+                        {
+                                $value = trim($this->objSimples->RetirarCaracteresEspeciais($value));
+                                $this->periodico->saveMaterial($this->periodico->idPeriodico,$idEtiqueta, $ocorrencia, $campo[2], 1, $value, $tag);
+                                $etiqueta_vazia = false;
+                        }
+                        else //para casos em que é preciso apagar campo da bt_obra
+                        {
+                                $this->periodico->saveMaterial($this->periodico->idPeriodico,$idEtiqueta, $ocorrencia, $campo[2], 1, $value, $tag);
+                        }
+                }
+                }
+                }
+//			}
+                }
+
+                //se a ocorrencia foi deletada
+                if($etiqueta_vazia)
+                {
+                        $this->periodico->atualizaOcorrencias($idEtiqueta,$ocorrencia);
+                }
+
+                $this->setFieldValue('selEtiqueta',$idEtiqueta);
+                $etiqueta = $this->etiqueta->getById($idEtiqueta);
+                $this->addInputFields($idEtiqueta,$ocorrencia,$tag);
+                //$this->setFieldAttr('btnPost','visible',false);
+                                
+                //remove o negrito do botão, pois já foi pressionado uma vez
+                $this->SetButtonAttr('btnPost','label','Gravar');
+        }
+}
+?>

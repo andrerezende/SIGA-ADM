@@ -1,0 +1,464 @@
+<?php
+// 20-10-2011 - Daniel Bonfim
+MIOLO::Import('extensions::class.phpmailer.php','PHPMailer');
+
+class frmProcessoNovo extends MFormAjax
+{
+	protected $processo;
+	protected $perms;
+	protected $setor;
+	protected $setorAcesso;
+	protected $session;
+        // 14-10-2011 - Daniel Bonfim
+        protected $objUsuario;
+        protected $idUserLogado;
+        protected $userLogado;
+        protected $allUsers;
+        // 20-10-2011 - Daniel Bonfim
+        protected $arrIdsUserObservadores;
+        
+
+	public function __construct()
+	{
+		//      construct
+		global $MIOLO;
+		$this->processo  = $MIOLO->GetBusiness('protocolo','processo');
+		$this->setor  = $MIOLO->GetBusiness('protocolo','setor');
+		$this->setorAcesso  = $MIOLO->GetBusiness('protocolo','setoracesso');
+		$this->perms  = $MIOLO->getPerms();
+		$this->session = $MIOLO->session;
+                // 14-10-2011 - Daniel Bonfim
+                $this->objUsuario = $MIOLO->GetBusiness('common','usuario');
+                
+		parent::__construct('Incluir Processo');
+		$this->SetClose($MIOLO->GetActionURL('protocolo','main'));
+		$this->page->addJsCode(file_get_contents(dirname(__FILE__).'/js/frmProcessoNovo.js'));
+		$this->EventHandler();
+	}
+
+	public function CreateFields()
+	{
+		global $MIOLO;
+                
+                // 14-10-2011 - Daniel Bonfim
+                $this->allUsers = $this->objUsuario->ListAllLogins();
+				
+                $mtField = array(array('mtusuario','Usuarios','',$this->allUsers));
+
+		//      ano do processo
+		if ($this->perms->checkAccess('PROT_ANO', A_ACCESS))
+		{
+			$ano = array('last'=>date('Y')-1,'this'=>date('Y'));
+			$value = ($this->session->isRegistered('sAno')) ? $this->session->getValue('sAno') : $ano['this'];
+			$opt1 = new MOption( 'opt1', $ano['last'],$ano['last'].'&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;', false, 'id1' );
+			$opt2 = new MOption( 'opt2', $ano['this'],$ano['this'].'&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;', false, 'id2' );
+			$groupAno = new MRadioButtonGroup('anoCorrente','Ano do processo',array($opt1,$opt2),$value,'','horizontal','css');
+			$groupAno->addAttribute('style','padding:10px');
+		}
+		else
+		{
+			$ano = date('Y');
+			$groupAno = new MHiddenField('anoCorrente',$ano);
+		}
+
+		if($this->perms->checkAccess('PROT_DIR', A_EXECUTE)){
+			$permissao = 'dir';
+		}elseif ($this->perms->checkAccess('PROT_GER', A_EXECUTE)){
+			$permissao = 'ger';
+		}elseif ($this->perms->checkAccess('PROT_COORD', A_EXECUTE)){
+			$permissao = 'coord';
+		}else{
+			$permissao = 'false';
+		}
+
+
+		//      dados do processo
+		$url = $this->manager->getActionUrl('protocolo','ajaxhandler');
+
+		//$tipo = new MSelection('tipo',$this->session->getValue('sTipo'),'Tipo:',array('P'=>'Processo','A'=>'Protocolado'));
+		$tipo = new MSelection('tipo','','Tipo:',array('P'=>'Processo','A'=>'Protocolado'));
+		$tipo->addAttribute("onchange","doTextTipo('$url');");
+		//MIOLO::GetPage()->OnLoad("doTextTipo('$url');"); // Sugestão da EAFBarbacena
+
+		//$titulo = new MTextField('titulo',$this->session->getValue('sTitulo'),'Titulo:',90);
+		$titulo = new MTextField('titulo','','Titulo:',90);
+		$titulo->addAttribute('maxlength','80');
+
+		//$solicitante = new MTextField('solicitante',$this->session->getValue('sSolicitante'),'Solicitante:',90);
+		$solicitante = new MTextField('solicitante','','Solicitante:',90);
+		$solicitante->addAttribute('maxlength','80');
+
+		//$assunto = new MMultiLineField('assunto',$this->session->getValue('sAssunto'),'Assunto:',240,5,88);
+		$assunto = new MMultiLineField('assunto','','Assunto:',240,5,88);
+
+		$clearProcesso = ($this->session->IsRegistered('sTitulo') && $this->session->IsRegistered('sSolicitante') && $this->session->IsRegistered('sAssunto')) ? new MButton('limparProcesso','Limpar',"javascript:doLimparDadosProcesso('$url')") : null;
+		$groupDadosProcesso = new MBaseGroup( 'groupTipoProcesso', 'Dados do processo',array($tipo,$titulo,$solicitante,$assunto,$clearProcesso),'horizontal','css');
+		$groupDadosProcesso->addAttribute('style','padding:10px');
+
+		//      origem do processo
+
+		//IFSP
+		$msg_tst = $MIOLO->login->idkey;
+		$uasg = $this->processo->getUASG($msg_tst);
+		$value = ($this->session->IsRegistered('sInstituicao')) ? $this->session->getValue('sInstituicao') : $uasg->fields('uasg');
+
+		$instituicao =  new MTextField('instituicao',$value,'Instituição (UP):',15);
+		$instituicao->addAttribute('maxlength','5');
+		$numProcesso = new MDiv('m_numProcesso','');
+
+		if (!$this->perms->checkAccess('PROT_ADMIN', A_ACCESS))
+		{
+			$instituicao->setReadOnly(true);
+		}
+		else
+		{
+			$url = $this->manager->getActionUrl('protocolo','ajaxhandler');
+			$origemExterna  = new MCheckBox( 'origemExterna','value','&nbsp;',false, _M('externo') );
+			$origemExterna->addAttribute("onchange","doTextInstituicao('$url');doTextOrigem('$url');");
+			$destinoExterno  = new MCheckBox( 'destinoExterno','value','&nbsp;',false, _M('externo') );
+			$destinoExterno->addAttribute("onchange","doTextDestino('$url');");
+		}
+
+		$setorOrigem = $this->session->IsRegistered("setorOrigem") ? $this->session->GetValue("setorOrigem") : $this->processo->getSetorUsuario();
+		$setoresAcesso = ($this->perms->checkAccess('PROT_ADMIN', A_ACCESS)) ? $this->setor->selAll() : $this->setorAcesso->selSetoresAcesso($this->processo->getSetorUsuario());
+
+
+		//IFSP
+		$setorOrigem = new MTextField('setorOrigem',$setorOrigem,'Setor de Origem:',$setoresAcesso,'','',15);
+
+		//$setorOrigem = new MComboBox('setorOrigem',$setorOrigem,'Setor de Origem:',$setoresAcesso,'','',15);
+		//$setorOrigem->addAttribute('maxlength','15');
+		//$setorOrigem->addAttribute("onkeyup","toUpperCase('setorOrigem')");
+		//$setorOrigem->addAttribute('style','text-transform:uppercase');
+		//$clearOrigem = ($this->session->IsRegistered('sSetorOrigem')) ? new MButton('limparOrigem','Limpar',"javascript:doLimparOrigem()") : null;
+
+		$groupOrigem = new MBaseGroup('groupOrigem', 'Origem do processo',array($instituicao,$numProcesso,$setorOrigem,$origemExterna,new MSpacer(),$clearOrigem),'horizontal','css');
+		$groupOrigem->addAttribute('style','padding:10px');
+
+		//      arquivo do proceso
+		//$arquivo = new MTextField('arquivo',$this->session->getValue('sArquivo'),'Caixa Arquivo:',15);
+		$arquivo = new MTextField('arquivo','','Caixa Arquivo:',15);
+		$arquivo->addAttribute('maxlength','7');
+
+		$clearArquivo = ($this->session->IsRegistered('sArquivo')) ? new MButton('limparArquivo','Limpar',"javascript:doLimparArquivo()") : null;
+		$groupArquivo = new MBaseGroup('groupArquivo', 'Arquivo do processo (opcional)',array($arquivo,$clearArquivo),'vertical','css');
+		$groupArquivo->addAttribute('style','padding:10px');
+
+		//      saída do processo
+		//$setorDestino = new MComboBox('setorDestino',$this->session->getValue('sSetorDestino'),'Setor de Destino:',$this->setor->selAll(),'','',15);
+		$setorDestino = new MComboBox('setorDestino','','Setor de Destino:',$this->setor->selAll(),'','',15);
+		$setorDestino->addAttribute("onkeyup","toUpperCase('setorDestino')");
+		$setorDestino->addAttribute('style','text-transform:uppercase');
+
+		//$decisao = new MMultiLineField('decisao',$this->session->getValue('sDecisao'),'Decisão:',400,5,88);
+		$decisao = new MMultiLineField('decisao','','Decisão:',400,5,88);
+		//$autor = new MTextField('autor',$this->session->getValue('sAutor'),'Autor:',40);
+		$autor = new MTextField('autor','','Autor:',40);
+
+		$autor->addAttribute('maxlength','40');
+		$clearSaida = ($this->session->IsRegistered('sSetorDestino') && $this->session->IsRegistered('sDecisao') && $this->session->IsRegistered('sAutor')) ? new MButton('limparSaida','Limpar',"javascript:doLimparSaida()") : null;
+		$groupSaida = new MBaseGroup('groupSaida', 'Saída do processo (opcional)',array($setorDestino,$destinoExterno,$decisao,$autor,$clearSaida),'horizontal','css');
+		$groupSaida->addAttribute('style','padding:10px');
+                
+                // begin - 14-10-2011 - Daniel Bonfim
+                $mtfUsuarios = new MMultiTextField2('mtfUsuarios',NULL,'Usuarios',$mtField,300,true,'vertical');
+                
+                $auth = $this->manager->auth;				
+                $this->idUserLogado = $auth->login->idkey;
+                $this->userLogado = $auth->login->id;
+                $mtfUsuarios->SetCodeValue(array($this->idUserLogado));
+                
+                //$groupLoginResponsavel = new MBaseGroup('groupLoginResponsavel', 'Observadores',array($idUsuarioResponsavel,$loginResponsavel,new MSpacer()),'horizontal','css');
+                $groupObservadores = new MBaseGroup('groupObservadores', 'Observadores',array($mtfUsuarios,new MSpacer()),'horizontal','css');
+		$groupObservadores->addAttribute('style','padding:10px');
+                // end 
+                
+		//      fields
+		$fields = array(
+			new MHiddenField('numProcesso'),
+			new MHiddenField('user',$permissao),
+			$groupAno,
+			array($groupDadosProcesso),
+			array($groupOrigem),
+			array($groupArquivo),
+			array($groupSaida),
+                    array($groupObservadores),
+		);
+		$this->SetFields($fields);
+                                
+		//      required fields
+		$validators = array(
+			new MRequiredValidator('titulo'),
+			new MRequiredValidator('solicitante'),
+			new MRequiredValidator('assunto'),
+		);
+		$this->setValidators($validators);
+
+		//      buttons
+		$buttons = array(
+			new MButton('btnSalvar','Abrir'),
+		);
+		$this->SetButtons($buttons);
+	}
+
+	public function btnSalvar_click()
+	{
+		global $MIOLO;
+                
+                // 16-10-2011 - Daniel Bonfim
+                $observadores = $this->GetFieldValue('mtfUsuarios');
+                $responsavelPresente = false;
+                
+                // verificando se a pessoa que abriu o processe nao foi removida da lista de observadores
+                for($i=0; $i<count($observadores); $i++) {
+                    // 31-10-2011 - Daniel Bonfim
+                    if($observadores[$i] == "[--Selecione--]") {
+                        $this->addError("Por favor, retire o elemento '[--Selecione--]' da lista de observadores.");
+                        return;
+                    }
+                    $observadores[$i] = str_replace("[", "", $observadores[$i]);
+                    $observadores[$i] = str_replace("]", "", $observadores[$i]);
+                    
+                    if($observadores[$i] == $this->userLogado)
+                        $responsavelPresente = true;
+                }                
+                if(!$responsavelPresente) {
+                    $this->addError("Não é permitido remover o responsável $this->userLogado da lista de observadores.");
+                    return;
+                }                
+                //print_r($observadores);exit;
+                
+                                
+		//      data
+		$data = $this->getData();
+
+		if ($data->tipo == 'A')
+		{
+			$processoClass = $MIOLO->getBusiness('protocolo','processo');
+			$id = $data->titulo;
+			$tit = $processoClass->getTitulo($id);
+			$res = $tit->result;
+			$data->titulo = $res[0][0];
+		}
+
+		if (!$data->tipo)
+		{
+			$this->addError('Você deve escolher um tipo de processo.');
+			return;
+		}
+		$data->dataAbertura = ($data->anoCorrente == date('Y')) ? date("YmdHi") : $data->anoCorrente.'12311200';
+		$data->dataSaida = ($data->setorDestino) ? $data->dataAbertura : null;
+		//30/03/2012 Tiago Macedo
+		$data->userSaida = ($data->setorDestino) ? $MIOLO->login->id : null;
+
+		$data->dataDespacho = ($data->decisao) ? $data->dataAbertura : null;
+		$this->setData($data);
+		//      session
+		if ($data->anoCorrente) $this->session->SetValue('sAno',$data->anoCorrente);
+		$this->session->SetValue('sTipo',$data->tipo);
+		$this->session->SetValue('sTitulo',$data->titulo);
+		$this->session->SetValue('sSolicitante',$data->solicitante);
+		$this->session->SetValue('sAssunto',$data->assunto);
+
+		$this->session->SetValue('sInstituicao',$data->instituicao);
+
+		$this->session->SetValue('sSetorOrigem',$data->setorOrigem);
+		$this->session->SetValue('sArquivo',$data->arquivo);
+		$this->session->SetValue('sSetorDestino',$data->setorDestino);
+		$this->session->SetValue('sDecisao',$data->decisao);
+		$this->session->SetValue('sAutor',$data->autor);
+                try
+		{
+                        $this->processo->setData($data);
+                        if (!$data->numProcesso = $this->getFormValue('numProcessoExterno'))
+                        {
+                                    $this->processo->setNewNumProcesso($data->anoCorrente);
+                                }    
+                        else
+                        {
+                                if (strlen($data->numProcesso) >= 9){
+                                        $data->numProcesso = str_repeat('0',14-strlen($data->numProcesso)).$data->numProcesso;
+                                }else{
+                                        $this->addError('Número de processo inválido.');
+                                        return;
+                                }
+                                $controle = $this->manager->getBusiness('protocolo','controleprotocolo');
+                                $instituicao = $data->instituicao;
+                                $serie = substr($data->numProcesso,0,6);
+                                $ano = substr($data->numProcesso,7,4);
+                                $codigo = substr($data->numProcesso,12,2);
+                                //$codigo = (is_int($codigo)) ? $codigo : $controle->getCodigo($ano.$serie,$data->instituicao);
+                                if (intval($ano.$serie.$codigo) > 0)
+                                {
+                                        $this->processo->getByNumero($ano.$serie.$codigo);
+                                        if ($this->processo->isPersistent()){
+                                                $this->addError('Numero de processo existente.');
+                                                return;
+                                        }else{
+                                                $this->processo->setData($data);
+                                                $this->processo->numProcesso = $ano.$serie.$codigo;
+                                        }
+                                }
+                                else
+                                {
+                                        $this->addError('Número de processo inválido.');
+                                        return;
+                                }
+                        }
+
+                        //      set and save
+		
+			$this->processo->beginTransaction();
+			$andamento = $this->processo->getAndamento(1);
+			$andamento->setData($data);
+			$andamento->status = 'N';
+			$andamento->setor = (substr($data->setorOrigem,0,1) == '*') ? $this->processo->getSetorUsuario() : $data->setorOrigem;
+			$andamento->dataEntrada = $data->dataAbertura;
+			//30/01/2012 Tiago Macedo
+			$andamento->userEntrada = $MIOLO->login->id;
+
+			$this->processo->addAndamento($andamento);
+			$this->processo->retencao = $this->manager->getBusiness('protocolo','retencao');
+			$this->processo->retencao->setData($andamento);
+
+                        $testeProcesso = $this->manager->getBusiness('protocolo','processo');
+                        $testeProcesso = $testeProcesso->processoDuplicado($this->processo->tipo, $this->processo->solicitante, $this->processo->titulo, $this->processo->assunto, $andamento->userEntrada, $this->processo->dataAbertura);
+                        if(is_null($testeProcesso)){                            
+                            $this->processo->save();      
+                            $msg = "Processo ".$this->processo->numProcessoFormatado()." criado com sucesso.";
+                            $this->processo->Log(OP_INS,$msg);
+                            $this->processo->endTransaction();
+                            $this->page->redirect($this->manager->GetActionURL('protocolo','main:processos',$this->processo->numProcesso));
+                        }    
+                        else {                        
+                            $numpro = $testeProcesso[0][0];                            
+                            $this->page->redirect($this->manager->GetActionURL('protocolo','main:processos',$numpro));
+                        }				
+                
+                        // begin - 16-10-2011 - Daniel Bonfim                
+                        // inserir os observadores na tabela de OBSERVADORES      
+
+                        for($i=0; $i<count($observadores); $i++) {
+                            $bussObservador_unit = $MIOLO->getBusiness('common','observador');
+                            $bussObservador_unit->idObservador = $bussObservador_unit->getNextId();
+                            $bussObservador_unit->idUserResponsavel = $this->idUserLogado;
+                            // pegando os ids dos usuarios contidos no array de observadores
+                            foreach($this->allUsers as $chave=>$valor) { // se encontrar, salve a chave                            
+                                if($observadores[$i] == $valor) {// caso haja apenas o responsavel no array, nao salvar o mesmo usuario como responsavel e observador                                                                
+                                    $bussObservador_unit->idUserObservador = $chave;
+                                    // 20-10-2011 - Daniel Bonfim
+                                    // colocando o id dos observadores em um array para ser usado na funçao de 
+                                    //envio de emails
+                                    $this->arrIdsUserObservadores[] = $chave;
+                                    break;
+                                }
+                            }
+                            $bussObservador_unit->processo = $this->processo->numProcesso;
+                            $bussObservador_unit->save();
+                        }
+                        // 20-10-2011 - Daniel Bonfim
+                        // enviando email para os observadores    
+                        $this->SendMailAbriu(); 
+                } catch(Exception $e) {
+                    $this->manager->Error($e->getMessage());
+                }
+                
+                
+	}
+        
+        // 20-10-2011 - Daniel Bonfim
+        // envia um email informando a cada observador que o processo foi aberto
+        private function SendMailAbriu() {
+            global $MIOLO;
+                        
+            $bussObservador = $MIOLO->getBusiness('common','observador');
+            $bussProcesso = $MIOLO->getBusiness('protocolo','processo');
+                                    
+        // se houverem observadores
+        if($this->arrIdsUserObservadores) {
+            
+            // array com os ids dos observadores
+            foreach($this->arrIdsUserObservadores as $idUserObservador) {
+                
+                $bussUsuario = $MIOLO->getBusiness('common','usuario');
+                // no objPessoa já tem todas as informacoes de que preciso
+                $objUsuario = $bussUsuario->GetById($idUserObservador); 
+                                
+                $email = $objUsuario->pessoa->email;
+                
+                $mail = new PHPMailer();
+		$mail->IsSMTP(); // telling the class to use SMTP
+		$mail->Host = "smtp.ifbaiano.edu.br"; // SMTP server
+		$mail->From = 'sigaadm@ifbaiano.edu.br';
+		$mail->FromName = 'SIGA - Sistema Integrado de Gestão Acadêmica';
+		//$mail->Subject = "[SIGA] Monitoramento do processo ".$bussProcesso->numProcessoFormatado($this->processo->numProcesso);
+                // 04-11-2011 - Daniel Bonfim
+                $mail->Subject = "[SIGA] Novo processo: ".$bussProcesso->numProcessoFormatado($this->processo->numProcesso);
+		$mail->WordWrap = 150;
+                
+                // 24-10-2011 - Daniel Bonfim
+                // informaçoes do processo para inserir no email
+                $tipo = $this->processo->tipo;
+                if($tipo == 'A')
+                    $tipo = "PROTOCOLADO";
+                else if($tipo == 'P')
+                    $tipo = "PROCESSO";
+                
+                $numFormatado = $this->processo->instituicao.".".$this->processo->numProcessoFormatado($this->processo->numProcesso);
+                $dataAbertura = $this->processo->dataFormatada($this->processo->dataAbertura);
+                $setor = $this->processo->setorOrigem;
+                
+                $status = $this->processo->retencao->status;
+                if($status == "N") {
+                    // 04-20-2011 - Daniel Bonfim
+                    if ($this->processo->retencao->setorDestino)
+                        $status = 'AGUARDANDO ENTRADA - '.$this->processo->retencao->setorDestino;
+                    else 
+                        $status = "NORMAL";
+                }
+                else if($status == "A")
+                    $status = "ARQUIVADO";
+                else if($status == "J")
+                    $status = "ANEXADO";
+                
+                $interessado = $this->processo->solicitante;
+                $titulo = $this->processo->titulo;
+                $assunto = $this->processo->assunto;
+                $arquivo = $this->processo->arquivo;
+                $usuario = $this->userLogado;   
+                                
+		$body =
+<<< HERE
+O sistema SIGA-ADM informa que o processo {$bussProcesso->numProcessoFormatado($this->processo->numProcesso)} foi criado, 
+    e você foi adicionado como um OBSERVADOR.
+
+Tipo: {$tipo}
+Número: {$numFormatado}
+Data Abertura: {$dataAbertura}
+Setor: {$setor}
+Status: {$status}
+Interessado: {$interessado}
+Titulo: {$titulo}
+Assunto: {$assunto}
+Caixa: {$arquivo}
+Usuário: {$usuario}
+
+Atenciosamente,
+SIGA - Sistema Integrado de Gestão Acadêmica
+sigaadm@ifbaiano.edu.br
+
+HERE;
+
+		$mail->Body = $body;
+                $mail->AddAddress($email);
+                                
+                $mail->Send();
+            }
+                
+        } else {
+            unset($bussObservador); 
+            unset($bussProcesso);
+        }   
+    }
+}
+?>

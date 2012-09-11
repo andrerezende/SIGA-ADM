@@ -1,0 +1,1170 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+
+class BusinessRhLookup
+{
+
+
+    function LookupVinculonaoTA(&$lookup)
+    {
+        $this->LookupVinculoTA($lookup,false);
+    } // LookupVinculonaoTA
+
+
+    function LookupVinculoTA(&$lookup, $restringe=TRUE)
+    {
+        $filter = $lookup->GetFilterValue('filteridVinculo');
+        if (!$filter) {
+           $filter = strtoupper($lookup->filterValue);
+        }
+        $filterNome = $lookup->GetFilterValue('filterNome');
+        if (!$filterNome) {
+           if (!$filter) {
+             $filterNome = 'NAO INFORMADO';
+           }
+        }
+
+        $lookup->AddFilterField( new TextField('filteridVinculo' , $filter,'Vínculo',10));
+        $lookup->AddFilterField( new TextField('filterNome' , $filterNome,'Nome',80));
+        $columns = array(
+                         new DataGridColumn('idVinculo','Vínculo','left', true, '10%',true),
+                         new DataGridColumn('nome','Nome','left', true, '90%',true),
+                   );
+        $where = '    p.idVinculo     = v.idVinculo
+                  and v.idFuncionario = f.idFuncionario
+                  and f.idPessoa      = c.idPessoa
+                  and p.idSituacao in (1,8,9,11,20)'; //12, ver obs acima
+        if ($restringe)
+        {
+            $where .= ' and p.idGrupoCargo <> 60';
+        }
+        $sql = new sql('distinct p.idVinculo, c.Nome',
+                       'rh_provimento p, rh_vinculo v, rh_funcionario f, cm_pessoa c',
+                        $where,
+                       'c.Nome');
+        if ( $filter )
+        {
+            $sql->where .= " and p.idVinculo like '{$filter}%' ";
+        }
+        if ( $filterNome )
+        {
+            $sql->where .= " and ( upper(c.Nome) like upper('{$filterNome}%') ) ";         
+        }
+
+        $lookup->SetGrid('sigaept',$sql,$columns,'Pesquisa por Vínculo',20,0);
+    } // LookupVinculoTA
+
+
+    function LookupLogin(&$lookup)
+    {
+        $filter = $lookup->GetFilterValue('filterlogin');
+        if (!$filter) {
+           $filter = strtoupper($lookup->filterValue);
+        }
+        $filternome = $lookup->GetFilterValue('filternome');
+        if (!$filternome) {
+           if (!$filter) {
+             $filternome = 'NAO INFORMADO';
+           }
+        }
+        $lookup->AddFilterField(new TextField('filterlogin',$filter    ,'Identificação (Login)',10));
+        $lookup->AddFilterField(new TextField('filternome' ,$filternome,'Nome'                 ,80));
+        $columns = array(
+                         new DataGridColumn('login','Identificação','left',TRUE,'10%'),
+                         new DataGridColumn('nome' ,'Nome'         ,'left',TRUE,'90%')
+                   );
+        $sql = new sql('u.login     , p.nome',
+                       'cm_usuario u, cm_pessoa p',
+                       'u.idpessoa  = p.idpessoa',
+                       'p.Nome');
+        if ( $filter )
+        {
+            $sql->where .= " and u.login like '{$filter}%' ";
+        }
+        if ( $filternome )
+        {
+            $sql->where .= " and ( upper(p.nome) like upper('{$filternome}%') ) ";         
+        }
+
+        $lookup->SetGrid('sigaept',$sql,$columns,'Pesquisa por Identificação (Login)',20,0);
+    } // LookupLogin
+
+
+    function LookupPessoaNome($lookup)
+    {
+        $filter = $lookup->GetFilterValue('filter');
+            if (!$filter)
+            {
+                $filter = $lookup->GetFilterValue();
+            }
+          $filter = empty($filter) ? 'A DEFINIR':$filter;
+        $lookup->AddFilterField( new TextField('filter', $filter,'Nome:&nbsp;', 40));
+        $columns = array(
+           new DataGridColumn('idpessoa','Id','center', true, '',true),
+           new DataGridColumn('nome','Nome','left', true, '75%',true),
+           new DataGridColumn('telefone','Telefone','left', true, '25%',false)
+        );
+        $sql = new sql("idpessoa, nome, telefone", "cm_pessoa","",'nome');
+        if ( $filter )
+        {
+            $sql->where = " ( upper(nome) like upper('{$filter}%') )";
+        }
+      $lookup->SetGrid('sigaept',$sql,$columns,'Pesquisa por nome de Pessoa',13,0);
+    }
+    
+    function LookupTransacao(&$lookup)
+    {
+        $filter = $lookup->GetFilterValue('filter');
+        if (!$filter) 
+           $filter = $lookup->GetFilterValue();
+        $lookup->AddFilterField( new TextField('filter',
+         $filter,'Transação', 20));
+        $columns = array(
+           new DataGridColumn('transacao','Transacao','left', true,
+            '60%',true),
+           new DataGridColumn('idtrans','Id','right', true,
+            '10%',true),
+           new DataGridColumn('sistema','Sistema','left', true,
+            '20%',true)
+        );
+        $sql = new sql('t.idtrans as key, t.transacao,t.idtrans as idtrans, '.
+                       't.idsistema, s.sistema','cm_transacao t,
+                        cm_sistema s','t.idsistema = s.idsistema',
+                       't.transacao');
+        if ( $filter )
+        {
+            $sql->where .= " and ( upper(t.transacao)
+             like upper('{$filter}%') )";
+        }
+        $lookup->SetGrid('rh',$sql,$columns,
+        'Pesquisa Transações',15,0);
+    }
+
+
+    function LookupAgencia(&$lookup)
+    {
+        global $MIOLO;
+
+        $filter = $lookup->GetFilterValue('filter');
+
+        if ( !$filter ){
+            $filter = $lookup->GetFilterValue();
+            //if (!$filter)
+            //{
+            //    $filter= 'A DEFINIR';
+            //}
+        }
+        $lookup->AddFilterField( new TextField('filter',$filter,'Agencias do Banco',35) );
+
+        /*
+        $columns = array(
+            new DataGridColumn('idagenc','Id'           ,'left',TRUE,'20%',TRUE),
+            new DataGridColumn('nomeag' ,'Nome Agencia' ,'left',TRUE,'40%',TRUE),
+            new DataGridColumn('nome'   ,'Nome do Banco','left',TRUE,'40%',TRUE)
+                );
+
+        $sql = new sql('a.idagenc,a.nome as nomeag,b.nome as nome,','cm_agencia a, cm_banco b','a.idbanco = b.idbanco','a.nome');
+    
+        if ($filter)
+        {
+            $sql->where .= " and (upper(b.nome) like upper('%$filter%')) or (upper(a.nome) like upper('%$filter%')) ";
+        }
+
+        $lookup->SetGrid('sigaept',$sql,$columns,'Pesquisa por Agências ou Bancos ',15,0);
+        */
+
+        $columns = array(
+           new MObjectGridColumn('idAgencia','Id'             ,'right', TRUE,'10%',TRUE),
+           new MObjectGridColumn('nome'     ,'Nome da Agência','left' , TRUE,'45%',TRUE),
+           new MObjectGridColumn('idBanco'  ,'Código do Banco','left' , TRUE,'45%',TRUE)
+        );
+        
+        $obj = $MIOLO->getBusiness('common','agencia');
+        $criteria = $obj->getCriteria();
+        $criteria->addColumnAttribute('idAgencia');// ,'idAgencia');
+        $criteria->addColumnAttribute('nome'     );
+        $criteria->addColumnAttribute('banco.idBanco','idBanco');//,'bb'   );
+        $filter = strtoupper($filter);
+        $criteria->addCriteria('nome','like' ,"$filter%");
+        //$criteria->addOrderAttribute('nome');
+
+        $sql = $criteria->retrieveAsCursor();
+        $lookup->setCursorGrid($sql,$columns, 'LoOkUp TeStE',15,0);
+    } // LookupAgencia
+    
+   
+    function LookupMunicipio(&$lookup)
+    {
+        if ( !($filter = $lookup->GetFilterValue('filter')) )
+        {
+            if (!($filter = $lookup->GetFilterValue()))
+            {
+                $filter= 'A DEFINIR';
+            }
+        }
+        if ($pos = strpos($filter,'[')) 
+        {
+            $filter = trim(substr($filter, 0, $pos));
+            MForm::setFormValue('filter',$filter);
+        }
+        $field = new MTextField('filter',$filter,'Municipio',20);
+        $lookup->AddFilterField( $field );
+        $columns = array(
+            new MDataGridColumn('idmunicipio','IdMunicipio','left',true,'0%',false),
+            new MDataGridColumn('municipio','Nome','left',true,'100%',true),
+            );
+        $sql = new sql("m.idmunicipio,m.municipio || ' [' || trim(m.iduf) || ']' as municipio,p.pais",'cm_municipio m,cm_pais p','m.idpais = p.idpais','m.municipio');
+        if ($filter)
+        {
+            $sql->where .= " and upper(m.municipio) LIKE upper('$filter%') ";
+        }
+        $lookup->SetGrid('sigaept',$sql,$columns,'Pesquisa Municipio',15,0);
+    }
+
+    function LookupPais(&$lookup){
+    
+     $filter = $lookup->GetFilterValue('filter');
+        if ( !$filter )
+        {
+            $filter = $lookup->GetFilterValue();
+            if (!$filter)
+            {
+                $filter= 'A DEFINIR';
+            }
+        }
+        $lookup->AddFilterField( new TextField('filter',$filter,'Pais',20) );
+        $columns = array(
+            new DataGridColumn('idpais','IdPais','left',true,'10%',false),
+            new DataGridColumn('pais','Nome','left',true,'50%',true),
+            new DataGridColumn('nacionalidade','Nacionalidade','left',true,'40%',true)
+
+            );
+        $sql = new sql('idpais,pais,nacionalidade','cm_pais','','pais');
+        if ($filter)
+        {
+     $sql->where .= "(upper(pais) like  upper('{$filter}%')) or upper(idpais) like upper('$filter%')" ;
+        }
+        $lookup->SetGrid('sigaept',$sql,$columns,'Pesquisa Pais',15,0);
+    }
+   
+    function LookupBanco(&$lookup)
+    {
+        $filter = $lookup->GetFilterValue('filter');
+        if ( !$filter )
+        {
+            $filter = $lookup->GetFilterValue();
+            /*if (!$filter)
+            {
+                $filter= 'A DEFINIR';
+             }*/
+        }
+        $lookup->AddFilterField( new TextField('filter',$filter,'Banco',20) );
+        $columns = array(
+            new DataGridColumn('idbanco','Id','left',true,'10%',true),
+            new DataGridColumn('nome','Nome do Banco','left',true,'90%',true)
+    
+                );
+        $sql = new sql('idbanco,nome','cm_banco','','nome');
+        if ($filter)
+        {
+            $sql->where .= "( upper(nome) LIKE upper('{$filter}%'))";
+        }
+        $lookup->SetGrid('sigaept',$sql,$columns,'Pesquisa por Banco',15,0);
+    }
+
+
+    function LookupUsuario(&$lookup)
+    {   
+        $filterLogin = $lookup->GetFilterValue('filterLogin');
+        if (!$filterLogin) 
+           $filterLogin = $lookup->GetFilterValue();
+        $filterNome = $lookup->GetFilterValue('filterNome');
+        if (!$filterNome)
+           if (!$filterLogin)
+              $filterNome = 'NÃO INFORMADO';
+        $clause = $lookup->GetFilterValue('clause');
+
+        $lookup->AddFilterField( new TextField('filterLogin',
+         $filterLogin,'Login', 20));
+        $lookup->AddFilterField( new Selection('clause',
+        $clause,'',array('AND' => '- e -','OR'  => '- ou -' )));
+        $lookup->AddFilterField( new TextField('filterNome',
+        $filterNome,'Nome', 40));
+        $columns = array(
+           new DataGridColumn('login','Login','left',
+           true, '10%',true),
+           new DataGridColumn('nome','Nome','left',
+           true, '50%',true),
+           new DataGridColumn('nick','Nick','left',
+           true, '10%',true),
+           new DataGridColumn('siglasetor','Setor','left'
+           , true, '20%',true)
+        );
+        $sql = new sql("u.idusuario, u.login, u.password,
+        u.idpessoa, u.idsetor,  u.nick, p.nome,
+        s.siglasetor",'cm_usuario u, cm_pessoa p,
+        cm_setor s', '(u.idpessoa = p.idpessoa(+))
+         and (u.idsetor = s.idsetor)','u.login');
+        if ( $filterLogin || $filterNome)
+        {
+            $sql->where .= " and (";
+            if ( $filterLogin )
+            {
+               $sql->where .= "( upper(u.login) like
+               upper('{$filterLogin}%') )";
+            }
+            if ( $filterNome )
+            {
+               $sql->where .= " $clause ( upper(p.nome)
+               like upper('{$filterNome}%') )";
+            }
+            $sql->where .= " )";
+        }
+//      $lookup->SetGrid($dbconf,$sql,$columns,$title,
+//$pageLength,$indexColumn)
+        $lookup->SetGrid('rh',$sql,$columns,
+        'Pesquisa Usuários',10,0);
+    }
+    function LookupPessoa(&$lookup)
+    {   
+        $filterNome = $lookup->GetFilterValue('filterNome');
+        if (!$filterNome) {
+           $filterNome = $lookup->GetFilterValue();
+           if (!$filterNome) {
+             $filterNome = 'A DEFINIR';
+           }
+        }
+        $lookup->AddFilterField( new TextField('filterNome',
+         $filterNome,'Nome', 40));
+        $columns = array(
+           new DataGridColumn('idpessoa','Id','right',
+           true, '10%',true),
+           new DataGridColumn('nome','Nome','left', true, '90%',true)
+        );
+        $columns[0]->visible = false;
+        $sql = new sql('p.idpessoa, p.nome','cm_pessoa p');
+        if ( $filterNome )
+        {
+          $sql->where .= " ( upper(p.nome) like
+          upper('{$filterNome}%') )";
+        }
+        $sql->SetOrderBy('p.nome');  
+        $lookup->SetGrid('sigaept',$sql,$columns,
+        'Pesquisa Pessoas',15,0);
+    }
+
+    
+    function LookupPessoaCPF(&$lookup)
+    {   
+        $filterNome = $lookup->GetFilterValue('filterNome');
+        $filterCPF = $lookup->GetFilterValue('filterCPF');
+       if (!$filterNome) 
+       {
+           $filterNome = 'A DEFINIR';
+       }
+        
+        if( !$filterCPF )
+        {
+            $filterCPF = $lookup->GetFilterValue();
+            if (!$filterCPF)
+            {
+                $filterCPF = 'A DEFINIR';
+            }
+        }
+    
+        $lookup->AddFilterField(
+                    new TextField('filterNome',$filterNome,'Nome',40));
+        $lookup->AddFilterField(
+                    new TextField('filterCPF',$filterCPF,'CPF', 40));
+       
+        $columns = array(
+                    new DataGridColumn('idpessoa','Id','right', true, '10%',true),
+                    new DataGridColumn('nome','Nome','left', true, '70%',true),
+                    new DataGridColumn('cpf','CPF','right', true, '20%',true)
+                        );
+        $columns[0]->visible = false;
+        $sql = new sql('p.idpessoa, p.nome, p.cpf','cm_pessoa p');
+        if( (($filterCPF=='A DEFINIR') && ($filterNome=='A DEFINIR')) || ($filterNome!='A DEFINIR'))
+        {
+             $sql->where .= " ( upper(p.nome) like upper('{$filterNome}%') )";
+             $sql->SetOrderBy('p.nome');
+        }
+        if( ($filterCPF) && ($filterCPF!='A DEFINIR') )
+        {
+            if( ($filterNome) && ($filterNome!='A DEFINIR') )
+            {
+                $sql->where .= ' AND ';
+            }
+            $sql->where .= " (p.cpf = '{$filterCPF}')";
+            $sql->SetOrderBy('p.cpf');
+        }
+        $lookup->SetGrid('sigaept',$sql,$columns,
+        'Pesquisa Pessoas',15,0);
+    }
+    function LookupGrupo(&$lookup)
+    {
+        $filter = $lookup->GetFilterValue('filter');
+        if (!$filter) 
+           $filter = $lookup->GetFilterValue();
+        $lookup->AddFilterField( new TextField('filter',
+         $filter,'Grupo', 20));
+        $columns = array(
+           new DataGridColumn('idgrupo','Id','right',
+            true, '10%',true),
+           new DataGridColumn('grupo','Grupo','left', true, '90%',true)
+        );
+        $sql = new sql('idgrupo, grupo', 'cm_grupoacesso'
+        ,'','idgrupo');
+        if ( $filter )
+        {
+            $sql->where .= " ( upper(grupo) like
+            upper('{$filter}%') )";
+        }
+        $lookup->SetGrid('rh',$sql,$columns,
+        'Pesquisa Grupos',15,0);
+    }
+    
+    function LookupLocal(&$lookup)
+    {
+        global $MIOLO;
+        $filter = $lookup->GetFilterValue('filter');
+        if (!$filter) 
+           $filter = $lookup->GetFilterValue();
+        if (!$filter)
+            $filter = 'A ESCOLHER';
+        $lookup->AddFilterField( new TextField('filter',
+        $filter,'Local de Trabalho', 20));
+        $columns = array(
+           new DataGridColumn('idlocalterceirizado','Id do local','right',
+           true, '10%',false),
+           new DataGridColumn('nome','Local de Trabalho','left',
+           true, '50%',true),
+           new DataGridColumn('idsetor','Id do Setor','right',
+           true, '10%',false),
+           new DataGridColumn('nomesetor','Setor','left',
+           true, '50%',true)
+        );
+        $sql = new sql('l.idlocalterceirizado, l.nome, l.idsetor, s.nomesetor',
+        'rh_localterceirizado l, cm_setor s','l.idsetor = s.idsetor','nome');
+        if ( $filter )
+        {
+            $sql->where .= " and ( upper(nome) like
+            upper('{$filter}%') )";
+        }
+        $lookup->SetGrid('common',$sql,$columns,
+        'Pesquisa Locais',15,0);
+        /*$ctlArray = array (
+            new MLinkButton('btnLink', 'Não encontrou? Clique para inserir um novo local de trabalho.',$MIOLO->getActionUrl('rh','main:localterceirizado:new','',array('origem'=>'lookup','name'=>Form::getFormValue('name') )))
+        );
+        $lookup->grid->SetControls($ctlArray);*/
+    }
+    
+    function LookupContrato(&$lookup)
+    {
+      $filter = $lookup->GetFilterValue('filterContrato');
+
+      if (!$filter)
+        $filter = 'A ESCOLHER';
+
+      $lookup->AddFilterField($numero = new TextField('filterContrato', $filter, 'Número do Contrato',12));
+
+      $columns = array
+        (
+           new DataGridColumn('idcontrato','Id','right', true, '5%',true),
+           new DataGridColumn('numcontrato','Número do Contrato','left', true, '35%',true),
+           new DataGridColumn('nome','Instituicao','left', true, '65%',true),
+        );
+      $numero->addAttribute('maxlength',12);  
+      $columns[0]->visible = false;
+
+        $sql = new sql('idcontrato, numcontrato, nome','rh_contrato, cm_instituicao', 'rh_contrato.idinstituicao = cm_instituicao.idinstituicao');
+    
+        if ($filter)
+        {
+            $sql->where .= " and numcontrato like '%{$filter}%'";
+        }
+
+        $lookup->SetGrid('common',$sql,$columns,'Pesquisa de Contrato',15,0);
+    }
+    
+    function LookupInstituicao(&$lookup)
+    {
+      $filterNome = $lookup->GetFilterValue('filterNome');
+      if (!$filterNome)
+        {
+            $filterNome = $lookup->GetFilterValue();
+        }
+        if (!$filterNome)
+            $filterNome = 'NAO INFORMADO';
+
+        $lookup->AddFilterField( new TextField('filterNome', $filterNome, 'Nome da Instituição',20));
+
+        $columns = array
+            (
+              //new DataGridColumn('sigla','Instituição','left',true,'100%',true)
+               new DataGridColumn('idinstituicao','Id','right', true, '5%',true),
+               new DataGridColumn('instituicao','Sigla','left', true, '35%',true),
+               new DataGridColumn('nome','Nome','left', true, '60%',true),
+             );
+             $columns[0]->visible = false;
+        //$sql = new  sql('t.idinstituicao,t.instituicao as sigla,t.nome,t.rua,t.numero,t.complemento,t.bairro,t.cep,t.telefone,t.email,t.fax,t.cgc,t.caixapostal','cm_instituicao t');
+
+        $sql = new sql('idinstituicao, instituicao, nome','cm_instituicao');
+    
+        if ($filterNome)
+        {
+            $sql->where .= " upper(instituicao) like upper('$filterNome%')";
+        }
+
+        $lookup->SetGrid('rh',$sql,$columns,'Pesquisa de Instituição',10,0);
+
+    }
+    
+
+    function LookupTabelaGeral(&$lookup)
+    {
+        $filter = $lookup->GetFilterValue('filter');
+        if (!$filter) 
+           $filter = $lookup->GetFilterValue();
+        $lookup->AddFilterField( new TextField('filter',
+        $filter,'Tabela', 20));
+        $columns = array(
+           new DataGridColumn('tabela','Tabela','left',
+            true, '100%',true)
+        );
+        $sql = new sql('tabela', 'cm_tabelageral','','tabela','tabela');
+        if ( $filter )
+        {
+            $sql->having .= " ( upper(tabela) like
+            upper('{$filter}%') )";
+        }
+        $lookup->SetGrid('rh',$sql,$columns,
+        'Pesquisa Tabelas',15,0);
+    }
+
+    function AutoCompleteTransaction($value)
+    {   global $MIOLO;
+
+        $db = $MIOLO->GetDatabase('tutorial');
+
+        $sql = "select t.idtrans as key, ".
+               "       t.transacao  as transacao,". 
+               "       t.idtrans as idtrans,".
+               "       s.idsistema as idsistema,".
+               "       s.sistema as sistema" .
+               " from cm_transacao t, cm_sistema s ".
+               " where t.idsistema = s.idsistema ".
+               " and t.idtrans = ?";
+        
+        $db->Query($db->Prepare($sql,$value));
+        return $db->rs;
+    }
+
+    function LookupFormacao($lookup)
+    {
+        global $MIOLO;
+
+        $filter = $lookup->GetFilterValue('filter');
+
+        if (!$filter)
+        {
+            $filter= 'A DEFINIR';
+        }
+        $lookup->AddFilterField( new TextField('filter', $filter,'Formação', 20));
+        
+        $tabelaGeral = $MIOLO->GetBusiness('common','tabelageral');
+        $query = $tabelaGeral->ListByTabela('RH_ESCOLARIDADE');
+
+        $columns = array(
+           new DataGridColumn('idformacao','Id','right', true, '5%',false),
+           new DataGridColumn('formacao','Formacao','left', true, '65%',true),
+           new DataGridColumn('item2','Escolaridade','left', true, '30%',true),
+           new DataGridColumn('nomeescolaridade','Escolaridade','left', true, '30%',false)
+          );
+
+        $sql = new sql("f.idformacao, f.formacao, t.item2, f.formacao || ' - ' || t.item2 as nomeescolaridade", 'rh_formacao f, cm_tabelageral t', "t.tabela='RH_ESCOLARIDADE' and t.item1=f.escolaridade", 'f.formacao');
+
+        if ( $filter )
+        {
+            $sql->where .= " and ( upper(f.formacao) like upper('{$filter}%') )";
+        }
+
+        $lookup->SetGrid('ufjf',$sql,$columns, 'Pesquisa Formação',15,0);
+    }
+
+     function LookupUF(&$lookup)
+    {
+        $filter = $lookup->GetFilterValue('filter');
+        if ( !$filter )
+        {
+            $filter = $lookup->GetFilterValue();
+            /*if (!$filter)
+            {
+                $filter= 'A DEFINIR';
+             }*/
+        }
+        $lookup->AddFilterField( new TextField('filter',$filter,'UF',20) );
+        $columns = array(
+            new DataGridColumn('iduf','Id','left',true,'10%',true),
+            new DataGridColumn('uf','Unidade da Federação','left',true,'90%',true)
+    
+                );
+        $sql = new sql('iduf,uf','cm_uf','','iduf');
+        if ($filter)
+        {
+            $sql->where .= "( upper(uf) LIKE upper('{$filter}%'))";
+        }
+        $lookup->SetGrid('sigaept',$sql,$columns,'Pesquisa por Unidades da Federação',15,0);
+    }
+
+function LookupSiapePessoa(&$lookup)
+    {   
+        $filterNome = $lookup->GetFilterValue('filterNome');
+
+        if (!$filterNome) {
+           $filterNome = $lookup->GetFilterValue();
+           if (!$filterNome) {
+             $filterNome = 'A DEFINIR';
+           }
+        }
+        $lookup->AddFilterField( new TextField('filterNome',
+         $filterNome,'Nome', 40));
+       $columns = array(
+       new DataGridColumn('idfunc','Id Funcionario','center',true, '15%',true),
+       new DataGridColumn('nome','Nome Funcionario','left',true, '85%',true),
+        );
+        $columns[0]->visible = true;
+        $sql = new sql('f.idfunc, p.nome','cm_pessoa p, rh_funcionario f');
+
+        if ( $filterNome )
+        {
+          $sql->where .= " ( upper(p.nome) like upper('{$filterNome}%') )";
+          $sql->where .= " AND ";
+          $sql->where .= " f.idpessoa = p.idpessoa ";
+          $sql->SetOrderBy('p.nome');
+        }
+       
+        $lookup->SetGrid('sigaept',$sql,$columns,
+        ' Pesquisa de Funcionarios ',15,0);
+    }
+
+    function LookupSiapeNumero(&$lookup)
+  {
+    
+            $filterSIAPE = $lookup->GetFilterValue('filterSIAPE');
+    
+            if(!$filterSIAPE)
+            {
+                $filterSIAPE= $lookup->GetFilterValue();
+
+                if (!$filterSIAPE)
+                    $filterSIAPE = 'A DEFINIR';
+            }
+    
+     $lookup->AddFilterField( new TextField('filterSIAPE', $filterSIAPE,'SIAPE', 15));
+
+            $columns = array(
+                new DataGridColumn('idfunc','SIAPE','left', true, '20%',true),
+                new DataGridColumn('nome','Nome','left', true, '70%',true)
+      );
+        
+            $sql = new sql("rh_funcionario.idfunc,p.nome",'cm_pessoa p, rh_funcionario');
+      if ( $filterSIAPE )
+      {
+                $sql->SetOrderBy('rh_funcionario.idfunc');
+    
+        $sql->where .= " ( upper(rh_funcionario.idfunc) like upper('{$filterSIAPE}%') )";
+       }
+            if( ($filterSIAPE) && ($filterSIAPE!='A DEFINIR'))
+            {
+                if( $filterSIAPE )
+                {
+                    $sql->where .= " AND ";
+                }
+                $sql->where .= "rh_funcionario.idfunc = '$filterSIAPE'";
+            }
+            if( ($filterSIAPE) )
+            {
+                $sql->where .= " AND p.idpessoa = rh_funcionario.idpessoa";
+            }
+            $lookup->SetGrid('sigaept',$sql,$columns,' Pesquisa Numero do Funcionario ',15,0);
+    }
+    
+    function LookupGrupoAndCargo($lookup)
+    {
+        $filter = $lookup->GetFilterValue('filter');
+        if (!$filter) {
+           $filter = $lookup->GetFilterValue();
+           if (!$filter) {
+             $filter = 'A DEFINIR';
+           }
+        }
+        $lookup->AddFilterField( new TextField('filter', $filter,'Procurar por <b>Grupo do Cargo</b> ou <b>Cargo</b>:', 30));
+        $columns = array(
+            new DataGridColumn('gc.nome','Grupo do Cargo','left', true, '60%',true),
+            new DataGridColumn('c.descricao','Cargo','left', true, '30%',true),
+        );
+        $sql = new sql('gc.idgrupocargo,gc.nome,c.idcargo,c.descricao,c.idgrupocargo', 'rh_grupocargo gc, rh_cargo c', '');
+        if ( $filter )
+        {
+            $sql->where .= " (( upper(gc.nome) like upper('{$filter}%') ) OR (upper(c.descricao) like upper('{$filter}%'))) AND (gc.idgrupocargo=c.idgrupocargo)";
+        }
+        $lookup->SetGrid('sigaept',$sql,$columns, 'Pesquisa Grupo do Cargo e Cargo',15,0);
+    }
+
+    function LookupGrupoCargo($lookup)
+    {
+        $filter = $lookup->GetFilterValue('filter');
+        if (!$filter) {
+           $filter = $lookup->GetFilterValue();
+           if (!$filter) {
+             $filter = 'A DEFINIR';
+           }
+        }
+        $lookup->AddFilterField( new TextField('filter', $filter,'Procurar pela <u>descrição</u> do <b>Grupo de Cargos</b>:', 30));
+        $columns = array(
+            new DataGridColumn('idgrupocargo','Código','center', true,'18%',true),
+            new DataGridColumn('descricao','Descrição do Grupo de Cargos','left',true,'82%',true),
+        );
+        $sql = new sql('idgrupocargo,descricao','rh_grupocargo','');
+        if ( $filter )
+        {
+            $sql->where .= " ( upper(descricao) like upper('%{$filter}%') )";
+        }
+        $lookup->SetGrid('sigaept',$sql,$columns,'Pesquisa Grupo de Cargos',15,0);
+//echo"<pre>"; var_dump($sql->command); echo"</pre>";
+    }
+
+    function LookupCargo(&$lookup)
+    {   
+        global $MIOLO;
+        
+        $filter = $lookup->GetFilterValue('filter1');
+        if (!$filter) 
+           $filter = $lookup->GetFilterValue();
+
+        $fGrupo = $lookup->getFilterValue('filter0');
+        
+        if (!$filter) {
+             $filter = 'A DEFINIR';
+           }
+        $grupoCargo = $MIOLO->getBusiness('rh','grupocargo');
+        $query = $grupoCargo->listWithVagas();
+        
+        $lookup->AddFilterField( new Selection('filter0', $fGrupo, 'Grupo Cargo',$query->result) );
+        $lookup->AddFilterField( new TextField('filter1', $filter,'Cargo', 30) );
+        $columns = array(
+            new DataGridColumn('idcargo','Código','center', true, '18%',true),
+            new DataGridColumn('descricao','Descrição do Cargo','left', true, '82%',true),
+        );
+
+        $sql = new sql('c.idcargo,c.descricao', 'rh_cargo c, rh_vaga v','','','c.idcargo,c.descricao');
+        if ( $filter )
+        {
+            $sql->where .= " (c.descricao) like upper('%{$filter}%')";
+        }
+        
+        $sql->where .= " and ( c.idgrupocargo = '{$fGrupo}' )";
+        $sql->where .= " and c.idgrupocargo = v.idgrupocargo and c.idcargo = v.idcargo";
+        
+        
+        $lookup->SetGrid('common',$sql,$columns,'Pesquisa Cargos',15,0);
+    }
+    
+    function LookupPublicacao($lookup)
+    {
+
+        global $MIOLO;
+        $filter = $lookup->GetFilterValue('filter');
+        if (!$filter) 
+           $filter = $lookup->GetFilterValue();
+           if (!$filter) {
+            $filter = 'A DEFINIR';
+           }
+        $lookup->AddFilterField( new TextField('filter', $filter,'Número', 20));
+        $columns = array(
+           new DataGridColumn('idpublicacao','Id','right', true, '0%',false),
+           new DataGridColumn('numero','Número','left', true, '10%',true),
+           new DataGridColumn('data','Data','left', true, '15%',true),
+           new DataGridColumn('autoridade','Autoridade','left', true, '15%',true),
+           new DataGridColumn('obs','Obs.','left', false, '60%',true),
+           new DataGridColumn('descricao','Diploma','left', true, '30%',true)
+        );
+        //$sql = new sql('p.idpublicacao,p.data,p.numero,p.autoridade,p.obs,d.descricao', 'rh_publicacao p, rh_diplomalegal d','p.iddiplomalegal = d.iddiplomalegal', 'p.data');
+        $sql = new sql("p.idpublicacao,to_char(p.data,'dd/mm/yyyy') as data,p.numero,p.autoridade,p.obs,d.descricao", 'rh_publicacao p, rh_diplomalegal d','p.iddiplomalegal = d.iddiplomalegal', 'p.data');
+    
+        if ( $filter )
+        {
+            $sql->where .= " and numero like '{$filter}%' ";
+        }
+        $lookup->SetGrid('sigaept',$sql,$columns, 'Pesquisa Publicação',15,0);
+        $ctlArray = array (
+            new MLinkButton('btnLink', 'Não encontrou? Clique para inserir uma nova publicação.',$MIOLO->getActionUrl('rh','main:publicacao:new','',array('origem'=>'lookup','name'=>Form::getFormValue('name') )))
+        );
+        $lookup->grid->SetControls($ctlArray);
+
+    }
+
+
+    function LookupNumeroVaga(&$lookup)
+    {   global $MIOLO;
+        $filter = $lookup->GetFilterValue('filter');
+        if (!$filter) 
+           $filter = $lookup->GetFilterValue();
+           if (!$filter) {
+             $filter = '999';
+           }
+        $lookup->AddFilterField( new TextField('filter', $filter,'Procure pelo <u>número</u> da <b>Vaga</b> ', 30) );
+        $columns = array(
+            new DataGridColumn('nvaga','Número da Vaga','center', true, '30%',true),
+            new DataGridColumn('cdesc','Cargo','center',true,'35%',true),
+            new DataGridColumn('gcdesc','Grupo do Cargo','center', true, '35%',true),
+        );
+
+        $sql = new sql('v.numerovaga as nvaga, c.descricao as cdesc, gc.descricao as gcdesc', 
+                        'rh_vaga v, rh_grupocargo gc, rh_cargo c',
+                        '');
+
+// campos a recupear: v.numerovaga, c.descricao, gc.descrivao
+// tabelas usadas: rh_vaga v, rh_cargo c, rh_grupocargo gc
+// condições necessárias: v.idvaga = c.idcargo
+//                        v.idgrupocargo = c.idgrupocargo
+//                        v.idgrupocargo = gc.idgrupocargo
+
+        if ( $filter )
+        {
+            $sql->where .= " (v.numerovaga = '{$filter}') AND ((v.idcargo = c.idcargo) AND (v.idgrupocargo = c.idgrupocargo) AND (v.idgrupocargo = c.idgrupocargo))";
+        }
+        $lookup->SetGrid('sigaept',$sql,$columns,'Pesquisa Número de Vaga',15,0);
+//echo"<pre>";var_dump($sql->command);echo"</pre>";
+    }
+
+    function LookupCid(&$lookup)
+    {
+        $restricaoSexo = $lookup->getFilterValue('filter0');
+        $fIdCidCategoria = $lookup->GetFilterValue('filter1');
+        if (!$fIdCidCategoria) 
+        {
+            $fIdCidCategoria = $lookup->GetFilterValue();
+        }
+        $fCidCategoria = $lookup->GetFilterValue('filter2');
+        if (!$fCidCategoria)
+        {
+           if (!$fCidCategoria)
+           {
+               $fCidCategoria = 'NÃO INFORMADO';
+           }
+        }
+        $clause = $lookup->GetFilterValue('clause');
+        if (!$clause)
+            $clause = 'OR';
+
+        $lookup->AddFilterField( new MTextField('filter1', $fIdCidCategoria,'Código', 10));
+        $lookup->AddFilterField( new Selection('clause', $clause,'',array('AND' => '- e -','OR'  => '- ou -' )));
+        $lookup->AddFilterField( new MTextField('filter2', $fCidCategoria,'Categoria', 20));
+        $lookup->AddFilterField( new MHiddenField('filter0', $restricaoSexo));
+        $columns = array(
+           new MDataGridColumn('idcidcategoria','Cod.','left', true, '10%',true),
+           new MDataGridColumn('categoria','Categoria','left', false, '40%',true),
+           new MDataGridColumn('idcidsubcategoria','Cod.sub.','left', true, '10%',true),
+           new MDataGridColumn('subcategoria','Sub Categoria','left', false, '40%',true),
+        );
+        $sql = new sql('c.idcidcategoria,c.descricao as categoria,s.idcidsubcategoria,s.descricao as subcategoria','rh_cidcategoria c, rh_cidsubcategoria s','c.idcidcategoria = s.idcidcategoria','c.idcidcategoria');
+        if ( $fIdCidCategoria || $fCidCategoria)
+        {
+            $sql->where .= " and (";
+            if ( $fIdCidCategoria )
+            {
+               $sql->where .= "( upper(c.idcidcategoria) like upper('{$fIdCidCategoria}%') )";
+            }
+            if ( $fCidCategoria )
+            {
+                if ($fIdCidCategoria)
+                {
+                    $sql->where .= $clause;
+                }
+               $sql->where .= " ( upper(c.descricao) like upper('{$fCidCategoria}%') )";
+            }
+            $sql->where .= " )";
+            $sql->where .= " and (s.restricaosexo = 5 or s.restricaosexo = $restricaoSexo)";
+        }
+        $lookup->SetGrid('sigaept',$sql,$columns,'Lookup CID',15,0);
+    }
+
+    /*// SEM USO EM QUALQUER MÓDULO. CONTÉM ERRO: grade usa MATRICULA, sql usa CPF
+    f unction LookupServidor(&$lookup)
+    {
+        
+        $filterMatricula = $lookup->GetFilterValue('filterMatricula');
+        $filterNome = $lookup->GetFilterValue('filterNome');
+       if (!$filterMatricula) 
+       {
+           $filterMatricula = 'A DEFINIR';
+       }
+        
+        if( !$filterNome )
+        {
+            $filterNome = $lookup->GetFilterValue();
+            if (!$filterNome)
+            {
+                $filterNome = 'A DEFINIR';
+            }
+        }
+        $lookup->AddFilterField(
+                    new TextField('filterMatricula',$filterMatricula,'Matrícula', 12));
+        $lookup->AddFilterField(
+                    new Text('texto',' OU '));
+        $lookup->AddFilterField(
+                    new TextField('filterNome',$filterNome,'Nome',20));
+        $columns = array(
+                    new DataGridColumn('idpessoa','Id','right', true, '10%',true),
+                    new DataGridColumn('matricula','Matrícula','right', true, '20%',true),
+                    new DataGridColumn('nome','Nome','left', true, '70%',true),
+                        );
+        $columns[0]->visible = false;
+        $sql = new sql('p.idpessoa, p.nome, p.cpf','cm_pessoa p');
+        if( (($filterMatricula=='A DEFINIR') && ($filterNome=='A DEFINIR')) || ($filterNome!='A DEFINIR'))
+        {
+             $sql->where .= " ( upper(p.nome) like upper('{$filterNome}%') )";
+             $sql->SetOrderBy('p.nome');
+        }
+        if( ($filterMatricula) && ($filterMatricula!='A DEFINIR') )
+        {
+            if( ($filterNome) && ($filterNome!='A DEFINIR') )
+            {
+                $sql->where .= ' AND ';
+            }
+            $sql->where .= " (p.cpf = '{$filterMatricula}')";
+            $sql->SetOrderBy('p.cpf');
+        }
+        $lookup->SetGrid('sigaept',$sql,$columns,
+        'Pesquisa Pessoas',15,0);
+    }*/
+
+    function LookupDirigente(&$lookup)
+    {
+        global $MIOLO, $page, $state;
+
+        $session = $MIOLO->session;
+       
+        $filter = $lookup->GetFilterValue('filterSiape');
+        if (!$filter) {
+           $filter = strtoupper($lookup->filterValue);
+        }
+        $filterNome = $lookup->GetFilterValue('filterNome');
+        if (!$filterNome) {
+           if (!$filter) {
+             $filterNome = 'NAO INFORMADO';
+           }
+        }
+        $lookup->AddFilterField( new TextField('filterSiape' , $filter,'Matricula',10));
+        $lookup->AddFilterField( new TextField('filterNome' , $filterNome,'Nome',50));
+
+        $columns = array(
+           new DataGridColumn('matricula','Matrícula','left', true, '20%',true),
+           new DataGridColumn('nome','Nome','left', true, '80%',true),
+        );
+        $sql = new sql('v.idvinculo as matricula, p.nome as nome','rh_funcionario f, rh_vinculo v, rh_provimento r, cm_pessoa p','f.idpessoa = p.idpessoa and f.idfuncionario = v.idfuncionario and v.idvinculo = r.idvinculo and r.datafim is null' ,'p.nome');        
+        if ( $filter )
+        {
+            $sql->where .= " and v.idvinculo like '{$filter}%' ";
+        }
+        if ( $filterNome )
+        {
+            $sql->where .= " and ( upper(p.nome) like upper('{$filterNome}%') ) ";         
+        }
+
+        if ( $session->isRegistered("filterAntigo") )
+        {
+            $filterAntigo = $session->getValue("filterAntigo"); 
+        }
+        else
+        {
+            $session->register("filterAntigo");
+            $session->setValue("filterAntigo",$filterNome);
+            $filterAntigo = $session->getValue("filterAntigo");
+        }
+
+        if ( $filterNome != $filterAntigo )
+        {
+            $filterAntigo = $filterNome;
+            $session->setValue("filterAntigo",$filterAntigo);
+            $state->set('pn_page',1);
+        }
+        $lookup->SetGrid('sigaept',$sql,$columns,'Pesquisa de servidores',20,0);
+  }
+
+
+    function LookupPensionista(&$lookup)
+    {
+        $filter = $lookup->GetFilterValue('filteridPensionista');
+        if (!$filter) {
+           $filter = strtoupper($lookup->filterValue);
+        }
+        $filterNome = $lookup->GetFilterValue('filterNome');
+        if (!$filterNome) {
+           if (!$filter) {
+             $filterNome = 'NAO INFORMADO';
+           }
+        }
+
+        $lookup->AddFilterField( new TextField('filteridPensionista', $filter    ,'Vínculo',10));
+        $lookup->AddFilterField( new TextField('filterNome'         , $filterNome,'Nome'   ,80));
+        $columns = array(
+                         new DataGridColumn('idpessoa'     ,''           ,'left', true, '0%' ,false),
+                         new DataGridColumn('idPensionista','Pensionista','left', true, '10%',TRUE ),
+                         new DataGridColumn('nome'         ,'Nome'       ,'left', true, '90%',TRUE )
+                   );
+
+        $sql = new sql( 'P.idpessoa, P.idPensionista, N.nome',
+                        'rh_pensionista P, cm_pessoa N'      ,
+                        'P.idpessoa = N.idpessoa'            );
+
+        if ( $filter )
+        {
+            $sql->where .= " and P.idpensionista like '{$filter}%' ";
+        }
+        if ( $filterNome )
+        {
+            $sql->where .= " and ( upper(N.nome) like upper('{$filterNome}%') ) ";         
+        }
+
+        $lookup->SetGrid('sigaept',$sql,$columns,'Pesquisa por Vínculo',20,0);
+    } // LookupPensionista
+    
+    function LookupCargoCadastroVagas(&$lookup)
+    {   
+        global $MIOLO;
+        
+        $filter = $lookup->GetFilterValue('filter1');
+        if (!$filter) 
+           $filter = $lookup->GetFilterValue();
+
+        $fGrupo = $lookup->getFilterValue('filter0');
+        
+        if (!$filter) {
+             $filter = 'A DEFINIR';
+           }
+        $grupoCargo = $MIOLO->getBusiness('rh','grupocargo');
+        $query = $grupoCargo->listWithVagas();
+        
+        $lookup->AddFilterField( new Selection('filter0', $fGrupo, 'Grupo Cargo',$query->result) );
+        $lookup->AddFilterField( new TextField('filter1', $filter,'Cargo', 30) );
+        $columns = array(
+            new DataGridColumn('idcargo','Código','center', true, '18%',true),
+            new DataGridColumn('descricao','Descrição do Cargo','left', true, '82%',true),
+        );
+
+        $sql = new sql('c.idcargo,c.descricao', 'rh_cargo c','','','c.idcargo,c.descricao');
+        if ( $filter )
+        {
+            $sql->where .= " (c.descricao) like upper('%{$filter}%')";
+        }
+        
+        $sql->where .= " and ( c.idgrupocargo = '{$fGrupo}' )";
+        
+        
+        $lookup->SetGrid('common',$sql,$columns,'Pesquisa Cargos',15,0);
+    }
+
+
+    function LookupCursoExterno(&$lookup)
+    {
+        global $MIOLO;
+        $filter = $lookup->GetFilterValue('filter');
+        if ( !$filter )
+		{
+            $filter = $lookup->GetFilterValue();
+        }
+        $lookup->AddFilterField( 
+			new MTextField('filter',$filter,'Curso ou Evento Externo: ',55) 
+		);
+        $columns = array(
+			new MObjectGridColumn('idcurso'			 ,'Id'                     ,'right',TRUE, '5%',FALSE),
+			new MObjectGridColumn('nome'			 ,'Curso ou Evento Externo','left' ,TRUE,'40%',TRUE),
+			new MObjectGridColumn("idinstituicao"      ,'Instituição'            ,'left' ,TRUE,'40%',TRUE),
+			new MObjectGridColumn('cargaHoraria'	 ,'CH'                     ,'left' ,TRUE, '4%',TRUE),
+			new MObjectGridColumn('dataInicio'		 ,'Início'                 ,'left' ,TRUE, '8%',TRUE),
+			new MObjectGridColumn('dataFim'			 ,'Fim'                    ,'left' ,TRUE, '8%',TRUE)
+        );
+		$filter = strtoupper($filter);
+		$objCursoExterno = $MIOLO->getBusiness('rh','capacitacaocurso');
+		$criteria = $objCursoExterno->getCriteria();
+		$criteria->addColumnAttribute('idcurso');
+		$criteria->addColumnAttribute('upper(nome)','nome');
+		//$criteria->addColumnAttribute('upper(instituicao.nome)','idinstituicao');
+		$criteria->addColumnAttribute('(instituicao.idinstituicao)','idinstituicao');
+		$criteria->addColumnAttribute('cargaHoraria');
+		$criteria->addColumnAttribute('dataInicio','dataInicio');
+		$criteria->addColumnAttribute('dataFim','dataFim');
+        if ($filter != '')
+        {
+            $criteria->addCriteria('upper(nome)','LIKE',"'{$filter}%'");
+        }
+		$cc = new CriteriaCondition;
+		$cc->addCriteria($criteria->getCriteria('idinstituicao','is not',"null"));
+		//$cc->addOrCriteria($criteria->getCriteria('trim(idinstituicao)','!=',"1"));
+		$cc->addOrCriteria($criteria->getCriteria('(idinstituicao)','!=',"1"));
+		$criteria->addCriteria($cc);
+        $criteria->addOrderAttribute('nome');
+		$sql = $criteria->retrieveAsCursor();
+        $lookup->setCursorGrid($sql,$columns,'Selecionar Curso ou Evento Externo: ',55,0);
+    } // LookupCursoExterno (capacitacao  externa)
+
+
+    function LookupCargoCadastroVagas2(&$lookup)
+    {   
+        global $MIOLO;
+        
+        $filter = $lookup->GetFilterValue('filter1');
+        if (!$filter) 
+           $filter = $lookup->GetFilterValue();
+
+        $fGrupo = $lookup->getFilterValue('filter0');
+        
+        if (!$filter) {
+             $filter = 'A DEFINIR';
+           }
+        $grupoCargo = $MIOLO->getBusiness('rh','grupocargo');
+        $grupoCargo->GetById($fGrupo);
+        $query = $grupoCargo->listCargos();
+        
+        $lookup->AddFilterField( new TextField('filter1', $filter,'Cargo', 30));
+	$lookup->AddFilterField( new HiddenField('filter0', $fGrupo));
+
+        $columns = array(
+            new DataGridColumn('idcargo','Código','center', true, '18%',true),
+            new DataGridColumn('descricao','Descrição do Cargo','left', true, '82%',true),
+        );
+
+        $sql = new sql('c.idcargo,c.descricao', 'rh_cargo c','','','c.idcargo,c.descricao');
+        if ( $filter )
+        {
+            $sql->where .= " (c.descricao) like upper('%{$filter}%')";
+        }
+        
+        $sql->where .= " and ( c.idgrupocargo = '{$fGrupo}' )";
+        
+        
+        $lookup->SetGrid('common',$sql,$columns,'Pesquisa Cargos - '.$grupoCargo->descricao,15,0);
+    }
+
+}
+?>

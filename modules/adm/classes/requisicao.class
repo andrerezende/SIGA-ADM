@@ -1,0 +1,2131 @@
+<?php
+class BusinessAdmRequisicao extends Business
+{
+    public $idRequisicao;
+    public $dataHora;
+    public $dataHoraAut;
+    public $idTipoReq;
+    public $status;
+    public $idUoRequisitante;
+    public $idUoExecutante;
+    public $idUsuarioRequisitante;
+    public $motivoRejeicao;
+    public $idUsuarioGestor; 
+    public $localEntrega; 
+    public $dataHoraExec; 
+    public $suplementar;
+
+    public $uoRequisitante;
+    public $uoExecutante;
+    public $restaurante;
+    public $hotel;
+    public $servext;
+    public $tabelaGeral;	
+    public $municipio;
+    public $servicoExterno;
+    public $biblioteca;
+
+    public $materialCompra;
+    public $lancamentoInt;
+
+    public $conceito;
+    public $obs;
+    public $ordemEntrega;
+    public $acesso;
+    
+    function __construct($data = null)
+    {
+        parent::__construct('sigaept', $data);
+        $this->fmtStrToDate = "TO_DATE(?,'DD/MM/YYYY')";
+        $this->fmtStrToDate2 = "TO_DATE(?,'DD/MM/YY')";
+    }
+
+    function OnCreate($data)
+    {
+        if (!empty($data))
+        {
+            $this->GetById($data);
+        }
+    }
+
+    function getById($id)
+    {
+        $this->idRequisicao = $id;
+        $this->retrieve();
+        return $this;
+    }
+    
+    function listByNumeroUsuario($numero,$idUsuario=null)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->AddColumnAttribute('idRequisicao');
+        $criteria->AddColumnAttribute('dataHora','datahora');
+        $criteria->AddColumnAttribute('tabelaGeral.item2','status');
+        $criteria->AddColumnAttribute('tipoRequisicao.descricao','tiporequisicao');
+        if ($idUsuario)
+        {
+            $criteria->addCriteria('acesso.idUsuario','=', $idUsuario);
+        }
+
+	if($numero)
+           $criteria->addCriteria('idRequisicao','=', "$numero");
+        else
+  	   $criteria->addCriteria('idRequisicao','>', "$numero");
+
+        $criteria->addCriteria('tabelaGeral.tabela','=',"'AD_ALMOXSTATUSREQ'");
+        $criteria->addOrderAttribute('idRequisicao');
+        return $criteria->retrieveAsQuery();
+    }
+    
+    function listByNumeroUsuario2($numero,$idUsuario=null)
+    {
+        
+        $sql = new sql ("r.idrequisicao, TO_CHAR(r.datahorareq, 'DD/MM/YY HH:MM:SS') as datahorareq, u.login, s.siglasetor, t.item2, o.descricao", 
+        "ad_requisicao r
+            INNER JOIN cm_usuario u on r.idusuarioreq = u.idusuario
+            INNER JOIN cm_setor s on u.idsetor = s.idsetor
+            INNER JOIN cm_tabelageral t on r.status = t.item1 
+            INNER JOIN ad_tiporeq o on o.idtiporeq = r.tiporequisicao", 
+         "t.tabela = 'AD_ALMOXSTATUSREQ'", 
+         "idrequisicao DESC");
+        
+        if($numero)
+           $sql->SetWhereAND('idRequisicao = '.$numero);
+
+        $query = $this->Query($sql);
+        return $query;
+    }
+
+    function listByStatusUsuario($status,$idUsuario)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->AddColumnAttribute('idRequisicao');
+        $criteria->AddColumnAttribute('dataHora','datahora');
+        $criteria->AddColumnAttribute('uoRequisitante.sigla');
+        $criteria->AddColumnAttribute('tipoRequisicao.descricao','tiporequisicao');
+        $criteria->addCriteria('tabelaGeral.tabela','=',"'AD_ALMOXSTATUSREQ'");
+        $criteria->addCriteria('idUsuarioReq','=', $idUsuario);
+
+        if ($status == "G") //Se Finalizada então mostra tb as executadas de almoxarifado, compras e serviço
+        {
+            $cc2 = new CriteriaCondition();
+            // ou (idTipoReq = '7' e status = '8')  COMPRA
+            $cc3 = new CriteriaCondition();
+            $cc3->addCriteria($criteria->getCriteria('idTipoReq','=', "'7'"));
+            $cc3->addCriteria($criteria->getCriteria('status','=', "'8'"));
+            $cc2->addOrCriteria($cc3);    
+
+            // ou (idTipoReq = '7' e status = '9') COMPRA
+            $cc4 = new CriteriaCondition();
+            $cc4->addCriteria($criteria->getCriteria('idTipoReq','=', "'7'"));
+            $cc4->addCriteria($criteria->getCriteria('status','=', "'9'"));
+            $cc2->addOrCriteria($cc4);
+
+            // ou (idTipoReq = '8' e status = '8') ALMOXARIFADO
+            $cc5 = new CriteriaCondition();
+            $cc5->addCriteria($criteria->getCriteria('idTipoReq','=', "'8'"));
+            $cc5->addCriteria($criteria->getCriteria('status','=', "'8'"));
+            $cc2->addOrCriteria($cc5);    
+
+            // ou (idTipoReq = '8' e status = '9') ALMOXARIFADO
+            $cc6 = new CriteriaCondition();
+            $cc6->addCriteria($criteria->getCriteria('idTipoReq','=', "'8'"));
+            $cc6->addCriteria($criteria->getCriteria('status','=', "'9'"));
+            $cc2->addOrCriteria($cc6);
+
+            // ou (idTipoReq = '9' e status = '8') SERVIÇO
+            $cc7 = new CriteriaCondition();
+            $cc7->addCriteria($criteria->getCriteria('idTipoReq','=', "'9'"));
+            $cc7->addCriteria($criteria->getCriteria('status','=', "'8'"));
+            $cc2->addOrCriteria($cc7);    
+
+            // ou (idTipoReq = '9' e status = '9') SERVIÇO
+            $cc8 = new CriteriaCondition();
+            $cc8->addCriteria($criteria->getCriteria('idTipoReq','=', "'9'"));
+            $cc8->addCriteria($criteria->getCriteria('status','=', "'9'"));
+            $cc2->addOrCriteria($cc8);
+
+            // e status = 'G'
+            $cc9 = new CriteriaCondition();
+            $cc9->addCriteria($criteria->getCriteria('status','=', "'$status'"));
+            $cc2->addOrCriteria($cc9);
+            $criteria->addCriteria($cc2);
+        }
+        else if ($status == "9")
+        {
+            $criteria->addCriteria('status','=', "'$status'");
+            $criteria->addCriteria('idTipoReq','<>', "'7'"); // COMPRA
+            $criteria->addCriteria('idTipoReq','<>', "'8'"); // ALMOXARIFADO
+            $criteria->addCriteria('idTipoReq','<>', "'9'"); // SERVIÇO
+        }
+        else
+        {
+            $criteria->addCriteria('status','=', "'$status'");
+        }
+
+        $criteria->addOrderAttribute('idRequisicao');
+        return $criteria->retrieveAsQuery();
+    }
+    
+    function listByDataTipo($dataIni,$dataFim,$tipo,$descTipoReq)
+    {		
+        $criteria = $this->getCriteria();
+        $criteria->AddColumnAttribute('idRequisicao');
+        $criteria->AddColumnAttribute('uoRequisitante.sigla');
+        $criteria->AddColumnAttribute('dataHora','datahora'); 
+        switch($tipo)
+        {
+            case 10:
+                //$criteria->AddColumnAttribute(strtolower($descTipoReq).'.precoEstimado');
+                //$criteria->AddColumnAttribute(strtolower($descTipoReq).'.valorReal');
+		  $criteria->AddColumnAttribute('precoEstimado');
+                $criteria->AddColumnAttribute('valorReal');
+                break;
+            case 6:
+            case 7:
+                $criteria->AddColumnAttribute('materialCompra.precoEstimado');
+                $criteria->AddColumnAttribute('materialCompra.valorReal');
+                break;
+            case 9:
+                $criteria->AddColumnAttribute('servicoExterno.valorEst');
+                $criteria->AddColumnAttribute('servicoExterno.valorReal');
+                break;
+            default:
+                $criteria->AddColumnAttribute(strtolower($descTipoReq).'.valorEstimado');
+                $criteria->AddColumnAttribute(strtolower($descTipoReq).'.valorReal');				
+        }   
+        $criteria->AddColumnAttribute('status');
+        $criteria->AddColumnAttribute('idTipoReq');
+        switch($tipo)
+        {
+            case 10:
+	    case 13:
+                $criteria->AddColumnAttribute('biblioteca.idMaterial');
+                break;
+            case 6:
+            case 7:
+                $criteria->AddColumnAttribute('materialCompra.idMaterial');
+                break;
+            case 9:
+                $criteria->AddColumnAttribute('servicoExterno.idServico');
+                break;				
+        }   
+        $cc = new CriteriaCondition();
+        $cc->addCriteria($criteria->getCriteria('status','=', "'4'"));
+        $cc->addOrCriteria($criteria->getCriteria('status','=', "'7'"));
+        $criteria->addCriteria($cc);        
+        $criteria->addCriteria('dataHora','>=', "'$dataIni'");
+        $criteria->addCriteria('dataHora','<=', "'$dataFim'");
+        $criteria->addCriteria('idTipoReq','=', $tipo);
+        $criteria->addCriteria('tabelaGeral.tabela','=',"'AD_ALMOXSTATUSREQ'");
+        $criteria->addOrderAttribute('uoRequisitante.sigla');
+        $criteria->addOrderAttribute('idRequisicao');
+        return $criteria->retrieveAsQuery();
+    }
+
+    function listAll()
+    {
+        $criteria =  $this->getCriteria();
+        return $criteria->retrieveAsQuery();
+    }
+
+    function getItemMaterialAlmoxarifado($idMaterial)
+    {
+        if ( $this->materialAlmoxarifado == NULL )
+        {
+            $this->retrieveAssociation('materialAlmoxarifado');
+            if ($this->materialAlmoxarifado != NULL)
+            {
+                foreach ( $this->materialAlmoxarifado as $a )
+                {
+                    if ( $a->idMaterial == $idMaterial )
+                    return $a;
+                }
+            }
+        }
+        else
+        {
+            foreach ( $this->materialAlmoxarifado as $a )
+            {
+                if ( $a->idMaterial == $idMaterial )
+                return $a;
+            }
+        }
+    }
+    
+    function getItemMaterialCompra($idMaterial)
+    {
+        if ( $this->materialCompra == NULL )
+        {
+            $this->retrieveAssociation('materialCompra');
+            if ($this->materialCompra != NULL)
+            {
+                foreach ( $this->materialCompra as $a )
+                {
+                    if ( $a->idMaterial == $idMaterial )
+                    return $a;
+                }
+            }
+        }
+        else
+        {
+            foreach ( $this->materialCompra as $a )
+            {
+                if ( $a->idMaterial == $idMaterial )
+                return $a;
+            }
+        }
+    }
+
+    function getItem()
+    {
+        global $MIOLO;
+
+        switch ($this->idTipoReq)
+        {
+            case 1:
+                $this->retrieveAssociation('restaurante');
+                return ( $this->restaurante == NULL ) ? $MIOLO->GetBusiness('adm','itemrestaurante') : $this->restaurante;
+
+            case 2:
+                $this->retrieveAssociation('hotel');
+                return ( $this->hotel == NULL ) ? $MIOLO->GetBusiness('adm','itemhotel') : $this->hotel;
+
+            case 3:
+                $this->retrieveAssociation('passagem');
+                return ( $this->passagem == NULL ) ? $MIOLO->GetBusiness('adm','itempassagem') : $this->passagem;             
+
+            case 4:                
+                $this->retrieveAssociation('veiculo');
+                return ( $this->veiculo == NULL ) ? $MIOLO->GetBusiness('adm','itemveiculo') : $this->veiculo;
+              
+            case 5:                
+                $this->retrieveAssociation('diaria');
+                return ( $this->diaria == NULL ) ? $MIOLO->GetBusiness('adm','itemdiaria') : $this->diaria;
+                    
+            case 6:
+            case 7:
+                $this->retrieveAssociation('materialCompra');
+                return ( $this->materialCompra == NULL ) ? $MIOLO->GetBusiness('adm','itemreq') : $this->materialCompra;
+                break;
+
+            case 8:
+                $this->retrieveAssociation('materialAlmoxarifado');
+                break;
+                    
+            case 9:
+                $this->retrieveAssociation('servext');
+                return ( $this->servext == NULL ) ? $MIOLO->GetBusiness('adm','itemservext') : $this->servext;
+                break;
+                    
+            case 10:
+	    case 13:
+                $this->retrieveAssociation('biblioteca');
+                return ( $this->biblioteca == NULL ) ? $MIOLO->GetBusiness('adm','itemreqbib') : $this->biblioteca;
+                break;
+        }
+    }
+
+    function addItem($item)
+    {
+        switch ($this->idTipoReq)
+        {
+            case 1:
+                $this->restaurante = $item;
+                $this->restaurante->idRequisicao = $this->idRequisicao;
+                break;
+                      
+            case 2:
+                $this->hotel = $item;
+                $this->hotel->idRequisicao = $this->idRequisicao;
+                break;
+
+            case 3:
+                $this->passagem = $item;
+                $this->passagem->idRequisicao = $this->idRequisicao;
+                break;
+                      
+            case 4:
+                $this->veiculo = $item;
+                $this->veiculo->idRequisicao = $this->idRequisicao;
+                break;
+                      
+            case 5:
+                $this->diaria = $item;
+                $this->diaria->idRequisicao = $this->idRequisicao;
+                break;
+                
+            case 6:
+                $this->materialCompra[0] = $item;
+                $this->materialCompra[0]->idRequisicao = $this->idRequisicao;
+                break;
+
+            case 7:
+                $this->materialCompra = $item;
+                $this->materialCompra->idRequisicao = $this->idRequisicao;
+                break;
+                      
+            case 8:
+                $item->idRequisicao = $this->idRequisicao;
+                $this->materialAlmoxarifado[] = $item;
+                break;
+                      
+            case 9:
+                $this->servext = $item;
+                $this->servext->idRequisicao = $this->idRequisicao;
+                break;
+                      
+            case 10:
+	    case 13:
+                $this->biblioteca = $item;
+                $this->biblioteca->idRequisicao = $this->idRequisicao;
+                break;
+        }
+    }
+    
+    function DeleteItem()
+      {
+          if ( $this->materialCompra != NULL )
+          {
+                      foreach( $this->materialCompra as $item )
+                      {
+                          $item->delete();
+                      }
+          }
+      }
+
+    function setStatus($status)
+    {
+        $this->status = $status;
+    }
+    
+    function setConceito($conceito)
+    {
+        $this->conceito = $conceito;
+    }
+    
+    function setObs($obs)
+    {
+        $this->obs = $obs;
+    }
+
+    function setMotivoRejeicao($motivoRejeicao)
+    {
+        $this->motivoRejeicao = $motivoRejeicao;
+    }
+      
+    function setDataHoraAutorizacao()
+    {
+        $this->dataHoraAut = date("d/m/Y H:i:s");
+    }
+      
+    function setIdUsuarioGestor($idUsuario)
+    {
+        $this->idUsuarioGestor = $idUsuario;
+    }
+
+    function save()
+    {
+        switch ($this->idTipoReq)
+        {
+            case 1:
+                if ( $this->restaurante != NULL )
+                {
+                    $this->restaurante->save();
+                }
+                break;
+                      
+            case 2:
+                if ( $this->hotel != NULL )
+                {
+                    $this->hotel->save();
+                }
+                break;
+              
+            case 3:
+                if ( $this->passagem != NULL )
+                {
+                    $this->passagem->save();
+                }
+                break;
+
+            case 4:
+                if ( $this->veiculo != NULL )
+                {
+                    $this->veiculo->save();
+                }
+                break;
+                      
+            case 5:
+                if ( $this->diaria != NULL )
+                {
+                    $this->diaria->save();
+                }
+                break;
+
+            case 6:
+                if ( $this->materialCompra[0] != NULL )
+                {
+                    $this->materialCompra[0]->save();
+                }
+                break;
+
+            case 7:
+                $cf = new MCurrencyFormatter();
+                if ( $this->materialCompra != NULL )
+                {
+                    foreach( $this->materialCompra as $item )
+                    {
+                        $item->precoEstimado = $cf->toDecimal($item->precoEstimado);
+                        $item->save();
+                    }
+                }
+                break;
+              
+            case 8:
+                if ( $this->materialAlmoxarifado != NULL )
+                {
+                    foreach( $this->materialAlmoxarifado as $item )
+                    {
+                        if ( !$item->isPersistent() )
+                        {
+                            $item->save();
+                        }
+                    }
+                }
+                break;
+            
+            case 9:
+                if ( $this->servext != NULL )
+                {
+                    if ($this->getTransaction()) $this->servext->setTransaction($this->getTransaction());
+                        $this->servext->save();
+                }
+                break;
+              
+            case 10:
+	    case 13:
+                if ( $this->biblioteca != NULL )
+                {
+                    $this->biblioteca->save();
+                }
+                break;
+        }
+        parent::save();
+    }
+
+    function getUoRequisitante()
+    {
+        $this->retrieveAssociation('uoRequisitante');
+    }
+    
+    function getUoExecutante()
+    {
+        $this->retrieveAssociation('uoExecutante');
+    }
+
+    function getItemValorEstimado()
+    {
+        $cf = new MCurrencyFormatter();
+        switch ($this->idTipoReq)
+        {
+            case 1:
+                $this->retrieveAssociation('restaurante');
+                $valor = $this->restaurante->valorEstimado;
+                $this->restaurante = NULL;
+                break;
+
+            case 2:
+                $this->retrieveAssociation('hotel');
+                $valor = $this->hotel->valorEstimado;
+                $this->hotel = NULL;
+                break;
+
+            case 3:
+                $this->retrieveAssociation('passagem');
+                $valor = $this->passagem->valorEstimado;
+                $this->passagem = NULL;
+                break;
+
+            case 4:
+                $this->retrieveAssociation('veiculo');
+                $valor = $this->veiculo->valorEstimado;
+                $this->veiculo = NULL;
+                break;
+                  
+            case 6: // compra permanente
+               //Case 6 comentada por Takanori Ogawa
+
+		 /*$this->retrieveAssociation('materialCompra');
+                if ($this->materialCompra)
+                {
+                    $valor = $cf->toDecimal($this->materialCompra[0]->quantPedida) * $cf->toDecimal($this->materialCompra[0]->precoEstimado);
+                }
+                break;*/
+
+            case 7:
+                $this->retrieveAssociation('materialCompra');
+
+                if ($this->materialCompra)
+                {
+                    foreach ($this->materialCompra as $material)
+                    {
+                        $valor += $cf->toDecimal($material->quantPedida) * $cf->toDecimal($material->precoEstimado);
+                    }
+                }
+                break;
+                      
+            case 9:
+                $this->retrieveAssociation('servicoExterno');
+                $valor = $this->servicoExterno->valorEstimado;
+                break;
+                
+            case 10:
+	    case 13:
+                $this->retrieveAssociation('biblioteca');
+                $valor = ($cf->toDecimal($this->biblioteca->quantPedida))*($cf->toDecimal($this->biblioteca->precoEstimado));
+                break;
+        }
+        return $valor;
+    }
+
+    function getIdUsuarioRequisitante()
+    {
+        return $this->idUsuarioRequisitante;
+    }
+
+    function setIdUsuarioRequisitante($newIdUsuarioRequisitante)
+    {
+        $this->idUsuarioRequisitante = $newIdUsuarioRequisitante;
+    }    
+
+    function setUoExecutante($idUoExecutante)
+    {
+        global $MIOLO;  
+        $cobaiaUoExecutante = $MIOLO->getBusiness('adm','uo');
+        $cobaiaUoExecutante = $cobaiaUoExecutante->getById($idUoExecutante);
+        $this->uoExecutante = $cobaiaUoExecutante;
+    }
+    
+    function setIdUoExecutante($newIdUoExecutante)
+    {
+        $this->idUoExecutante = $newIdUoExecutante;
+    }
+    
+    function setIdUoRequisitante($newIdUoRequisitante)
+    {
+        $this->idUoRequisitante = $newIdUoRequisitante;
+    }
+
+    function listLocalidadeDiarias()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->AddColumnAttribute('localidadeDiaria.idMunicipio');
+        $criteria->AddColumnAttribute('localidadeDiaria.municipio.municipio');
+        $criteria->AddColumnAttribute('localidadeDiaria.municipio.idUF');
+        $criteria->AddColumnAttribute('localidadeDiaria.quantDiarias');
+        $criteria->AddColumnAttribute('localidadeDiaria.idVinculo');
+        $criteria->addCriteria('idRequisicao','=', $this->idRequisicao);
+        $criteria->addOrderAttribute('localidadeDiaria.municipio.municipio');
+        return $criteria->retrieveAsQuery();
+    }
+
+    function listReqDiariaByUo($idUo)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->AddColumnAttribute('idRequisicao');
+        $criteria->AddColumnAttribute('dataHora');
+        $criteria->addCriteria('idTipoReq','=','5');
+        $criteria->addCriteria('idUoRequisitante','=', $idUo);
+        $criteria->addOrderAttribute('dataHora');
+        return $criteria->retrieveAsQuery();
+    }
+
+
+    function getLocalidadeDiarias()
+    {
+        $this->retrieveAssociation('localidadeDiaria');
+        if ($this->localidadeDiaria != NULL)
+        {
+            if (!is_array($this->localidadeDiaria))
+            {
+                $this->localidadeDiaria = array($this->localidadeDiaria);  
+            }
+        }
+    }
+    
+    function DeleteLocalidadeDiaria($id)
+    {
+        $localidadeDiaria = $this->getLocalidadeDiaria($id);
+        $localidadeDiaria->Delete();
+    }
+    
+    function getLocalidadeDiaria($id)
+    {
+        $this->retrieveAssociation('localidadeDiaria');
+
+        if ($this->localidadeDiaria != NULL)
+        {
+            foreach ( $this->localidadeDiaria as $t )
+            {
+                if ( trim($t->idMunicipio) == $id )
+                {
+                    return $t;
+                }
+            }
+        }
+    }
+
+    function getTotalDiarias()
+    {
+        $this->retrieveAssociation('localidadeDiaria');
+
+        if ($this->localidadeDiaria != NULL)
+        {
+            foreach ( $this->localidadeDiaria as $t )
+            {
+                $totalDiarias += str_replace(',','.',$t->quantDiarias);
+            }
+            return $totalDiarias;
+        }
+    }
+
+    function getRubrica()
+    {
+        global $MIOLO;
+        $requisita = $MIOLO->getBusiness('adm','requisita');
+        $requisita->GetById($this->idTipoReq,$this->idUoRequisitante,$this->getAno());
+        return $requisita->idRubrica;
+    }
+
+    /* ---------------------------------------
+
+    Métodos para requisicão de compras
+    
+    ----------------------------------------*/
+    function getMaterialCompra($idMaterial=null)
+    {
+        global $MIOLO;
+        $this->retrieveAssociation('materialCompra');
+        if ($this->materialCompra)
+        {
+            if ($idMaterial)
+            {
+                foreach ($this->materialCompra as $material)
+                {
+                    if ($material->idMaterial == $idMaterial) return $material;
+                }
+            }
+            else return $this->materialCompra;
+        }
+        $material = $MIOLO->getBusiness('adm','itemreq');
+        $material->idRequisicao = $this->idRequisicao;
+        return $material;
+    }
+    
+    /* ---------------------------------------
+
+    Métodos para requisicão de almoxarifado
+    
+    ----------------------------------------*/
+    function getMateriaisReqAlmoxarifado()
+    {
+        $this->retrieveAssociation('materialAlmoxarifado');
+    }
+    
+    function getQuantidadeByMaterial($idMaterial)
+    {
+        $this->getUoExecutante();
+        $materialEstoque = $this->uoExecutante->getMaterial($idMaterial);
+        return $materialEstoque->estoque;
+    }
+
+    function getValorTotalByMaterial($idMaterial)
+    {
+        $this->getUoExecutante();
+        $materialEstoque = $this->uoExecutante->getMaterial($idMaterial);
+        return $materialEstoque->valorTotal;
+    }
+
+    function getValorMedioByMaterial($idMaterial)
+    {
+        $valorMedio = $this->getValorTotalByMaterial($idMaterial) / $this->getQuantidadeByMaterial($idMaterial);
+        return $valorMedio;
+    }
+
+    function getValorEstimadoReqAlmoxarifado()
+    {
+        $cf = new MCurrencyFormatter();
+        $this->getMateriaisReqAlmoxarifado();
+        foreach ($this->materialAlmoxarifado as $material) $valorEstimado += $cf->toDecimal($material->precoEstimado)*$cf->toDecimal($material->quantPedida);
+        return $valorEstimado;
+    }
+
+    function getValorRealReqAlmoxarifado()
+    {
+        $cf = new MCurrencyFormatter();
+        $this->getMateriaisReqAlmoxarifado();
+        foreach ($this->materialAlmoxarifado as $material)
+        {
+            $this->getUoExecutante();
+            $materialEstoque = $this->uoExecutante->getMaterial($material->idMaterial);
+            $valorReal += $material->quantAutorizada * $cf->toDecimal($materialEstoque->valorTotal) / $materialEstoque->estoque;
+        }
+        return $valorReal;
+    }
+
+    function saveQuantidadesAutorizadas($data)
+    {
+        $this->getMateriaisReqAlmoxarifado();
+        foreach ($this->materialAlmoxarifado as $material)
+        {
+            foreach ($data as $key=>$quantidade)
+            {
+                if ($material->idMaterial == $key)
+                {
+                    $quantidadeDisponivel = $this->getQuantidadeByMaterial($material->idMaterial);
+                    if ($quantidadeDisponivel > $quantidade) $material->quantAutorizada = $quantidade;
+                    else $material->quantAutorizada = $quantidadeDisponivel;
+                    $material->save();
+                }
+            }
+        }
+    }
+
+    function addPrevisaoDebitoAlmoxarifado()
+    {
+        $this->getUoRequisitante();
+        $cf = new MCurrencyFormatter();
+        $orcamento = $this->uoRequisitante->getOrcamentoByRubrica($this->getRubrica());
+        $orcamento->addPrevisaoDebito($this->getValorEstimadoReqAlmoxarifado());
+        try
+        {
+            $orcamento->save();
+            $orcamento->Log(OP_INS,"Orçamento Interno atualizado com sucesso.");
+        }
+        catch (Exception $e)
+        {
+            $this->addError($e->getMessage());
+        }
+    }
+    
+    function removePrevisaoDebitoAlmoxarifado()
+    {
+        $this->getUoRequisitante();
+        $orcamento = $this->uoRequisitante->getOrcamentoByRubrica($this->getRubrica());
+        $orcamento->removePrevisaoDebito($this->getValorEstimadoReqAlmoxarifado());
+        try
+        {
+            $orcamento->save();
+            $orcamento->Log(OP_INS,"Orçamento Interno atualizado com sucesso.");
+        }
+        catch (Exception $e)
+        {
+            $this->addError($e->getMessage());
+        }
+    }
+    
+    function addDebitoAlmoxarifado()
+    {
+        $this->getUoRequisitante();
+        $orcamento = $this->uoRequisitante->getOrcamentoByRubrica($this->getRubrica());
+        try
+        {
+            $orcamento->addDebito($this->getValorRealReqAlmoxarifado());
+            $orcamento->save();
+            $orcamento->Log(OP_INS,"Orçamento Interno atualizado com sucesso.");
+        }
+        catch (Exception $e)
+        {
+            $this->addError($e->getMessage());
+        }
+    }
+
+    function addCreditoAlmoxarifado()
+    {
+        $this->getUoExecutante();
+        $orcamento = $this->uoExecutante->getOrcamentoByRubrica($this->getRubrica());
+        try
+        {
+            $orcamento->addCredito($this->getValorRealReqAlmoxarifado());
+            $orcamento->save();
+            $orcamento->Log(OP_INS,"Orçamento Interno atualizado com sucesso.");
+        }
+        catch (Exception $e)
+        {
+            $this->addError($e->getMessage());
+        }
+    }
+
+    function addLancamentoInternoAlmoxarifado($tipo,$valor,$obs = null)
+    {
+        global $MIOLO;
+
+        $lancamentoInt = $MIOLO->getBusiness('adm','lancamentoint');
+        $lancamentoInt->tipoLancamento = $tipo;
+        $lancamentoInt->obs = $obs;
+        $lancamentoInt->valor = $valor;
+        $lancamentoInt->data = date("d/m/Y");                
+        $lancamentoInt->ano = date("Y");
+        $lancamentoInt->idUoRequisitante = $this->idUoRequisitante;       
+        $lancamentoInt->idUoExecutante = $this->idUoExecutante;
+        $lancamentoInt->idRubrica = $this->getRubrica();           
+        $lancamentoInt->idRequisicao = $this->idRequisicao;
+
+        try
+        {
+            $lancamentoInt->save();
+            $lancamentoInt->Log(OP_INS,"Lançamento Interno atualizado com sucesso.");
+        }
+        catch (Exception $e)
+        {
+            $this->addError($e->getMessage());
+        }
+    }
+
+    function addMovimento($tipo)
+    {
+        global $MIOLO;
+        $today = getDate();
+        $this->getMateriaisReqAlmoxarifado();
+        foreach ($this->materialAlmoxarifado as $material)
+        {
+            $movimento = $MIOLO->getBusiness('adm','movimento');
+            $movimento->idMaterial = $material->idMaterial;
+            $movimento->idRequisicao = $material->idRequisicao;
+            $movimento->tipoMovimento = $tipo;
+            $movimento->dataMovimento = $today['mday']."/".$today['mon']."/".$today['year'];
+            $movimento->quantidade = $material->quantAutorizada;        
+            $movimento->valorTotal = str_replace('.',',',$material->quantAutorizada*$this->getValorMedioByMaterial($material->idMaterial));
+            try
+            {
+                $movimento->save();
+                $movimento->Log(OP_INS,"Movimento lançado com sucesso.");
+            }
+            catch (Exception $e)
+            {
+                $this->addError($e->getMessage());
+            }
+        }
+    }
+
+    function saidaEstoque()
+    {
+        $this->getMateriaisReqAlmoxarifado();
+        foreach ($this->materialAlmoxarifado as $material)
+        {
+            $materialEstoque = $this->uoExecutante->getMaterial($material->idMaterial);
+            $materialEstoque->valorTotal -= $material->quantAutorizada * $this->getValorMedioByMaterial($material->idMaterial);
+            $materialEstoque->valorTotal = str_replace('.',',',$materialEstoque->valorTotal);
+            $materialEstoque->estoque -= $material->quantAutorizada;
+            try
+            {
+                $materialEstoque->save();
+                $materialEstoque->Log(OP_INS,"Saida de material realizada com sucesso.");
+            }
+            catch (Exception $e)
+            {
+                $this->addError($e->getMessage());
+            }
+        }
+    }
+
+    /* ---------------------------------------
+
+    Método ListMovimentosByDataSetor($idsetoralmox,$dataInicio,$dataFim)
+    Lista todos os movimentos feitos pelo almoxarifado informado
+    ($idsetoralmox) entre as datas informadas ($dataInicio,$dataFim)
+    
+    ----------------------------------------*/
+    function ListMovimentosByDataSetor($idsetoralmox,$dataInicio,$dataFim)
+    {
+        $dataInicio = ($dataInicio) ? ":".str_replace('?',"'$dataInicio'", $this->fmtStrToDate) : "";
+        $dataFim = ($dataFim) ? ":".str_replace('?',"'$dataFim'", $this->fmtStrToDate) : "";
+
+        $sql = new sql('mat.idmaterial,mat.descricao,mat.unidade,req.idrequisicao as numero,mov.idordement,mov.quantidade,mov.valortotal','ad_requisicao req,ad_movimento mov,ad_material mat','mov.idrequisicao = req.idrequisicao and mov.idmaterial = mat.idmaterial');
+        $sql->SetWhereAnd('mov.datamov >= ? and mov.datamov <= ?');
+        $args = array($dataInicio,$dataFim);
+        $query = $this->Query($sql,$args);
+        return $query;
+    }
+
+    function addPrevisaoDebito($valor = 0)
+    {
+        /*
+        * Adicionei o atributo valor neste método no entanto
+        * creio que isto não vai mudar a funcionalidade do mesmo
+        * Ass: Danilo Fernandes
+        * 03-09-2007
+        */
+
+        $this->getUoRequisitante();
+        $idRubrica = $this->uoRequisitante->getRubricaByTipoReq($this->idTipoReq);
+
+        if ($valor > 0)
+            $this->uoRequisitante->addPrevisaoDebito($idRubrica,$valor,$this->getAno());
+        else
+            $this->uoRequisitante->addPrevisaoDebito($idRubrica,$this->getItemValorEstimado(),$this->getAno());
+    }
+
+    function removePrevisaoDebito($valor = 0)
+    {
+        $this->getUoRequisitante();
+        $idRubrica = $this->uoRequisitante->getRubricaByTipoReq($this->idTipoReq);
+
+        if ($valor > 0)
+            $this->uoRequisitante->removePrevisaoDebito($idRubrica,$valor,$this->getAno());
+        else
+            $this->uoRequisitante->removePrevisaoDebito($idRubrica,$this->getItemValorEstimado(),$this->getAno());
+    }
+
+    function addPrevisaoDebitoPermanente()
+    {
+        $this->getUoRequisitante();
+        $idRubrica = $this->uoRequisitante->getRubricaByTipoReq($this->idTipoReq);
+        $this->uoRequisitante->addPrevisaoDebito(99999903,$this->getItemValorEstimado(),$this->getAno());
+    }
+
+    function addLancamentoInterno($tipo, $valor = 0, $obs = NULL, $idLicitacao = NULL, $item = NULL)
+    {
+        global $MIOLO;
+
+        $this->getUoRequisitante();
+        $lancamento = $MIOLO->getBusiness('adm','lancamentoint');
+        $lancamento->tipoLancamento = $tipo;
+        $lancamento->obs = $obs;
+
+        if ($valor > 0)
+            $lancamento->valor = $valor;
+        else
+            $lancamento->valor = $this->getItemValorEstimado();
+
+        $lancamento->data = date("d/m/Y");                
+        $lancamento->ano = date("Y");
+        $lancamento->idUoRequisitante = $this->idUoRequisitante;       
+        $lancamento->idUoExecutante = $this->idUoExecutante;
+        $lancamento->idRubrica = $this->uoRequisitante->getRubricaByTipoReq($this->idTipoReq);           
+        $lancamento->idRequisicao = $this->idRequisicao;
+        $lancamento->idLicitacao = $idLicitacao;
+        $lancamento->item = $item;
+
+        try
+        {
+            $lancamento->save();
+            $lancamento->Log(OP_INS,"Lançamento interno tipo ".$tipo." para a requisicao ".$this->idRequisicao." no valor de ".$lancamento->valor." atualizado com sucesso.");
+        }
+        catch (Exception $e)
+        {
+            $this->addError($e->getMessage());
+        }
+    }
+
+    function repExecucaoFinanceira($idUo, $rubrica, $dataInicial, $dataFinal, $tipo)
+    {
+        global $MIOLO;
+
+        $ano = substr($dataFinal,6,4);
+        $statusPossiveis = "('4','7','8','9','C','D','E','G')";//status da requisição
+        $dataInicial = substr($this->_db->CharToTimestamp($dataInicial .= " 00:00:00"),1);
+        $dataFinal = substr($this->_db->CharToTimestamp($dataFinal .= " 23:59:59"),1);
+
+        if(($tipo != 'COMPRA') && ($tipo != 'ALMOXARIFADO') && ($tipo != 'SERVIÇOS EXTERNOS'))
+        {
+            $criteria = $this->getCriteria();
+            $criteria->setDistinct(true);
+            $criteria->addColumnAttribute('idRequisicao');
+            $criteria->addColumnAttribute("substr(dataHora, 0, 10)", 'dataHoraReq');
+        }
+        switch ($tipo)
+        {
+            case 'HOTEL':
+                $criteria->addColumnAttribute('hotel.pessoa.nome');
+                $criteria->addColumnAttribute('hotel.empresa.nome');
+                $criteria->addColumnAttribute('hotel.notaFiscal');
+                $criteria->addColumnAttribute('hotel.valorEstimado');
+                $criteria->addColumnAttribute('hotel.valorReal');
+                break;
+
+            case 'RESTAURANTE':
+                $criteria->addColumnAttribute('restaurante.pessoa.nome');
+                $criteria->addColumnAttribute('restaurante.empresa.nome');
+                $criteria->addColumnAttribute('restaurante.notaFiscal');
+                $criteria->addColumnAttribute('restaurante.valorEstimado');
+                $criteria->addColumnAttribute('restaurante.valorReal');
+                break;
+
+            case 'PASSAGEM':
+                $criteria->addColumnAttribute('passagem.pessoa.nome');
+                $criteria->addColumnAttribute('passagem.empresaPassagem.nome');
+                $criteria->addColumnAttribute('passagem.notaFiscal');
+                $criteria->addColumnAttribute('passagem.valorEstimado');
+                $criteria->addColumnAttribute('passagem.valorReal');
+                break;
+
+            case 'VEICULO':
+                $criteria->addColumnAttribute('veiculo.pessoa.nome');
+                $criteria->addColumnAttribute("' - '",'empresa');
+                $criteria->addColumnAttribute("'-'",'notaFiscal');
+                $criteria->addColumnAttribute('veiculo.valorEstimado');
+                $criteria->addColumnAttribute('veiculo.valorReal');
+                break;
+
+            case 'DIARIA':
+                $criteria->addColumnAttribute('diaria.vinculo.funcionario.pessoa.nome');
+                $criteria->addColumnAttribute("' - '",'empresa');
+                $criteria->addColumnAttribute("'-'",'notaFiscal');
+                $criteria->addColumnAttribute('diaria.valorEstimado');
+                $criteria->addColumnAttribute('diaria.valorReal');
+                break;
+
+            case 'COMPRA': //compra e almoxarifado usam mesma tabela -> é preciso diferenciar pelo idTipoReq
+                $sql = new MSql("r.idRequisicao, substr(r.dataHoraReq, 0, 10) as dataHoraReq, '  -  ' as nome, ' - ' as empresa, '-' as notaFiscal, sum(decode(i.status,'7',0,'4',0,'9',0,(i.quantPedida-i.quantEntregue))*i.precoEstimado), sum(decode(i.status, '7', i.valorReal, '8', i.valorReal, '9', i.valorReal, 'A', i.valorReal, 0)), r.status", 'ad_requisicao r, ad_itemreq i, ad_requisita req, ad_tiporeq t', "r.idRequisicao=i.idRequisicao and r.idUoReq=req.idUo and r.TipoRequisicao=t.idTipoReq and r.TipoRequisicao=req.idTipoReq and r.dataHoraReq>=$dataInicial and r.dataHoraReq<=$dataFinal and r.status in $statusPossiveis and r.idUoReq=$idUo and req.idRubrica='$rubrica' and req.ano='$ano' and t.descricao='$tipo'", 'r.idRequisicao', 'r.idRequisicao, r.dataHoraReq, r.status');
+                $query = $this->Query($sql);
+                break;
+
+            case 'ALMOXARIFADO':
+                $sql = new MSql("r.idRequisicao, substr(r.dataHoraReq, 0, 10) as dataHoraReq, '  -  ' as nome, ' - ' as empresa, '-' as notaFiscal, sum(decode(i.status,'4',0,'7',0,i.quantPedida*i.precoEstimado)), sum(decode(i.status, '7', i.valorReal, '8', i.valorReal, '9', i.valorReal, 0)), r.status", 'ad_requisicao r, ad_itemreq i, ad_requisita req, ad_tiporeq t', "r.idRequisicao=i.idRequisicao and r.idUoReq=req.idUo and r.TipoRequisicao=t.idTipoReq and r.TipoRequisicao=req.idTipoReq and r.dataHoraReq>=$dataInicial and r.dataHoraReq<=$dataFinal and r.status in $statusPossiveis and r.idUoReq=$idUo and req.idRubrica='$rubrica' and req.ano='$ano' and t.descricao='$tipo'", 'r.idRequisicao', 'r.idRequisicao, r.dataHoraReq, r.status');
+                $query = $this->Query($sql);
+                break;
+
+            case 'SERVIÇOS EXTERNOS':
+                $sql = new MSql("r.idRequisicao, substr(r.dataHoraReq, 0, 10) as dataHoraReq, '  -  ' as nome, ' - ' as empresa, '-' as notaFiscal, sum(decode(i.status,'4',0,i.quantidade*i.valorEst)), sum(decode(i.status, '7', i.valorReal*i.quantEntregue, '8', i.valorReal*i.quantEntregue, '9', i.valorReal*i.quantEntregue, 'A', i.valorReal*i.quantEntregue, 0)), r.status", 'ad_requisicao r, ad_itemreqservext i, ad_requisita req, ad_tiporeq t', "r.idRequisicao=i.idRequisicao and r.idUoReq=req.idUo and r.TipoRequisicao=t.idTipoReq and r.TipoRequisicao=req.idTipoReq and r.dataHoraReq>=$dataInicial and r.dataHoraReq<=$dataFinal and r.status in $statusPossiveis and r.idUoReq=$idUo and req.idRubrica='$rubrica' and req.ano='$ano' and t.descricao='$tipo'", 'r.idRequisicao', 'r.idRequisicao, r.dataHoraReq, r.status');
+                $query = $this->Query($sql);
+                break;
+        }
+
+        if(($tipo != 'COMPRA') && ($tipo != 'ALMOXARIFADO') && ($tipo != 'SERVIÇOS EXTERNOS'))
+        {
+            $criteria->addColumnAttribute('status');
+            $criteria->addCriteria('dataHora','>=',$dataInicial);
+            $criteria->addCriteria('dataHora','<=',$dataFinal);
+            $criteria->addCriteria('status','in',$statusPossiveis);
+            $criteria->addCriteria('idUoRequisitante','=',$idUo);
+            $criteria->addCriteria('requisita.idRubrica','=',"'$rubrica'");
+            $criteria->addCriteria('requisita.ano','=', $ano);
+            $criteria->addOrderAttribute('idRequisicao');
+            $query = $criteria->retrieveAsQuery();
+        }
+        return $query->result;
+    }
+
+    function getAno()
+    {
+		if (strlen($this->dataHora) == 19) {
+			return substr($this->dataHora,6,-9);
+		}
+        return substr($this->dataHora,6,4);
+    }
+    
+    function listAOrdenar()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->AddColumnAttribute('idRequisicao');
+        $criteria->AddColumnAttribute('uoRequisitante.nome','nome');
+        $criteria->AddColumnAttribute('dataHora','datahora');
+        $criteria->AddColumnAttribute('tabelaGeral.item2','status');        
+        $criteria->addCriteria('tabelaGeral.tabela','=',"'AD_ALMOXSTATUSREQ'");
+
+        $ccc = new CriteriaCondition();
+        $ccc->addCriteria($criteria->getCriteria('idTipoReq','=', "'7'"));
+        $ccc->addOrCriteria($criteria->getCriteria('idTipoReq','=', "'9'"));
+        $criteria->addCriteria($ccc);
+      
+        $ccc1 = new CriteriaCondition();
+        $ccc1->addCriteria($criteria->getCriteria('status','=', "'4'"));
+        $ccc1->addOrCriteria($criteria->getCriteria('status','=', "'J'"));
+        $criteria->addCriteria($ccc1);
+
+        $criteria->addOrderAttribute('idRequisicao');
+        return $criteria->retrieveAsQuery();
+    }
+    
+    function countItensALiberar()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->AddColumnAttribute('materialCompra.idMaterial');
+        $criteria->addCriteria('materialCompra.status','=', "'0'");
+        $criteria->addCriteria('idRequisicao','=', $this->idRequisicao);  
+        $query = $criteria->retrieveAsQuery();
+        return count($query->result);        
+    }
+    
+    function somenteItensAnuladosAbertos()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->AddColumnAttribute('materialCompra.idMaterial');
+        $criteria->addCriteria('materialCompra.status','!=', "'0'");
+        $criteria->addCriteria('materialCompra.status','!=', "'4'");
+        $criteria->addCriteria('idRequisicao','=', $this->idRequisicao);  
+        $query = $criteria->retrieveAsQuery();
+        
+        if (count($query->result) > 0)
+        {
+            return false;        	
+        }
+        else
+        {
+            return true;	
+        }
+    }
+
+    function countItensLiberados()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->AddColumnAttribute('materialCompra.idMaterial');
+        $criteria->addCriteria('materialCompra.status','=', "'8'");
+        $criteria->addCriteria('idRequisicao','=', $this->idRequisicao);        
+        $query = $criteria->retrieveAsQuery();
+        return count($query->result);        
+    }
+      
+    function countItens()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->AddColumnAttribute('materialCompra.idMaterial');
+        $criteria->addCriteria('idRequisicao','=', $this->idRequisicao);  
+        $query = $criteria->retrieveAsQuery();
+        return count($query->result);        
+    }
+    
+    function GetFaturasPassagem($dataInicial,$dataFinal)
+    {
+		
+        $criteria =  $this->getCriteria();
+        $criteria->addColumnAttribute('passagem.notaFiscal');
+        $criteria->addColumnAttribute('dataHora');
+        $criteria->addColumnAttribute('passagem.idRequisicao');
+        $criteria->addColumnAttribute('passagem.pessoa.nome');
+        $criteria->addColumnAttribute('uoRequisitante.sigla');
+        $criteria->addColumnAttribute('passagem.valorReal');		
+        $criteria->addColumnAttribute('passagem.empresaPassagem.nome');				
+        $ccc = new CriteriaCondition();
+        $ccc->addOrCriteria($criteria->getCriteria('status','=', "'9'"));
+        $ccc->addOrCriteria($criteria->getCriteria('status','=', "'E'"));
+        $ccc->addOrCriteria($criteria->getCriteria('status','=', "'D'"));
+        $criteria->addCriteria($ccc);
+        $criteria->addCriteria('dataHora','>=', "'$dataInicial'");
+        $criteria->addCriteria('dataHora','<=', "'$dataFinal'");
+        return $criteria->retrieveAsQuery();
+    }
+	
+    function GetFaturasHospedagem($dataInicial,$dataFinal)
+    {
+      
+        $criteria =  $this->getCriteria();
+        $criteria->addColumnAttribute('hotel.notaFiscal');
+        $criteria->addColumnAttribute('dataHora');
+        $criteria->addColumnAttribute('hotel.idRequisicao');
+        $criteria->addColumnAttribute('hotel.pessoa.nome');
+        $criteria->addColumnAttribute('uoRequisitante.sigla');
+        $criteria->addColumnAttribute('hotel.valorReal');		
+        $criteria->addColumnAttribute('hotel.empresa.nome');		
+        $ccc = new CriteriaCondition();
+        $ccc->addOrCriteria($criteria->getCriteria('status','=', "'9'"));
+        $ccc->addOrCriteria($criteria->getCriteria('status','=', "'E'"));
+        $ccc->addOrCriteria($criteria->getCriteria('status','=', "'D'"));
+        $criteria->addCriteria($ccc);
+        $criteria->addCriteria('dataHora','>=', "'$dataInicial'");
+        $criteria->addCriteria('dataHora','<=', "'$dataFinal'");
+        return $criteria->retrieveAsQuery();
+    }
+	
+    function GetFaturasAlimentacao($dataInicial,$dataFinal)
+    {		
+        $criteria =  $this->getCriteria();
+        $criteria->addColumnAttribute('restaurante.notaFiscal');
+        $criteria->addColumnAttribute('dataHora');
+        $criteria->addColumnAttribute('restaurante.idRequisicao');
+        $criteria->addColumnAttribute('restaurante.pessoa.nome');
+        $criteria->addColumnAttribute('uoRequisitante.sigla');
+        $criteria->addColumnAttribute('restaurante.valorReal');
+        $criteria->addColumnAttribute('restaurante.empresa.nome');		
+        $ccc = new CriteriaCondition();
+        $ccc->addOrCriteria($criteria->getCriteria('status','=', "'9'"));
+        $ccc->addOrCriteria($criteria->getCriteria('status','=', "'E'"));
+        $ccc->addOrCriteria($criteria->getCriteria('status','=', "'D'"));
+        $criteria->addCriteria($ccc);
+        $criteria->addCriteria('dataHora','>=', "'$dataInicial'");
+        $criteria->addCriteria('dataHora','<=', "'$dataFinal'");
+        return $criteria->retrieveAsQuery();		
+    }
+
+    function listDiariasComPassagem($dataInicial,$dataFinal,$valor)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->AddColumnAttribute('uoRequisitante.sigla');
+        $criteria->AddColumnAttribute('diaria.numProcesso');
+        $criteria->AddColumnAttribute('idRequisicao');
+        $criteria->AddColumnAttribute('diaria.vinculo.funcionario.pessoa.nome');
+        $criteria->AddColumnAttribute('diaria.localidadesDiaria.municipio.municipio');        
+        $criteria->addCriteria('idTipoReq','=', '5');
+        $criteria->addCriteria("diaria.passagemAerea","=","'S'");
+        $criteria->addCriteria('dataHora','>=', "'$dataInicial'");
+        $criteria->addCriteria('dataHora','<=', "'$dataFinal'");
+        $criteria->addCriteria('status','=', "'$valor'");        
+        $criteria->addOrderAttribute('uoRequisitante.sigla');
+        return $criteria->retrieveAsQuery();
+    }
+    
+    function getTipoRequisicaoPorUoNoPeriodo($idUo,$dataInicio,$dataFim)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->AddColumnAttribute('idTipoReq');
+        $criteria->addCriteria('idUoRequisitante','=', $idUo);
+        $criteria->addCriteria('dataHora','>=', "'$dataInicio'");
+        $criteria->addCriteria('dataHora','<=', "'$dataFim'");
+        $criteria->addCriteria('status','in', array('4','7','9','C','D','E','G'));
+        $criteria->addGroupAttribute('idTipoReq');
+        $criteria->addOrderAttribute('idTipoReq');
+        return $criteria->retrieveAsQuery();
+    }
+    
+    function ListRequisicaoPorUoNoPeriodo($idUo,$dataInicio,$dataFim)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->AddColumnAttribute('idRequisicao');
+        $criteria->AddColumnAttribute('status');
+        $criteria->addCriteria('idUoRequisitante','=', $idUo);
+        $criteria->addCriteria('dataHora','>=', "'$dataInicio'");
+        $criteria->addCriteria('dataHora','<=', "'$dataFim'");
+        return $criteria->retrieveAsQuery();
+    }
+    
+    function repExecFinanceira($idUo,$idTipoReq,$dataInicio,$dataFim)
+    {
+        global $MIOLO;
+        $rubrica = $MIOLO->getBusiness('adm','requisita');
+        switch ( $idTipoReq )
+        {
+            case 5:
+                $criteria = $this->getCriteria();
+                $criteria->AddColumnAttribute('idRequisicao');
+                $criteria->AddColumnAttribute('dataHora');
+                $criteria->AddColumnAttribute('diaria.vinculo.funcionario.pessoa.nome');
+                $criteria->AddColumnAttribute('diaria.valorEstimado');
+                $criteria->AddColumnAttribute('diaria.valorReal');
+                $criteria->addCriteria('idUoRequisitante','=', $idUo);
+                $criteria->addCriteria('dataHora','>=', "'$dataInicio'");
+                $criteria->addCriteria('dataHora','<=', "'$dataFim'");
+                $criteria->addCriteria('status','in', array('4','7','9','C','D','E','G'));
+                $criteria->addOrderAttribute('idRequisicao');
+                $result = $criteria->retrieveAsQuery()->result;
+                foreach ( $result as $r )
+                {
+                    $data = substr($r[1],0,10);
+                    $rubrica->getById($idTipoReq,$idUo,substr($r[1],6,4));
+                    $rubrica->retrieveAssociation('rubrica');
+                    $resultado[] = array("{$r[0]}","{$rubrica->rubrica->descricao}","{$data}","{$r[2]}",null,"{$r[3]}","{$r[4]}");
+                }
+                break;
+            case 2:
+                $criteria = $this->getCriteria();
+                $criteria->AddColumnAttribute('idRequisicao');
+                $criteria->AddColumnAttribute('dataHora');
+                $criteria->AddColumnAttribute('hotel.pessoa.nome');
+                $criteria->AddColumnAttribute('hotel.empresa.nome');
+                $criteria->AddColumnAttribute('hotel.valorEstimado');
+                $criteria->AddColumnAttribute('hotel.valorReal');
+                $criteria->addCriteria('idUoRequisitante','=', $idUo);
+                $criteria->addCriteria('dataHora','>=', "'$dataInicio'");
+                $criteria->addCriteria('dataHora','<=', "'$dataFim'");
+                $criteria->addCriteria('status','in', array('4','7','9','C','D','E','G'));
+                $criteria->addOrderAttribute('idRequisicao');
+                $result = $criteria->retrieveAsQuery()->result;
+                foreach ( $result as $r )
+                {
+                    $data = substr($r[1],0,10);
+                    $rubrica->getById($idTipoReq,$idUo,substr($r[1],6,4));
+                    $rubrica->retrieveAssociation('rubrica');
+                    $resultado[] = array("{$r[0]}","{$rubrica->rubrica->descricao}","{$data}","{$r[2]}","{$r[3]}","{$r[4]}","{$r[5]}");
+                }
+                break;
+            case 3:
+                $criteria = $this->getCriteria();
+                $criteria->AddColumnAttribute('idRequisicao');
+                $criteria->AddColumnAttribute('dataHora');
+                $criteria->AddColumnAttribute('passagem.pessoa.nome');
+                $criteria->AddColumnAttribute('passagem.empresaPassagem.nome');
+                $criteria->AddColumnAttribute('passagem.valorEstimado');
+                $criteria->AddColumnAttribute('passagem.valorReal');
+                $criteria->addCriteria('idUoRequisitante','=', $idUo);
+                $criteria->addCriteria('dataHora','>=', "'$dataInicio'");
+                $criteria->addCriteria('dataHora','<=', "'$dataFim'");
+                $criteria->addCriteria('status','in', array('4','7','9','C','D','E','G'));
+                $criteria->addOrderAttribute('idRequisicao');
+                $result = $criteria->retrieveAsQuery()->result;
+                foreach ( $result as $r )
+                {
+                    $data = substr($r[1],0,10);
+                    $rubrica->getById($idTipoReq,$idUo,substr($r[1],6,4));
+                    $rubrica->retrieveAssociation('rubrica');
+                    $resultado[] = array("{$r[0]}","{$rubrica->rubrica->descricao}","{$data}","{$r[2]}","{$r[3]}","{$r[4]}","{$r[5]}");
+                }
+                break;
+            case 1:
+                $criteria = $this->getCriteria();
+                $criteria->AddColumnAttribute('idRequisicao');
+                $criteria->AddColumnAttribute('dataHora');
+                $criteria->AddColumnAttribute('restaurante.pessoa.nome');
+                $criteria->AddColumnAttribute('restaurante.empresa.nome');
+                $criteria->AddColumnAttribute('restaurante.valorEstimado');
+                $criteria->AddColumnAttribute('restaurante.valorReal');
+                $criteria->addCriteria('idUoRequisitante','=', $idUo);
+                $criteria->addCriteria('dataHora','>=', "'$dataInicio'");
+                $criteria->addCriteria('dataHora','<=', "'$dataFim'");
+                $criteria->addCriteria('status','in', array('4','7','9','C','D','E','G'));
+                $criteria->addOrderAttribute('idRequisicao');
+                $result = $criteria->retrieveAsQuery()->result;
+                foreach ( $result as $r )
+                {
+                    $data = substr($r[1],0,10);
+                    $rubrica->getById($idTipoReq,$idUo,substr($r[1],6,4));
+                    $rubrica->retrieveAssociation('rubrica');
+                    $resultado[] = array("{$r[0]}","{$rubrica->rubrica->descricao}","{$data}","{$r[2]}","{$r[3]}","{$r[4]}","{$r[5]}");
+                }
+                break;
+            case 4:
+                $criteria = $this->getCriteria();
+                $criteria->AddColumnAttribute('idRequisicao');
+                $criteria->AddColumnAttribute('dataHora');
+                $criteria->AddColumnAttribute('veiculo.pessoa.nome');
+                $criteria->AddColumnAttribute('veiculo.valorEstimado');
+                $criteria->AddColumnAttribute('veiculo.valorReal');
+                $criteria->addCriteria('idUoRequisitante','=', $idUo);
+                $criteria->addCriteria('dataHora','>=', "'$dataInicio'");
+                $criteria->addCriteria('dataHora','<=', "'$dataFim'");
+                $criteria->addCriteria('status','in', array('4','7','9','C','D','E','G'));
+                $criteria->addOrderAttribute('idRequisicao');
+                $result = $criteria->retrieveAsQuery()->result;
+                foreach ( $result as $r )
+                {
+                    $data = substr($r[1],0,10);
+                    $rubrica->getById($idTipoReq,$idUo,substr($r[1],6,4));
+                    $rubrica->retrieveAssociation('rubrica');
+                    $resultado[] = array("{$r[0]}","{$rubrica->rubrica->descricao}","{$data}","{$r[2]}",null,"{$r[3]}","{$r[4]}");
+                }
+                break;
+        }
+        return $resultado;
+    }
+
+    function repExecucaoFinanceiraSintetico($dataInicial, $dataFinal, $tipo)
+    {
+        global $MIOLO;
+
+        $ano = substr($dataFinal,6,4);
+        $dataInicial = substr($this->_db->CharToTimestamp($dataInicial .= " 00:00:00"),1);
+        $dataFinal = substr($this->_db->CharToTimestamp($dataFinal .= " 23:59:59"),1);
+        if($tipo == 'Previsao')
+        {
+            $status = "('4','7')";
+            $valor = "valorEstimado";
+        }
+        else
+        {
+            $status = "('8','9','C','D','E','G')";
+            $valor = "valorReal";
+        }
+
+        //alimentacao
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('uoRequisitante.sigla');
+        $criteria->addColumnAttribute('sum(restaurante.'.$valor.')');
+        $criteria->addCriteria('status','in',$status);
+        $criteria->addCriteria('dataHora','>=',"'$dataInicial'");
+        $criteria->addCriteria('dataHora','<=',"'$dataFinal'");
+        $criteria->addCriteria('requisita.ano','=', $ano);
+        $criteria->addOrderAttribute('uoRequisitante.sigla');
+        $criteria->addGroupAttribute('uoRequisitante.sigla');
+        $query1 = $criteria->retrieveAsQuery();
+
+        //diaria
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('uoRequisitante.sigla');
+        $criteria->addColumnAttribute('sum(diaria.'.$valor.')');
+        $criteria->addCriteria('status','in',$status);
+        $criteria->addCriteria('dataHora','>=',"'$dataInicial'");
+        $criteria->addCriteria('dataHora','<=',"'$dataFinal'");
+        $criteria->addCriteria('requisita.ano','=', $ano);
+        $criteria->addOrderAttribute('uoRequisitante.sigla');
+        $criteria->addGroupAttribute('uoRequisitante.sigla');
+        $query2 = $criteria->retrieveAsQuery();
+
+        //hospedagem
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('uoRequisitante.sigla');
+        $criteria->addColumnAttribute('sum(hotel.'.$valor.')');
+        $criteria->addCriteria('status','in',$status);
+        $criteria->addCriteria('dataHora','>=',"'$dataInicial'");
+        $criteria->addCriteria('dataHora','<=',"'$dataFinal'");
+        $criteria->addCriteria('requisita.ano','=',$ano);
+        $criteria->addOrderAttribute('uoRequisitante.sigla');
+        $criteria->addGroupAttribute('uoRequisitante.sigla');
+        $query3 = $criteria->retrieveAsQuery();
+
+        //pas. aerea
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('uoRequisitante.sigla');
+        $criteria->addColumnAttribute('sum(passagem.'.$valor.')');
+        $criteria->addCriteria('status','in',$status);
+        $criteria->addCriteria('passagem.tipoTransporte','=',"'2'");
+        $criteria->addCriteria('dataHora','>=',"'$dataInicial'");
+        $criteria->addCriteria('dataHora','<=',"'$dataFinal'");
+        $criteria->addCriteria('requisita.ano','=',"$ano");
+        $criteria->addOrderAttribute('uoRequisitante.sigla');
+        $criteria->addGroupAttribute('uoRequisitante.sigla');
+        $query4 = $criteria->retrieveAsQuery();
+
+        //pas. terrestre
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('uoRequisitante.sigla');
+        $criteria->addColumnAttribute('sum(passagem.'.$valor.')');
+        $criteria->addCriteria('status','in',$status);
+        $criteria->addCriteria('passagem.tipoTransporte','<>',"'2'");
+        $criteria->addCriteria('dataHora','>=',"'$dataInicial'");
+        $criteria->addCriteria('dataHora','<=',"'$dataFinal'");
+        $criteria->addCriteria('requisita.ano','=', $ano);
+        $criteria->addOrderAttribute('uoRequisitante.sigla');
+        $criteria->addGroupAttribute('uoRequisitante.sigla');
+        $query5 = $criteria->retrieveAsQuery();
+
+        //veiculo
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('uoRequisitante.sigla');
+        $criteria->addColumnAttribute('sum(veiculo.'.$valor.')');
+        $criteria->addCriteria('status','in',$status);
+        $criteria->addCriteria('dataHora','>=',"'$dataInicial'");
+        $criteria->addCriteria('dataHora','<=',"'$dataFinal'");
+        $criteria->addCriteria('requisita.ano','=', $ano);
+        $criteria->addOrderAttribute('uoRequisitante.sigla');
+        $criteria->addGroupAttribute('uoRequisitante.sigla');
+        $query9 = $criteria->retrieveAsQuery();
+
+        //serviço externo
+
+        if($tipo == 'Previsao')
+        {
+            $sql = new MSql("u.sigla, sum(decode(r.status,'8',0,'9',0,'C',0,'D',0,'E',0,'G',0,decode(i.status,'4',0,'7',0,'9',0,(i.quantidade-i.quantEntregue)*i.valorEst)))", 'ad_requisicao r, ad_itemreqservext i, ad_requisita req, ad_tiporeq t, ad_uo u', "r.idUoReq=u.idUo and r.idRequisicao=i.idRequisicao and r.idUoReq=req.idUo and r.TipoRequisicao=t.idTipoReq and r.TipoRequisicao=req.idTipoReq and r.dataHoraReq>=$dataInicial and r.dataHoraReq<=$dataFinal and r.status in $status and req.ano='$ano' and t.descricao='SERVIÇOS EXTERNOS'", 'u.sigla', 'u.sigla');
+        }
+        else
+        {
+            $sql = new MSql("u.sigla, sum(decode(r.status,'4',0,'7',0,decode(i.status, '7', i.valorReal, '8', i.valorReal, '9', i.valorReal, 'A', i.valorReal, 0))*i.quantEntregue)", 'ad_requisicao r, ad_itemreqservext i, ad_requisita req, ad_tiporeq t, ad_uo u', "r.idUoReq=u.idUo and r.idRequisicao=i.idRequisicao and r.idUoReq=req.idUo and r.TipoRequisicao=t.idTipoReq and r.TipoRequisicao=req.idTipoReq and r.dataHoraReq>=$dataInicial and r.dataHoraReq<=$dataFinal and r.status in $status and req.ano='$ano' and t.descricao='SERVIÇOS EXTERNOS'", 'u.sigla', 'u.sigla');
+        }
+        $query8 = $this->Query($sql);
+
+        //compra
+        if($tipo == 'Previsao')
+        {
+            $sql = new MSql("u.sigla, sum(decode(r.status,'9',0,'C',0,'D',0,'E',0,'G',0,decode(i.status,'7',0,'4',0,'9',0,(i.quantPedida-i.quantEntregue))*i.precoEstimado))", 'ad_requisicao r, ad_itemreq i, ad_requisita req, ad_tiporeq t, ad_uo u', "r.idUoReq=u.idUo and r.idRequisicao=i.idRequisicao and r.idUoReq=req.idUo and r.TipoRequisicao=t.idTipoReq and r.TipoRequisicao=req.idTipoReq and r.dataHoraReq>=$dataInicial and r.dataHoraReq<=$dataFinal and (r.status in $status or r.status = '8') and req.ano='$ano' and t.descricao='COMPRA CONSUMO'", 'u.sigla', 'u.sigla');
+        }
+        else
+        {
+            $sql = new MSql("u.sigla, sum(decode(r.status,'4',0,'7',0,decode(i.status,'7',i.valorReal,'8',i.valorReal,'9',i.valorReal,'A',i.valorReal,0))*i.quantEntregue)", 'ad_requisicao r, ad_itemreq i, ad_requisita req, ad_tiporeq t, ad_uo u', "r.idUoReq=u.idUo and r.idRequisicao=i.idRequisicao and r.idUoReq=req.idUo and r.TipoRequisicao=t.idTipoReq and r.TipoRequisicao=req.idTipoReq and r.dataHoraReq>=$dataInicial and r.dataHoraReq<=$dataFinal and r.status in $status and req.ano='$ano' and t.descricao='COMPRA CONSUMO'", 'u.sigla', 'u.sigla');
+        }
+        $query6 = $this->Query($sql);
+
+        //quantAutorizada pode ser maior que quantPedida para COMPRAS
+        if($tipo == 'Previsao')
+        {
+            for($i = 0; $i < count($query->result); $i++)
+            {
+                if($query->result[$i][1] < 0)
+                {
+                    //zera valor estimado
+                    ($query[$i][1] = 0);
+                }
+            }
+        }
+
+        //almoxarifado
+        if($tipo == 'Previsao')
+        {
+            $sql = new MSql("u.sigla, sum(decode(r.status,'8',0,'9',0,'C',0,'D',0,'E',0,'G',0,decode(i.status,'4',0,'7',0,(i.quantPedida-i.quantEntregue)*i.precoEstimado)))", 'ad_requisicao r, ad_itemreq i, ad_requisita req, ad_tiporeq t, ad_uo u', "r.idUoReq=u.idUo and r.idRequisicao=i.idRequisicao and r.idUoReq=req.idUo and r.TipoRequisicao=t.idTipoReq and r.TipoRequisicao=req.idTipoReq and r.dataHoraReq>=$dataInicial and r.dataHoraReq<=$dataFinal and r.status in $status and req.ano='$ano' and t.descricao='ALMOXARIFADO'", 'u.sigla', 'u.sigla');
+        }
+        else
+        {
+            $sql = new MSql("u.sigla, sum(decode(r.status,'4',0,'7',0,decode(i.status, '7', i.valorReal, '8', i.valorReal, '9', i.valorReal, 0))*i.quantEntregue)", 'ad_requisicao r, ad_itemreq i, ad_requisita req, ad_tiporeq t, ad_uo u', "r.idUoReq=u.idUo and r.idRequisicao=i.idRequisicao and r.idUoReq=req.idUo and r.TipoRequisicao=t.idTipoReq and r.TipoRequisicao=req.idTipoReq and r.dataHoraReq>=$dataInicial and r.dataHoraReq<=$dataFinal and r.status in $status and req.ano='$ano' and t.descricao='ALMOXARIFADO'", 'u.sigla', 'u.sigla');
+        }
+        $query7 = $this->Query($sql);
+
+        //lista todas UOs
+        $uo = $this->_miolo->GetBusiness('adm', 'uo');
+        $criteria = $uo->getCriteria();
+        $criteria->addColumnAttribute('sigla');
+        $criteria->addGroupAttribute('sigla');
+        $query = $criteria->retrieveAsQuery();
+
+        $tree = array();
+        foreach($query->result as $r)
+        {
+            $tree[$r[0]] = array();
+        }
+
+        if($query1->result)
+            foreach($query1->result as $r)
+            {
+                $tree[$r[0]][0] = $r[0];
+                $tree[$r[0]][1] = $r[1];
+            }
+        if($query2->result)
+            foreach($query2->result as $r)
+            {
+                $tree[$r[0]][0] = $r[0];
+                $tree[$r[0]][2] = $r[1];
+            }
+        if($query3->result)
+            foreach($query3->result as $r)
+            {
+                $tree[$r[0]][0] = $r[0];
+                $tree[$r[0]][3] = $r[1];
+            }
+        if($query4->result)
+            foreach($query4->result as $r)
+            {
+                $tree[$r[0]][0] = $r[0];
+                $tree[$r[0]][4] = $r[1];
+            }
+        if($query5->result)
+            foreach($query5->result as $r)
+            {
+                $tree[$r[0]][0] = $r[0];
+                $tree[$r[0]][5] = $r[1];
+            }
+        if($query6->result)
+            foreach($query6->result as $r)
+            {
+                $tree[$r[0]][0] = $r[0];
+                $tree[$r[0]][6] = $r[1];
+            }
+        if($query7->result)
+            foreach($query7->result as $r)
+            {
+                $tree[$r[0]][0] = $r[0];
+                $tree[$r[0]][7] = $r[1];
+            }
+        if($query8->result)
+            foreach($query8->result as $r)
+            {
+                $tree[$r[0]][0] = $r[0];
+                $tree[$r[0]][8] = $r[1];
+            }
+        if($query9->result)
+            foreach($query9->result as $r)
+            {
+                $tree[$r[0]][0] = $r[0];
+                $tree[$r[0]][9] = $r[1];
+            }
+
+        $i = 0;
+        foreach($tree as $t)
+        {
+            if( ($t[0]!=null) or ($t[1]!=null) or ($t[2]!=null) or ($t[3]!=null) or ($t[4]!=null) or ($t[5]!=null) or ($t[6]!=null) or ($t[7]!=null) or ($t[8]!=null) or ($t[9]!=null) )
+            {
+                $tree2[$t[0]] = $t;
+                $tree2[$t[0]][10] = floatval(str_replace(',', '.', $t[1])) + floatval(str_replace(',', '.', $t[2])) + floatval(str_replace(',', '.', $t[3])) + floatval(str_replace(',', '.', $t[4])) + floatval(str_replace(',', '.', $t[5])) + floatval(str_replace(',', '.', $t[6])) + floatval(str_replace(',', '.', $t[7])) + floatval(str_replace(',', '.', $t[8])) + floatval(str_replace(',', '.', $t[9]));
+            }
+        }
+
+        $tree2["TOTAL"][0] = "TOTAL";
+        $tree2["TOTAL"][1] = 0;
+        $tree2["TOTAL"][2] = 0;
+        $tree2["TOTAL"][3] = 0;
+        $tree2["TOTAL"][4] = 0;
+        $tree2["TOTAL"][5] = 0;
+        $tree2["TOTAL"][6] = 0;
+        $tree2["TOTAL"][7] = 0;
+        $tree2["TOTAL"][8] = 0;
+        $tree2["TOTAL"][9] = 0;
+        $tree2["TOTAL"][10] = 0;
+        foreach($tree2 as $t)
+        {
+            $tree2["TOTAL"][1] += floatval(str_replace(',', '.', $t[1]));
+            $tree2["TOTAL"][2] += floatval(str_replace(',', '.', $t[2]));
+            $tree2["TOTAL"][3] += floatval(str_replace(',', '.', $t[3]));
+            $tree2["TOTAL"][4] += floatval(str_replace(',', '.', $t[4]));
+            $tree2["TOTAL"][5] += floatval(str_replace(',', '.', $t[5]));
+            $tree2["TOTAL"][6] += floatval(str_replace(',', '.', $t[6]));
+            $tree2["TOTAL"][7] += floatval(str_replace(',', '.', $t[7]));
+            $tree2["TOTAL"][8] += floatval(str_replace(',', '.', $t[8]));
+            $tree2["TOTAL"][9] += floatval(str_replace(',', '.', $t[9]));
+            $tree2["TOTAL"][10] += floatval(str_replace(',', '.', $t[10]));
+            $tree2[$t[0]][1] = number_format(str_replace(',','.',$tree2[$t[0]][1]),2,',','.');
+            $tree2[$t[0]][2] = number_format(str_replace(',','.',$tree2[$t[0]][2]),2,',','.');
+            $tree2[$t[0]][3] = number_format(str_replace(',','.',$tree2[$t[0]][3]),2,',','.');
+            $tree2[$t[0]][4] = number_format(str_replace(',','.',$tree2[$t[0]][4]),2,',','.');
+            $tree2[$t[0]][5] = number_format(str_replace(',','.',$tree2[$t[0]][5]),2,',','.');
+            $tree2[$t[0]][6] = number_format(str_replace(',','.',$tree2[$t[0]][6]),2,',','.');
+            $tree2[$t[0]][7] = number_format(str_replace(',','.',$tree2[$t[0]][7]),2,',','.');
+            $tree2[$t[0]][8] = number_format(str_replace(',','.',$tree2[$t[0]][8]),2,',','.');
+            $tree2[$t[0]][9] = number_format(str_replace(',','.',$tree2[$t[0]][9]),2,',','.');
+            $tree2[$t[0]][10] = number_format(str_replace(',','.',$tree2[$t[0]][10]),2,',','.');
+        }
+
+        return $tree2;
+    }
+
+    function setLocalEntrega($local)
+    {
+        $this->localEntrega = strtoupper(trim($local));
+    }
+	
+    function listLiberadasDeVeiculo()
+    {
+        $criteria = $this->getCriteria();
+        
+        $criteria->addColumnAttribute('idRequisicao');
+        $criteria->addColumnAttribute('uoRequisitante.sigla');
+        $criteria->addCriteria('idTipoReq','=',"'4'");
+        $cc = new CriteriaCondition();
+        $cc->addCriteria($criteria->getCriteria('status','=', "'7'"));
+        $cc->addOrCriteria($criteria->getCriteria('status','=', "'9'"));
+        $cc->addOrCriteria($criteria->getCriteria('status','=', "'G'"));
+        $criteria->addCriteria($cc);
+        return $criteria->retrieveAsQuery();
+    }
+
+    function temItemNaoExecutado()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('idRequisicao');
+        $criteria->addCriteria('idRequisicao','=',$this->idRequisicao);
+        $criteria->addCriteria('status','<>',"'9'");
+        $query = $criteria->retrieveAsQuery();
+        $itemNaoExecutado = false;
+        if(count($query->result) > 1)
+        {
+            $itemNaoExecutado = true;
+        }
+        return $itemNaoExecutado;
+    }
+
+    function getSaldo($ano=null)
+    {
+        $cf = new MCurrencyFormatter();
+        $this->retrieveAssociation('uoRequisitante');
+        $orcamento = $this->uoRequisitante->getOrcamento($this->getRubrica(),$this->getAno());
+        $saldo = $cf->toDecimal($orcamento->credito) - $cf->toDecimal($orcamento->debito) - $cf->toDecimal($orcamento->previsaoDebito);
+        return $cf->toDecimal($saldo);
+    }
+
+    function getSaldoByUORubricaIntervalo($uo,$rubrica,$inicio,$fim,$tipo)
+    {
+        global $MIOLO;
+
+        $ano = substr($fim,6,4);
+        $statusPrevisao = "('4','7')";
+        $statusReal = "('8','9','C','D','E','G')";
+        $dataInicial = substr($this->_db->CharToTimestamp($inicio .= " 00:00:00"),1);
+        $dataFinal = substr($this->_db->CharToTimestamp($fim .= " 23:59:59"),1);
+
+        if (($tipo != 'COMPRA') && ($tipo != 'ALMOXARIFADO') && ($tipo != 'SERVIÇOS EXTERNOS'))
+        {
+            $criteria = $this->getCriteria();//ESTIMADO
+            $criteria2 = $this->getCriteria();//REAL
+        }
+
+        if ($tipo == 'HOTEL')
+        {
+            $criteria->addColumnAttribute('sum(hotel.valorEstimado)');
+            $criteria2->addColumnAttribute('sum(hotel.valorReal)');
+        }
+        if ($tipo == 'PASSAGEM')
+        {
+            $criteria->addColumnAttribute('sum(passagem.valorEstimado)');
+            $criteria2->addColumnAttribute('sum(passagem.valorReal)');
+        }
+        if ($tipo == 'RESTAURANTE')
+        {
+            $criteria->addColumnAttribute('sum(restaurante.valorEstimado)');
+            $criteria2->addColumnAttribute('sum(restaurante.valorReal)');
+        }
+        if ($tipo == 'VEICULO')
+        {
+            $criteria->addColumnAttribute('sum(veiculo.valorEstimado)');
+            $criteria2->addColumnAttribute('sum(veiculo.valorReal)');
+        }
+        if ($tipo == 'DIARIA')
+        {
+            $criteria->addColumnAttribute('sum(diaria.valorEstimado)');
+            $criteria2->addColumnAttribute('sum(diaria.valorReal)');
+        }
+
+        if ($tipo == 'COMPRA')
+        {
+            $sql1 = new MSql("sum(decode(i.status,'7',0,'4',0,(i.quantPedida-i.quantAutorizada))*i.precoEstimado)", 'ad_requisicao r, ad_itemreq i, ad_requisita req, ad_tiporeq t', "r.idRequisicao=i.idRequisicao and r.idUoReq=req.idUo and r.TipoRequisicao=t.idTipoReq and r.TipoRequisicao=req.idTipoReq and r.dataHoraReq>=$dataInicial and r.dataHoraReq<=$dataFinal and (r.status in $statusPrevisao or r.status='8') and r.idUoReq=$uo and req.idRubrica='$rubrica' and req.ano='$ano' and t.descricao='$tipo'");
+            $query1 = $this->Query($sql1);
+
+            $sql2 = new MSql("sum(decode(i.status, '7', i.valorReal, '8', i.valorReal, '9', i.valorReal, 'A', i.valorReal, 0))", 'ad_requisicao r, ad_itemreq i, ad_requisita req, ad_tiporeq t', "r.idRequisicao=i.idRequisicao and r.idUoReq=req.idUo and r.TipoRequisicao=t.idTipoReq and r.TipoRequisicao=req.idTipoReq and r.dataHoraReq>=$dataInicial and r.dataHoraReq<=$dataFinal and r.status in $statusReal and r.idUoReq=$uo and req.idRubrica='$rubrica' and req.ano='$ano' and t.descricao='$tipo'");
+            $query2 = $this->Query($sql2);
+        }
+        if ($tipo == 'ALMOXARIFADO')
+        {
+            $sql1 = new MSql("sum(decode(i.status,'4',0,i.quantPedida*i.precoEstimado))", 'ad_requisicao r, ad_itemreq i, ad_requisita req, ad_tiporeq t', "r.idRequisicao=i.idRequisicao and r.idUoReq=req.idUo and r.TipoRequisicao=t.idTipoReq and r.TipoRequisicao=req.idTipoReq and r.dataHoraReq>=$dataInicial and r.dataHoraReq<=$dataFinal and r.status in $statusPrevisao and r.idUoReq=$uo and req.idRubrica='$rubrica' and req.ano='$ano' and t.descricao='$tipo'");
+            $query1 = $this->Query($sql1);
+
+            $sql2 = new MSql("sum(decode(i.status, '7', i.valorReal, '8', i.valorReal, '9', i.valorReal, 0))", 'ad_requisicao r, ad_itemreq i, ad_requisita req, ad_tiporeq t', "r.idRequisicao=i.idRequisicao and r.idUoReq=req.idUo and r.TipoRequisicao=t.idTipoReq and r.TipoRequisicao=req.idTipoReq and r.dataHoraReq>=$dataInicial and r.dataHoraReq<=$dataFinal and r.status in $statusReal and r.idUoReq=$uo and req.idRubrica='$rubrica' and req.ano='$ano' and t.descricao='$tipo'");
+            $query2 = $this->Query($sql2);
+        }
+
+        if ($tipo == 'SERVIÇOS EXTERNOS')
+        {
+            $sql1 = new MSql("sum(decode(i.status,'4',0,i.quantidade*i.valorEst))", 'ad_requisicao r, ad_itemreqservext i, ad_requisita req, ad_tiporeq t', "r.idRequisicao=i.idRequisicao and r.idUoReq=req.idUo and r.TipoRequisicao=t.idTipoReq and r.TipoRequisicao=req.idTipoReq and r.dataHoraReq>=$dataInicial and r.dataHoraReq<=$dataFinal and r.status in $statusPrevisao and r.idUoReq=$uo and req.idRubrica='$rubrica' and req.ano='$ano' and t.descricao='$tipo'");
+            $query1 = $this->Query($sql1);
+
+            $sql2 = new MSql("sum(decode(i.status, '7', i.valorReal, '8', i.valorReal, '9', i.valorReal, 'A', i.valorReal, 0))", 'ad_requisicao r, ad_itemreqservext i, ad_requisita req, ad_tiporeq t', "r.idRequisicao=i.idRequisicao and r.idUoReq=req.idUo and r.TipoRequisicao=t.idTipoReq and r.TipoRequisicao=req.idTipoReq and r.dataHoraReq>=$dataInicial and r.dataHoraReq<=$dataFinal and r.status in $statusReal and r.idUoReq=$uo and req.idRubrica='$rubrica' and req.ano='$ano' and t.descricao='$tipo'");
+            $query2 = $this->Query($sql2);
+        }
+
+        if (($tipo != 'COMPRA') && ($tipo != 'ALMOXARIFADO') && ($tipo != 'SERVIÇOS EXTERNOS'))
+        {
+            $criteria->addCriteria('dataHora','>=',"'$dataInicial'");
+            $criteria->addCriteria('dataHora','<=',"'$dataFinal'");
+            $criteria->addCriteria('status','in',$statusPrevisao);
+            $criteria->addCriteria('idUoRequisitante','=',"$uo");
+            $criteria->addCriteria('requisita.idRubrica','=',"'$rubrica'");
+            $criteria->addCriteria('requisita.ano','=', $ano);
+            $query1 = $criteria->retrieveAsQuery();
+
+            $criteria2->addCriteria('dataHora','>=',"'$dataInicial'");
+            $criteria2->addCriteria('dataHora','<=',"'$dataFinal'");
+            $criteria2->addCriteria('status','in',$statusReal);
+            $criteria2->addCriteria('idUoRequisitante','=',"$uo");
+            $criteria2->addCriteria('requisita.idRubrica','=',"'$rubrica'");
+            $criteria2->addCriteria('requisita.ano','=', $ano);
+            $query2 = $criteria2->retrieveAsQuery();
+        }
+
+        if($query1->result[0][0] == null)
+            $sum1 = 0;
+        else
+            $sum1 = $query1->result[0][0];
+        
+        if($query2->result[0][0] == null)
+            $sum2 = 0;
+        else
+            $sum2 = $query2->result[0][0];
+
+        return array($sum1, $sum2);
+    }
+
+    function getOrdemEntrega($idUo)
+    {
+        $ordem = $this->getBusiness('adm','ordementrega');
+        $criteria = $ordem->getCriteria();
+        $criteria->addCriteria('idUoExecutante','=',$idUo);
+        $cursor = $criteria->retrieveAsCursor();
+        while ($o = $cursor->getObject())
+        {
+            $this->ordemEntrega[] = $o;
+        }
+    }
+    
+    function abrirOrdemEntrega($idUo)
+    {
+        global $MIOLO;
+        $this->getOrdemEntrega($idUo);
+        if ($this->ordemEntrega)
+        {
+            foreach ($this->ordemEntrega as $ordem)
+            {
+                if ($ordem->impresso == 0)
+                {
+                    return $ordem;
+                }
+            }
+        }
+        $ordem = $MIOLO->getBusiness('adm','ordementrega');
+        $ordem->data = date('d/m/Y');
+        $ordem->numero = $ordem->getUltimoNumeroByUo($idUo);
+        $ordem->numero++;
+        $ordem->idUoExecutante = $idUo;
+        $ordem->impresso = 0;
+        return $ordem;
+    }
+    
+    /**********************************************
+	
+    Método listRequisicoesAtendidosByCosup(()
+    
+    Retorna todas as requisições atendidas
+    (status 4) pela COSUP (tiporequisição = 7)
+    Compra Consumo 
+    ***********************************************/
+    function listRequisicoesAtendidosByCosup($status = 0,$uoHU = 0)
+    {
+        $sql = new sql("distinct(r.idrequisicao),r.datahorareq,uo.sigla,r.obs","ad_itemreq i, ad_material m, ad_requisicao r, ad_uo uo", "m.idmaterial = i.idmaterial and i.idrequisicao = r.idrequisicao and r.iduoreq = uo.iduo");
+        $sql->SetWhereAnd("r.tiporequisicao = '7'");
+        $sql->SetWhereAnd("(r.status = '4' or r.status = '7' or r.status = '8' or r.status = 'J')");
+        $sql->SetWhereAnd("i.status = '$status'");
+        $sql->SetWhereAnd("r.suplementar <> 'S'");
+
+        //Todo: setar para a UO do HU
+        if ($uoHU == 1)
+            $sql->SetWhereAnd("r.iduoreq = '325'");
+        elseif ($uoHU == 2)
+            $sql->SetWhereAnd("r.iduoreq != '325'");
+                    
+        $sql->SetOrderBy("r.idrequisicao");    
+        
+        $query = $this->ObjQuery($sql->Select());
+        
+        return $query;
+    }
+ //taka
+/**********************************************
+	
+    Método listRequisicoesAtendidosByCosupPermanente(()
+    
+    Retorna todas as requisições atendidas
+    (status 4) pela COSUP (tiporequisição = 6)
+    Compra Permanente
+
+    ***********************************************/
+
+
+
+
+  
+    function listRequisicoesAtendidosByCosupPermanente($status = 0,$uoHU = 0)
+    {
+        $sql = new sql("distinct(r.idrequisicao),r.datahorareq,uo.sigla,r.obs","ad_itemreq i, ad_material m, ad_requisicao r, ad_uo uo", "m.idmaterial = i.idmaterial and i.idrequisicao = r.idrequisicao and r.iduoreq = uo.iduo");
+        $sql->SetWhereAnd("r.tiporequisicao = '6'");
+        $sql->SetWhereAnd("(r.status = '4' or r.status = '7' or r.status = '8' or r.status = 'J')");
+        $sql->SetWhereAnd("i.status = '$status'");
+        $sql->SetWhereAnd("r.suplementar <> 'S'");
+
+        //Todo: setar para a UO do HU
+        if ($uoHU == 1)
+            $sql->SetWhereAnd("r.iduoreq = '325'");
+        elseif ($uoHU == 2)
+            $sql->SetWhereAnd("r.iduoreq != '325'");
+                    
+        $sql->SetOrderBy("r.idrequisicao");    
+        
+        $query = $this->ObjQuery($sql->Select());
+        
+        return $query;
+    }
+    
+//taka
+
+    
+
+    function repRequisicaoUO($idUo, $dataInicial, $dataFinal, $tipo)
+    {
+        global $MIOLO;
+        $ano = substr($dataFinal,6,4);
+        $statusPossiveis = "('4','7','8','9','C','D','E','G')";
+        $dataInicial = substr($this->_db->CharToTimestamp($dataInicial .= " 00:00:00"),1);
+        $dataFinal = substr($this->_db->CharToTimestamp($dataFinal .= " 23:59:59"),1);
+
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('idRequisicao');
+        $criteria->addColumnAttribute("substr(dataHora, 0, 10)", 'dataHoraReq');
+        $criteria->addColumnAttribute('tabelaGeral.item2','status');
+        switch ($tipo)
+        {
+            case 'HOTEL':
+                $criteria->addColumnAttribute('hotel.motivo');
+                $criteria->addColumnAttribute('hotel.valorEstimado');
+                break;
+            case 'RESTAURANTE':
+                $criteria->addColumnAttribute('restaurante.motivo');
+                $criteria->addColumnAttribute('restaurante.valorEstimado');
+                break;
+            case 'PASSAGEM':
+                $criteria->addColumnAttribute('passagem.motivo');
+                $criteria->addColumnAttribute('passagem.valorEstimado');
+                break;
+            case 'VEICULO':
+                $criteria->addColumnAttribute('veiculo.justificativa');
+                $criteria->addColumnAttribute('veiculo.valorEstimado');
+                break;
+            case 'DIARIA':
+                $criteria->addColumnAttribute('diaria.motivo');
+                $criteria->addColumnAttribute('diaria.valorEstimado');
+                break;		
+        }
+
+        $criteria->addCriteria('dataHora','>=',$dataInicial);
+        $criteria->addCriteria('dataHora','<=',$dataFinal);
+        $criteria->addCriteria('status','in',$statusPossiveis);
+        $criteria->addCriteria('tabelaGeral.tabela','=',"'AD_ALMOXSTATUSREQ'");
+        if ($idUo != '%')
+        {
+            $criteria->addCriteria('idUoRequisitante','=',$idUo);
+        }
+        $criteria->addCriteria('requisita.ano','=', $ano);
+        $criteria->addOrderAttribute('idRequisicao');
+        $query = $criteria->retrieveAsQuery();
+        return $query->result;	
+    }
+	  
+    //retorna a licitacao do primeiro item; os outros podem ser diferentes
+    function GetNumeroLicitacao($idRequisicao, $tipo)
+    {
+        $criteria = $this->getCriteria();
+        if($tipo == 'COMPRA')
+        {
+            $criteria->addColumnAttribute('materialCompra.empenhado.licitacao.numero');
+            $criteria->addCriteria('idRequisicao','=',"$idRequisicao");
+        }
+        elseif($tipo == 'SERVIÇOS EXTERNOS')
+        {
+            $criteria->addColumnAttribute('servext.empenhado.licitacao.numero');
+            $criteria->addCriteria('idRequisicao','=',"$idRequisicao");
+        }
+        $query = $criteria->retrieveAsQuery();
+        return $query->result[0][0];
+    }
+	
+    function listByNumeroReqUoDatas($data)
+    {
+        $idRequisicao = $data->edtNumReq;
+        $idUo = $data->idUo;
+        $dataInicial = $data->dataInicio;
+        $dataFinal = $data->dataFim;
+        $descricao = $data->descricao;
+        $tipo = $data->tipo;
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('idRequisicao');
+        $criteria->addColumnAttribute('idRequisicao');
+        $criteria->addColumnAttribute('dataHora');
+        $criteria->addColumnAttribute('tipoRequisicao.descricao');
+        $criteria->addColumnAttribute('obs');
+        $criteria->addColumnAttribute('uoRequisitante.sigla');
+
+        $c1s = new CriteriaCondition();
+        $c1s->addOrCriteria($criteria->getCriteria('status','=', "'4'"));
+        $c1s->addOrCriteria($criteria->getCriteria('status','=', "'7'"));
+        $c1s->addOrCriteria($criteria->getCriteria('status','=', "'8'"));
+        $c1s->addOrCriteria($criteria->getCriteria('status','=', "'9'"));
+        $c1s->addOrCriteria($criteria->getCriteria('status','=', "'G'"));
+        $c1s->addOrCriteria($criteria->getCriteria('status','=', "'E'"));
+        $c1s->addOrCriteria($criteria->getCriteria('status','=', "'F'"));
+        $criteria->addCriteria($c1s);
+
+        if ($tipo=="servico")
+        {
+           	$criteria->addCriteria($criteria->getCriteria('idTipoReq','=', "'9'"));
+        }
+        else 
+        {
+            $critCompra = new CriteriaCondition();
+            $critCompra->addOrCriteria($criteria->getCriteria('idTipoReq','=', "'7'"));
+            $critCompra->addOrCriteria($criteria->getCriteria('idTipoReq','=', "'6'"));
+            $criteria->addCriteria($critCompra);
+        }
+        if (($descricao != "")&&($tipo=="material"))
+        {
+            $criteria->addCriteria('materialCompra.material.descricao','like',"'%$descricao%'");
+        }
+        if (($descricao != "")&&($tipo=="servico"))
+        {
+            $criteria->addCriteria('servicoExterno.servico.descricao','like',"'%$descricao%'");
+        }
+        if ($idRequisicao != "")
+        {
+           	$ids = explode(',', $idRequisicao);
+            $criteria->addCriteria('idRequisicao','=',$ids[0]);
+            if(count($ids) > 1)
+            {
+                for($i = 1; $i < count($ids); $i++)
+                    $criteria->addOrCriteria('idRequisicao','=',$ids[$i]);
+            }
+        }
+        if ($idUo != "%")
+            $criteria->addCriteria('idUoRequisitante','=', $idUo);
+        
+        if ($dataInicial!="")
+            $criteria->addCriteria('dataHora','>=', "'$dataInicial'");
+        
+        if ($dataFinal!="")
+            $criteria->addCriteria('dataHora','<=', "'$dataFinal'");
+			
+        $query = $criteria->retrieveAsQuery();
+        return $query->result;
+    }
+    
+    function getSituacaoGeralRequisicao($numero)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->AddColumnAttribute('idRequisicao');
+        $criteria->AddColumnAttribute('tipoRequisicao.descricao');
+        $criteria->AddColumnAttribute('idTipoReq');
+        $criteria->addCriteria('idRequisicao','=', "$numero");
+        return $criteria->retrieveAsQuery();
+    }
+    
+    function getDataRequisicao($idRequisicao)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->AddColumnAttribute('dataHora');
+        $criteria->AddColumnAttribute('dataHoraAut');
+        $criteria->addCriteria('idRequisicao','=', "$idRequisicao");
+        return $criteria->retrieveAsQuery();
+    }
+
+    function getProximaASerAtendida()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->AddColumnAttribute('idRequisicao');
+        $criteria->addCriteria('idUoRequisitante','=', "$this->idUoRequisitante");
+        $criteria->addCriteria('idRequisicao','<>', "$this->idRequisicao");
+        $criteria->addCriteria('status','=', "'$this->status'");
+        $query = $criteria->retrieveAsQuery();
+        return $query->result[0][0];
+    }
+
+    function getProximaASerExecutada()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->AddColumnAttribute('idRequisicao');
+        $criteria->addCriteria('idUoExecutante','=', "$this->idUoExecutante");
+        $criteria->addCriteria('idRequisicao','<>', "$this->idRequisicao");
+        $criteria->addCriteria('status','=', "'$this->status'");
+        $query = $criteria->retrieveAsQuery();
+        return $query->result[0][0];
+    }
+
+    function GetItemReqNaoEntregue()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->AddColumnAttribute('materialCompra.idRequisicao');
+        $criteria->AddColumnAttribute('materialCompra.idMaterial');
+        $criteria->addCriteria('idRequisicao','=', "$this->idRequisicao");
+        $criteria->addCriteria('materialCompra.status','<>', "'7'");//ENTREGUE
+        $query = $criteria->retrieveAsQuery();
+        return $query->result;
+    }
+
+    function checkLancamento($tipo,$valor)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->AddColumnAttribute('lancamentoInt.idLancamentoInt');
+        $criteria->addCriteria('lancamentoInt.valor','=',"'$valor'");
+        $criteria->addCriteria('lancamentoInt.tipoLancamento','=', "'$tipo'");                
+        $criteria->addCriteria('lancamentoInt.idRequisicao','=',$this->idRequisicao);
+        $query = $criteria->retrieveAsQuery();
+        
+        if (count($query->result) > 0)
+            return true;        	
+        else
+            return false;	
+    }
+	
+    function listSuplementaresLicitacoesEmpenhosByUo($idUo)
+    {
+        if($idUo > 0)
+        {
+            $whereUo = "and r.iduoreq = $idUo";
+        }
+        else
+        {
+            $whereUo = "";
+        }
+        $sql = new MSql("r.idrequisicao, t.descricao, l.numero, u.sigla", "ad_requisicao r, ad_itemreq ir, ad_licitacao l, ad_tiporeq t, ad_uo u", "r.suplementar = 'S' $whereUo and r.idrequisicao = ir.idrequisicao and ir.idlicitacao = l.idlicitacao and r.tiporequisicao = t.idtiporeq and r.iduoreq = u.iduo UNION select r.idrequisicao, t.descricao, l.numero, u.sigla FROM ad_requisicao r, ad_itemreqservext iserv, ad_licitacao l, ad_tiporeq t, ad_uo u WHERE r.suplementar = 'S' $whereUo and r.idrequisicao = iserv.idrequisicao and iserv.idlicitacao = l.idlicitacao and r.tiporequisicao = t.idtiporeq and r.iduoreq = u.iduo UNION select r.idrequisicao, t.descricao, l.numero, u.sigla FROM ad_requisicao r, ad_itemreqbib ib, ad_licitacao l, ad_tiporeq t, ad_uo u WHERE r.suplementar = 'S' $whereUo and r.idrequisicao = ib.idrequisicao and ib.idlicitacao = l.idlicitacao and r.tiporequisicao = t.idtiporeq and r.iduoreq = u.iduo");
+        $query = $this->Query($sql);
+        return $query->result;
+    }
+}
+?>

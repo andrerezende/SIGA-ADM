@@ -1,0 +1,214 @@
+<?
+class frmUoAlmoxarifadoEstornoSaida extends MCompoundForm
+{
+    protected $uoalmoxarifado;
+    protected $requisicao;
+	protected $idRequisicaoValue;
+
+    function __construct($objUO)
+    {
+        global $MIOLO;
+		$this->idRequisicaoValue = MForm::getFormValue('idRequisicao');
+        $this->uoalmoxarifado = $objUO;
+        $this->requisicao = $MIOLO->getBusiness('adm','requisicao',$this->idRequisicaoValue);
+		parent::__construct("Estorno de Saída de Material - Requisição de almoxarifado {$this->requisicao->idRequisicao}");
+        $this->eventHandler();
+		$this->SetClose(null);
+    }
+
+    function CreateFields()
+    {
+        global $item;
+		$tipoReq = $this->manager->GetBusiness('adm','tiporeq');
+		$tipoReq->GetById($this->requisicao->idTipoReq);
+       	$tabelaGeral = $this->manager->GetBusiness('common','tabelageral');
+	   	$status = $tabelaGeral->GetByItem('AD_ALMOXSTATUSREQ',$this->requisicao->status);
+		$this->_info[0]	= new TextLabel('txtNumero',$this->requisicao->idRequisicao,'Número');
+		$this->_info[1] = new TextLabel('txtStatus',strtoupper($status->item2),'Status');
+		$this->requisicao->retrieveAssociation('uoRequisitante');
+		$this->requisicao->retrieveAssociation('uoExecutante');
+		$this->_info[2] = new TextLabel('txtUoRequisitante',$this->requisicao->uoRequisitante->nome,'UO Req.');
+		$this->_info[3] = new TextLabel('txtUoExecutante',$this->requisicao->uoExecutante->nome,'UO Exec.');
+		$this->_info[4] = new TextLabel('txtTipoReq',$tipoReq->descricao,'Tipo');
+        $this->_info[5] = new TextLabel('txtDataHora',$this->requisicao->dataHora,'Data Hora');
+
+		$this->_form[] =  $this->manager->GetUI()->GetGrid('adm','gridUoAlmoxarifadoEstornoSaida',$this->requisicao);
+		$this->addField(new MHiddenField('idRequisicao',$this->idRequisicaoValue));
+		$this->addButton(new MButton('btnEstornar','Estornar'));
+	}
+
+	function btnEstornar_click()
+	{
+		global $MIOLO, $action, $module, $item;
+
+		$estoque = $MIOLO->GetBusiness($module, 'estoque');
+		$movimento = $MIOLO->GetBusiness($module, 'movimento');
+		$ordemEntrega = $MIOLO->GetBusiness($module, 'ordementrega');
+		$idRequisicao = $this->idRequisicaoValue;
+		$cf = new MCurrencyFormatter();
+
+                $flags = true;
+
+		try
+		{
+			$objRequisicao = $MIOLO->GetBusiness('adm', 'requisicao');
+			$objRequisicao->getById($idRequisicao);
+			$objRequisicao->retrieveAssociation('materialAlmoxarifado');
+			$objRequisicao->beginTransaction();
+
+                        $objuo = $MIOLO->GetBusiness($module, 'uo', $item);
+                        $datamovFormat = substr($objRequisicao->dataHoraExec, 6, 4).'/'. substr($objRequisicao->dataHoraExec, 3, 2).'/'.substr($objRequisicao->dataHoraExec, 0, 2);
+
+                        if (strtotime($objuo->dataBloqueio) >= strtotime($datamovFormat)){
+                                $dataFormatada = substr($objuo->dataBloqueio, 8, 2).'/'. substr($objuo->dataBloqueio, 5, 2).'/'.substr($objuo->dataBloqueio, 0, 4);
+                                $flags = false;
+                                $this->AddError('Estornos bloqueados para datas anteriores à '.$dataFormatada.'.');
+                        }else {
+                            $valorTotalReq = 0.0;
+                            foreach($objRequisicao->materialAlmoxarifado as $m)
+                            {
+                                    //Item Requisição
+                                    $itemReq = $MIOLO->GetBusiness($module, 'itemreq');
+                                    $itemReq->GetById($m->idRequisicao, $m->idMaterial);
+                                    $itemReq->status = '0';//SOLICITADO
+                                    $itemReq->setTransaction($objRequisicao->getTransaction());
+                                    $itemReq->save();
+
+                                    //busca movimento original
+                                    $itemReq->retrieveAssociation('movimento');
+                                    if($itemReq->movimento)
+                                    {
+                                            foreach($itemReq->movimento as $mov)
+                                            {
+                                                    if(!$mov->idMovimentoRef)
+                                                    {
+                                                            $movimento = $mov;
+                                                                                                            }
+                                            }
+                                    }
+
+                                    //novo movimento (estorno)
+                                    $novoMovimento = $MIOLO->GetBusiness($module, 'movimento');
+                                    $novoMovimento->tipoMovimento = '4';//ESTORNO SAIDA
+                                    $novoMovimento->dataMovimento = date('d/m/Y');
+                                    $novoMovimento->quantidade = $movimento->quantidade;
+                                    $novoMovimento->valorTotal = $movimento->valorTotal;
+                                    $novoMovimento->idRequisicao = $movimento->idRequisicao;
+                                    $novoMovimento->idMaterial = $movimento->idMaterial;
+                                    $novoMovimento->idItemNota = $movimento->idItemNota;
+                                    $novoMovimento->idMovimentoRef = $movimento->idMovimento;
+                                    //Tiago Macedo 19-16-2012
+                                    $novoMovimento->extraOrcamentario = $movimento->extraOrcamentario;
+                                    $novoMovimento->quantidadetotal = $movimento->quantidadetotal;
+                                    $novoMovimento->valorunitario = $movimento->valorunitario;
+                                    $novoMovimento->idUoAlmoxarifado = $movimento->idUoAlmoxarifado;
+                                    $novoMovimento->datahora = date('Y-m-d H:i:s');
+                                    $novoMovimento->setTransaction($objRequisicao->getTransaction());
+                                    $novoMovimento->save();
+
+                                    //grava referencia no movimento original e apaga idOrdemEntrega
+                                    $movimento->idMovimentoRef = $novoMovimento->idMovimento;
+                                    $idOrdemEntrega = $movimento->idOrdemEntrega;
+                                    $movimento->idOrdemEntrega = '';
+                                    $movimento->setTransaction($objRequisicao->getTransaction());
+                                    $movimento->save();
+
+                                    //se não houver outro movimento para a mesma ordem, apaga a ordem de entrega
+                                    $ordemEntrega->GetById($idOrdemEntrega);
+                                    $ordens = $movimento->ListMovimentosByOrdemEntrega($ordemEntrega->numero);
+                                    if(count($ordens->result) == 1)
+                                    {
+                                            $ordemEntrega->setTransaction($objRequisicao->getTransaction());
+                                            $ordemEntrega->delete();
+                                    }
+
+                                    //estoque
+                                    $estoque->GetById($this->uoalmoxarifado->idUo, $movimento->idMaterial);
+                                    $estoque->estoque += $novoMovimento->quantidade;
+                                    $estoque->valorTotal = $cf->toDecimal($estoque->valorTotal) + $cf->toDecimal($novoMovimento->valorTotal);
+                                    $estoque->setTransaction($objRequisicao->getTransaction());
+                                    $estoque->save();
+
+                                    //Somatório do valor de todos os itens
+                                    $valorTotalReq = $cf->toDecimal($valorTotalReq) + $cf->toDecimal($movimento->valorTotal);
+                            }
+
+                            ////atualizações referentes a orçamento e a lançamento interno
+                            if($objRequisicao->dataHoraAut)
+                            {
+                                    $anoRequisicao = substr($objRequisicao->dataHoraAut,6,4);
+                            }
+                            else
+                            {
+                                    $anoRequisicao = substr($objRequisicao->dataHora,6,4);
+                            }
+                            $requisita = $this->manager->getBusiness('adm','requisita');
+                            $requisita->GetById($objRequisicao->idTipoReq, $objRequisicao->idUoRequisitante, $anoRequisicao);
+
+                            //Adiciona previsao debito na Uo Requisitante e Remove debito na Uo Requisitante
+                            $objRequisicao->getUoRequisitante();
+                            $objRequisicao->uoRequisitante->setTransaction($objRequisicao->getTransaction());
+                            $objRequisicao->uoRequisitante->addPrevisaoRemoveDebito($requisita->idRubrica, $valorTotalReq, $valorTotalReq, $anoRequisicao);
+                            $objRequisicao->Log(OP_UPD,"Requisicao ".$objRequisicao->idRequisicao.": retorno de previsao de debito e remocao de debito de ".$valorTotalReq." na UO ".$objRequisicao->uoRequisitante->idUo);
+
+                            //Lançamento interno da remocao de debito/previsao debito
+                            $lancamentoInt = $this->manager->getBusiness('adm','lancamentoint');
+                            $lancamentoInt->setTransaction($objRequisicao->getTransaction());
+                            $lancamentoInt->tipoLancamento = '6';//ESTORNO DE DEBITO/CREDITO
+                            $lancamentoInt->data = date("d/m/Y");
+                            $lancamentoInt->valor = $valorTotalReq;
+                            $lancamentoInt->ano = date("Y");
+                            $lancamentoInt->idUoRequisitante = $objRequisicao->idUoRequisitante;
+                            $lancamentoInt->idUoExecutante = $objRequisicao->idUoExecutante;
+                            $lancamentoInt->idRubrica = $requisita->idRubrica;
+                            $lancamentoInt->idRequisicao = $objRequisicao->idRequisicao;
+                            $lancamentoInt->idUsuario = $MIOLO->GetLogin()->idkey;
+                            $lancamentoInt->obs = "Estorno de Saida de Almoxarifado";
+                            $lancamentoInt->save();
+                            $lancamentoInt->Log(OP_INS,"Lançamento Interno numero ".$lancamentoInt->idLancamentoInt." gerado com sucesso para a Requisicao ".$objRequisicao->idRequisicao.".");
+
+                            //Remove credito executante na Uo Executante
+                            $objRequisicao->getUoExecutante();
+                            $objRequisicao->uoExecutante->setTransaction($objRequisicao->getTransaction());
+                            $objRequisicao->uoExecutante->removeCreditoExecutante($requisita->idRubrica, $valorTotalReq, $anoRequisicao);
+                            $objRequisicao->Log(OP_UPD,"Requisicao ".$objRequisicao->idRequisicao.": remocao de credito executante de ".$valorTotalReq." na UO ".$objRequisicao->uoExecutante->idUo);
+
+                            //Lançamento interno da remocao do credito executante
+                            $lancamentoInt2 = $this->manager->getBusiness('adm','lancamentoint');
+                            $lancamentoInt2->setTransaction($objRequisicao->getTransaction());
+                            $lancamentoInt2->tipoLancamento = '3';//ESTORNO DE CREDITO
+                            $lancamentoInt2->data = date("d/m/Y");
+                            $lancamentoInt2->valor = $valorTotalReq;
+                            $lancamentoInt2->ano = date("Y");
+                            $lancamentoInt2->idUoRequisitante = $objRequisicao->idUoRequisitante;
+                            $lancamentoInt2->idUoExecutante = $objRequisicao->idUoExecutante;
+                            $lancamentoInt2->idRubrica = $requisita->idRubrica;
+                            $lancamentoInt2->idRequisicao = $objRequisicao->idRequisicao;
+                            $lancamentoInt2->idUsuario = $MIOLO->GetLogin()->idkey;
+                            $lancamentoInt2->obs = "Estorno de Saida de Almoxarifado";
+                            $lancamentoInt2->save();
+                            $lancamentoInt2->Log(OP_INS,"Lançamento Interno numero ".$lancamentoInt2->idLancamentoInt." gerado com sucesso para a Requisicao ".$objRequisicao->idRequisicao.".");
+
+                            //Requisição
+                            $objRequisicao->status = 'H';//AUTORIZADA PELO GESTOR
+                            $objRequisicao->save();
+
+                            $objRequisicao->endTransaction();
+
+                            $objRequisicao->Log(OP_DEL,"Estorno de Saida: " . $objRequisicao->idRequisicao);
+                            $MIOLO->Information('Estorno feito com sucesso.', $MIOLO->GetActionURL($module,$action,$item,array('form'=>'estornosaidamaterial')));
+                        }
+		}
+		catch (Exception $e)
+		{
+			$this->addError($e->getMessage());
+		}
+                 //Tiago Macedo 19-16-2012
+                 //Após fazer o estorno corrige a tabale movimento.
+                 if ($flags){
+                    $movimentoTeste = $MIOLO->GetBusiness($module, 'movimento');
+                    $movimentoTeste->corrigeTudo($movimento->idMaterial, $item);
+                 }
+	}
+        }
+?>

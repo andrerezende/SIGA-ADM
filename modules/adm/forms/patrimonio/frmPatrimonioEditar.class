@@ -1,0 +1,265 @@
+<?php
+class frmPatrimonioEditar extends MForm
+{
+
+    protected $objPatrimonio;
+
+    function __construct($objPatrimonio)
+    {
+        global $MIOLO,$module,$action,$item;
+
+        $this->objPatrimonio = $objPatrimonio;
+        // 17-11-2011 - Daniel Bonfim
+        // correcao no bug em que o framework atribui 01/01/0001 para datas nulas
+        // nao é possivel corrigir esse problema na inserção do dado por estar encapsulado,
+        // portanto estou tratando apenas na apresentação
+        if($this->objPatrimonio->datainiciouso == '01/01/0001' ||$this->objPatrimonio->datainiciouso == '31/12/1969' )
+            $this->objPatrimonio->datainiciouso = "";
+
+        parent::__construct('Dados do Item');
+        $this->SetClose(null);
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+        global $MIOLO,$module;
+        // 18/10/2010 - Vitor Pacheco
+		$ccontabil = $MIOLO->GetBusiness('adm', 'vidautil');
+		$descricao = $ccontabil->getDescricao($this->objPatrimonio->idvidautil);
+
+        $tabelaGeral = $MIOLO->GetBusiness('common', 'tabelageral');
+        $options = $tabelaGeral->ListByTabela('AD_TIPOINGRESSOPAT');
+        $fields = array(
+            new MMultiLineField('descricao','','Descrição',60,5,60),
+            new MTextField('numeroSerie','','Número de Série',20),
+            new MHiddenField('idMaterial'),
+            new MTextField('marcaModelo','','Marca/Modelo',60,'Máx. 50 caracteres'),
+            new MLookupTextField('classificador','','Classificador',50),
+            new MHiddenField('idClassificador'),
+            new MCalendarField('dataAquisicao','','Data de Aquisição',20),
+            new MCalendarField('dataGarantia','','Data da Garantia',20),
+            new MTextField('numeroEmpenho','','Número Empenho',20),
+            new MHiddenField('idEmpenhado'),
+            new MLookupTextField('setor','','Setor',50),
+            new MHiddenField('idSetor'),
+            new MLookupTextField('dependencia','','Dependência',50),
+            new MHiddenField('idDependencia'),
+            new MTextField('numPro','','Processo',20),
+            // 20/10/2010 - Vitor Pacheco
+            new MHiddenField('subelemento'),
+            new MTextField('notaFiscal','','Nota Fiscal',20, null, null, true),
+            new MTextField('valor','','Valor',10),
+            // 18/10/2010 - Vitor Pacheco
+			new MCalendarField('datainiciouso','','Data de Início de uso',20),
+			new MLookupTextField('contacontabil', $descricao, 'Conta contábil', 50, NULL, NULL, NULL, 'adm', 'contacontabil'),
+			// 15/06/2011 - Daniel Bonfim
+			//new MTextField('cnpj','','CNPJ',15),
+            new MTextField('fornecedor','','Fornecedor',70),
+            // 26/08/2011 - Daniel Bonfim
+            new MTextField('tomboanterior','','Tombo Anterior',15, "Máx. 20 caracteres"),
+			new MHiddenField('idvidautil'),
+        );
+
+        $this->SetFields($fields);
+        $this->SetFieldAttr('setor','module','common');
+        $this->SetFieldAttr('setor','item','setor');
+        $this->SetFieldAttr('setor','related','idSetor,setor');
+        $this->SetFieldAttr('dependencia','module',$module);
+        $this->SetFieldAttr('dependencia','item','dependencia');
+        $this->SetFieldAttr('dependencia','related','idDependencia,dependencia');
+        $this->SetFieldAttr('dependencia','filter','dependencia,idSetor,setor');
+        $this->SetFieldAttr('classificador','module',$module);
+        $this->SetFieldAttr('classificador','item','classificador');
+        $this->SetFieldAttr('classificador','related','idClassificador,classificador');
+        // 18/10/2010 - Vitor Pacheco
+		$this->SetFieldAttr('contacontabil', 'related', 'idvidautil,contacontabil');
+
+        //dependencia só é editável se estiver vazio
+        if($this->objPatrimonio->idDependencia)
+        {
+            $this->SetFieldAttr('dependencia','visible',false);
+        }
+
+        $buttons = array(
+            new MButton('btnSalvar', 'Salvar')
+        );
+        $this->SetButtons($buttons);
+
+        $this->SetData();
+    }
+
+    function SetData()
+    {
+        global $MIOLO, $module;
+
+        $data = $this->objPatrimonio;
+        $setor = $MIOLO->GetBusiness('common','setor');
+        $setor->GetById($data->idSetor);
+        $dependencia = $MIOLO->GetBusiness($module,'dependencia');
+        $dependencia->GetById($data->idDependencia);
+        $classificador = $MIOLO->GetBusiness($module,'classificador');
+        $classificador->GetById($data->idClassificador);
+
+        // 15/06/2011 - Daniel Bonfim
+        $objNotafiscal = $MIOLO->GetBusiness('adm','notafiscal', $this->objPatrimonio->idNotaFiscal);
+        $objNotafiscal->fornecedor = $objNotafiscal->getFornecedor();
+        // Tratamento da string de CNPJ
+		$notafiscal = $objNotafiscal->listNotas($data->notaFiscal);
+		//$cnpj = substr($notafiscal->result[0][5], 0,2) . "." .
+		//		substr($notafiscal->result[0][5], 2,3) . "." .
+		//		substr($notafiscal->result[0][5], 5,3) . "/" .
+		//		substr($notafiscal->result[0][5], 8,4) . "-" .
+		//		substr($notafiscal->result[0][5], 12,2);
+
+
+        if($data->idEmpenhado)
+        {
+            $data->retrieveAssociation('empenhado');
+            $data->empenhado->retrieveAssociation('empenho');
+        }
+        $this->SetFieldValue('descricao',$data->descricao);
+        $this->SetFieldValue('numeroSerie',$data->numeroSerie);
+        $this->SetFieldValue('idMaterial',$data->idMaterial);
+        $this->SetFieldValue('marcaModelo',$data->marcaModelo);
+        $this->SetFieldValue('idClassificador',$data->idClassificador);
+        $this->SetFieldValue('dataAquisicao',$data->dataAquisicao);        
+        if ($objNotafiscal->dataGarantia) $datagarantia=date('d/m/Y', strtotime($objNotafiscal->dataGarantia));
+        $this->SetFieldValue('dataGarantia',$datagarantia);
+        $this->SetFieldValue('idEmpenhado',$data->idEmpenhado);
+        $this->SetFieldValue('numeroEmpenho',($data->numeroEmpenho) ? $data->numeroEmpenho : $data->empenhado->empenho->numero);
+        $this->SetFieldValue('idSetor',$data->idSetor);
+        // 18/10/2010 - Vitor Pacheco
+	if ($data->datainiciouso) $datainicio=date('d/m/Y', strtotime($data->datainiciouso));
+	$this->SetFieldValue('datainiciouso', $datainicio);
+	$this->SetFieldValue('idvidautil', $data->idvidautil);
+
+        $processo = $this->manager->GetBusiness('protocolo','processo');
+        $this->SetFieldValue('numPro',$processo->numProcessoFormatado($data->numPro));
+        // 20/10/2010 - Vitor Pacheco
+        $this->SetFieldValue('subelemento', substr($data->idvidautil, -4, -2));
+        $this->SetFieldValue('notaFiscal',$data->notaFiscal);
+        $data->valor = str_replace('.',',', $data->valor);
+        $this->SetFieldValue('valor', $data->valor);
+        $this->SetFieldValue('classificador',$classificador->descricao);
+        $this->SetFieldValue('setor',$setor->sigla);
+        $this->SetFieldValue('dependencia',$dependencia->dependencia);
+        $this->SetFieldValue('idDependencia',$data->idDependencia);
+        // 15/06/2011 - Daniel Bonfim
+        //$this->SetFieldValue('cnpj',$cnpj);
+        $this->SetFieldValue('fornecedor', $objNotafiscal->fornecedor->nome);
+        // 26/08/2011 - Daniel Bonfim
+        $this->SetFieldValue('tomboanterior',$data->tomboanterior);
+        
+        // 24/07/2012 - Tiago Macedo
+        $this->SetFieldAttr('marcaModelo', 'readonly', true);
+        $this->SetFieldAttr('classificador', 'readonly', true);
+        $this->SetFieldAttr('dataAquisicao', 'readonly', true);
+        $this->SetFieldAttr('numPro', 'readonly', true);
+        $this->SetFieldAttr('contacontabil', 'readonly', true);        
+        
+        $this->SetFieldAttr('setor', 'readonly', true);
+        $this->SetFieldAttr('numeroEmpenho', 'readonly', true);
+        // 03/06/2011 Daniel Bonfim
+        $this->SetFieldAttr('descricao', 'readonly', true);
+        $this->SetFieldAttr('valor', 'readonly', true);
+        //15/06/2011 - Daniel Bonfim
+        //$this->SetFieldAttr('cnpj', 'readonly', true);
+        $this->SetFieldAttr('fornecedor', 'readonly', true);
+        $this->SetFieldAttr('dataGarantia', 'readonly', true);
+
+    }
+
+    public function btnSalvar_click()
+    {
+        global $MIOLO;
+
+        // 01-11-2011 - Daniel Bonfim
+        $auth = $this->manager->auth;
+        $idUsuario = $auth->login->idkey;
+        $bussUsuario = $MIOLO->GetBusiness("common",'usuario');
+
+        $objUsuario = $bussUsuario->GetById2($idUsuario);
+
+        // id setor
+        $idSetor_usuario = $objUsuario->idSetor;
+        $idSetor_patrimonio = $this->objPatrimonio->idSetor;
+
+        // trazendo os objSetores
+        $bussSetor = $MIOLO->GetBusiness("common",'setor');
+        $objSetorUsuario = $bussSetor->getById($idSetor_usuario);
+
+        $bussSetor = $MIOLO->GetBusiness("common",'setor');
+        $objSetorPatrimonio = $bussSetor->getById($idSetor_patrimonio);
+
+        // id instituicao
+        $idInstituicao_usuario = $objSetorUsuario->idinstituicao;
+        $idInstituicao_patrimonio = $objSetorPatrimonio->idinstituicao;
+
+        // se o idinstituicao do usuario for diferente de 2 (RET) e se for diferente do idinstituicao do
+        // patrimonio, exiba mensagem de erro
+        if(($idInstituicao_usuario != 2) && ($idInstituicao_usuario != $idInstituicao_patrimonio)) {
+            $this->addError("Você não tem permissão para editar este item.");
+            return;
+        }
+
+
+        $this->objPatrimonio->SetData($this->GetData());
+        //print_r($this->objPatrimonio);exit;
+	$this->objPatrimonio->numeroSerie = $this->GetFormValue('numeroSerie');
+	//$datainicio=date('Y-m-d', $this->GetFormValue('datainiciouso'));
+	$datainicio=$this->GetFormValue('datainiciouso');
+
+	$this->objPatrimonio->datainiciouso=$datainicio;
+	$serie = substr($this->objPatrimonio->numPro,0,6);
+	$ano = substr($this->objPatrimonio->numPro,7,4);
+	$codigo = substr($this->objPatrimonio->numPro,12,2);
+	$this->objPatrimonio->numPro = $ano.$serie.$codigo;
+	$this->objPatrimonio->subelemento = substr($this->objPatrimonio->idvidautil, -4, -2);
+	$this->objPatrimonio->valor = str_replace(',', '.', $this->objPatrimonio->valor);
+	
+
+        try
+        {
+            $this->objPatrimonio->update();
+            $this->objPatrimonio->Log(OP_UPD,"Dados do item modificados");
+            $this->addInfo("Dados do item Modificados com Sucesso.");
+        }
+        catch (Exception $e)
+        {
+            $this->addError($e->getMessage());
+        }
+	$movimentoPat = $this->manager->GetBusiness('adm','movimentopat');
+	$arrayMovimento=$movimentoPat->GetAllMovimentacoes($this->objPatrimonio->idItemPatrimonio,"1");
+
+
+	for ($index = 0; $index < count($arrayMovimento); $index++) {
+	    $idmovimentacao=$arrayMovimento[$index][0];
+	    $objMovimento=$movimentoPat->GetById($idmovimentacao);
+	    $objMovimento->dataMovimento=$this->objPatrimonio->dataAquisicao;
+
+	    try{
+		$objMovimento->save();
+	    }catch(Exception $e){
+		$this->addError($e->getMessage());
+
+	    }
+	}
+	/*------------------------------------------Movimentação------------------------------------------------------------*/
+	$movimentoPat = $this->manager->GetBusiness('adm','movimentopat');
+	$novoIdNumeroTermo = $movimentoPat->GetTermoFormatado($movimentoPat->GetNextIdTermo());
+	$movimentoPat->numeroTermo = $novoIdNumeroTermo . '/' . date('Y');
+	$movimentoPat->tipoMovimento = '5';
+	$movimentoPat->idItemPatrimonio = $this->objPatrimonio->idItemPatrimonio;
+	$movimentoPat->idSetorOrigem = $this->objPatrimonio->idSetor;
+	$movimentoPat->idSetorDestino = $this->objPatrimonio->idSetor;
+	$movimentoPat->dataMovimento =$this->objPatrimonio->dataAquisicao;
+
+	$auth = $this->manager->auth;
+	$idUsuario = $auth->login->idkey;
+	$movimentoPat->idUsuario=$idUsuario;
+	$movimentoPat->save();
+	/*-------------------------------------------------------------------------------------------------------------------------*/
+    }
+}
+?>

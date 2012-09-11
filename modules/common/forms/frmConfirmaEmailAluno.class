@@ -1,0 +1,137 @@
+<?
+
+MIOLO::Import('extensions::class.phpmailer.php','PHPMailer'); 
+
+class frmConfirmaEmailAluno extends MForm
+{
+    var $objUsuario;
+
+	function __construct()
+    {   global $MIOLO, $module, $page, $context, $self, $action;
+
+        $id = $MIOLO->getLogin()->idkey;
+        $this->objUsuario = $MIOLO->GetBusiness($module,'usuario', $id);
+		parent::__construct('Alteração de email');
+	    $this->eventHandler();
+	}
+
+    function createFields()
+	{  global $auth, $perms, $action;
+       $fields = array(
+           new MTextHeader('hdr',1,'Aten&ccedil;&atilde;o'),
+           new MLabel("Caro aluno, por favor informe um email v&aacute;lido. O email &eacute; obrigat&oacute;rio, no SIGA, para cursar disciplinas da Universaliza&ccedil;&atilde;o da Inform&aacute;tica."),
+           new MTextLabel('txtLogin','','Login'),
+           new MTextLabel('txtNome','','Nome'),
+           new MTextField('txtEmail','','email',50)
+       );
+	   $this->SetFields($fields);
+       $this->SetFieldValue('txtLogin',$this->objUsuario->login);
+       $this->SetFieldValue('txtNome',$this->objUsuario->nome);
+       $this->SetFieldValue('txtEmail',$this->objUsuario->pessoa->email);
+        $buttons = array(
+            new MButton('btnConfirma','CONFIRMAR'),
+            new MButton('btnContinua','N&Atilde;O CONFIRMAR')
+        );
+	   $this->SetButtons($buttons);
+
+       $validators = array(
+           new MEmailValidator('txtEmail','','required'),
+        );
+
+        //$this->SetValidators($validators);
+
+	}
+
+	function btnConfirma_click()
+	{
+		global $MIOLO, $module, $self, $action;
+        $data = $this->GetData();
+
+        $pessoa = $this->objUsuario->pessoa;
+        $pessoa->email = $this->getFieldValue('txtEmail'); 
+        if ( $this->verifica_email($pessoa->email) )
+        {
+            try
+            {
+                $pessoa->save();         
+                $this->sendMail($this->objUsuario);     
+                $go = $this->manager->getActionUrl('common','main');
+                $this->manager->Information('email atualizado com sucesso.', $go);
+            }
+            catch ( EMioloException $e )
+            {
+                $this->AddError('Erro no cadastro/alteração do email!');
+            }
+        }
+        else
+        {
+            $this->addError("Email inv&aacute;lido.");
+        }
+	}
+
+    function btnContinua_click()
+    {
+        $session = $this->manager->session;
+        $session->register("naoConfirma");
+        $session->setValue("naoConfirma",1);
+        $this->page->Redirect($this->manager->getActionURL('common','main'));
+    }
+
+    function sendMail($user)
+    {  
+       $email = $user->pessoa->email;
+       $time = $this->manager->getSysTime(); 
+       $ipaddress = $_SERVER['REMOTE_ADDR'];
+       $mail = new PHPMailer();
+       $mail->IsSMTP(); // telling the class to use SMTP
+       $mail->Host = "smtp.ufjf.br"; // SMTP server
+       $mail->From = 'siga@ufjf.edu.br';
+       $mail->FromName = 'SIGA - Sistema Integrado de Gestão Acadêmica';
+       $mail->Subject = "[SIGA] Alteração de email";
+       $mail->WordWrap = 150;
+       $body =
+<<< HERE
+O sistema SIGA realizou a alteração do seu email:
+
+email atual: {$email}
+login: {$user->login}
+nome:  {$user->nome}
+
+A alteração foi feita em [{$time}] a partir da máquina [{$ipaddress}].
+
+Atenciosamente,
+SIGA - Sistema Integrado de Gestão Acadêmica
+siga@ufjf.edu.br
+
+HERE;
+       $mail->Body = $body;
+       $mail->AddAddress($email);
+       $mail->Send();
+    }
+ 
+    function verifica_email($email)
+    {
+    /**
+    * Esta função valida um email
+    *
+    * @param   string   email a ser verificado
+    *
+    * @returns   boolean   True se o email for válido ou False se for inválido
+    *
+    *
+    * @author   Walter Oze
+    * @version   1.0
+    */
+   
+        if (ereg("^([0-9,a-z,A-Z]+)([.,_]([0-9,a-z,A-Z]+))*[@]([0-9,a-z,A-Z]+)([.,_,-]([0-9,a-z,A-Z]+))*[.]([0-9,a-z,A-Z]){2}([0-9,a-z,A-Z])?$", $email))
+        {
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+}
+
+?>

@@ -1,0 +1,249 @@
+<?php
+class frmMultiplosAbertura extends MFormAjax
+{
+    protected $processo;
+    protected $perms;
+    protected $setor;
+    protected $setorAcesso;
+    public function __construct()
+    {
+//      construct
+        global $MIOLO;
+        $this->processo  = $MIOLO->GetBusiness('protocolo','processo');
+        $this->setor  = $MIOLO->GetBusiness('protocolo','setor');
+        $this->setorAcesso  = $MIOLO->GetBusiness('protocolo','setoracesso');
+        $this->perms  = $MIOLO->getPerms();
+        parent::__construct('Abertura Múltiplos Solicitantes');
+        $this->SetClose($MIOLO->GetActionURL('protocolo','main'));
+        $this->page->addJsCode(file_get_contents(dirname(__FILE__).'/js/frmMultiplosAbertura.js'));
+        $this->EventHandler();
+    }    
+    public function CreateFields()
+    {
+    	global $MIOLO;
+//      ano do processo
+        if ($this->perms->checkAccess('PROT_ANO', A_ACCESS))
+        {
+            $ano = array('last'=>date('Y')-1,'this'=>date('Y'));
+            $value = $ano['this'];
+            $opt1 = new MOption( 'opt1', $ano['last'],$ano['last'].'&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;', false, 'id1' );
+            $opt2 = new MOption( 'opt2', $ano['this'],$ano['this'].'&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;', false, 'id2' ); 
+            $groupAno = new MRadioButtonGroup('anoCorrente','Ano do processo',array($opt1,$opt2),$value,'','horizontal','css'); 
+            $groupAno->addAttribute('style','padding:10px');
+        }
+        else
+        {
+            $ano = date('Y');
+            $groupAno = new MHiddenField('anoCorrente',$ano);
+        }
+        
+//      dados do processo
+        if($this->perms->checkAccess('PROT_DIR', A_EXECUTE)) 
+		{ 
+			$permissao = 'dir'; 
+		}elseif ($this->perms->checkAccess('PROT_GER', A_EXECUTE)) 
+		{ 
+			$permissao = 'ger'; 
+		}elseif ($this->perms->checkAccess('PROT_COORD', A_EXECUTE)) 
+		{ 
+			$permissao = 'coord'; 
+		}else 
+		{ 
+			$permissao = 'false'; 
+		}
+
+		
+		$url = $this->manager->getActionUrl('protocolo','ajaxhandler'); 
+		$tipo = new Mselection('tipo',null, 'Tipo:',array('P'=>'Processo','A'=>'Protocolado'));         
+		$tipo->addAttribute("onchange","doTextTipo('$url');");
+		 
+        $titulo = new MTextField('titulo','','Titulo:',90);
+        $titulo->addAttribute('maxlength','80');
+        $solicitante = new MTextField('solicitante','','Solicitante:',75);
+        $solicitante->addAttribute('maxlength','80');
+        $solicitante->addAttribute('onkeypress',"return&nbsp;setValue(this,event)");
+        $solicitantes = new MMultiTextField3( 'solicitantes', null, 'Solicitantes',array($solicitante), 650, true, 'vertical2' );
+        $solicitantes->fieldWidth = 200;       
+        $assunto = new MMultiLineField('assunto','','Assunto:',240,5,88);
+        $groupDadosProcesso = new MBaseGroup( 'groupTipoProcesso', 'Dados do processo',array($tipo,$titulo,$solicitantes,$assunto),'horizontal','css');
+        $groupDadosProcesso->addAttribute('style','padding:10px');
+        
+//      origem do processo
+        //IFSP
+        $msg_tst = $MIOLO->login->idkey;
+        $uasg = $this->processo->getUASG($msg_tst);
+	$value =  $uasg->fields('uasg');
+ 
+        $instituicao =  new MTextField('instituicao',$value,'Instituição:',15);
+        $instituicao->addAttribute('maxlength','5');
+        if (!$this->perms->checkAccess('PROT_ADMIN', A_ACCESS))
+        {
+            $instituicao->setReadOnly(true);
+        }
+        else
+        {
+            $url = $this->manager->getActionUrl('protocolo','ajaxhandler');
+            $origemExterna  = new MCheckBox( 'origemExterna','value','&nbsp;',false, _M('externo') );
+            $origemExterna->addAttribute("onchange","doTextOrigem('$url');");
+            $destinoExterno  = new MCheckBox( 'destinoExterno','value','&nbsp;',false, _M('externo') );
+            $destinoExterno->addAttribute("onchange","doTextDestino('$url');");
+        }
+        //IFSP
+        $setorOrigem = $this->processo->getSetorUsuario();
+        $setoresAcesso = ($this->perms->checkAccess('PROT_ADMIN', A_ACCESS)) ? $this->setor->selAll() : $this->setorAcesso->selSetoresAcesso($this->processo->getSetorUsuario());
+        
+        //$setorOrigem = new MComboBox('setorOrigem',$setorOrigem,'Setor de Origem:',$setoresAcesso,'','',15);
+        //$setorOrigem->addAttribute('maxlength','15');
+        //$setorOrigem->addAttribute("onkeyup","toUpperCase('setorOrigem')");
+        //$setorOrigem->addAttribute('style','text-transform:uppercase');
+        $setorOrigem = new MTextField('setorOrigem',$setorOrigem,'Setor de Origem:',$setoresAcesso,'','',15);
+        $groupOrigem = new MBaseGroup('groupOrigem', 'Origem do processo',array($instituicao,$setorOrigem,$origemExterna),'horizontal','css');
+        $groupOrigem->addAttribute('style','padding:10px');
+        
+//      arquivo do proceso
+
+        $arquivo = new MTextField('arquivo','','Caixa Arquivo:',15);
+        $arquivo->addAttribute('maxlength','7');
+        $groupArquivo = new MBaseGroup('groupArquivo', 'Arquivo do processo (opcional)',array($arquivo),'vertical','css');
+        $groupArquivo->addAttribute('style','padding:10px');
+        
+//      saída do processo
+        $setorDestino = new MComboBox('setorDestino','','Setor de Destino:',$this->setor->selAll(),'','',15);
+        $setorDestino->addAttribute("onkeyup","toUpperCase('setorDestino')");
+        $setorDestino->addAttribute('style','text-transform:uppercase');
+        $decisao = new MMultiLineField('decisao','','Decisão:',400,5,88);
+        $autor = new MTextField('autor','','Autor:',40);
+        $autor->addAttribute('maxlength','40');
+        $groupSaida = new MBaseGroup('groupSaida', 'Saída do processo (opcional)',array($setorDestino,$destinoExterno,$decisao,$autor),'horizontal','css');
+        $groupSaida->addAttribute('style','padding:10px');
+//      fields
+        $fields = array(
+            new MHiddenField('numProcesso'),
+            new MHiddenField('user',$permissao), 
+            $groupAno,
+            array($groupDadosProcesso),
+            array($groupOrigem),
+            array($groupArquivo),
+            array($groupSaida),
+        );
+        $this->SetFields($fields);
+//      required fields
+        $validators = array(
+			new MRequiredValidator('titulo'),
+			new MRequiredValidator('assunto'),
+			new MRequiredValidator('setorOrigem'),
+        );
+        $this->setValidators($validators);
+//      buttons
+        $buttons = array(
+            new MButton('btnAbrir','Abrir'),
+        );
+        $this->SetButtons($buttons);
+    }
+    public function btnAbrir_click()
+    {
+    	global $MIOLO;
+        $data = $this->getData();
+        if ($data->tipo == 'A') 
+    	{ 
+			$processoClass = $MIOLO->getBusiness('protocolo','processo'); 
+			$id = $data->titulo; 
+			$tit = $processoClass->getTitulo($id); 
+			$res = $tit->result; 
+			$data->titulo = $res[0][0]; 
+    	}
+    	$this->setData($data);
+        if ($data->tipo)
+        {
+            if (is_array($data->solicitantes))
+            {
+                $data->dataAbertura = ($data->anoCorrente == date('Y')) ? date("YmdHi") : $data->anoCorrente.'12311200';
+                $data->dataSaida = ($data->setorDestino) ? $data->dataAbertura : null;
+                $data->dataDespacho = ($data->decisao) ? $data->dataAbertura : null;
+                $data->solicitantes = $this->solicitantes->getCodeValue();
+                $this->processo->beginTransaction();
+                foreach ($data->solicitantes as $solicitante)
+                {
+                    unset($andamento);
+                    try 
+                    {
+                        $processo = $this->manager->getBusiness('protocolo','processo');
+                        $processo->setData($data);
+                        $processo->solicitante = $solicitante[0];
+                        $processo->setTransaction($this->processo->getTransaction());
+                        $processo->setNewNumProcesso($data->anoCorrente);
+                        $andamento = $processo->getAndamento(1);
+                        $andamento->setData($data);
+                        $andamento->status = 'N';
+                        $andamento->setor = (substr($data->setorOrigem,0,1) == '*') ? $this->processo->getSetorUsuario() : $data->setorOrigem;
+                        $andamento->dataEntrada = $data->dataAbertura;
+                        $processo->addAndamento($andamento);
+                        $processo->retencao = $this->manager->getBusiness('protocolo','retencao');
+                        $processo->retencao->setData($andamento);
+                        $processo->save();
+                        $numProcessosFormatados[] = $processo->numProcessoFormatado();
+                        $numProcessos[] = $processo->numProcesso;
+                        $processo->Log(OP_INS,"Processo ".$processo->numProcessoFormatado()." criado com sucesso.");
+                    }
+                    catch(Exception $e) {$this->manager->Error($e->getMessage());}
+                }
+                $this->processo->endTransaction();
+  //              $action_sim = $this->manager->GetActionURL('protocolo','main:multiplos:aberturaprint','',array('inicio'=>$numProcessos[0],'fim'=>array_pop($numProcessos)/*,'event'=>'btnCapa_click'*/));
+   //             $action_nao = $this->manager->GetActionURL('protocolo','main:multiplos:abertura');
+    //            $this->manager->Question("Os processos de ".$numProcessosFormatados[0]." a ".array_pop($numProcessosFormatados)." foram abertos com sucesso. Deseja imprimir as capas dos mesmos?",$action_sim,$action_nao);
+            $this->manager->GetActionURL('protocolo','main:multiplos:abertura');
+            }
+            else
+            {
+                $this->addError('Você deve inserir pelo menos um solicitante.');
+            }
+        }
+        else
+        {
+            $this->addError('Você deve selecionar um tipo de processo.');
+        }
+    }
+    public function btnCapa_click()
+    {
+        $inicio = $this->getFormValue('inicio');
+        $fim = $this->getFormValue('fim');
+        $ano = substr($inicio,0,4);
+//      report
+        $report = new MEzPDFReport('2','portrait');
+        $report->pdf->ezSetCmMargins(8.5,2.5,3.5,2.5);
+//      text report
+        $tipo = array('P'=>'PROCESSO','A'=>'PROTOCOLADO');
+//      table report
+        $options['textCol'] = array(0,0,0);
+        $options['shaded'] = 0;
+        $options['showLines'] = 0;
+        $options['fontSize'] = 12;
+        $options['maxWidth'] = 480;
+        $options['xPos'] = 'left';
+        $options['xOrientation'] = 'right';
+        $cols = array('','');
+        for ($i=intval(substr($inicio,4,6));$i<=intval(substr($fim,4,6));$i++)
+        {
+            $serie = str_repeat("0",6-strlen($i)).$i;
+            $this->processo->getByPartNumero($ano.$serie);
+            $report->pdf->ezText($tipo[$this->processo->tipo],12);
+            $report->pdf->ezText($this->processo->instituicao.'.'.$this->processo->numProcessoFormatado(),24);
+            $dataRel[] = array('INTERESSADO:',$this->processo->solicitante);
+            $dataRel[] = array('','');
+            $dataRel[] = array('ENTRADA SISTEMA:',$this->processo->dataFormatada($this->processo->dataAbertura));
+            $dataRel[] = array('','');
+            $dataRel[] = array('SETOR ORIGEM:',$this->processo->setorOrigem);
+            $dataRel[] = array('','');
+            $dataRel[] = array('TÍTULO:',$this->processo->titulo);
+            $dataRel[] = array('','');
+            $dataRel[] = array('','');
+            $dataRel[] = array('ASSUNTO:',$this->processo->assunto);
+            $report->pdf->ezTable($dataRel,$cols,'',$options);
+			if ($i != intval(substr($fim,4,6))) $report->pdf->ezNewPage();
+            unset($dataRel);
+        }
+//      report
+        $report->Execute();
+    }
+}
+?>

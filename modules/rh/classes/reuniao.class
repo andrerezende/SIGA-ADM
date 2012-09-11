@@ -1,0 +1,263 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class BusinessRhReuniao extends MBusiness
+{
+    var $idProades;
+    var $idReuniao;
+    var $data;
+    var $local;
+    var $inicio;
+    var $termino;
+    var $resultado;
+    var $numero;
+
+    var $assuntos;
+    var $encaminhamentos;
+    var $decisoes;
+    var $fatores;
+    var $ausentes;
+    var $presentes;
+    var $proades;
+    var $resultados;
+    var $anexos;
+    
+
+    function __construct($data=NULL)
+    {
+       parent::__construct('sigaept',$data);
+    }
+
+    function getById($idReuniao)
+    {
+       $this->idReuniao = $idReuniao;
+       $this->retrieve();
+       return $this;
+    }
+
+    function listAll()
+    {
+        $criteria = $this->getCriteria();
+        $query = $criteria->retrieveAsQuery();
+        return $query;
+    }
+
+    function listAssuntos()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('assuntos.idAssunto');
+        $criteria->addColumnAttribute('assuntos.assunto');
+        $criteria->addCriteria('assuntos.idReuniao','=',"'$this->idReuniao'");
+        return $criteria->retrieveAsQuery();
+
+    }
+
+    function listEncaminhamentos()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('encaminhamentos.idEncaminhamento');
+        $criteria->addColumnAttribute('encaminhamentos.encaminhamento');
+        $criteria->addCriteria('encaminhamentos.idReuniao','=',"'$this->idReuniao'");
+        return $criteria->retrieveAsQuery();
+
+    }
+
+    function listDecisoes()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('decisoes.idDecisao');
+        $criteria->addColumnAttribute('decisoes.decisao');
+        $criteria->addCriteria('decisoes.idReuniao','=',"'$this->idReuniao'");
+        return $criteria->retrieveAsQuery();
+
+    }
+
+    function listFatores()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('fatores.idFator');
+        $criteria->addColumnAttribute('fatores.fator','fator');
+        $criteria->addColumnAttribute('fatores.meta.meta','meta');
+        $criteria->addCriteria('fatores.idReuniao','=',"'$this->idReuniao'");
+        return $criteria->retrieveAsQuery();
+    }
+
+    function listOutrosFatores()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('fatores.idFator');
+        $criteria->addColumnAttribute('fatores.fator','fator');
+        $criteria->addColumnAttribute('fatores.meta.meta','meta');
+        $criteria->addCriteria('fatores.idReuniao','=',"'$this->idReuniao'");
+        $criteria->addCriteria('fatores.outro','=',"'S'");
+        return $criteria->retrieveAsQuery();
+    }
+
+    function listAusentes()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('ausentes.idAusente');
+        $criteria->addColumnAttribute('ausentes.idVinculo');
+        $criteria->addColumnAttribute('ausentes.vinculo.funcionario.pessoa.nome','nome');
+        $criteria->addColumnAttribute('ausentes.justificado');
+        $criteria->addCriteria('ausentes.idReuniao','=',"'$this->idReuniao'");
+        return $criteria->retrieveAsQuery();
+    }
+
+    function listPresentes()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('presentes.idPresente');
+        $criteria->addColumnAttribute('presentes.idVinculo');
+        $criteria->addColumnAttribute('presentes.vinculo.funcionario.pessoa.nome','nome');
+        $criteria->addCriteria('presentes.idReuniao','=',"'$this->idReuniao'");
+        return $criteria->retrieveAsQuery();
+    }
+
+    function listAusentesByJustificativa($justificativa)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('ausentes.idAusente');
+        $criteria->addColumnAttribute('ausentes.vinculo.funcionario.pessoa.nome','nome');
+        $criteria->addColumnAttribute('ausentes.justificado');
+        $criteria->addCriteria('ausentes.justificado','=',"'$justificativa'");
+        $criteria->addCriteria('ausentes.idReuniao','=',"'$this->idReuniao'");
+        return $criteria->retrieveAsQuery();
+    }
+
+    function listAusentesComJustificativa()
+    {
+        return $this->listAusentesByJustificativa("S");
+    }
+
+    function listAusentesSemJustificativa()
+    {
+        return $this->listAusentesByJustificativa("N");
+    }
+
+    function getPresentes()
+    {
+        $setor = $this->_miolo->getBusiness('common','setor');
+        if ( ! $this->proades )
+        {
+            $this->retrieveAssociation('proades');
+        }
+        $idSetor = $setor->getSetoresFilhos($this->proades->idSetor);
+
+        $funcionario = $this->_miolo->getBusiness('rh','funcionario');
+        $qryServidores = $funcionario->listBySetor($idSetor);
+
+        //pegando os ausentes
+
+        $qryAusentes = $this->listAusentes();
+        if ( ! $qryAusentes->eof() )
+        {
+            foreach ( $qryAusentes->result as $rs )
+            {
+                $ausentes[$rs[1]] = $rs[2];
+            }
+        }
+
+        foreach ( $qryServidores->result as $rs )
+        {
+            $idVinculo = $rs[0];
+            $vinculo = $this->_miolo->getBusiness('rh','vinculo');
+            $vinculo->getById($idVinculo);
+            if ( $vinculo->isAtivo() && (! $vinculo->isDocente() )  )
+            {
+                if ( ! $ausentes[$rs[0]] )
+                {
+                    $presentes[] = $rs[1];
+                }
+            }
+        }
+
+        return $presentes;
+    }
+
+    function listResultados()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('resultados.idMeta');
+        $criteria->addColumnAttribute('resultados.meta.meta');
+        $criteria->addColumnAttribute('resultados.resultado','resultado');
+        $criteria->addCriteria('resultados.idReuniao','=',"'$this->idReuniao'");
+        return $criteria->retrieveAsQuery();
+    }
+
+    function getResultadoByMeta($idMeta)
+    {
+        if ( ! is_array($this->resultados) ) 
+        {
+            $this->retrieveAssociation('resultados');
+        }
+        if ( is_array($this->resultados) )
+        {
+            foreach ( $this->resultados as $resultado )
+            {
+                if ( $resultado->idMeta == $idMeta )
+                {
+                    return $resultado;
+                }
+            }
+        }
+    }
+
+    function getPresentesEAusentes()
+    {
+        $ausentes = $this->listAusentes();
+        if ( ! $ausentes->eof() )
+        {
+            foreach ( $ausentes->result as $rs )
+            {
+                $total[] = $rs[1];
+            }
+        }
+        $presentes = $this->listPresentes();
+        if ( ! $presentes->eof() )
+        {
+            foreach ( $presentes->result as $rs )
+            {
+                $total[] = $rs[1];
+            }
+        }
+        if ( is_array($total) )
+        {
+            return $total;
+        }
+        else
+        {
+            return array();
+        }
+    }
+
+    function listResultadosByResultado($resultado)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('resultados.idMeta');
+        $criteria->addColumnAttribute('resultados.meta.meta');
+        $criteria->addColumnAttribute('resultados.resultado','resultado');
+        $criteria->addColumnAttribute('rh_resultadoreuniao.justificativa');
+//        $criteria->addColumnAttribute('resultados.justificativa');
+        $criteria->addCriteria('resultados.idReuniao','=',"'$this->idReuniao'");
+        $criteria->addCriteria('resultados.resultado','=',"'$resultado'");
+        return $criteria->retrieveAsQuery();
+    }
+}
+?>

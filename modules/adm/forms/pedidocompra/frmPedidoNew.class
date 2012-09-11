@@ -1,0 +1,215 @@
+<?php
+class frmPedidoNew extends MFormAjax {
+
+	/**
+	 * Business utilizado
+	 * @var BusinessAdmPedidoCompra
+	 */
+	public $pedido;
+	/**
+	 * Business utilizado
+	 * @var BusinessAdmPedidoCompra
+	 */
+	public $objPedido;
+
+	public function __construct($objPedido = null) {
+		global $MIOLO, $module;
+		//$this->perms  = $MIOLO->getPerms();
+		//$this->session = $MIOLO->session;
+		$this->objPedido = $MIOLO->GetBusiness($module, 'pedidocompra');
+		if ($objPedido == null) {
+			$this->pedido = $MIOLO->GetBusiness($module, 'pedidocompra');
+		} else {
+			$this->pedido = $objPedido;
+			unset($this->pedido->idPedidoCompra);
+		}
+		parent::__construct('Incluir Solicitação de Compra');
+		$this->defaultButton = false;
+		$this->page->addJsCode(file_get_contents(dirname(__FILE__) . '/js/frmPedidoNew.js'));
+		$this->page->addJsCode(file_get_contents(dirname(__FILE__) . '/../../ui/js/mask.js'));
+		$this->EventHandler();
+	}
+
+	public function CreateFields() {
+		global $MIOLO, $page, $module, $context, $action, $history;
+		parent::CreateFields();
+
+		$ui = $this->manager->GetUI();
+		$url = $this->manager->getActionUrl('adm', 'ajaxhandler');
+
+		$idUsuario = $this->manager->GetLogin()->idkey;
+
+		if (isset($this->pedido->idMaterial) && !empty($this->pedido->idMaterial)) {
+			$objMatServ = $this->manager->getbusiness('adm', 'material');
+			$objMatServ->GetById($this->pedido->idMaterial);
+			$tipoPedido = 'material';
+		} else if (isset($this->pedido->idServico) && !empty($this->pedido->idServico)) {
+			$objMatServ = $this->manager->getbusiness('adm', 'servico');
+			$objMatServ->GetById($this->pedido->idServico);
+			$tipoPedido = 'servico';
+		}
+
+		$Instituicao = $MIOLO->GetBusiness('common', 'instituicao');
+		$objUsuario = $this->manager->getbusiness('common', 'usuario');
+		$objSetor = $this->manager->getbusiness('common', 'setor');
+		$objInstituicao = $MIOLO->GetBusiness('common', 'instituicao');
+		$optionsUG = $Instituicao->listUG();
+
+		$objUsuario->GetById($idUsuario);
+		$objSetor = $objSetor->getById($objUsuario->GetIdSector());
+		$tipo = new MSelection('tipo', $tipoPedido, 'Tipo', array('material' => 'MATERIAL', 'servico' => 'SERVIÇO'));
+		$tipo->addAttribute("onchange", "doTextTipo('$url');");
+		$fundamentacao = new MSelection(
+			'fundamentacao',
+			$this->pedido->fundamentacao,
+			'Fundamentação Legal',
+			array(
+				'Dispensa de Licitação Até R$ 8.000 - Art. 24, Parágrafo II da Lei 8.666/93' => 'Dispensa de Licitação Até R$ 8.000 - Art. 24, Parágrafo II da Lei 8.666/93',
+				'Dispensa de Licitação Acima de R$ 8.000 (Emergencial) - Art. 24, Parágrafo IV da Lei 8.666/93' => 'Dispensa de Licitação Acima de R$ 8.000 (Emergencial) - Art. 24, Parágrafo IV da Lei 8.666/93',
+				'Inexigibilidade - Art. 25 da Lei 8.666/93' => 'Inexigibilidade - Art. 25 da Lei 8.666/93',
+				'Adesão a Registro de Preços / Carona - Art. 8º § 1º do decreto 3.931/01' => 'Adesão a Registro de Preços / Carona - Art. 8º § 1º do decreto 3.931/01',
+				'Pregão - Lei 10.520 de 17 de julho de 2002' => 'Pregão - Lei 10.520 de 17 de julho de 2002',
+				'Concorrência - Art. 22, §1º, da Lei 8.666/93' => 'Concorrência - Art. 22, §1º, da Lei 8.666/93',
+				'Tomada de Preços - Art. 22, §2º, da Lei 8.666/93' => 'Tomada de Preços - Art. 22, §2º, da Lei 8.666/93',
+				'Convite - Art. 22, §3º, da Lei 8.666/93' => 'Convite - Art. 22, §3º, da Lei 8.666/93',
+				'Concurso - Art. 22, §4º, da Lei 8.666/93' => 'Concurso - Art. 22, §4º, da Lei 8.666/93',
+				'Leilão - Art. 22, §5º, da Lei 8.666/93' => 'Leilão - Art. 22, §5º, da Lei 8.666/93',
+			)
+		);
+
+		// Campos
+		$fields = array(
+			new MSeparator('Pedido'),
+			new MSpacer(1),
+			new MCalendarField('data', date('d/m/Y'), 'Data do Pedido', 20),
+			new MTextField('nomeUsuario', $objUsuario->GetName(), 'Solicitante', 50),
+			new MHiddenField('idUsuario', $idUsuario),
+			new MTextField('siglaSetor', $objSetor->nome, 'Setor', 50),
+			new MHiddenField('idSetor', $objUsuario->GetIdSector()),
+			new Selection('instituicao', $this->pedido->instituicao, 'Instituição Beneficiada', $optionsUG->result, false),
+			new MSpacer(2),
+			new MSeparator('Material ou Serviço'),
+			new MSpacer(1),
+			$tipo,
+			new MLookupTextField('idMaterial', $this->pedido->idMaterial, 'Código do Material', 20),
+			new MLookupTextField('idServico', $this->pedido->idServico, 'Código do Serviço', 20),
+			new MMultiLineField('descricao', $objMatServ->descricao, 'Descrição', 60, 2, 60),
+			new MTextField('unidade', $objMatServ->unidade, 'Unidade', 10),
+			new MTextField('quantidade', $this->pedido->quantidade, 'Quantidade', 10),
+			new MHiddenField('codMaterial'),
+			new MSpacer(2),
+			new MSeparator('Cotações'),
+			new MSpacer(1),
+			new MTextField('nomeEmpresa1', $this->pedido->empresa1, 'Nome Empresa 1 *', 50),
+			new MTextField('cnpjEmpresa1', $this->pedido->empresa1Cnpj, 'CNPJ Empresa 1 *', 20, 'formato (10.000.000/0001-01)'),
+			new MTextField('cotacaoEmpresa1', $this->pedido->empresa1Cotacao, 'Cotação Empresa 1 (R$) *', 10, 'Ex.: 500.00'),
+			new MSpacer(1),
+			new MTextField('nomeEmpresa2', $this->pedido->empresa2, 'Nome Empresa 2 *', 50),
+			new MTextField('cnpjEmpresa2', $this->pedido->empresa2Cnpj, 'CNPJ Empresa 2 *', 20, 'formato (10.000.000/0001-01)'),
+			new MTextField('cotacaoEmpresa2', $this->pedido->empresa2Cotacao, 'Cotação Empresa 2 (R$) *', 10, 'Ex.: 500.00'),
+			new MSpacer(1),
+			new MTextField('nomeEmpresa3', $this->pedido->empresa3, 'Nome Empresa 3 *', 50),
+			new MTextField('cnpjEmpresa3', $this->pedido->empresa3Cnpj, 'CNPJ Empresa 3 *', 20, 'formato (10.000.000/0001-01)'),
+			new MTextField('cotacaoEmpresa3', $this->pedido->empresa3Cotacao, 'Cotação Empresa 3 (R$) *', 10, 'Ex.: 500.00'),
+			new MSpacer(2),
+			new MSeparator('Fundamentação Legal'),
+			new MSpacer(1),
+			$fundamentacao,
+			new MTextField('fundamentacaoLegal', $value, '', 60),
+			new MMultiLineField('justificativa', $this->pedido->justificativa, 'Motivação / Justificativa', 60, 2, 60),
+			new MMultiLineField('objeto', $this->pedido->objeto, 'Objeto', 60, 2, 60),
+		);
+		$this->SetFields($fields);
+
+		// Atributos dos Campos
+		$this->SetFieldAttr('data', 'readonly', true);
+		$this->SetFieldAttr('nomeUsuario', 'readonly', true);
+		$this->SetFieldAttr('siglaSetor', 'readonly', true);
+		$this->SetFieldAttr('tipo', 'onchange', "doTextTipo('$url');");
+		$this->SetFieldAttr('idMaterial', 'module', $module);
+		$this->SetFieldAttr('idMaterial', 'item', 'materialPermanente');
+		$this->SetFieldAttr('idMaterial', 'related', 'idMaterial,descricao,codMaterial,unidade');
+		$this->SetFieldAttr('idServico', 'module', $module);
+		$this->SetFieldAttr('idServico', 'item', 'servicoExterno');
+		$this->SetFieldAttr('idServico', 'related', 'idServico,descricao,codMaterial');
+		$this->cnpjEmpresa1->addAttribute('maxlength', 18);
+		$this->cnpjEmpresa1->addAttribute('onKeyUp', 'makeMask(this, \'##.###.###/####-##\');');
+		$this->cnpjEmpresa1->addAttribute('onBlur', 'makeMask(this, \'##.###.###/####-##\');');
+		$this->cnpjEmpresa2->addAttribute('maxlength', 18);
+		$this->cnpjEmpresa2->addAttribute('onKeyUp', 'makeMask(this, \'##.###.###/####-##\');');
+		$this->cnpjEmpresa2->addAttribute('onBlur', 'makeMask(this, \'##.###.###/####-##\');');
+		$this->cnpjEmpresa3->addAttribute('maxlength', 18);
+		$this->cnpjEmpresa3->addAttribute('onKeyUp', 'makeMask(this, \'##.###.###/####-##\');');
+		$this->cnpjEmpresa3->addAttribute('onBlur', 'makeMask(this, \'##.###.###/####-##\');');
+
+		// Validadores
+		$validators = array(
+			new MRequiredValidator('nomeEmpresa1'),
+			new MRequiredValidator('cnpjEmpresa1'),
+			new MRequiredValidator('cotacaoEmpresa1'),
+			new MRequiredValidator('nomeEmpresa2'),
+			new MRequiredValidator('cnpjEmpresa2'),
+			new MRequiredValidator('cotacaoEmpresa2'),
+			new MRequiredValidator('nomeEmpresa3'),
+			new MRequiredValidator('cnpjEmpresa3'),
+			new MRequiredValidator('cotacaoEmpresa3'),
+		);
+		$this->setValidators($validators);
+
+		// Botão
+		$buttons = array(
+			new FormButton('btnNew', 'Incluir Nova Solicitação'),
+		);
+		$this->SetButtons($buttons);
+		$this->page->onLoad("setDisabled();");
+	}
+
+	public function btnNew_click() {
+		global $MIOLO;
+
+		$data = $this->getData();
+
+		if (!$data->instituicao) {
+			$this->addError('Selecione a Instituição Beneficiada.');
+			return false;
+		}
+
+		$this->objPedido->setData($data);
+		$this->objPedido->idMaterial = $data->idMaterial;
+		$this->objPedido->idServico = $data->idServico;
+		$this->objPedido->instituicao = $data->instituicao;
+		$this->objPedido->empresa1 = $data->nomeEmpresa1;
+		$this->objPedido->empresa1Cnpj = $data->cnpjEmpresa1;
+		$this->objPedido->empresa1Cotacao = str_replace(',', '.', $data->cotacaoEmpresa1);
+		$this->objPedido->empresa2 = $data->nomeEmpresa2;
+		$this->objPedido->empresa2Cnpj = $data->cnpjEmpresa2;
+		$this->objPedido->empresa2Cotacao = str_replace(',', '.', $data->cotacaoEmpresa2);
+		$this->objPedido->empresa3 = $data->nomeEmpresa3;
+		$this->objPedido->empresa3Cnpj = $data->cnpjEmpresa3;
+		$this->objPedido->empresa3Cotacao = str_replace(',', '.', $data->cotacaoEmpresa3);
+		$this->objPedido->fundamentacao = $data->fundamentacao;
+		$this->objPedido->situacao = 'PENDENTE';
+		$this->objPedido->justificativa = $data->justificativa;
+
+		$serie = substr($data->numPro, 0, 6);
+		$ano = substr($data->numPro, 7, 4);
+		$codigo = substr($data->numPro, 12, 2);
+
+		$processo = $this->manager->GetBusiness('protocolo', 'processo');
+		$processo->getByNumeroFormatado($data->numPro);
+
+		$numPro = $ano . $serie . $codigo;
+		$this->objPedido->numPro = $numPro;
+
+		try {
+			$msg = 'Solicitação realizada com sucesso.';
+			$this->objPedido->beginTransaction();
+			$this->objPedido->Log(OP_INS, $msg);
+			$this->objPedido->save();
+			$this->objPedido->endTransaction();
+			$this->manager->Information($msg, $this->manager->GetActionURL('adm', 'main:pedidocompra'));
+		} catch (Exception $e) {
+			$this->manager->Error($e->getMessage());
+		}
+	}
+}

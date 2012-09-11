@@ -1,0 +1,320 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+$MIOLO->Uses('ui/controls/lkppublicacao.class','rh');
+
+/*
+-não há restrição de setor de lotação do servidor ao substituir uma ocupação
+*/
+
+class frmFuncaoSubstituir extends MForm
+{
+    protected $objfuncao, $k, $objocupacaotitular;
+
+
+    function __construct($objfuncao)
+    {
+        $this->objfuncao = $objfuncao;
+        parent::__construct('Substituição de Ocupação de Função');
+        $this->k = new Mkrono();
+        $this->EventHandler();
+    } // __construct
+
+
+    function CreateFields()
+    {
+        global $module;
+
+        $this->objocupacaotitular = $this->manager->getBusiness($module,'ocupacaofuncao');
+
+        //recupera em um objeto a ocupação aberta do titular
+          $ocupacaofuncao = $this->objocupacaotitular->getTitularSubstituto //define qual a ocupação do titular
+                            ( $this->objfuncao->idfuncao, //função
+                              TRUE,                       //ocupação ABERTA/qualquer
+                              TRUE );                     //ocupante TITULAR/substituto
+          $this->objocupacaotitular->getbyId($ocupacaofuncao[2]);           //recupera o objeto inteiro
+
+          $this->objocupacaotitular->retrieveAssociation('vinculo');  //vínculo do titular
+          $this->objocupacaotitular->vinculo->retrieveAssociation('funcionario');
+          $this->objocupacaotitular->vinculo->funcionario->retrieveAssociation('pessoa');
+
+        $fields[] = new MHiddenField('substituicao','S');
+
+        $fields[] = array(new MLabel('Titular da função'),
+                          new MLabel($ocupacaofuncao[0],'blue'),
+                          new MLabel($this->objocupacaotitular->vinculo->funcionario->pessoa->nome,'blue'));
+        $fields[] = new MTextLabel('i',$this->objocupacaotitular->datainicio,'Início' ,'blue');
+        $fields[] = new MTextLabel('f',$this->objocupacaotitular->datafim   ,'Término','blue');
+
+        $fields[] = new MSpacer(1);
+        $fields[] = new MSeparator();
+        $fields[] = new MLabel('Substituição:','red',TRUE);
+
+        $fields[] = new MCalendarField('datainicio','','Início' ,'10');
+        $fields[] = new MCalendarField('datafim'   ,'','Término','10');
+          lkppublicacao($fields,'idpublicacaoinicio','Publicação');
+          $this->SetFields($fields);
+
+        $fields = $this->Servidor();
+          $this->AddFields($fields);
+
+        $validators[] = new MRequiredValidator('datainicio');
+        $validators[] = new MRequiredValidator('datafim');
+        $validators[] = new MRequiredValidator('idvinculo');
+        //$validators[] = new MRequiredValidator('idpublicacaofim','Publicação');
+          $this->SetValidators($validators);
+
+        $buttons = array( new MButton('btnSalvar', 'Salvar Substituição') );
+          $this->SetButtons($buttons);
+    } // CreateFields
+
+
+    function Servidor()
+    {
+        global $module;
+
+        $idvinculo = MForm::GetFormValue('idvinculo');  //vínculo do pretenso substituto
+          //para recuperar descrição do código, após refazimento de tela devido a um outro lookup,
+          if ($idvinculo)
+          {
+              $obj = $this->manager->GetBusiness($module,'vinculo',$idvinculo);
+              $obj->retrieveAssociation('funcionario');
+              $obj->funcionario->retrieveAssociation('pessoa');
+              $nome = $obj->funcionario->pessoa->nome; //visualização acessória
+          }
+
+        $lkpvinculo = new MLookupTextField('idvinculo','','Vínculo do Substituto',12);
+          $lkpvinculo->module = $module;
+          $lkpvinculo->item   = 'VinculonaoTA';      //método em lookup.class
+          $lkpvinculo->event  = 'btnvinculo_click';  //método: chama o método local; filler: enche os campos em 'related'; 
+
+        $fields[] = new MSpacer(1);
+        $fields[] = $lkpvinculo;
+          $fields[] = array( new MLabel($nbsp) , new MTextLabel('nome' ,$nome,'','blue') );
+
+        return $fields;
+    } // Servidor
+
+
+    function btnvinculo_click($sender,$key='')
+    {
+        global $module;
+        $item = $key ? $key : $item; 
+        $obj = $this->manager->GetBusiness($module,'vinculo',$item);  //vínculo do pretenso substituto
+        $obj->retrieveAssociation('funcionario');
+        $obj->funcionario->retrieveAssociation('pessoa');
+        $this->SetFieldAttr('idvinculo','value',$item                          );          //campo editável, de procura e para gravar
+        $this->SetFieldAttr('nome'     ,'value',$obj->funcionario->pessoa->nome);          //visualização acessória
+    } // btnvinculo_click
+
+
+    function Verifica($data, $funcaodatainicio, $objocupacaosubstituto)
+    {
+        global $module;
+
+        //verifica coerência da data de início com a situação funcional, ocorrência de provimento e etc
+          $dataidpublicacaoinicio = $this->GetFieldValue('dataidpublicacaoinicio'); //campo não editável, que não é recuperado em GetData()
+
+          $objprovimento = $this->manager->GetBusiness($module,'provimento');
+          $objprovimento->getUltimoProvimento($data->idvinculo);
+
+          $vinculo = $this->manager->GetBusiness($module,'vinculo');
+          /*if ($vinculo->isTA())
+          {
+              $setorsubstituto = $objprovimento->idSetor;
+          }
+          else
+          {
+              $setorsubstituto = false;
+          }*/
+
+          $erros = $objocupacaosubstituto->VerificaInicio(
+                   $data,                    //dados digitados
+                   $dataidpublicacaoinicio,  //dado obtido na escolha da publicação
+                   false,                    //setor atual do substituto não verificado em substituição
+                   $funcaodatainicio);       //data de início da função
+
+        //não pode já haver uma substituição para a função
+          $substituto = $objocupacaosubstituto->getTitularSubstituto($this->objfuncao->idfuncao,  //função
+                                                                     false,                       //ocupação aberta/QUALQUER
+                                                                     false);                      //ocupante titular/SUBSTITUTO
+
+/*
+comentado 
+  por 
+    ora 
+      até 
+        que 
+          a 
+            Lourdes 
+              entre 
+                com 
+                  todas 
+                    as
+                      substituições 
+                        passadas
+
+(trabalho que creio que ela fará ate o fim de Junho de 2009)
+(após tal trabalho tal crítica deverá voltar, a princípio não permitindo mais a retroação)
+
+          
+          
+          
+          if ( $this->k->compareDate($data->datainicio, '<=', $substituto[1]) )
+          {
+              $erros[] = 'A função já tem um substituto até a data de ' . $substituto[1] . ', vínculo: ' . $substituto[0];
+          }
+
+
+
+*/
+        //titular deve estar afastado ou cedido na data de início do substituto
+        
+          $emlicenca              =       $this->objocupacaotitular->vinculo->emLicenca($data->datainicio);
+          if ($emlicensa)   // $licencas
+          {
+              $datainiciolicafast = reset($this->objocupacaotitular->vinculo->licAfast)->dataInicio;
+          }
+          $emcessao               =       $this->objocupacaotitular->vinculo->emCessao ($data->datainicio);
+          if ($emcessao)    // cessoes
+          {
+              $datainiciocessao   = reset($this->objocupacaotitular->vinculo->cessao  )->dataInicio;
+          }
+
+          if ( (! $emlicenca) and (! $emcessao ) )
+          {
+//              $erros[] = 'Titular da função não está afastado ou não está cedido';
+          }
+
+        //data de início do substituto tem que ser maior ou igual ao afastamento ou à cessão do titular
+          if ( $this->k->compareDate($data->datainicio, '<', $datainiciolicafast) )
+          {
+              $erros[] = 'Data de início da substituição não pode ser antes do início do afastamento do titular';
+          }
+          if ( $this->k->compareDate($data->datainicio, '<', $datainiciocessao) )
+          {
+              $erros[] = 'Data de início da substituição não pode ser antes do início da cessão do titular';
+          }
+
+        //substituto não pode estar com alguma ocupação
+          //if ($objocupacaosubstituto->seServidortemOcupacao($data->idvinculo))
+
+        //servidor pode estar com alguma ocupação atualmente, como titular, não como substituto
+          if ($objocupacaosubstituto->seServidortemOcupacao($data->idvinculo,'substituta'))
+          {
+              $erros[] = 'O servidor já tem uma substituição atualmente';
+          }
+
+        //data de término do substituto tem que ser maior ou igual à data de início   /* TVZ usar V erificaT ermino *\
+          if ( $this->k->compareDate($data->datafim, '<', $data->datainicio) )
+          {
+              $erros[] = 'Data de término não pode ser menor que a de início';
+          }
+
+        //exagero        data da publicação de início do substituto tem que ser maior ou igual à data da publicação do afastamento do titular
+
+        //se titular tem data de término futura então a data de término do substituto fica limitada à data de término do titular
+          if ( $this->k->compareDate($this->objocupacaotitular->datafim, '>', date("Y/m/d")) )
+          {
+              if ( $this->k->compareDate($this->objocupacaotitular->datafim, '<', $data->datafim) )
+              {
+                  $erros[] = 'Data de término do substituto não pode ser maior que a do titular';
+              }
+          }
+
+        if ( count($erros) > 0 )
+        {
+            foreach ( $erros as $e )
+            {
+                $this->addError($e);
+            }
+            return false;
+        }
+
+        return TRUE;
+    } // Verifica
+
+
+    function btnSalvar_click()
+    {
+        global $module;
+
+        $data = $this->GetData();    //recupera somente os editáveis
+
+        $objocupacaosubstituto = $this->manager->getBusiness($module,'ocupacaofuncao');
+
+        if (! $this->Verifica($data, $objfuncao->datainicio, $objocupacaosubstituto)) //dados digitados e data de início da função
+        {
+            RETURN;
+        }
+        $objocupacaosubstituto->SetData($data);
+        $objocupacaosubstituto->idfuncao     = $this->objocupacaotitular->idfuncao;
+
+        $objocupacaosubstituto->BeginTransaction();
+        TRY
+        {
+            $objocupacaosubstituto->save();
+            $msg = ' Substituição feita, titular: '  . $this->objocupacaotitular->idvinculo
+                 . ', substituto: '                  . $objocupacaosubstituto->idvinculo
+                 . ', início: '  . $data->datainicio . ', término: ' . $data->datafim;
+            $objocupacaosubstituto->Log(OP_UPD,'idocupacaofuncao: ' . $objocupacaosubstituto->idocupacaofuncao . $msg);
+            $objocupacaosubstituto->EndTransaction();
+            $go = $this->manager->GetActionURL($module,'main:funcao',$this->objocupacaotitular->idfuncao);
+            $this->manager->Information($msg,$go);
+        }
+        CATCH (Exception $e)
+        {
+            $this->AddError($e->GetMessage());
+        }
+    } // btnSalvar_click
+
+
+    /*function ajustaDataFimOcupacao($data)
+    {
+        global $module;
+//ver em frm OF alterar
+        $objocupacaosubstituto = $this->manager->getBusiness($module,'ocupacaofuncao');
+        $ocupantesemaberto = $objocupacaosubstituto->listOcupantesemAberto($this->objfuncao->idfuncao)->result;
+        if ($ocupantesemaberto)
+        {
+            $q = 0;
+            foreach ($ocupantesemaberto as $reg)
+            {
+                $objocupacaosubstituto->getById($reg[0]);
+                $objocupacaosubstituto->setTransaction($this->objfuncao->getTransaction());
+                $fimmaximo = $this->k->operation('+',$data->datainicio,$data->mandato.'%Y');
+                $fimmaximo = $this->k->operation('-',$fimmaximo       ,'1%D');
+                if ( (! $objocupacaosubstituto->datafim) or ($this->k->compareDate($objocupacaosubstituto->datafim, '>', $fimmaximo)) )
+                {
+                    $show[] = new MLabel('Ocupação com a data de término redefinida, vínculo: ' . $objocupacaosubstituto->idvinculo);
+                    $objocupacaosubstituto->datafim = $fimmaximo;
+                    $q ++;
+                    $return = ' Quantidade de ocupações redefinidas pelo mandato: ' . $q;
+                    $objocupacaosubstituto->save();
+                }
+            } // foreach
+            $container = new MVContainer( 'container', $show );
+            $this->manager->getTheme()->insertContent( $container );
+        }
+        return $return;
+    } // ajustaDataFimOcupacao*/
+
+
+}
+?>

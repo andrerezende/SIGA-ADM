@@ -1,0 +1,132 @@
+<?
+class frmUoAlmoxarifadoRepTomadaDeConta extends MForm
+{
+    public $uoalmoxarifado;
+    
+    function __construct($objUo)
+    {
+        global $MIOLO;
+		parent::__construct("Tomada de Conta");
+        $this->uoalmoxarifado = $objUo;
+        $this->eventHandler();
+    }
+
+	function CreateFields()
+	{
+		$fields = Array(
+			new MCalendarField('dataInicio',date('d/m/Y'),'Data Inicial',10,'informe a data inicial do relatório.'),
+			new MCalendarField('dataFim',date('d/m/Y'),'Data Final',10,'informe a data final do relatório.'),
+		);
+		$this->SetFields($fields);
+		$buttons = Array
+		(
+			new FormButton('btnGerarRelatorio', 'Gerar Relatório','PDF')
+		);
+		$this->SetButtons($buttons);
+	}
+    function GeneratePageHeader($report,$data)
+    {
+        $header = $report->pdf->openObject();
+        $report->pdf->saveState();
+        /*
+        $report->pdf->setColor(1,1,1,1);
+        $report->pdf->filledRectangle(300,758,270,50);
+        $report->pdf->setColor(0,0,0,1);
+        $report->pdf->SetStrokeColor(0, 0, 0);
+        */
+        $dataHoje = date('d/m/Y');
+        $ui = $this->manager->GetUI();
+        $report->pdf->addPngFromFile($this->manager->getUI()->GetImageSrc('logonet.png','adm'), 40, 520, 50, 50);
+        $h = $report->pdf->getFontHeight(10);
+        $report->pdf->addText(110,555,10,'UNIVERSIDADE FEDERAL DE JUIZ DE FORA');
+        $report->pdf->addText(110,555-$h,10,"{$this->uoalmoxarifado->nome}");
+        $report->pdf->addText(110,555-(2*$h),10,"TOMADA DE CONTAS NO PERÍODO DE {$data->dataInicio} A {$data->dataFim}                         {$dataHoje}");
+        $report->pdf->restoreState();
+        $report->pdf->closeObject();
+        $report->pdf->addObject($header, 'all');
+        $report->pdf->ezSetDy(+15);
+    }
+	function btnGerarRelatorio_click()
+	{
+        $ui = $this->manager->GetUI();
+        $report = $ui->GetReport('adm','repUoAlmoxarifadoTomadaDeConta',$this->uoalmoxarifado);
+        $report->Generate();
+        /*
+        $data = $this->getData();
+        $cf = new MCurrencyFormatter();
+        $estoque = $this->uoalmoxarifado->listMateriais();
+        if ($estoque)
+        {
+            $report = new MEzPDFReport('2','landscape');
+	        $report->pdf->ezSetMargins(100,32,32,32);
+            $cols = array('Especificação','Unidade','Código','Qtd Anterior','Valor Anterior','Qtd Entrada','Valor Entrada','Qtd Saida','Valor Saida','Qtd Atual','Valor Atual');
+            $options['textCol'] = array(0,0,0);
+            $options['shaded'] = 1;
+            $options['showLines'] = 0;
+            $options['fontSize'] = 8;
+            $options['maxWidth'] = 780;
+            $options['xPos'] = 'left';
+            $options['xOrientation'] = 'right';
+            $this->generatePageHeader($report,$data);
+            foreach ($estoque as $material)
+            {
+                $movimentos = $this->uoalmoxarifado->getMovimentosByMaterialAndData($material->idMaterial,$data->dataInicio,$data->dataFim);
+                if ($movimentos)
+                {
+                    foreach ($movimentos as $movimento)
+                    {
+                        switch ($movimento->tipoMovimento)
+                        {
+                            case 1:
+                                $qtdEntrada = $qtdEntrada + $movimento->quantidade;
+                                $saldoEntrada = $cf->toDecimal($saldoEntrada) + $cf->toDecimal($movimento->valorTotal);
+                            break;
+                            case 2:
+                                $qtdEntrada = $qtdEntrada - $movimento->quantidade;
+                                $saldoEntrada = $cf->toDecimal($saldoEntrada) - $cf->toDecimal($movimento->valorTotal);
+                            break;
+                            case 3:
+                                $qtdSaida = $qtdSaida + $movimento->quantidade;
+                                $saldoSaida = $cf->toDecimal($saldoSaida) + $cf->toDecimal($movimento->valorTotal);
+                            break;
+                            case 4:
+                                $qtdSaida = $qtdSaida - $movimento->quantidade;
+                                $saldoSaida = $cf->toDecimal($saldoSaida) - $cf->toDecimal($movimento->valorTotal);
+                            break;
+                        }
+                    }
+                }
+                $qtdEntrada = ($qtdEntrada) ? $qtdEntrada : 0;
+                $qtdSaida = ($qtdSaida) ? $qtdSaida : 0;
+                $qtdAnterior = $material->estoque - $qtdEntrada + $qtdSaida;
+                $saldoAnterior = $cf->toDecimal($material->valorTotal) - $cf->toDecimal($saldoEntrada) + $cf->toDecimal($saldoSaida);
+                $material->retrieveAssociation('material');
+                $dataRel[] = array(
+                    $material->material->descricao,
+                    $material->material->unidade,
+                    $material->material->codmaterial,
+                    $qtdAnterior,
+                    $cf->formatWithSymbol($cf->toDecimal($saldoAnterior)),
+                    $qtdEntrada,
+                    $cf->formatWithSymbol($cf->toDecimal($saldoEntrada)),
+                    $qtdSaida,
+                    $cf->formatWithSymbol($cf->toDecimal($saldoSaida)),
+                    $material->estoque,
+                    $cf->formatWithSymbol($cf->toDecimal($material->valorTotal)),
+                );
+                $saldoAnteriorTotal = $cf->toDecimal($saldoAnteriorTotal) + $cf->toDecimal($saldoAnterior);
+                $saldoEntradaTotal = $cf->toDecimal($saldoEntradaTotal) + $cf->toDecimal($qtdEntrada);
+                $saldoSaidaTotal = $cf->toDecimal($saldoSaidaTotal) + $cf->toDecimal($saldoSaida);
+                $saldoAtualTotal = $cf->toDecimal($saldoAtualTotal) + $cf->toDecimal($material->valorTotal);
+                unset($qtdAnterior,$qtdEntrada,$qtdSaida,$saldoAnterior,$saldoEntrada,$saldoSaida);
+            }
+            $dataRel[] = array('TOTAL','','','',$cf->formatWithSymbol($cf->toDecimal($saldoAnteriorTotal)),'',$cf->formatWithSymbol($cf->toDecimal($saldoEntradaTotal)),'',$cf->formatWithSymbol($cf->toDecimal($saldoSaidaTotal)),'',$cf->formatWithSymbol($cf->toDecimal($saldoAtualTotal)));
+            $report->pdf->ezTable($dataRel,$cols,'',$options);
+            $report->pdf->ezText('',30);
+			$report->pdf->ezText('                                      ___________________________________________________                                                             __________________________________________________                                                                                                            COORDENADOR DE SUPRIMENTOS                                                                                                       OPERADOR DE ALMOXARIFADO',8);
+            $report->Execute();
+        }
+        */
+	}	
+}
+?>

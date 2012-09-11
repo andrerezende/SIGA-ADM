@@ -1,0 +1,209 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+class frmPreCatalogacaoPeriodico extends Form
+{
+    var $objPeriodico;
+    var $objSimples;
+    var $objEditora;
+    var $objGenero;
+
+    function frmPreCatalogacaoPeriodico()  // construtor da Classe
+    { 
+  
+        global $MIOLO,$module;
+  
+        //Instancia o objeto precatalogacao
+        $this->objPeriodico = $MIOLO->GetBusiness($module,'periodico');
+        $this->objGenero = $MIOLO->GetBusiness($module,'genero');
+        $this->objSimples = $MIOLO->GetBusiness($module,'pesquisasimples');
+
+        // Título do Formulário
+        $this->Form('Pré-Catalogação de Periódicos');
+
+        //Chama o CreateFileds, etc.
+        $this->EventHandler();
+
+        // Botão "enviar" não aparece
+        $this->defaultButton = false;
+		
+        // Botão 'fechar', direcionando para o handler biblioteca/main/catalogacao
+	//alterado
+        $this->SetClose($this->manager->GetActionURL($module, 'main:catalogacao:periodicos'));
+    }
+   
+    function CreateFields()
+    {    		
+
+      	global $MIOLO, $module ;
+
+        //Talvez tenha que atribuir natoralmennte o ttipo de genero aqui sem precisar listar como eh listado em obra assim =>  $query = $this->objGenero->ListGenero();
+   
+        // Campos que aparecem no formulário
+        $fields = Array (
+            new TextField('edtISSN','','ISSN',30,'Obrigatório'),
+            new TextField('edtTitulo','','Título',70),
+            new TextField('edtSubtitulo','','Subtítulo',70),
+            new TextField('edtTituloAbreviado','','Titulo abreviado',70),
+            //new TextField('edtEditora','','Editora',60),
+            new MlookupFieldValue('lkpEditora','','Editora',70,'Obrigatório'),
+            //new TextField('edtEdicao','','Edição',20),
+            new TextField('edtSECS','','SECS',70),
+            new TextField('edtCapesPeriodico','','Avaliação Capes',70),
+            new TextField('edtCCN','','CCN',40),
+            new LookupTextField('lkpLocalDePublicacao','','Local de Publicação',70,'Pesquisar'),
+            new TextField('edtPeriodicidade','','Periodicidade',70),
+            new TextField('edtAquisicao','','Modo de Aquisição',70),
+            new TextField('edtAssuntos','','Assuntos',70),
+            new TextField('edtLocalAcessoEletro','','Localização e Acesso',70),
+            new HiddenField('ideditora')
+            );
+
+        $this->SetFields($fields);
+
+        // 4 propiedades do lookup
+        //As 4 propriedades de um lookup
+        // module = módulo usado
+        // item = A funcao que chama no arquivo classes/lookup.class
+        // event = O evento relacionado quando o usuário clica em "acao"
+        // related = Os campos retornados após a ação
+        $this->SetFieldAttr('lkpEditora','module','biblioteca');
+        $this->SetFieldAttr('lkpEditora','item','Editora');
+        $this->SetFieldAttr('lkpEditora','event','btnConsulta:click');
+        $this->SetFieldAttr('lkpEditora','related', 'ideditora,descricao');
+
+
+            //Lookup Local de publicacao de obra
+                    $this->SetFieldAttr('lkpLocalDePublicacao','module','common');
+            $this->SetFieldAttr('lkpLocalDePublicacao','item','municipio');
+            $this->SetFieldAttr('lkpLocalDePublicacao','event','filler');
+            $this->SetFieldAttr('lkpLocalDePublicacao','related','idMunicipio,lkpLocalDePublicacao');
+        
+        // Insere os campos
+        $this->SetFields($fields);
+
+        // Botões que aparecem no formulário
+        $buttons = Array(
+            new FormButton('btnIncluir', 'Incluir'),
+            new FormButton('btnVoltar', 'Voltar', $MIOLO->GetActionURL($module = $module,"main:catalogacao:periodicos")),
+        );
+
+        //Insere os Botões
+        $this->SetButtons($buttons);
+
+            // validators
+            $this->AddValidator(new RequiredValidator('edtISSN'));
+            $this->AddValidator(new RequiredValidator('lkpEditora'));
+        
+        //Definindo o foco
+        if (!($this->GetFieldValue('edtTitulo')))
+        {
+            $this->page->onLoad("MIOLO_GetElementById('edtISSN').focus();");
+        }
+        
+    }
+
+    // pega os dados que estão no formulário   
+    function GetData()
+    {
+        global $MIOLO,$module;
+        $data = new FormData();
+        $data->titulo = trim($this->objSimples->RetirarCaracteresEspeciais($this->GetFieldValue('edtTitulo')));
+        $data->subtitulo = trim($this->objSimples->RetirarCaracteresEspeciais($this->GetFieldValue('edtSubtitulo')));
+        $data->tituloAbreviado = trim($this->objSimples->RetirarCaracteresEspeciais($this->GetFieldValue('edtTituloAbreviado')));
+
+        $data->editora = trim($this->objSimples->RetirarCaracteresEspeciais($this->GetFieldValue('lkpEditora')));
+
+        $data->localizacaoAcessoEletronico = trim($this->objSimples->RetirarCaracteresEspeciais($this->GetFieldValue('edtLocalAcessoEletro')));
+        $data->issn = trim($this->objSimples->RetirarCaracteresEspeciais($this->GetFieldValue('edtISSN')));
+            $data->secs = trim($this->objSimples->RetirarCaracteresEspeciais($this->GetFieldValue('edtSECS')));
+        $data->avaliacaoCapes = trim($this->objSimples->RetirarCaracteresEspeciais($this->GetFieldValue('edtCapesPeriodico')));
+        $data->ccn = trim($this->objSimples->RetirarCaracteresEspeciais($this->GetFieldValue('edtCCN')));
+        $data->cidade = trim($this->objSimples->RetirarCaracteresEspeciais($this->GetFieldValue('lkpLocalDePublicacao')));
+        $data->periodicidade = trim($this->objSimples->RetirarCaracteresEspeciais($this->GetFieldValue('edtPeriodicidade')));
+        $data->modoDeAquisicao = trim($this->objSimples->RetirarCaracteresEspeciais($this->GetFieldValue('edtAquisicao')));
+        $data->assuntos = trim($this->objSimples->RetirarCaracteresEspeciais($this->GetFieldValue('edtAssuntos')));
+        $data->edicao = eregi_replace("[ªº°]","",$data->edicao);
+        $data->ideditora = $this->GetFieldValue('ideditora');
+        return $data;
+    }
+
+
+    // usada para inserir valores no formulário
+    function SetDataEditora($data)
+    {
+        $this->SetFieldValue('ideditora',$data->ideditora);
+        $this->SetFieldValue('lkpEditora',$data->descricao);
+    }
+
+    // Consulta: função chamada após o usuário usar o lookup
+    function btnConsulta_click($sender,$ideditora)
+    { 
+        global $MIOLO,$module,$item;
+        $ideditora = ($ideditora != '') ? $ideditora : $item;
+        //Instancia o objeto editora
+        $this->objEditora = $MIOLO->GetBusiness($module,'editora');
+        // ok retorna os dados de ideditora
+        $ok = $this->objEditora->GetByCodigo($ideditora);
+	$this->SetDataEditora($ok);
+    }
+
+    // Inserir dados
+    function btnIncluir_click()
+    { 
+        global $MIOLO,$module, $item;
+
+        $data = $this->GetData();
+        if($data->issn!=null & $data->ideditora!=null){
+            
+            $data->idPeriodico = $this->objPeriodico->GetNextIdPeriodico();
+            $this->objPeriodico->idPeriodico = $data->idPeriodico;
+
+            //já grava o 008 na pré-catalogação
+            $ficha008 = date('ymd') . '                 r               d';
+            
+            try
+            {
+                $this->objPeriodico->savePeriodico($data);
+                $this->objPeriodico->saveSubFicha($ficha008, '008');
+                
+                $msg = "Periódico " . $data->titulo . " inserido com sucesso. Deseja ir para Catalogação?";
+                
+                $MIOLO->Prompt(Prompt::Question($msg,$MIOLO->GetActionURL($module,'main:catalogacao:periodicos:catalogacaoperiodico', $data->idPeriodico, ''), $MIOLO->GetActionURL($module,'main:catalogacao:periodicos:precatalogacaoperiodico')));
+
+                //$MIOLO->Prompt(Prompt::Information("Periodico " . $data->titulo . " inserido com sucesso.",$this->listURL));
+            }
+            catch (Exception $e)
+            {
+                $this->addError($e->getMessage());
+            }
+        }else{
+            $item = $data;
+            $MIOLO->Error("O campo ISSN e Editora são obrigatórios",'');
+        }
+    }
+}
+?>

@@ -1,0 +1,217 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+/*
+   Cria um report com linhas de agrupamento
+*/
+
+    class repCapacitacaoConcluido extends MPDFReport
+    {
+        var $timestamp;
+        var $img;
+        var $level = array();
+        var $count;
+        var $ano;
+        var $unidade;
+
+        function __construct($objData)
+        {
+            global $MIOLO, $module, $page, $context, $self, $action, $perms;
+
+            $this->ano = $objData->ano;
+            $this->unidade = $objData->unidade;
+            parent::__construct(NULL, NULL, 55);
+            $ui = $MIOLO->GetUI();
+            $this->img = $ui->GetImageSrc('icon_siga.png','');
+            $this->timestamp = date('d/m/Y G:i');
+            $this->pdf->ezStartPageNumbers(520, 800, 12, 'rigth', 'Página: {PAGENUM}');
+            $this->pdf->ezSetMargins(100, 30, 30, 30);
+            $this->GeneratePageHeader();
+            $this->GeneratePageFooter();
+
+            $db = $MIOLO->getDatabase('ufjf');
+            $ano = ($this->ano != 'AAAA') ? "and to_char(m.datainicio,'YYYY') = '{$this->ano}'" : '';
+            $sql = new MSQL('s.idsetor,i.idvinculo,p.nome,c.nome as curso,m.nome as modulo','cm_setor s, rh_capacitacaoinsc i, cm_pessoa p, rh_capacitacaocurso c, rh_capacitacaomodulo m, rh_provimento pr,rh_funcionario f, rh_vinculo v',"i.idvinculo = pr.idvinculo and pr.idsetor = s.idsetor and i.idvinculo = v.idvinculo and v.idfuncionario = f.idfuncionario and f.idpessoa = p.idpessoa and i.idmodulo = m.idmodulo and m.idcurso=c.idcurso and pr.datafim is null and i.status='F' {$ano} ",'s.idsetor,p.nome,i.idvinculo');
+            $query = $db->getQuery($sql);
+            $result = $query->result; 
+            $setor = $MIOLO->getBusiness('common','setor');
+if (!$result)
+                $result = array(); 
+            foreach($result as $row)
+            {
+                 $setor->getById($row[0]);
+                 $row[0] = $siglaUnidade = $setor->getUnidade();
+                 $query2 = $setor->listBySigla($siglaUnidade, true);
+                 if (($query2->fields('idsetor') == $this->unidade) || ($this->unidade == 'AAAA'))
+                 { 
+                    $data[] = $row;
+                    $data0[] = $query2->fields('nomesetor');
+                    $data1[] = $row[1];
+                    $data2[] = $row[2];
+                    $data3[] = $row[3];
+                    $data4[] = $row[4];
+                 }
+            }
+
+            // define as colunas da linha de detalhe
+            $columns = array(
+                new MPDFReportColumn('siape', '<b><i>SIAPE</i></b>', 'left', false, 10, true),
+                new MPDFReportColumn('nome', '<b><i>Nome</i></b>', 'left', false, 30, true),
+                new MPDFReportColumn('curso', '<b><i>Curso</i></b>', 'left', false, 30, true),
+                new MPDFReportColumn('modulo', '<b><i>Modulo</i></b>', 'left', false, 30, true),
+            );
+
+            // define as colunas da linha de grupo (level1)
+            $sum1 = array(
+                new MPDFReportColumn('texto', 'texto', 'right', false, 80, true),
+            );
+
+            // Largura do report, em %
+            $this->SetWidth(100);
+
+/*            array_multisort(
+                 $data0, SORT_ASC, SORT_STRING,
+                 $data2, SORT_ASC, SORT_STRING,
+                 $data1, SORT_ASC, SORT_STRING,     // Causava erro no código e aparentemente não interfere em nada.
+                 $data3, SORT_ASC, SORT_STRING,
+                 $data4, SORT_ASC, SORT_STRING,
+                 $data
+            );*/
+
+            // cria a arvore de dados
+            $t = new MTreeArray($data, '0', '1,2,3,4');
+
+            // registra as colunas de detalhes e summary
+            $this->SetColumns($columns);
+            $colDetail = $this->columns;
+            $this->SetColumns($sum1);
+            $colSum1 = $this->columns;
+
+            $this->count = 0;
+            $this->SetRowMethod('repCapacitacaoConcluido', 'MyRowMethod');
+
+            // gera o report
+
+            foreach ($t->tree as $this->level[0] => $node1)
+            {
+                $this->SetOption('showHeadings', 1);
+                $this->SetOption('showLines', 0);
+                $this->columns = $colDetail;
+                $this->GenerateGroupHeader(1, $this->level);
+                $this->GenerateData($node1);
+            }
+            $this->count = $this->slot['count'];
+            $this->GenerateReportFooter();
+
+        }
+
+        function MyRowMethod($row, $columns, $slot, $report)
+        {
+            // se é o mesmo valor na coluna level1, não imprime
+            if ($row[0] === $slot['siape'])
+            {
+                $row[0] = '';
+                $row[1] = '';
+            }
+            else
+            {
+                $slot['siape'] = $row[0];
+                $slot['count']++;
+            }
+
+        }
+
+
+        function GenerateGroupHeader($level, $array)
+        {
+            global $MIOLO;
+            $this->pdf->SetStrokeColor(0, 0, 0);
+            $x0 = $this->pdf->left;
+            $x1 = $this->pdf->right;
+
+            if ($level == 1)
+            {
+                $this->pdf->ezSetDy(-32, 'makeSpace');
+                $y = $this->pdf->y;
+                $this->pdf->SetStrokeColor(0, 0, 0);
+                $this->pdf->line($x0, $y+23, $x1, $y+23);
+                $this->pdf->addText($x0, $y + 10, 12, 'Unidade: ' . $array[0]);
+            }
+        }
+
+        function GeneratePageHeader()
+        {
+            $x0 = $this->pdf->left;
+            $x1 = $this->pdf->right;
+            $h = $this->pdf->getFontHeight(12);
+            $header = $this->pdf->openObject();
+            $this->pdf->saveState();
+            $this->pdf->addPngFromFile($this->img, $x0, 770, 50, 50);
+            $this->pdf->addText($x0 + 60, 800, 12, 'IF - Instituto Federal');
+            $this->pdf->addText($x0 + 60, 800 - $h - $h, 12, 'SIGA - Sistema Integrado de Gestao Academica');
+            $y = 800 - $h - $h - 5;
+            $this->pdf->SetColor(0.1,0.1,0.1);
+            $this->pdf->filledRectangle($x0, $y-20, $x1-30, 16 );
+            $this->pdf->SetColor(1,1,1);
+            $ano = ($this->ano != 'AAAA') ? "em {$this->ano}" : "- Geral";
+            $this->pdf->addText($x0 + 5, $y - 16, 14, "Cursos de Capacitacao - Concluidos {$ano}");
+            $this->pdf->restoreState();
+            $this->pdf->closeObject();
+            $this->pdf->addObject($header, 'all');
+        }
+
+        function GeneratePageFooter()
+        {
+            $x0 = $this->pdf->left;
+            $x1 = $this->pdf->right;
+            $footer = $this->pdf->openObject();
+            $this->pdf->saveState();
+            $this->pdf->SetStrokeColor(0, 0, 0);
+            $this->pdf->line($x0, 28, $x1, 28);
+            $this->pdf->addText($x0, 19, 9, $this->timestamp);
+            $this->pdf->restoreState();
+            $this->pdf->closeObject();
+            $this->pdf->addObject($footer, 'all');
+        }
+
+        function GenerateData($data)
+        {
+            $this->pdf->ezSetDy(-5);
+            $this->SetData($data);
+            $this->rawdata = $this->GenerateTableData();
+            $this->GenerateBody($this->rawdata);
+        }
+
+        function GenerateReportFooter()
+        {
+            $x0 = $this->pdf->left;
+            $x1 = $this->pdf->right;
+            $y = $this->pdf->y;
+            $this->pdf->SetStrokeColor(0, 0, 0);
+            $this->pdf->line($x0, $y-10, $x1, $y-10);
+            $this->pdf->addText($x0, $y-20, 9, 'Total: ' . $this->count . ' participantes');
+        }
+
+        function Generate()
+        {
+            $this->SetOutput();
+            $this->Execute();
+        }
+    }
+?>

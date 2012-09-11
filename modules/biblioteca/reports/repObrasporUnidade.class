@@ -1,0 +1,213 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+    class repObrasporUnidade extends MPDFReport
+    {
+        var $timestamp;
+        var $img;
+        var $level = array();
+        var $idUnidade;
+        var $idGenero;
+        var $DescUnidade;
+        var $DescGenero;
+        var $unidade;
+        var $obras;
+        var $resultado = array();
+
+        function __construct($data)
+        {
+            global $MIOLO, $module, $page, $context, $self, $action, $perms;
+
+            parent::__construct(NULL, NULL, 55, NULL, 'landscape', 'a4');
+            //var_dump($data);           
+            $this->idUnidade = $data->Unidade;
+			$this->idGenero = $data->Genero;
+			$unidade = $MIOLO->GetBusiness($module, 'unidade'); 
+			$genero = $MIOLO->GetBusiness($module, 'genero');          
+           
+            if ($this->idUnidade == 0)
+            {
+            	$this->DescUnidade = "TODAS";
+            }
+            else 
+            {            	
+            	$this->DescUnidade = $unidade->GetByCodigo($this->idUnidade)->descricao;
+            } 
+            if ($this->idGenero == 0)
+            {
+            	$this->DescGenero = "TODOS";
+            }
+            else 
+            {            	
+            	$this->DescGenero = $genero->GetByCodigo($this->idGenero)->descricao;
+            }
+            
+            $obras = $MIOLO->GetBusiness($module, 'obra');            
+            
+            $resultado = $obras->RelatorioObrasporUnidade($this->idUnidade,$this->idGenero); 
+			
+            
+            //var_dump($resultado->result);
+                       
+            $ui = $MIOLO->GetUI();
+            $this->img = $ui->GetImageSrc('logonet.png','biblioteca');
+            $this->timestamp = date('d/m/Y G:i');
+            $this->pdf->ezStartPageNumbers(800, 540, 10, 'rigth', 'Página: {PAGENUM}/{TOTALPAGENUM}');
+            $this->pdf->ezSetMargins(100, 40, 20, 20);
+            $this->GeneratePageHeader();
+            $this->GeneratePageFooter();
+                          
+            if ($resultado->result)
+            {		
+	            
+	    
+				//$this->resultado = $resultado->result;				
+	                  
+	
+	            // define as colunas da linha de detalhe
+	            $columns = array(
+	                new MPDFReportColumn('OBRA', '<b><i>OBRA</i></b>', 'center', false, 4, true),
+	                new MPDFReportColumn('TITULO', '<b><i>TÍTULO</i></b>', 'left', false, 30, true),
+	                new MPDFReportColumn('AUTOR', '<b><i>AUTOR</i></b>', 'left', false, 15, true),
+	                new MPDFReportColumn('EDICAO', '<b><i>EDIÇÃO</i></b>', 'left', false, 5, true),
+	                new MPDFReportColumn('LOCAL', '<b><i>LOCAL</i></b>', 'left', false, 10, true),
+	                new MPDFReportColumn('EDITORA', '<b><i>EDITORA</i></b>', 'left', false, 10, true),
+	                new MPDFReportColumn('DATA', '<b><i>DATA</i></b>', 'left', false, 5, true),
+	                new MPDFReportColumn('CLASSIFICACAO', '<b><i>CLASSIFICAÇÃO</i></b>', 'center', false, 8, true),
+					new MPDFReportColumn('EX', '<b><i>EX</i></b>', 'center', false, 3, true),
+	                
+	            );
+	
+	     
+	           
+	
+	            // Largura do report, em %
+	            $this->SetWidth(100);
+	            $this->SetColumns($columns);
+	            $colDetail = $this->columns;
+	            
+	             
+	             // gera o report
+	             $this->GenerateGroupHeader(1, $this->level);
+	             $this->columns = $colDetail; 
+	             $this->SetOption('titleFontSize', 8);
+	             $this->SetOption('fontSize', 7);
+	             $this->GenerateData($resultado->result);	             
+	            
+	             
+            }
+            else 
+            {
+            	
+            	$this->SetWidth(100);
+	            // gera o report
+	            $this->GenerateGroupHeader(1, $this->level);
+	            $this->SetOption('showHeadings', 0);
+	            $this->SetOption('showLines', 1);
+
+	            $x0 = $this->pdf->left;          
+		        $this->pdf->ezSetDy(-32, 'makeSpace');
+		        $y = $this->pdf->y;
+	            $this->pdf->addText($x0, $y + 30, 15, 'Não foi encontrado item desse gênero em nenhuma das Unidades');
+	           
+            }
+          
+          
+        }
+
+        function GenerateGroupHeader()
+        {
+            $this->pdf->SetStrokeColor(0, 0, 0);
+            $x0 = $this->pdf->left;          
+            $this->pdf->ezSetDy(-32, 'makeSpace');
+            $y = $this->pdf->y;
+            $this->pdf->addText($x0, $y + 19, 10, 'Unidade: ' .$this->DescUnidade);
+            $this->pdf->addText($x0, $y + 9, 10, 'Gênero: ' .$this->DescGenero);           
+                       
+          
+        }
+
+        function GeneratePageHeader()
+        {
+            $x0 = $this->pdf->left;
+            $x1 = $this->pdf->right;
+            $h = $this->pdf->getFontHeight(12);
+            $header = $this->pdf->openObject();
+            $this->pdf->saveState();
+
+		$x00=$this->pdf->left;
+		$hh = $this->pdf->getFontHeight(12);
+		$this->pdf->addText($x00, 800, 12, $this->manager->getConf('instituicao.sigla')." - ".$this->manager->getConf('instituicao.nome'));
+		$this->pdf->addText($x00, 800 - $hh, 12, $this->manager->getConf('theme.system'));
+
+
+/*
+            $this->pdf->addPngFromFile($this->img, 15, 510 + $x0, 50, 50);
+            $this->pdf->addText(70, 560, 12, 'UFJF - Universidade Federal de Juiz de Fora');
+            $this->pdf->addText(70, 560 -$h , 12, 'CGCO - Centro de Gestão do Conhecimento Organizacional');
+            $this->pdf->addText(70, 560 -$h -$h , 12, 'SIGA - Sistema Integrado de Gestão Acadêmica - Módulo Biblioteca');
+*/
+
+            $y = 550 - $h - $h - 5;
+            $this->pdf->SetColor(0.1,0.1,0.1);
+            $this->pdf->filledRectangle($x0, $y-20, $x1-30, 16 );
+            $this->pdf->SetColor(1,1,1);
+            $this->pdf->addText($x0 + 5, $y - 16, 12, 'RELATÓRIO DE OBRAS POR UNIDADE E GÊNERO');
+            $this->pdf->restoreState();
+            $this->pdf->closeObject();
+            $this->pdf->addObject($header, 'all');
+        }
+
+        function GeneratePageFooter()
+        {
+            $x0 = $this->pdf->left;
+            $x1 = $this->pdf->right;
+            $footer = $this->pdf->openObject();
+            $this->pdf->saveState();
+            $this->pdf->SetStrokeColor(0, 0, 0);
+            $this->pdf->line($x0, 28, $x1, 28);
+            $this->pdf->addText($x0, 19, 9, $this->timestamp . ' - CGCO/DSI');
+            $this->pdf->restoreState();
+            $this->pdf->closeObject();
+            $this->pdf->addObject($footer, 'all');
+        }
+
+        function GenerateData($data)
+        {
+        
+        	$this->pdf->ezSetDy(-5);
+            $this->SetData($data);
+            $this->rawdata = $this->GenerateTableData();
+            $this->GenerateBody($this->rawdata);
+        }
+
+        function Generate()
+        {
+            $this->SetOutput();
+            $this->Execute();
+        }
+    }
+?>

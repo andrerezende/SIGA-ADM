@@ -1,0 +1,639 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class BusinessRhProvimento extends MBusiness
+{
+    var $idVinculo;
+    var $dataInicio;
+    var $dataFim;
+    var $excedeLotacao;
+    var $obs;
+    var $regimeJuridico;
+    var $idClasse;
+    var $idReferencia;
+    var $idJornada;
+    var $idSituacao;
+    var $idGrupoCargo;
+    var $idCargo;
+    var $idSetor;
+    var $idPublicacao;
+    var $idGrupoOcorrencia;
+    var $idOcorrencia;
+    var $vinculo;
+    var $setor;
+    var $situacaofuncional;
+    var $ocorrencia;
+    var $cargo;
+    var $publicacao;
+    var $jornada;
+    var $classe;
+    var $referencia;
+    var $idAmbiente, $ambiente;
+
+    function __construct($data=null)
+    {
+        parent::__construct('sigaept',$data);
+    }
+
+    function OnCreate($data)
+    {
+        if (empty($data))
+        {
+            //$this->initialize();
+        }
+        else
+        {
+            $this->GetById($data);
+        }
+    }
+
+    function GetById($id, $proxy=true)
+    {
+       $this->idVinculo = $id;
+       if ($proxy)
+       {
+           $this->retrieveAsProxy();
+       }
+       else
+       {
+           $this->retrieve();
+       }
+       return $this;
+    }
+
+    //previne acesso direto via url de um secretário de unidade a um servidor não vinculado
+    function seVinculosobSetorLogin($idvinculo, $login)
+    {
+    	global $MIOLO;
+        if (is_null($idvinculo))
+        {
+            return false;
+        }
+
+        //obtém setor atual do usuário (do secretário de unidade, por exemplo)
+        $this->getUltimoProvimento($login);
+        $setorlogin = $this->idSetor;
+
+        //coleciona setores ligados ao usuário
+        $setor    = $MIOLO->getBusiness('common','setor',$setorlogin);
+        $setorpai = $MIOLO->getBusiness('common','setor');
+        $setorpai->getById($setor->idPaiSetor);
+        $idsetorpai = ( $setorpai->idPaiSetor == 0 ) ? $setor->idSetor : $setorpai->idSetor;
+        $setoresfilhos = $setor->getSetoresFilhos($idsetorpai);
+
+        //obtém setor do servidor que se quer verificar (do servidor normalmente vinculado ao secretário)
+        $this->getUltimoProvimento($idvinculo);
+        $setorservidor = $this->idSetor;
+
+        if (in_array($setorservidor, $setoresfilhos))
+        {
+            return TRUE;
+        }
+    } // seVinculosobSetorLogin
+
+    function inicionoCargoAtual($idvinculo)
+    {
+        global $MIOLO, $module;
+
+        $criteria = $this->getCriteria();
+
+        $criteria->addCriteria('idVinculo','=', "'$idvinculo'");
+
+        //$criteria->addColumnAttribute('idSituacao'             );
+        $criteria->addColumnAttribute('idGrupoCargo'           );
+        $criteria->addColumnAttribute('idCargo'                );
+        //$criteria->addColumnAttribute('idGrupoOcorrencia'      );
+        //$criteria->addColumnAttribute('idOcorrencia'           );
+        $criteria->addColumnAttribute('dataInicio','dataInicio');
+        $criteria->addColumnAttribute('dataFim'   ,'dataFim'   );
+
+        $criteria->addOrderAttribute('dataInicio',false);
+        $result = $criteria->retrieveAsQuery()->result;
+
+        $reset = reset($result);
+        $cargoatual = $reset[0] . $reset[1];
+
+        //testa cada provimento (o provimento mais recente, o anterior, etc) até encontrar alguma mudança ou o primeiro
+        foreach ($result as $provimento)
+        {
+            if ($provimento[0] . $provimento[1] == $cargoatual)
+            {
+                $return = $provimento[2];
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        return $return;
+    } // inicionoCargoAtual
+
+
+    function ListBySetor($idSetor)
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->addColumnAttribute('idVinculo');
+        $criteria->addColumnAttribute('vinculo.funcionario.pessoa.nome');
+        $criteria->addCriteria('idsetor','=', "$idSetor");
+        $criteria->addCriteria('dataFim','is', "null");
+        $criteria->addOrderAttribute('vinculo.funcionario.pessoa.nome');
+        return $criteria->retrieveAsQuery();
+    }
+
+    function GetDados()
+    {
+        $dataInicio = new MInvertDate($this->dataInicio);
+        $criteria =  $this->getCriteria();
+        $criteria->addColumnAttribute('classe.nome');
+        $criteria->addColumnAttribute('referencia.nivelPadrao');
+        $criteria->addColumnAttribute('jornada.descricao');
+        $criteria->addColumnAttribute('situacaofuncional.descricao');
+        $criteria->addColumnAttribute('setor.sigla');
+        $criteria->addColumnAttribute('cargo.descricao');
+        $criteria->addCriteria('idVinculo','=', "{$this->idVinculo}");
+        $criteria->addCriteria('dataInicio','=', "'{$dataInicio->date}'");
+        $query = $criteria->retrieveAsQuery();
+        $data = $query->result[0];
+        return $data;
+    }
+
+    function isEstatutario()
+    {
+        return $this->regimeJuridico == 'EST';
+    }
+
+    function setDataFim($dataFim)
+    {
+        $this->dataFim = $dataFim;
+    }
+
+    function setDataInicio($dataInicio)
+    {
+        $this->dataInicio = $dataInicio;
+    }
+
+    function setIdGrupoOcorrencia($idGrupoOcorrencia)
+    {
+        $this->idGrupoOcorrencia = $idGrupoOcorrencia;
+    }
+    
+    function setIdOcorrencia($idOcorrencia)
+    {
+        $this->idOcorrencia = $idOcorrencia;
+    }
+
+    function setIdSituacao($idSituacao)
+    {
+        $this->idSituacao = $idSituacao;
+    }
+    
+    function setIdPublicacao($idPublicacao)
+    {
+        $this->idPublicacao = $idPublicacao;
+    }
+
+    function setIdJornada($idJornada)
+    {
+        $this->idJornada = $idJornada;
+    }
+    
+    function setIdGrupoCargo($idGrupoCargo)
+    {
+        $this->idGrupoCargo = $idGrupoCargo;
+    }
+
+/*    function getIdGrupoCargo()
+    {
+        return $this->IdGrupoCargo;
+    }    
+*/
+
+    
+    function setIdSetor($idSetor)
+    {
+        $this->idSetor = $idSetor;
+    }
+    
+    function getIdSetor()
+    {
+        return $this->idSetor;
+    }    
+
+    function setIdClasse($idClasse)
+    {
+        $this->idClasse = $idClasse;
+    }
+    
+    function getIdClasse()
+    {
+        return $this->idClasse;
+    }
+    
+    function setIdReferencia($idReferencia)
+    {
+        $this->idReferencia = $idReferencia;
+    }
+    
+    function getIdReferencia()
+    {
+        return $this->idReferencia;
+    }
+    
+    function setObs($obs)
+    {
+        $this->obs = $obs;
+    }
+    
+    function getObs()
+    {
+        return $this->obs;
+    }    
+    
+    function setIdCargo($idCargo)
+    {
+        $this->idCargo = $idCargo;
+    }
+    
+    function getIdSituacao()
+    {
+        return $this->idSituacao;
+    }
+
+    function setIdAmbiente($idAmbiente)
+    {
+        $this->idAmbiente = $idAmbiente;
+    }
+    
+    function getAmbiente()
+    {
+        $this->retrieveAssociation('ambiente');
+    }
+
+    function finaliza($dataFim = NULL)
+    {
+        $this->dataFim = ($dataFim ) ? $dataFim : $this->dataFim;
+        $this->save();
+    }
+
+    public /*static*/ function listSetoresLotacao()
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->addColumnAttribute('idSetor');
+        $criteria->addColumnAttribute('setor.nome');
+        $criteria->addCriteria('dataFim','=',"'0001/01/01'");
+        $criteria->addCriteria('idVinculo','=','vinculo.idVinculo');
+        $criteria->addCriteria('idSituacao','<>','2');
+        $criteria->addGroupAttribute('setor.nome');
+        $criteria->addGroupAttribute('idSetor');
+        return $criteria->retrieveAsQuery();
+    }
+
+    function getPrimeiroProvimento($idVinculo)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addCriteria('idVinculo','=',"'$idVinculo'");
+        $criteria->addOrderAttribute('dataInicio',TRUE);
+        $this->retrieveFromCriteria($criteria);
+    } // getPrimeiroProvimento
+
+    function getMaxDataInicio($idVinculo)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('MAX(dataInicioOriginal)','dataInicio');
+        $criteria->addCriteria('idVinculo','=',"'$idVinculo'");
+        $query = $criteria->retrieveAsQuery();
+        return $query->fields('dataInicio');
+    }
+
+    /*function getUltimoProvimentoCom($idVinculo, $idGrupoOcorrencia=NULL, $idOcorrencia=NULL)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addCriteria('idVinculo','=',"'$idVinculo'");
+        if ($idGrupoOcorrencia)
+        {
+            $criteria->addCriteria('idGrupoOcorrencia','=', $idGrupoOcorrencia);
+        }
+        if ($idOcorrencia)
+        {
+            $criteria->addCriteria('idOcorrencia'     ,'=', $idOcorrencia);  
+        }
+        $criteria->addOrderAttribute('dataInicio',false);
+        $this->retrieveFromCriteria($criteria);
+    }*/
+
+    function getbyVinculoDataInicio($idVinculo, $idGrupoOcorrencia=NULL, $idOcorrencia=NULL, $dataInicio=NULL)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addCriteria('idVinculo','=',"'$idVinculo'");
+        if ($idGrupoOcorrencia)
+        {
+            $criteria->addCriteria('idGrupoOcorrencia','=', "'$idGrupoOcorrencia'");
+        }
+        if ($idOcorrencia)
+        {
+            $criteria->addCriteria('idOcorrencia'     ,'=', "'$idOcorrencia'"     );
+        }
+        if ($dataInicio)
+        {
+            $criteria->addCriteria('dataInicio'       ,'=', "'$dataInicio'"       );
+        }
+        $criteria->addOrderAttribute('dataInicio',false);
+        $this->retrieveFromCriteria($criteria);
+        return $criteria->retrieveAsQuery();
+    } // getbyVinculoDataInicio
+
+    function getUltimoProvimento($idVinculo)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addCriteria('idVinculo','=',"'$idVinculo'");
+        $criteria->addOrderAttribute('dataInicio',false);
+        $this->retrieveFromCriteria($criteria);
+    }
+
+    function getUltimoProvimentoComProgressaoFuncional($idVinculo)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addCriteria('idVinculo','=',"'$idVinculo'");
+        $criteria->addCriteria('idOcorrencia','=', '27');        
+        $criteria->addCriteria('idGrupoOcorrencia','=', '6');        
+        $criteria->addOrderAttribute('dataInicio',false);
+        $this->retrieveFromCriteria($criteria);
+    }    
+
+    function getJornada()
+    {
+        $this->retrieveAssociation('jornada');
+    }
+
+    function getSituacaoFuncional()
+    {
+        $this->retrieveAssociation('situacaofuncional');
+    }
+    
+    function getCargo()
+    {
+        $this->retrieveAssociation('cargo');
+    }
+    
+    function getClasse()
+    {
+        $this->retrieveAssociation('classe');
+    }
+    
+    function getReferencia()
+    {
+        $this->retrieveAssociation('referencia');
+    }
+
+    function getProgressao()
+    {
+        //primeiro verifica se ainda tem mais uma proxima referencia dentro da classe atual do servidor
+        if ( $idReferencia = $this->getNextReferencia() )
+        {
+            $data->idClasse = $this->idClasse;
+            $data->idReferencia = $idReferencia;
+            return $data;
+        }
+        else
+        {
+        //caso não tenha pega a proxima classe do servidor de acordo com o seu grupocargo
+            if ( $data = $this->getNextClasseReferencia() )
+            {
+                $classe = $this->_miolo->getBusiness('rh','classe',$data->idClasse);
+                if ( $classe->nome == "TITULAR" )
+                {
+                    //var_dump($data->idClasse);
+                    throw new Exception("Servidor em final de carreira.");
+                }
+                return $data;
+            }
+        }
+        return FALSE;
+    }
+
+    function getNextReferencia()
+    {
+	$classe = $this->_miolo->getBusiness('rh','classe',$this->idClasse);
+        
+        $criteria = $classe->getCriteria();
+
+        $nextId = $this->idReferencia+1;
+        
+        $criteria->addColumnAttribute('referencias.idReferencia');
+        $criteria->addCriteria('referencias.classeGrupoCargo.idGrupoCargo','=',$this->idGrupoCargo);
+        $criteria->addCriteria('referencias.idClasse','=',$this->idClasse);
+        $criteria->addCriteria('referencias.idReferencia','=',$nextId);
+        
+        $query = $criteria->retrieveAsQuery();
+
+        if ( ! $query->eof() )
+        {
+            return $query->fields('idreferencia');
+        }
+
+        return FALSE;
+    }
+
+    function getNextClasseReferencia()
+    {
+        $classe = $this->_miolo->getBusiness('rh','classe',$this->idClasse);
+        $criteria = $classe->getCriteria();
+        
+        $nextId = $classe->getProximaProgressao();
+        
+        $criteria->addColumnAttribute('referencias.idReferencia');
+        $criteria->addCriteria('referencias.classeGrupoCargo.idGrupoCargo','=',$this->idGrupoCargo);
+        $criteria->addCriteria('referencias.idClasse','=',$nextId);
+        $criteria->addOrderAttribute('referencias.idReferencia');
+        
+        $query = $criteria->retrieveAsQuery();
+
+        if ( ! $query->eof() )
+        {
+            $data->idReferencia = $query->result[0][0];
+            $data->idClasse = $nextId;
+            return $data;
+        }
+
+        return FALSE;
+    }
+
+    function isTitular()
+    {
+        $this->getClasse();
+        return ( $this->classe->nome == "TITULAR" );
+    }
+
+    function save()
+    {
+        $op = ( $this->isPersistent() ) ? OP_UPD : OP_INS;
+        parent::save();
+        $this->log($op,"vinculo: $this->idvinculo, data inicio: $this->dataInicio, data fim: $this->dataFim, id situacao: $this->idSituacao, classe/referencia: $this->idClasse/$this->idReferencia, grupo/cargo: $this->idGrupoCargo/$this->idCargo, setor: $this->idSetor, grupo/ocorrencia: $this->idGrupoOcorrencia/$this->idOcorrencia");
+    }
+
+    function progrideMestrado()
+    {
+        $ordem = $this->getClasseOrdemProgressao();
+        if ( $ordem < 2 )
+        {
+            //2 é a ordem para o mestrado
+            return $this->getDataProgressao(2,'DOC');
+        }
+        return FALSE;
+        
+    }
+
+    function progrideDoutorado()
+    {
+        $ordem = $this->getClasseOrdemProgressao();
+        switch($ordem)
+        {
+            case 2: //classe Assistente, passa para 3: Adjunto
+                return $this->getDataProgressao(3,'DOC');
+            break;
+            
+            case 3: //classe Adjunto, dependendo passa para 4: Associado
+                $this->retrieveAssociation('vinculo');
+                if ( $this->vinculo->isDocenteAdjuntoNivel4() )
+                {
+                    $k = new MKrono();
+                    $dataMinima = $this->vinculo->getDataMinimaProgressao();
+                    if ( $k->compareDate($dataMinima,'<',date('d/m/Y')) )
+                    {
+                        return $this->getDataProgressao(4,'DOC');
+                    }
+                    else
+                    {
+                        return FALSE;
+                    }
+                }
+                else
+                {
+                    return FALSE;
+                }
+            break;
+
+            default:
+                return FALSE;
+            break;
+        }    
+    }
+
+    function getClasseOrdemProgressao()
+    {
+        $classe = $this->_miolo->getBusiness('rh','classe',$this->idClasse);
+        return $classe->ordemprogressao; 
+    }
+
+    /*
+    retorna um array com os dados da progressao obtidos com a ordem
+    mais especificamente o id da nova classe e o id da nova referencia
+    */
+    function getDataProgressao($ordemProgressao,$categoria)
+    {
+        $classe = $this->_miolo->getBusiness('rh','classe');
+        $classe->getByOrdemProgressao($ordemProgressao,$categoria);
+        if ( $classe->isPersistent() )
+        {
+            return $classe->getDataProgressao();
+        }
+        return FALSE;
+    }
+
+    
+    function listAmbientesdoVinculo($idVinculo)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('dataInicio'        , 'dataInicio');
+        $criteria->addColumnAttribute('setor.sigla'       , 'sigla');
+        $criteria->addColumnAttribute('cargo.descricao'   , 'cargo');
+        $criteria->addColumnAttribute('ambiente.descricao', 'ambiente');
+        $criteria->setAssociationType('ambiente','right');
+        $criteria->addCriteria('idVinculo','=',$idVinculo);
+        $criteria->addOrderAttribute('dataInicio');//,FALSE);
+        return $criteria->retrieveAsQuery();
+    } // listAmbientesdoVinculo
+
+
+    function listUltimosProvimentos()
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('idVinculo');//,'idVinculo');
+        $criteria->addColumnAttribute('vinculo.funcionario.pessoa.nome');
+        $criteria->addColumnAttribute('setor.sigla'       );//, 'sigla');
+        $criteria->addColumnAttribute('cargo.descricao'   );//, 'cargo');
+        $criteria->addColumnAttribute('ambiente.descricao');//, 'ambiente');
+        $criteria->addCriteria('dataFim','is', "null");
+        $criteria->addOrderAttribute('vinculo.funcionario.pessoa.nome');
+        return $criteria->retrieveAsQuery();
+    } // listUltimosProvimentos
+    
+    function getProvimentosComProgressaoFuncional($idVinculo)
+    {
+    	$criteria = $this->getCriteria();
+        $criteria->addCriteria('idVinculo','=',"'$idVinculo'");
+        $criteria->addCriteria('idOcorrencia','=', '27');        
+        $criteria->addCriteria('idGrupoOcorrencia','=', '6');        
+        $criteria->addOrderAttribute('dataInicio',false);
+        return $criteria->retrieveAsQuery()->result;
+    }// getProvimentosComProgressaoFuncional
+    
+    function getProvimentosComProgressaoPorMerito($idVinculo)
+    {
+    	$criteria = $this->getCriteria();
+        $criteria->addCriteria('idVinculo','=',"'$idVinculo'");
+        $criteria->addCriteria('idOcorrencia','=', '100');        
+        $criteria->addCriteria('idGrupoOcorrencia','=', '6');        
+        $criteria->addOrderAttribute('dataInicio',false);
+        return $criteria->retrieveAsQuery()->result;
+    }// getProvimentosComProgressaoFuncional
+    
+    function getUltimoProvimentoComProgressaoPorMerito($idVinculo)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addCriteria('idVinculo','=',"'$idVinculo'");
+        $criteria->addCriteria('idOcorrencia','=', '100');        
+        $criteria->addCriteria('idGrupoOcorrencia','=', '6');        
+        $criteria->addOrderAttribute('dataInicio',false);
+        $this->retrieveFromCriteria($criteria);
+    }
+
+	// retorna dados do provimento, sem precisar carregar outro (relatório grande)
+    function GetDadosByVinculoData($idVinculo,$dataInicioProvimento)
+    {
+		$krono = new MKrono();
+        $dataInicioProvimento = $krono->InvertDate($dataInicioProvimento);
+        $criteria =  $this->getCriteria();
+        $criteria->addColumnAttribute('classe.nome');
+        $criteria->addColumnAttribute('referencia.nivelPadrao');
+		$criteria->addColumnAttribute('jornada.descricao');
+		$criteria->addColumnAttribute('classe.idClasse');
+		$criteria->addColumnAttribute('situacaofuncional.descricao');
+        $criteria->addColumnAttribute('setor.sigla');
+        $criteria->addColumnAttribute('cargo.descricao');
+        $criteria->addCriteria('idVinculo','=',"$idVinculo");
+        $criteria->addCriteria('dataInicio','=',"$dataInicioProvimento");
+        $query = $criteria->retrieveAsQuery();
+        $data = $query->result[0];
+        return $data;
+    }
+    
+}
+?>

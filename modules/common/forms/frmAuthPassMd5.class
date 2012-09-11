@@ -1,0 +1,95 @@
+<?
+class frmAuthPassMd5 extends MForm
+{
+    function __construct()
+    {   
+       global $auth,$page;
+       parent::__construct('');
+       $fields = Array(
+	       new MTextField('uid','','Usuário',20),
+           new MPasswordField('pwd','','Senha',20),
+           new MHiddenField('tries', ''),
+           new MHiddenField('return_to', ''),
+           new MHiddenField('hash', '')
+       );
+	   $this->SetFields($fields);
+       $max_tries = 3;
+       $uid = trim($this->GetFormValue('uid'));
+       $pwd = trim($this->GetFormValue('pwd')); // já deve vir em MD5
+       $hash = $this->GetFormValue('hash');
+       $return_to_ok = $this->GetFormValue('return_to_ok');
+       $return_to_fail = $this->GetFormValue('return_to_fail');
+       $check_method = $this->GetFormValue('check_method');
+       $challenge = uniqid(rand());
+
+       $response = md5($uid . ':' . $pwd . ':' . $challenge);
+
+//
+//  acrescentar campos para: 
+//  - vinculo: [P] professor, [A] aluno
+//
+//  se professor: departamento
+//  se aluno: curso
+//
+
+       if ( $ok = $this->manager->auth->Authenticate($uid, $challenge, $response) )
+       {
+           if ($ok = ($check_method != '') ? $this->{$check_method}($uid) : TRUE)
+           {
+    	       if ( $return_to_ok )
+               {
+                   $user = $this->manager->getBusinessMad('user');
+                   $user->getByLogin($uid);
+                   $name = urlencode($user->nome);
+                   $vinculo = $this->getVinculo($uid);
+                   $tipo = urlencode($vinculo['tipo']);
+                   $assoc = urlencode($vinculo['assoc']);
+                   $param .= (($param == '') ? '?' : '&') . "uid=" . $uid;
+                   $param .= (($param == '') ? '?' : '&') . "nome=" . $name;
+                   $param .= (($param == '') ? '?' : '&') . "tipo=" . $tipo;
+                   $param .= (($param == '') ? '?' : '&') . "assoc=" . $assoc;
+                   $param .= (($param == '') ? '?' : '&') . "check=ok";
+                   $param .= (($hash != '') ? "?hash=$hash" : '');
+                   $url = $return_to_ok . $param;
+	           } 
+               else
+               {
+                   $url = "http://www.sigaept.br"; 
+               }
+           } 
+       }
+       if (!$ok)
+       {      
+           $param = (($param == '') ? '?' : '&') . "check=fail";
+           $url = $return_to_fail . $param;
+       }
+       $page->Redirect($url);
+    }
+
+    function getVinculo($login)
+    {
+       $login = trim($login);
+       $vinculo['tipo'] = ''; 
+       $vinculo['assoc'] = '';
+       $db = $this->manager->getDatabase('sigaept');
+       $sql = new MSql('p.matricula,p.curso,c.nome','ga_programa p, ga_curso c',"(p.matricula='$login') and (p.curso=c.curso)");
+       $query = $db->getQuery($sql);
+       if (!$query->eof())
+       {
+          $vinculo['tipo'] = 'A'; 
+          $vinculo['assoc'] = $query->result[0][1] . '-' .$query->result[0][2] ;  
+          return $vinculo;
+       } 
+       $sql = new MSql('do.idvinc,de.depto,s.nomesetor','ga_docente do, ga_departamento de, cm_setor s',"(idvinc='$login') and (do.iddepto=de.iddepto) and (de.idsetor=s.idsetor)");
+       $query = $db->getQuery($sql);
+       if (!$query->eof())
+       {
+          $vinculo['tipo'] = 'P'; 
+          $vinculo['assoc'] = $query->result[0][1] . '-' .$query->result[0][2] ; 
+          return $vinculo;
+       } 
+       return $vinculo;
+    } 
+
+}
+?>

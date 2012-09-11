@@ -1,0 +1,177 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+class frmCatalogacaoFicha008 extends MForm
+{
+    public $subficha;
+    public $periodico;
+    private $ficha008;
+
+    function __construct($subficha)
+    {
+       $this->subficha = $subficha;
+       parent::__construct($subficha->titulo);
+       
+       // Botão 'fechar', direcionando para o handler biblioteca/main/catalogacao
+        $this->SetClose($this->manager->GetActionURL($module, 'main:catalogacao:periodicos'));
+    }
+
+    function CreateFields()
+    {
+        $this->periodico = $this->manager->getBusiness('biblioteca','periodico');
+        $this->periodico->GetById($this->subficha->idPeriodico);
+        $this->ficha008 = $this->periodico->getCampoFixo('008');
+
+                $fichanova = false;
+		if ($this->ficha008 == null) 
+		{
+			$this->ficha008 = '                       r               d';
+			$fichanova = true;
+		}
+        
+		$campo = new MTextField('subficha008', $this->ficha008, '008', 50);
+		$this->addField($campo);
+		$this->ficha008 = str_replace(' ', '#', $this->ficha008);
+		$this->SetFieldAttr('subficha008', 'readonly', true);
+
+        $ficha = $this->manager->getBusiness('biblioteca','ficha');
+        $posicao = $ficha->getPosicao($this->subficha->idficha,$this->subficha->idsubficha);
+        while (! $posicao->eof)
+        {
+            $obj = $posicao->getRowObject();
+            $field = $ficha->getInputField($this->subficha->idsubficha, $obj);
+            $field->formMode = 2;
+            $field->setValue($this->ficha008{$obj->posicao});
+            $this->addField($field);
+            $posicao->moveNext();
+        }
+        $campo->formMode = 2;
+                        
+        $idsubficha = $this->subficha->idsubficha;
+		if( (substr($this->ficha008,0,6) == '######') and ($fichanova) )
+		{
+                        $this->SetFieldValue($idsubficha.'_7_000', date('ymd'));
+		}
+		else
+		{
+                        $this->SetFieldValue($idsubficha.'_7_000', substr($this->ficha008,0,6));
+		}
+                $this->SetFieldValue($idsubficha.'_7_007',substr($this->ficha008,7,4));
+                $this->SetFieldValue($idsubficha.'_7_011',substr($this->ficha008,11,4));
+		if(substr($this->ficha008,17,1) == '#'){ //pais pode ter 1 ou 2 caracteres
+			if(substr($this->ficha008,16,1) == '#'){ //pais tem 1 caracter
+                                $this->SetFieldValue($idsubficha.'_7_015',substr($this->ficha008,15,1));
+			}
+			else{ //pais tem 2 caracteres
+                                $this->SetFieldValue($idsubficha.'_7_015',substr($this->ficha008,15,2));
+			}
+		}
+		else{ //pais tem 3 caracteres
+                        $this->SetFieldValue($idsubficha.'_7_015',substr($this->ficha008,15,3));
+		}
+                $this->SetFieldValue($idsubficha.'_7_035',substr($this->ficha008,35,3));
+
+        $buttons = Array(
+           new MButton('btnPost008', '<b>Gravar</b>'),
+        );
+	    $this->SetButtons($buttons);
+    }
+
+    function btnPost008_click()
+    {
+		global $MIOLO;
+                $idsubficha = $this->subficha->idsubficha;
+		//preenche posições 16 e 17 com espaço (#), pois país pode ter 1, 2 ou 3 caracteres
+		$this->ficha008{16} = '#';
+		$this->ficha008{17} = '#';
+
+		//testa campos equivalentes a mais de uma posição
+                if( strlen($this->getFormValue($idsubficha.'_7_000')) < 6 )
+		{
+                        $valor=$this->getFormValue($idsubficha.'_7_000').str_repeat('#',6-strlen($this->getFormValue($idsubficha.'_7_000')));
+                        $this->SetFieldValue($idsubficha.'_7_000', $valor);
+		}
+                if( strlen($this->getFormValue($idsubficha.'_7_007')) < 4)
+		{
+                        $valor=$this->getFormValue($idsubficha.'_7_007').str_repeat('#',4-strlen($this->getFormValue($idsubficha.'_7_007')));
+                        $this->SetFieldValue($idsubficha.'_7_007', $valor);
+		}
+                if( strlen($this->getFormValue($idsubficha.'_7_011')) < 4)
+		{
+                        $valor=$this->getFormValue($idsubficha.'_7_011').str_repeat('#',4-strlen($this->getFormValue($idsubficha.'_7_011')));
+                        $this->SetFieldValue($idsubficha.'_7_011', $valor);
+		}
+
+		
+		$ficha = $this->manager->getBusiness('biblioteca','ficha');
+		$posicao = $ficha->getPosicao($this->subficha->idficha,$this->subficha->idsubficha);
+		$obj = $posicao->getRowObject();
+				
+		
+		//$idEtiqueta = $this->subficha->idetiqueta;
+		$idEtiqueta = $obj->idetiqueta;
+		$fields = $this->getFieldList();
+        foreach($fields as $field)
+        {
+			if (($field instanceof MTextField) || ($field instanceof MSelection))
+            {
+                $posicao = explode('_',$field->getName());
+                if ($posicao[0] == $this->subficha->idsubficha)
+                {
+					if(strval($field->getValue()) != "") //testa se foi selecionado algum valor para o campo
+					{
+						$conteudo = strval($field->getValue());
+					
+						for($i = 0; $i < strlen($conteudo); $i++) 
+						//loop para o caso de campo corresponder a mais de uma posicao
+						{
+							$this->ficha008{$posicao[2] + $i} = substr($conteudo, $i, 1);
+						}
+					}
+                }
+            }
+        }
+
+		$this->ficha008 = str_replace('#', ' ', $this->ficha008);
+
+		$this->setFieldValue('subficha008', $this->ficha008);
+
+		try
+		{
+			$this->periodico->saveSubFicha($this->ficha008, '008');
+
+		}
+		catch (Exception $e)
+		{
+			$this->addError($e->getMessage());
+		}
+
+		//remove o negrito do botão, pois já foi pressionado uma vez
+		$this->SetButtonAttr('btnPost008','label','Gravar');
+	}
+}
+
+?>

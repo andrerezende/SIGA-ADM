@@ -1,0 +1,109 @@
+<?
+class frmLicitacaoOriginal extends Form
+{
+	var $objLicitacao;
+
+	function __construct()
+    {
+		global $MIOLO;
+        $this->Form('Consulta Licitação Original');
+		$this->SetClose($this->manager->GetActionURL('adm','main:financeiro:licitacaooriginal'));
+        $this->EventHandler();
+		$this->defaultButton = false;
+    }
+
+    function CreateFields()
+    {
+		global $MIOLO, $module;
+
+		$this->objLicitacao = $MIOLO->GetBusiness($module, 'licitacao');
+
+		$fields = array(
+			new MLookupTextField('licitacao', '', 'Número da Licitação', 20),
+		);
+       	$this->SetFields($fields);
+		$this->SetFieldAttr('licitacao','module',$module);
+		$this->SetFieldAttr('licitacao','item','licitacao');
+		$this->SetFieldAttr('licitacao','event','filler');
+		$this->SetFieldAttr('licitacao','related', '"",licitacao');
+
+		$button = array(
+			new FormButton('btnEnviar','Enviar'),
+		);
+       	$this->SetButtons($button);
+	}
+
+	function btnEnviar_click()
+    {
+		global $MIOLO, $module, $item;
+
+		$this->page->SetAction($MIOLO->GetActionURL($module, $action));
+		$licitacao = $this->GetFormValue('licitacao');
+		if($licitacao == null)
+		{
+			$idLicitacao = $this->GetFormValue('idLicitacao');
+		}
+		else
+		{
+			$this->objLicitacao = $MIOLO->GetBusiness($module,'licitacao');
+			$idLicitacao = $this->objLicitacao->GetIdBynumero($licitacao);
+		}
+		if($idLicitacao == null)
+		{
+			$MIOLO->Error('Licitação não encontrada', $MIOLO->GetActionURL($module, $action) );
+		}
+
+		$this->objLicitacao = $MIOLO->GetBusiness($module,'licitacao',$idLicitacao);
+		$itensDaLicitacao = $this->objLicitacao->getItens();
+
+		//verifica status da licitacao
+		if( ($this->objLicitacao->status != '4') and ($this->objLicitacao->status != '5') )
+		{
+			$MIOLO->Error('O status da licitacao não permite este tipo de operação.', $MIOLO->GetActionURL($module, $action) );
+		}
+
+        $this->SetTitle('Consulta Licitação Original - ' . $licitacao);
+
+		$columns = array(
+           	new MGridColumn('Nº','center', true,'5%'),
+           	new MGridColumn('Descrição','left', false,'30%'),
+           	new MGridColumn('Qtde.','center', true,'5%'),
+           	new MGridColumn('Unidade','center', true,'5%'),
+           	new MGridColumn('R$ Unit','center', true,'10%'),
+           	new MGridColumn('Empresa','left', false,'20%'),
+           	new MGridColumn('R$ Total','center', true,'10%'),
+           	new MGridColumn('Rubrica','center', false,'10%'),
+           	new mgridcolumn('elemento','center', false,'10%',false),
+           	new MGridColumn('subelemento','center', false,'10%',false),
+           	new mgridcolumn('idfornecedor','center', false,'10%',false),
+           	new MGridColumn('codmaterial','center', false,'10%',false),
+           	new MGridColumn('Req.','center', true,'5%'),
+        );
+
+		$data = $this->objLicitacao->GetDadosItensParaEmpenho($idLicitacao, $itensDaLicitacao, false, true);
+		$grid = new MGrid($data, $columns, $href_datagrid, 0);
+
+		//calcula valor total (saldo da licitacao)
+		$valorTotalGeral = 0;
+		for($i = 0; $i < count($data); $i++)
+		{
+			$valorTotalGeral += ($data[$i][2] * str_replace(',','.',str_replace('.','',$data[$i][4])));
+		}
+		$valorTotalGeral = number_format(str_replace(',','.',$valorTotalGeral),2,',','.');
+
+		$fields = array(
+            $grid,
+			new MSpacer(1),
+			new MTextLabel('totalGeral', $valorTotalGeral, 'Valor Total dos Itens'),
+			new MSpacer(1),
+        );
+        $this->SetFields($fields);
+
+		$button = array(
+			new MButton('btnVoltar','Voltar', $MIOLO->GetActionURL($module, 'main:licitacoes', $this->objLicitacao->idLicitacao)),
+		);
+       	$this->SetButtons($button);
+		$this->SetButtonAttr('btnEnviar','visible',false);
+	}
+}
+?>

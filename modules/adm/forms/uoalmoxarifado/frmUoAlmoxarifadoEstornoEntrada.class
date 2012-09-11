@@ -1,0 +1,193 @@
+<?php
+class frmUoAlmoxarifadoEstornoEntrada extends MCompoundForm
+{
+    protected $uoalmoxarifado;
+    protected $empenho;
+    function __construct($objUO)
+    {
+        global $MIOLO;
+        $this->uoalmoxarifado = $objUO;
+        $this->empenho = $MIOLO->getBusiness('adm','empenho',Form::getFormValue('idEmpenho'));
+		parent::__construct("Estorno de Entrada de Material - Empenho {$this->empenho->numero}");
+        $this->EventHandler();
+		$this->SetClose(null);
+    }
+
+	function CreateFields()
+    {
+        global $item;
+		$cf = new MCurrencyFormatter();
+        // info
+        $tipo = array("OR"=>"Original","CO"=>"Complemento","CA"=>"Complementação");
+        $tg = $this->manager->getBusiness('common','tabelageral');
+        $this->empenho->getEmpenhado();
+        $this->empenho->empenhado[0]->getLicitacao();
+        $this->empenho->getFornecedor();
+        $this->_info[]	= new MTextLabel('numeroEmpenho',$this->empenho->numero,'Empenho');
+        $this->_info[]	= new MTextLabel('status',strtoupper($tg->ListByTabela('AD_EMPENHOSTATUS')->result[$this->empenho->status-1][1]),'Status',array(2=>"EMPENHADO"));
+        $this->_info[]	= new MTextLabel('tipo',strtoupper($tipo[$this->empenho->tipoEmpenho]),'Tipo');
+        $this->_info[]	= new MTextLabel('numeroLicitacao',$this->empenho->empenhado[0]->itensLicitacao->licitacao->numero,'Licitação');
+        $this->_info[]	= new MTextLabel('fornecedor',$this->empenho->fornecedor->instituicao->nome,'Fornecedor');
+        $this->_info[]	= new MTextLabel('data',$this->empenho->dataEmpenho,'Data');
+        $this->_info[]	= new MTextLabel('txtValor',$cf->formatWithSymbol($this->empenho->valorSaldo),'Saldo');
+
+		$this->_form[] = $this->manager->GetUI()->GetGrid('adm','gridUoAlmoxarifadoEstornoEntrada',$this->empenho);
+        
+        $buttons = array(
+            new MButton('btnEstornar','Estornar'),
+        );
+        $this->setButtons($buttons);
+    }
+
+	function btnEstornar_click()
+	{
+		global $MIOLO, $action, $module, $item;
+
+		$estoque = $MIOLO->GetBusiness($module, 'estoque');
+		$movimento = $MIOLO->GetBusiness($module, 'movimento');
+		$notaFiscal = $MIOLO->GetBusiness($module, 'notafiscal');
+		$itemNota = $MIOLO->GetBusiness($module, 'itemnota');
+		$empenho = $MIOLO->GetBusiness($module, 'empenho');
+		$ordemEntrega = $MIOLO->GetBusiness($module, 'ordementrega');
+		$cf = new MCurrencyFormatter();
+
+		if($select = $this->GetFormValue('select'))
+		{
+			foreach($select as $sel)
+			{
+				$movimento->GetById($sel);
+				$estoque->GetById($this->uoalmoxarifado->idUo, $movimento->idMaterial);
+				$itemNota->GetById($movimento->idItemNota);
+				$notaFiscal->GetById($itemNota->idNotaFiscal);
+				$empenho->GetById($notaFiscal->idEmpenho);
+
+				try
+				{
+					//Novo movimento (estorno)
+					$novoMovimento = $MIOLO->GetBusiness($module, 'movimento');
+					$novoMovimento->dataMovimento = date('d/m/Y');
+					$novoMovimento->quantidade = $movimento->quantidade;
+					$novoMovimento->valorTotal = $movimento->valorTotal;
+					$novoMovimento->idRequisicao = $movimento->idRequisicao;
+					$novoMovimento->idMaterial = $movimento->idMaterial;
+					$novoMovimento->idMovimentoRef = $movimento->idMovimento;
+					if($movimento->tipoMovimento == '1')
+					{
+						$novoMovimento->tipoMovimento = '2';//ESTORNO ENTRADA
+					}
+					if($movimento->tipoMovimento == '5')
+					{
+						$novoMovimento->tipoMovimento = '6';//ESTORNO E/S
+					}
+					$novoMovimento->beginTransaction();
+					$novoMovimento->save();
+
+					//Estoque
+					if($movimento->tipoMovimento == '1')
+					{
+						$estoque->estoque -= $novoMovimento->quantidade;
+						$estoque->valorTotal = $cf->toDecimal($estoque->valorTotal) - $cf->toDecimal($novoMovimento->valorTotal);
+						$estoque->setTransaction($novoMovimento->getTransaction());
+						$estoque->save();
+					}
+
+					//Precisa apagar idItemNota do movimento para poder apagar registro de ad_itemnota
+					//Precisa apagar idOrdemEntrega do movimento para cortar ligação com ad_ordentrega
+					//Tambem grava idMovimentoRef (id do novo movimento de estorno) no original
+					$idItemNota = $movimento->idItemNota;
+					$idNotaFiscal = $itemNota->idNotaFiscal;
+					$idEmpenhado = $itemNota->idEmpenhado;
+					$idOrdemEntrega = $movimento->idOrdemEntrega;
+					$movimento->setTransaction($novoMovimento->getTransaction());
+					$movimento->idItemNota = '';
+					$movimento->idOrdemEntrega = '';
+					$movimento->idMovimentoRef = $novoMovimento->idMovimento;
+					$movimento->save();
+					$itemNota->setTransaction($novoMovimento->getTransaction());
+					$itemNota->delete();
+
+					//se não houver outro movimento para a mesma ordem, apaga a ordem de entrega
+					if($idOrdemEntrega)
+					{
+						$ordemEntrega->GetById($idOrdemEntrega);
+						$ordens = $movimento->ListMovimentosByOrdemEntrega($ordemEntrega->numero);
+						if(count($ordens->result) == 1)//apenas o movimento que está sendo estornado
+						{
+							$ordemEntrega->setTransaction($novoMovimento->getTransaction());
+							$ordemEntrega->delete();
+						}
+					}
+
+					//verifica se NF tem mais algum item. se nao tiver, apaga NF
+					$itemNota = $MIOLO->GetBusiness($module, 'itemnota');
+					$itensNF = $itemNota->GetByIdNota($idNotaFiscal);
+					$notaFiscal->setTransaction($novoMovimento->getTransaction());
+					$haNotas = false;//<- verifica se há NFs para o empenho (para atualizar status do empenho)
+					if(count($itensNF->result) <= 1)
+					{
+						$notaFiscal->delete();
+					}
+					else
+					{
+						$haNotas = true;
+						$notaFiscal->valor = $cf->toDecimal($notaFiscal->valor) - $cf->toDecimal($novoMovimento->valorTotal);
+						$notaFiscal->save();
+					}
+
+					//Empenho
+					$notasEmpenho = $notaFiscal->GetNotasByIdEmpenho($empenho->idEmpenho);
+					foreach($notasEmpenho->result as $n)
+					{
+						if($n[0] != $idNotaFiscal)
+						{
+							$haNotas = true;
+						}
+					}
+					if($haNotas)//há alguma NF para o empenho
+					{
+						$empenho->status = '6';//ENTREGA PARCELADA
+					}
+					else//não há NF para o empenho
+					{
+						$empenho->status = 'B';//DISTRIBUIDO
+					}
+					$empenho->setTransaction($novoMovimento->getTransaction());
+					$empenho->save();
+
+					//Item Requisição
+					$itemReq = $MIOLO->GetBusiness($module, 'itemreq');
+					$itemReq->GetById($movimento->idRequisicao, $movimento->idMaterial);
+					$itemReq->status = '5';//LICITADO
+					$itemReq->quantAutorizada = $cf->toDecimal($itemReq->quantAutorizada) - $cf->toDecimal($novoMovimento->quantidade);
+					$itemReq->setTransaction($novoMovimento->getTransaction());
+					$itemReq->save();
+
+					//Requisição
+					$objRequisicao = $MIOLO->GetBusiness($module, 'requisicao');
+					$objRequisicao->GetById($movimento->idRequisicao);
+					$movimentoReq = $movimento->GetByRequisicaoMaterialTipo($movimento->idRequisicao, null, "('1','5')");
+					if(count($movimentoReq->result) > 1)//existe outro movimento para mesma requisicao
+					{
+						$objRequisicao->status = '8';//EXECUTADA PARCIALMENTE
+					}
+					else//não existe outro movimento para mesma requisicao
+					{
+						$objRequisicao->status = '7';//LIBERADA PARA EXECUCAO
+					}
+					$objRequisicao->setTransaction($novoMovimento->getTransaction());
+					$objRequisicao->save();
+
+					$objRequisicao->endTransaction();
+
+					$movimento->Log(OP_DEL,"Estorno de Entrada: " . $novoMovimento->idMovimento . " item empenhado: " . $idEmpenhado);
+					$MIOLO->Information('Estorno feito com sucesso.', $MIOLO->GetActionURL($module,$action,$item,array('form'=>'estornoentradamaterial')));
+				}
+				catch (Exception $e)
+				{
+					$this->addError($e->getMessage());
+				}
+			}
+		}
+	}
+}
+?>

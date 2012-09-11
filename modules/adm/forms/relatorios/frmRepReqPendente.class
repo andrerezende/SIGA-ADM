@@ -1,0 +1,94 @@
+<?
+class frmRepReqPendente extends Form
+{
+	var $objTipoReq;
+   
+   function __construct()
+   {
+ 	  global $MIOLO, $module, $self;
+ 	  $this->Form('Requisições Pendentes');
+ 	  $this->EventHandler();
+   }
+
+	function CreateFields()
+	{
+		global $MIOLO,$module,$self, $action, $auth;
+
+		$this->objTipoReq = $MIOLO->GetBusiness($module,'tiporeq');		
+		$lista = $this->objTipoReq->ListAll();		    	    
+
+		for ($i=0; $i<count($lista->result); $i++){
+			if (($lista->result[$i][1] <> 'ALMOXARIFADO') && ($lista->result[$i][1] <> 'COMPRA')
+						&& ($lista->result[$i][1] <> 'SERVICO EXTERNO'))
+			{			
+				$options[$lista->result[$i][0]] = $lista->result[$i][1];
+			}
+		}	
+			
+		
+		$fields = array(
+			new MSelection('selTipoRequisicao','','Tipos de Requisição',$options,false),
+			new CalendarField('dataInicio','','A partir de'),
+            new CalendarField('dataFim','','Até'),
+           
+		);
+		$this->SetFields($fields);
+
+		$buttons = array(
+			new FormButton('btnPost', 'Gerar Relatório', 'PDF'),
+			new FormButton('btnGerarCSV', 'Gerar Planilha')
+		);
+		$this->SetButtons($buttons);
+	}
+
+   function btnPost_click()
+   {
+		 global $MIOLO, $module;
+	
+		 $ui = $MIOLO->GetUI();
+	     $report = $ui->GetReport($module,'repRequisicaoPendente');
+	     $report->Generate();
+   }
+   
+   function btnGerarCSV_click()
+	{
+		$objRequisicao = $this->manager->getBusiness('adm','requisicao');
+	           
+	    $tipoReq  	= $this->GetFormValue('selTipoRequisicao');
+		$dataInicio = $this->GetFormValue('dataInicio');
+		$dataFim 	= $this->GetFormValue('dataFim');
+		
+		$objTipoReq = $this->manager->getBusiness('adm','tiporeq');				
+		$descReq = $objTipoReq->GetById($tipoReq)->descricao;
+				
+		$consulta = $objRequisicao->listByDataTipo($dataInicio, $dataFim, $tipoReq, $descReq);
+	    		
+	
+	    if ( is_array($consulta->result) )
+	 	{
+			$resultAux[] = array('Nº REQ.','UNIDADE','DATA', 'VALOR ESTIMADO','VALOR REAL','STATUS');
+			
+			foreach ($consulta->result as $result)		  
+	    	{
+	    		if ($result[5] == '9')
+				{
+					$result[5] = 'AGUARDANDO AVALIAÇÃO DO GESTOR';
+				}
+				else if ($result[5] == 'D')
+				{
+					$result[5] = 'PAGAMENTO NÃO AUTORIZADO';
+				}
+	    		
+	    		$resultAux[] = array($result[0],$result[1],$result[2],$result[3],$result[4],$result[5]);		
+	    	}
+		}
+		else 
+		{
+			$consulta->result[] = ""; 
+		}   
+			    
+	    $consulta->result = $resultAux;
+		$consulta->getCSV("Relatório Requisições Pendentes: $dataInicio até $dataFim");	
+	}   
+}
+?>

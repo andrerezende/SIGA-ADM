@@ -1,0 +1,323 @@
+<?
+class frmLocalidadesDiaria extends Form
+{
+	protected $objRequisicao;
+	
+    function __construct($objRequisicao)
+    {
+        global $MIOLO, $module, $self, $page;
+        
+		$this->objRequisicao = $objRequisicao;
+        
+        $urlBase = $MIOLO->getActionUrl($module,'main');
+        $page->setAction($urlBase);
+        
+        $this->Form('Incluir Localidade');
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+        $itemRequisicao = $this->objRequisicao->getItem();
+
+		$fields = array(
+			new MLookupFieldValue('lkpMunicipio','','Município',40),
+			new MTextField('quantDiarias','','Quant. diarias',10,'Ex.: 0,5 - 1 - 1,5 - 2 - ...'),
+            new MHiddenField('idMunicipio')
+        );
+		
+        $this->SetFields($fields);
+
+        if ($itemRequisicao->nacional == "S")
+        {
+            $this->SetFieldAttr('lkpMunicipio','module','common');
+            $this->SetFieldAttr('lkpMunicipio','item','municipioNacional');
+            $this->SetFieldAttr('lkpMunicipio','event','filler');
+            $this->SetFieldAttr('lkpMunicipio','related','idMunicipio,lkpMunicipio');
+        }
+        else
+        {
+            $this->SetFieldAttr('lkpMunicipio','module','common');
+            $this->SetFieldAttr('lkpMunicipio','item','municipioInternacional');
+            $this->SetFieldAttr('lkpMunicipio','event','filler');
+            $this->SetFieldAttr('lkpMunicipio','related','idMunicipio,lkpMunicipio');
+        }
+
+		
+		$buttons = array(
+        	new FormButton('btnSalvarLocalidade', 'Incluir'),
+        	new FormButton('btnFinalizar', 'Finalizar')
+        );
+
+		$this->SetButtons($buttons);        
+    }
+
+	public function btnSalvarLocalidade_click()
+	{
+        global $MIOLO;
+
+        $localidadeDiaria = $MIOLO->getBusiness('adm','localidadediaria');        
+        $itemRequisicao = $this->objRequisicao->getItem();                
+        
+        $localidadeDiaria->idRequisicao = $this->objRequisicao->idRequisicao;
+        $localidadeDiaria->idVinculo = $itemRequisicao->idVinculo;
+        $localidadeDiaria->idMunicipio = trim($this->GetFormValue('idMunicipio'));
+        $localidadeDiaria->quantDiarias = $this->GetFormValue('quantDiarias');
+        
+		try
+		{
+            $localidadeDiaria->save();
+		}
+		catch (Exception $e)
+		{
+			$this->AddError("Informe o seguinte erro a equipe do CGCO: ".$e->getMessage());
+		}
+    }
+
+    public function btnFinalizar_click()
+	{
+        global $MIOLO;
+
+        $k = new MKrono();
+        $diaria = $MIOLO->getBusiness('adm','diaria');
+        $municipio = $MIOLO->getBusiness('common','municipio');
+        $feriado = $MIOLO->getBusiness('common','feriado');
+  
+        $itemRequisicao = $this->objRequisicao->getItem();                
+        $maxDiarias = $k->DaysDiff($itemRequisicao->dataSaida,$itemRequisicao->dataRetorno) + 0.5;
+        $totalDiarias = 0 + $this->objRequisicao->getTotalDiarias();
+
+        $this->objRequisicao->getUoRequisitante();       
+        $this->objRequisicao->getLocalidadeDiarias();
+        $idUsuario = $this->manager->GetLogin()->idkey;
+        
+        if ($totalDiarias > $maxDiarias)
+        {
+    		$this->addError("Número de diárias excedeu o máximo permitido!");
+        }
+        elseif (is_null($this->objRequisicao->localidadeDiaria))
+        {
+    		$this->addError("É preciso informar ao menos UMA localidade.");
+        }       
+        else
+        {
+            try
+            {
+                // Cálculo do valor das diárias
+                $query =  $this->objRequisicao->listLocalidadeDiarias();
+
+                //var_dump($itemRequisicao->nacional);
+                if ($itemRequisicao->nacional == "S") //Diaria Nacional
+                {
+                    while (!$query->eof())
+                    {
+                        $i++;
+                        $municipio->GetById2($query->fields('idMunicipio'));
+                        
+                        // gambiarra pro problema dos municipios cat 5 usarem os valores do cat4
+                        if ($municipio->categoriaDiaria == '5')
+                            $categoriaDiariaMunicipio = 4;
+                        else
+                            $categoriaDiariaMunicipio = $municipio->categoriaDiaria;
+                        
+                        $diaria->GetById($categoriaDiariaMunicipio,$itemRequisicao->categoriaFunc);
+
+                        $quantDiaria = explode(",",$query->fields('quantDiarias'));
+                        $total += ($quantDiaria[0] * str_replace(',','.',$diaria->diaria));
+
+                        // se a quantidade de diárias tiver meia diária
+                        if ($quantDiaria[1] == '5')
+                        {                    
+                            $total += (str_replace(',','.',$diaria->meiaDiaria));
+                        }
+                        $query->moveNext();
+                    }
+                    $valorDiarias = $total;
+                    
+                    //Calculo do valor dos vales refeição   
+                    if ($totalDiarias == $maxDiarias)
+                    {
+                        $dia = $itemRequisicao->dataSaida;
+                        while ($k->DaysDiff($dia,$itemRequisicao->dataRetorno) >= 0)
+                        {
+                            // Se for feriado nacional
+                            if ((!$feriado->feriado($dia)) && 
+                                ($feriado->getAbrangencia($dia) != 4) && //Feriado Nacional
+                                ($feriado->getAbrangencia($dia) != 5) && //Feriado Mundial
+                                (date("D",mktime(0,0,0,substr($dia,3,2),substr($dia,0,2),substr($dia,6,4))) != "Sat") &&
+                                (date("D",mktime(0,0,0,substr($dia,3,2),substr($dia,0,2),substr($dia,6,4))) != "Sun"))
+                            {
+                                $diasUteis++;
+                            }
+                                
+                            $dia = $k->Operation('+',$dia,'1%D');
+                        }                    
+                        $total -= $diasUteis * 6.55;                
+                        $valesRefeicao = $diasUteis * 6.55;
+                    }
+                    else
+                    {
+                        // Meia diária desconta um VR inteiro
+                        if (!is_int($totalDiarias)) $td = $totalDiarias+0.5;
+                        else $td = $totalDiarias;
+
+                        $total -= $td * 6.55;                
+                        $valesRefeicao = $td * 6.55;
+                    } 
+
+                    // Adicional de taxi se não for usado só veículo da UFJF
+                    if ($itemRequisicao->meioTransporteDiaria != '1')
+                    {
+                        $diariasTaxi = 54.98*$i;
+                        $total +=$diariasTaxi;
+                    }
+                }
+                else //Diaria Internacional
+                {
+                    while (!$query->eof())
+                    {
+                        $i++;
+                        $municipio->GetById2($query->fields('idMunicipio'));
+
+                        $categoriaDiariaMunicipio = $municipio->categoriaDiaria;
+                        
+                        //var_dump($categoriaDiariaMunicipio);
+                        //var_dump($itemRequisicao->categoriaFunc);
+                        $diaria->GetById($categoriaDiariaMunicipio,$itemRequisicao->categoriaFunc);
+
+                        $quantDiaria = explode(",",$query->fields('quantDiarias'));
+                        //var_dump($quantDiaria[0]);
+                        //var_dump($diaria->diaria);
+                        $total += ($quantDiaria[0] * str_replace(',','.',$diaria->diaria));
+
+                        $query->moveNext();
+                    }
+                    $total = $total * 1.90;
+                    $valorDiarias = $total;
+                }
+
+                //var_dump($total);
+                $itemRequisicao->setValorEstimado($total);
+                
+                $requisita = $this->manager->getBusiness('adm','requisita');
+                $requisita->GetById($this->objRequisicao->idTipoReq,$this->objRequisicao->idUoRequisitante);            
+
+                if ($this->objRequisicao->uoRequisitante->temSaldoPraFazerRequisicaoByRubrica($requisita->idRubrica,$itemRequisicao->valorEstimado))
+                {
+                    // Abre novo processo
+                    $processo  = $MIOLO->GetBusiness('protocolo','processo');
+                    $this->objRequisicao->getUoRequisitante();
+                    $this->objRequisicao->uoRequisitante->retrieveAssociation("setor");
+
+                    $vinculo = $this->manager->getBusiness('rh','vinculo',$itemRequisicao->idVinculo);
+                    $vinculo->retrieveAssociation('funcionario');          
+
+                    $ano = date('Y');
+                    $dataProcesso->dataAbertura = date("YmdHi");
+                    $dataProcesso->titulo = "DIARIA";
+                    $dataProcesso->assunto = "REQUER CONCESSAO DE DIARIA";
+                    $dataProcesso->setorOrigem = $this->objRequisicao->uoRequisitante->setor->sigla;
+                    $dataProcesso->solicitante = $vinculo->funcionario->pessoa->nome;
+                    $dataProcesso->instituicao = 23071;
+                    $dataProcesso->tipo = "P";
+                    $processo->setData($dataProcesso);
+                    $processo->setNewNumProcesso($ano);
+                    
+                    $processo->beginTransaction();
+                    $andamento = $processo->getAndamento(1);
+                    $andamento->setData($dataProcesso);
+                    $andamento->status = 'N';
+                    $andamento->setor = $dataProcesso->setorOrigem;
+                    $andamento->dataEntrada = $dataProcesso->dataAbertura;
+                    $andamento->dataSaida = $dataProcesso->dataAbertura;
+                    $andamento->setorDestino = 'COSUFI';
+                    
+                    $processo->addAndamento($andamento);
+                    $processo->retencao = $this->manager->getBusiness('protocolo','retencao');
+                    $processo->retencao->setData($andamento);
+                    $processo->save();
+                    
+                    $msg = "Processo ".$processo->numProcessoFormatado()." criado com sucesso.";
+                    $processo->Log(OP_INS,$msg);
+                    $processo->endTransaction();
+
+                    $itemRequisicao->setNumProcesso($processo->numProcesso);
+                
+                    // Se é o gestor fazendo a requisição já autoriza e libera de uma vez.
+                    if ($this->objRequisicao->uoRequisitante->isGestorOf($idUsuario))
+                    {                        
+                            $this->objRequisicao->beginTransaction();
+                            $this->objRequisicao->setStatus('7');
+                            $this->objRequisicao->save();                
+                            $mensagem = "Solicitação ".$this->objRequisicao->idRequisicao." criada e autorizada.";
+
+                            $this->objRequisicao->getUoRequisitante();
+                            $this->objRequisicao->uoRequisitante->setTransaction($this->objRequisicao->getTransaction());
+                            $this->objRequisicao->uoRequisitante->addPrevisaoDebito($requisita->idRubrica,$itemRequisicao->valorEstimado,$this->objRequisicao->getAno());
+                            $this->objRequisicao->Log(OP_UPD,"Requisicao ".$this->objRequisicao->idRequisicao.": adicao da previsao de ".$itemRequisicao->valorEstimado." na UO ".$this->objRequisicao->uoRequisitante->idUo);
+                           
+                            $lancamentoInt = $this->manager->getBusiness('adm','lancamentoint');
+                            $lancamentoInt->setTransaction($this->objRequisicao->getTransaction());
+                            $lancamentoInt->tipoLancamento = '4';
+                            $lancamentoInt->data = date("d/m/Y");                
+                            $lancamentoInt->valor = $itemRequisicao->valorEstimado;
+                            $lancamentoInt->ano = date("Y");
+                            $lancamentoInt->idUoRequisitante = $this->objRequisicao->idUoRequisitante;       
+                            $lancamentoInt->idUoExecutante = $this->objRequisicao->idUoExecutante;
+                            $lancamentoInt->idRubrica = $requisita->idRubrica;           
+                            $lancamentoInt->idRequisicao = $this->objRequisicao->idRequisicao;
+                            $lancamentoInt->save();
+
+                            $this->objRequisicao->endTransaction();
+                            //$lancamentoInt->Log(OP_INS,"Lançamento Interno numero ".$lancamentoInt->idLancamentoInt." realizado. Requisicao ".$this->objRequisicao->idRequisicao.", tipo: 4, valor: ".$itemRequisicao->valorEstimado);
+                            $this->objRequisicao->Log(OP_INS,"Requisicao ".$this->objRequisicao->idRequisicao." submetida a avaliação do gestor, autorizada e liberada.");
+                            $mensagem = "Solicitação ".$this->objRequisicao->idRequisicao." submetida à avaliação do gestor, autorizada e liberada.";
+                            $mensagem .= "<br />Processo Número: ".$processo->numProcessoFormatado().".";
+                    }
+                    else
+                    {                    
+                        $mensagem = "Solicitação ".$this->objRequisicao->idRequisicao." submetida à avaliação do gestor.";
+                        $mensagem .= "<br />Processo Número: ".$processo->numProcessoFormatado().".";
+                    }
+                    $this->objRequisicao->setStatus('2');
+                    $this->objRequisicao->save();                    
+
+                    if ($itemRequisicao->nacional == 'S') //Diaria Nacional
+                    {
+                        $mensagem .= "<br />Diárias: R$ ".number_format(str_replace(',','.',$valorDiarias),2,',','');
+                        $mensagem .= "<br />Medida Provisória 1522-6: R$ ".number_format(str_replace(',','.',$valesRefeicao),2,',','');
+                        if ($itemRequisicao->meioTransporteDiaria != '1')
+                            $mensagem .= "<br />Adicional Legislação Vigente 80% T3-VB: R$ ".number_format(str_replace(',','.',$diariasTaxi),2,',','');
+                        $mensagem .= "<br />Total Estimado: R$ ".number_format(str_replace(',','.',$total),2,',','');
+                    }
+                    else //Diaria Internacional
+                    {
+                        $mensagem .= "<br />Valor Total: R$ ".number_format(str_replace(',','.',$itemRequisicao->valorEstimado),2,',','');
+                    }
+                        
+                    if ($this->objRequisicao->uoRequisitante->isGestorOf($idUsuario))
+                    {
+                        $this->manager->information($mensagem,$this->manager->getActionUrl('adm','main:requisicoes:find') );
+                    }
+                    else
+                    {
+                        $action_rep = $this->manager->getActionURL('adm','main:requisicoes:reprequisicaodiaria', '', array("req"=>"{$this->objRequisicao->idRequisicao}"));
+                        $action_voltar = $this->manager->getActionURL('adm','main:requisicoes:find');
+                        $this->manager->Question($mensagem."<br />Deseja imprimir a requisição? Após imprimir, abrir processo, juntar documentos e enviar ao Gestor.",$action_rep, $action_voltar);
+                    }
+                }
+                else
+                {
+                    $this->manager->information("Saldo insuficiente para esta rubrica.",$this->manager->getActionUrl('adm','main:requisicoes:find') );
+                }
+            }
+            catch (Exception $e)
+            {
+                $this->AddError("Informe o seguinte erro a equipe do CGCO: ".$e->getMessage());
+            }
+        }
+    }
+
+
+}
+?>

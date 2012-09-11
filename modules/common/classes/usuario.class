@@ -1,0 +1,320 @@
+<?php
+class BusinessCommonUsuario extends MBusiness implements IUser
+{
+    var $idUsuario;
+	var $idPessoa;
+	var $idSetor;
+    var $login;
+    var $password;
+    var $passMD5;
+    var $nick;
+    var $nome;
+    var $setor;   // object
+    var $grupos;  // array
+    var $pessoa;  // object
+
+    function __construct($data=null)
+    {
+       parent::__construct('common',$data);
+    }
+
+    function GetName()
+    {
+        return $this->nome;
+    }
+
+    function GetId()
+    {
+        return $this->idUsuario;
+    }
+
+    function GetIdPerson()
+    {
+        return $this->idPessoa;
+    }
+
+    function GetIdSector()
+    {
+        return $this->idSetor;
+    }
+
+    function GetById($id)
+    {
+        $this->idUsuario = $id;
+        $this->retrieve();
+        $this->nome = $this->pessoa->nome;
+        $this->GetGroups();
+        return $this;
+    }
+
+    function GetByLogin($login)
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->addCriteria('login','=', "'$login'");
+        $this->retrieveFromCriteria($criteria);
+        $this->nome = $this->pessoa->nome;
+        $this->GetGroups();
+        return $this;
+    }
+
+    function GetByLoginPass($login,$pass)
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->addCriteria('login','=', "'$login'");
+        $criteria->addCriteria('password','=', "'$pass'");
+        $this->retrieveFromCriteria($criteria);
+        $this->nome = $this->pessoa->nome;
+        $this->GetGroups();
+        return $this;
+    }
+
+    function Save()
+    {
+        $op = $this->IsPersistent() ? OP_UPD : OP_INS;
+        parent::save();
+        $this->Log($op,"idusuario = $this->idUsuario; login = $this->login");
+    }
+
+    function UpdatePassword($password)
+    {
+        try
+        {
+            $this->password = $password;
+            $this->passMD5 = md5($this->password);
+            $this->Save();
+            $this->Log(OP_UPD,"password idusuario = $this->idUsuario; login = $this->login");
+            return true;
+        }
+        catch (EMioloException $e)
+        {
+            return false;
+        }
+    }
+
+    function UpdatePasswordMD5($passMD5)
+    {
+        $this->passMD5 = $passMD5;
+        $this->Update();
+    }
+
+    function Delete()
+    {
+        parent::delete();
+        $this->Log(OP_DEL,"idusuario = $this->idUsuario; login = $this->login");
+    }
+
+	function ListByLogin($login)
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->AddColumnAttribute('*');
+        $criteria->AddColumnAttribute('pessoa.nome');
+        $criteria->AddColumnAttribute('setor.sigla');
+        $criteria->addCriteria('login','LIKE', "'{$login}%'");
+        $criteria->addOrderAttribute('login');
+        return $criteria->retrieveAsQuery();
+    }
+
+    function ListRange($range=NULL)
+    {
+        $sql = new sql('u.idusuario, u.idpessoa, u.idsetor, u.login, u.nick, p.nome, s.siglasetor');
+        $sql->SetLeftJoin('cm_usuario u','cm_pessoa p','u.idpessoa=p.idpessoa');
+        $sql->SetJoin('cm_usuario u','cm_setor s','u.idsetor=s.idsetor');
+        $sql->SetRange($range);
+        $query = $this->Query($sql);
+        return $query;
+    }
+
+	function ListAll()
+    {
+        $criteria =  $this->getCriteria();
+        // 14-10-2011 - Daniel Bonfim
+        $criteria->addOrderAttribute('login');
+        return $criteria->retrieveAsQuery();
+    }
+    
+    // 14-10-2011 - Daniel Bonfim
+    function ListAllLogins() {
+        $sql = new sql('idusuario, login','cm_usuario', '', 'login');
+        $query = $this->Query($sql);
+        
+        // colocando em um array cuja chave é o id e o valor o login
+        $query = $query->result;        
+        $arr_retorno = null;
+        foreach($query as $qry) {
+            $arr_retorno[$qry[0]] = $qry[1];
+        }
+        //print_r($arr_retorno);exit;
+        return $arr_retorno;
+    }
+
+    function ListGruposByIdUsuario($idUsuario)
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->setDistinct(true);
+        $criteria->AddColumnAttribute('grupos.idGrupo');
+        $criteria->AddColumnAttribute('grupos.grupo');
+        $criteria->addCriteria('idUsuario','=', "$idUsuario");
+        return $criteria->retrieveAsQuery();
+    }
+
+    function GetTransactionRights($trans,$login=NULL)
+    {
+        if (is_null($login))
+        {
+            $login = $this->login;
+        }
+        $trans = strtoupper($trans);
+        $rights = 0;
+        $criteria =  $this->getCriteria();
+        $criteria->AddColumnAttribute('max(grupos.acesso.direito)','direito');
+        $criteria->addCriteria('login','=', "'$login'");
+        $criteria->addCriteria('grupos.acesso.transacao.transacao','=', "'$trans'");
+        $query = $criteria->retrieveAsQuery();
+        if ( $query )
+        {
+            $rights = $query->fields('direito');
+        }
+        return $rights;
+    }
+
+    function GetRights()
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->AddColumnAttribute('grupos.acesso.transacao.transacao');
+        $criteria->AddColumnAttribute('max(grupos.acesso.direito)','direito');
+        $criteria->addCriteria('login','=', "'{$this->login}'");
+        $criteria->addGroupAttribute('grupos.acesso.transacao.transacao');
+        $query = $criteria->retrieveAsQuery();
+        return $query->chunkResult(0,1,false);
+    }
+
+    function GetGroups()
+    {
+        if (is_null($this->grupos))
+        {
+           $this->retrieveAssociation('grupos');
+        }
+    }
+
+    function GetArrayGroups() // converte o array de objetos para um array de strings
+    {
+        $aGroups = array();
+        $this->GetGroups();
+        if (count($this->grupos))
+        {
+            foreach($this->grupos as $grupo)
+            {
+                $aGroups[$grupo->grupo] = $grupo->grupo;
+            }
+        }
+        return $aGroups;
+    }
+
+    function SetArrayGroups($aGrupos) // converte um array de strings para um array de objetos
+    {
+        $this->grupos = NULL;
+        if (count($aGrupos))
+        {
+            foreach($aGrupos as $g)
+            {
+                $grupo = $this->GetBusiness('common','grupo', $g);
+                $this->grupos[] = $grupo;
+            }
+        }
+    }
+
+    function ValidatePassword($password)
+    {
+       $ok = ($this->password == $password);
+       if (!$ok)
+       {
+          $this->AddError('Senha não confere!');
+       }
+       return $ok;
+    }
+
+    function ValidateMD5Password($password)
+    {
+       $ok = ($this->passMD5 == $password);
+       if (!$ok)
+       {
+          $this->AddError('Senha não confere!');
+       }
+       return $ok;
+    }
+
+    function ValidatePasswordMD5($challenge,$response)
+    {
+       $hash_pass = md5(trim($this->login) . ':' . trim($this->passMD5) . ":" . $challenge);
+       $ok = ($hash_pass == $response);
+       if (!$ok)
+       {
+          $this->AddError('Senha não confere!');
+       }
+       return $ok;
+    }
+
+    function weakPassword()
+    {
+       $datanasc = $this->pessoa->datanasc;
+       $nasc = substr($datanasc,0,2) . substr($datanasc,3,2) . substr($datanasc,8,2);
+       $this->_miolo->trace('DataNasc: ' . $nasc);
+       $weak = ($this->passMD5 == md5('010101')) || ($this->passMD5 == md5($nasc));
+       return $weak;
+    }
+
+    function isMemberOf($grupo)
+    {
+        $ok = false;
+        if (count($this->grupos))
+        {
+            foreach($this->grupos as $grupo)
+            {
+                $ok = $ok || ($grupo == $grupo->grupo);
+            }
+        }
+        return $ok;
+    }
+
+    function GetSetorProvimento()
+    {
+    	// Se o login for admin retorna 988 (CENTRAL) pois admin não tem setor
+    	if ($this->login == 'admin')
+		    return '148';
+
+        $sql = new sql('idsetor','rh_provimento','datafim is null and idvinculo = ?');
+    	$args = array($this->login);
+	    $query = $this->Query($sql,$args);
+
+        if (is_null($query->fields('idsetor')))
+            return '148';
+        else
+            return $query->fields('idsetor');
+    }
+
+    function GetById2($id) {
+		$this->idUsuario = $id;
+		$this->retrieve();
+		return $this;
+	}
+
+	function GetIdPessoa() {
+		return $this->idPessoa;
+	}
+
+	function ListBySetor($idSetor) {
+		$criteria =  $this->getCriteria();
+		$criteria->AddColumnAttribute('*');
+		$criteria->addCriteria('idsetor','=', "'$idSetor'");
+		$criteria->addOrderAttribute('login');
+		return $criteria->retrieveAsQuery();
+	}
+
+	public function CheckEmptyFields() {
+		if (($this->pessoa->cpf == null) || ($this->pessoa->email == null)) {
+			return true;
+		}
+		return false;
+	}
+}
+?>

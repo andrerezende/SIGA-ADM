@@ -1,0 +1,262 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?
+class frmReservar extends Form
+{
+
+	var $objReservar;
+	var $objEmprestimo;
+	var $objAcademico;
+	var $objRH;
+	var $objExemplar;
+	var $objEstado;
+
+    function frmReservar()  // construtor da Classe
+    {
+		global $MIOLO,$module;
+
+		// Título do Formulário
+		$this->Form('Reservar Exemplar');
+
+		//Chama o CreateFields, etc.
+		$this->EventHandler();
+
+		// Botão "enviar" não aparece
+		$this->defaultButton = false;
+			 
+	}
+   
+    function CreateFields()
+    {global $MIOLO,$module;
+		// Campos que aparecem no formulário
+		$fields = Array (
+			//new Text('','Use o formulário abaixo para cadastrar uma nova Reservar da biblioteca'),
+			new TextField('edtExemplar','','Exemplar',100,'',4),
+			);
+	
+
+		// Insere os campos
+		$this->SetFields($fields);
+
+		// Botões que aparecem no formulário
+		$buttons = Array(
+			new FormButton('btnReservar', 'Reservar'),
+    		);
+
+		//Insere os Botões
+		$this->SetButtons($buttons);
+
+		//Instancia o objeto reservar
+		$this->objReservar = $MIOLO->GetBusiness($module,'reservar');
+
+		// exemplar e status devem ser readonly
+		$this->SetFieldAttr('edtExemplar','readonly',true);
+		$this->SetFieldAttr('edtStatus','readonly',true);
+		$this->SetButtonAttr('btnReservar','visible',false);
+
+   }
+
+	// pega os dados que estão no formulário   
+   	function btnVerificar_click($sender)
+	{global $MIOLO, $module, $item;
+
+		// exemplar e status devem ser readonly
+		$this->SetFieldAttr('edtExemplar','readonly',true);
+	
+		$Exemplar = $this->objReservar->GetAll($item);  // onde item é o idexemplar
+		
+		
+
+		$EstadosPossiveis = array(	$this->objReservar->GetEstado("DISPONIVEL")->result[0][0],
+									$this->objReservar->GetEstado("EMPRESTADO")->result[0][0],
+									$this->objReservar->GetEstado("RESERVADO")->result[0][0]
+								  );
+
+		
+		//var_dump($EstadosPossiveis);
+        //if(0==null){        var_dump($this->manager->GetLogin());}
+
+        //var_dump($Exemplar->mnemonico);
+		// Usuário tem que estar LOGADO !
+	if ($this->manager->GetLogin()->idkey)  //  Rever grupo
+		{ 
+			//endereco para botao voltar (para pag de resultados)
+			$e = $this->GetFormValue('endereco');
+
+			//pelo idexemplar, busca dados da obra
+			$this->objExemplar = $MIOLO->GetBusiness($module, 'exemplar');
+			$obra=$this->objExemplar->GetById($item);
+
+			//pagina atual do grid de exemplares
+			$pgdet=$this->GetFormValue('pgdet');
+
+			//monta a url destino para mensagens ou erros
+			$goto = $MIOLO->GetActionURL($module, 'main:pesquisasimples', $obra->idobra, array("event"=>"btnDetalhesObra:click", "endereco"=>$e, "pn_page"=>$pgdet));
+
+			$matricula = $this->manager->GetLogin()->id;
+			$idusuario = $this->manager->GetLogin()->idkey;
+			
+			//Instancia o objeto emprestimo
+			$this->objEmprestimo = $MIOLO->GetBusiness($module,'emprestimo');
+			
+			//Retorna idgrupo de bt_vinculo ( desde que datavalidade >= data do sistema )  
+			$checkvinculo = $this->objEmprestimo->ValidateVinculo($idusuario);
+			$checkvinculo = $checkvinculo[0][0];
+			$checkvinculo = 0;
+			
+
+                		$checkativo = true;
+
+                
+				if ($checkativo)
+				{
+					
+					// Item 1
+					if (in_array($Exemplar->idestado,$EstadosPossiveis))
+					{
+						//Item 2
+						if (!( $idEmprestimo = $this->objEmprestimo->TemEmprestimoDestaObra($this->manager->GetLogin()->idkey,$Exemplar->numerodaobra,$Exemplar->numerodotombo)->result[0][0]) )
+						{
+							
+							// Item 3
+							if ( (!$idReserva = $this->objReservar->TemReservaDestaObra($this->manager->GetLogin()->idkey,$Exemplar->numerodaobra,$Exemplar->numerodotombo)->result[0][0]))
+							{
+							
+								// Item 4
+								if ( ($LimiteDeReservas = $this->objReservar->TemPolitica($this->manager->GetLogin()->idkey,$item)->result[0][0]))
+								{
+									
+									//var_dump($LimiteDeReservas);
+		
+									// Item 5
+									if ( ($LimiteDeReservas > $this->objReservar->GetQtdeReservas($this->manager->GetLogin()->idkey)->result[0][0]))
+									{
+		
+										// Item 6
+										if ( ($this->objReservar->TemDireito($this->manager->GetLogin()->idkey,$Exemplar)->result[0][0]))
+										{
+										
+											//Item 7
+                                            if ($Exemplar->mnemonico == 'DISPONIVEL') // Exemplar está Disponível.
+											{
+												/*if ($Mensagem = $this->objReservar->Reservar($this->manager->GetLogin()->idkey,$Exemplar,"ATENDIDA"))
+												{
+													$MIOLO->Information($Mensagem, $goto);
+												}
+												else
+												{
+													$MIOLO->Error('Algum erro ocorreu ao realizar reserva', $goto);
+												}
+                                                */
+                                                $MIOLO->Information('Livro já disponível,  não é possível reserva-lo.', $goto);
+											}
+																		
+                                            if ( ($Exemplar->mnemonico == 'EMPRESTADO') ||  ($Exemplar->mnemonico == 'RESERVADO') ) // Exemplar esta Emprestado/Reservado.
+											{
+												if ($Mensagem = $this->objReservar->Reservar($this->manager->GetLogin()->idkey,$Exemplar,"SOLICITADA"))
+												{
+													$MIOLO->Information($Mensagem, $goto);
+												}
+												else
+												{
+													$MIOLO->Error('Algum erro ocorreu ao realizar reserva', $goto);
+												}
+											}
+		
+										}
+										else
+										{
+											$MIOLO->Error('Você não tem permissão para reservar este tipo de material. Itens de consulta e/ou disponíveis não podem ser reservados.' . $idReserva, $goto);
+										}
+										
+																								
+		
+		
+									}
+									else
+									{
+//										$MIOLO->Error('Você não pode reservar mais exemplares.', $goto);
+										$MIOLO->Error('Você ultrapassou o seu limite de reservas.', $goto);
+									}
+										
+								}
+								else
+								{   
+									$MIOLO->Error('Exemplar não pode ser reservado. Itens de consulta e/ou disponíveis não podem ser reservados.' . $idReserva, $goto);
+								}	
+							}
+							else
+							{
+								$MIOLO->Error('Você já possui uma reserva desta obra: Código da Reserva ' . $idReserva, $goto);
+							}
+						}
+						else
+						{
+							$MIOLO->Error('Você possui empréstimo desta obra, não podendo reservá-la. O código do Empréstimo é: ' . $idEmprestimo, $goto);
+						}
+						
+					
+					}
+					else
+					{
+						//Instancia o objeto estado - Alteração feita p/ Cristina em 21/03/06
+						$this->objEstado = $MIOLO->GetBusiness($module,'estado');
+						$estado=$this->objEstado->GetByCodigo($Exemplar->idestado);
+//						$estado=$this->objEstado->GetMnemonicoById($Exemplar->idestado);
+//						$MIOLO->Error('Não é permitida a reserva para este material. O ID do Estado é: ' . //                               $Exemplar->idestado, $goto);
+						$MIOLO->Error('Não é permitida a reserva para materiais com o estado igual a: ' .            $estado->descricao, $goto);
+					}
+					
+					
+				}
+				else 
+				{
+						
+				}
+		
+			
+		
+			
+		} // fim do if usuario logado   - retirar
+		else
+		{
+			$goto = $MIOLO->GetActionURL($module,'main');
+			//$MIOLO->Error('Você precisa estar LOGADO!', $goto);
+            $MIOLO->Error('Exemplar em estado que não pode reservado!', $goto);
+     
+        
+
+
+        
+		} //
+	}
+
+
+	
+	// Enviar pode ser inserir ou editar
+	function btnEnviar_click()
+	{ global $MIOLO,$module; 
+	
+
+	}
+	
+}
+
+?>

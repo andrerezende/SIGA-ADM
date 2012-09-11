@@ -1,0 +1,200 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+
+//frm_EditarExcluir
+class frmFuncao extends MCompoundForm
+{
+    public $oid;
+    protected $obj;
+
+
+    function __construct($obj)
+    {
+        global $MIOLO, $module;
+
+        $this->obj = $obj;
+        parent::__construct();
+        $this->SetClose($MIOLO->GetActionURL($module,'main:funcao:find'));
+        $this->SetTitle('Função: ' . 
+                                     $this->obj->descricao);
+        $this->SetIcon($MIOLO->GetUi()->GetImage($module,'publicacao_mini.png'));
+    } // __construct
+
+
+    function CreateFields()
+    {
+        //global $MIOLO, $module, $perms, $context,$history,$self;
+        global $module, $perms, $context;
+        $k = new Mkrono();
+
+        if ($this->oid == NULL)
+        {
+            $this->oid = $this->obj->idfuncao;
+        }
+
+        // form
+        $ui = $this->manager->GetUI();
+        $form = MForm::GetFormValue('form');
+        switch ($form)
+        {
+            case 'finalizar':
+                if (! $this->obj->datafim)  //certamente este teste precisa existir se houver um acesso via URL
+                {
+                    $this->_form[0] = $ui->GetForm($module,'frmFuncaoFinalizar', $this->obj, 'funcao'); //'funcao': caminho
+                }
+                break;
+
+            case 'substituir':
+                if (! $this->obj->datafim)  //certamente este teste precisa existir se houver um acesso via URL
+                {
+                    $this->_form[0] = $ui->GetForm($module,'frmFuncaoSubstituir', $this->obj, 'funcao');
+                }
+                break;
+
+            case 'alterar':
+                $this->_form[0] = $ui->GetForm($module,'frmFuncaoAlterar', $this->obj, 'funcao');
+                break;
+
+            case 'excluir':                                               //Administrador
+                //if ( $MIOLO->getPerms()->isMemberOf($MIOLO->GetLogin()->id,'SIGA_MONITORIA') )
+                {
+                    $this->_form[0] = $ui->GetForm($module,'frmFuncaoExcluir', $this->obj, 'funcao');
+                } // if SIGA_MONITORIA
+                break;
+
+        }  // switch
+
+        array_push($this->_form, $ui->GetGrid($module,'gridOcupacaonaFuncao',$this->obj->idfuncao,'funcao'));
+
+        if ( $perms->checkAccess('rh_funcao',A_EXECUTE,false) )
+        {
+            // panel
+            $action = $context->action;
+            $this->_panel[0] = $panel = new MActionPanel('pnlCompound','Opções','',false,'','large');
+            $this->_panel[0]->SetIconType('small');
+
+            $objocupacaofuncao = $this->manager->getBusiness($module,'ocupacaofuncao');
+            $vinculo    = $objocupacaofuncao->getTitularSubstituto($this->obj->idfuncao,  //função
+                                                                   TRUE,                  //ocupação ABERTA/qualquer
+                                                                   TRUE);                 //ocupante TITULAR/substituto
+            $substituto = $objocupacaofuncao->getTitularSubstituto($this->obj->idfuncao,  //função
+                                                                   false,                 //ocupação aberta/QUALQUER
+                                                                   false);                //ocupante titular/SUBSTITUTO
+
+            $panel->AddUserAction('rh_funcao',A_EXECUTE,'Alterar',$ui->GetImage($module,'editar_mini.png')
+                                 ,$module,$action, $this->oid, array("form"=>"alterar"));
+
+            if ($vinculo)                                    //se função em aberto
+            {                    //ou 'rh_f uncaosubstituicao'
+                if ( $k->compareDate($substituto[1], '<', date('d/m/Y')) )
+                {
+                    $panel->AddUserAction('rh_funcao',A_EXECUTE,'Substituir',$ui->GetImage($module,'decisoes_mini.png')
+                                         ,$module,$action, $this->oid, array("form"=>"substituir"));
+                }
+                else
+                {
+                    $label = new MLabel('Substituto: ' . $substituto[0],'red',TRUE);
+                    $panel->addControl($label);
+                }
+            }
+            else                                             //se ocupação vazia
+            {                    //ou 'rh_f uncaofinalizacao'
+                if (! $this->obj->datafim)  //certamente este teste precisa existir se houver um acesso via URL
+                {
+                    $panel->AddUserAction('rh_funcao',A_EXECUTE,'Finalizar',$ui->GetImage($module,'jornada_mini.png')
+                                         ,$module,$action, $this->oid, array("form"=>"finalizar"));
+                }
+                                 //ou 'rh_f uncaoexclusao'
+                $panel->AddUserAction('rh_funcao',A_EXECUTE,'Excluir',$ui->GetImage($module,'exclusao_mini.png')
+                                     ,$module,$action, $this->oid, array("form"=>"excluir"));
+                //$label = new MLabel('gaga');
+                //$panel->insertControl(0, $label);
+                //$panel->addBreak();
+            }
+        } //if 'rh_funcao',ACCESS
+/*
+GRUPO RH_C ADASTRO (usado por Cad-marquinho e Rem-zilda) NAO tem 'rh_f uncao'
+GRUPO RH_SECRETARIA                                      NAO tem 'rh_f uncao'
+
+GRUPO RH_F UNCAOALTERACAO ( usado por Marquinho e Zilda ) tem 'rh_f uncao'[EXECUTE] -no quente
+GRUPO RH_F UNCAOCONSULTA  ( usado por Judson --teste--  ) tem 'rh_f uncao'[ACCESS ] -no quente, TESTE
+
+Falta resolver sobre ocupacao, mormente Secretario e o proprio Servidor)
+*/
+        //if ($form <> 'dados') //em caso de edição não faz exibição dos dados
+        {
+            $this->Detalhes();
+        }
+    } // CreateFields
+
+
+    function Detalhes()
+    {
+            $this->obj->retrieveAssociation('nivelfuncao');
+            $this->_info[]   = array( new MLabel('Nível:'                                           ),
+                                      new MLabel($this->obj->nivelfuncao->sigla . '-' .
+                                                 $this->obj->nivelfuncao->nivel      ,'blue'        ),
+                                      new MLabel($this->obj->nivelfuncao->descricao                 ) );
+            //$this->_info[]   = new MSpacer(1);
+            $this->obj->retrieveAssociation('setor');
+            $this->_info[]   = array( new MLabel('Setor:'                                           ),
+                                      new MLabel($this->obj->setor->nome             ,'blue'        ));
+            $this->_info[]   = new MSpacer(1);
+            $this->obj->retrieveAssociation('cargoconfianca');
+            $this->_info[]   = array( new MLabel('Tipo:'                                           ),
+                                      new MLabel($this->obj->cargoconfianca->descricao             ,'blue'        ));
+            if($this->obj->idcargoconfianca == 5)
+            {
+            		$this->obj->retrieveAssociation('curso');
+	            	$this->_info[]   = array( new MLabel('Curso:'),
+            								  new MLabel($this->obj->curso->nome,'blue'));
+            }
+            
+            $this->_info[]   = new MSpacer(1);
+            $this->_info[]   = array( new MLabel('Mandato:'                                         ),
+                                      new MLabel($this->obj->mandato                 ,'blue'        ) );
+            $this->_info[]   = array( new MLabel("Início&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:"),
+                                      new MLabel($this->obj->datainicio              ,'blue'        ) );
+            $this->_info[]   = array( new MLabel('Término&nbsp;&nbsp;&nbsp;:'                       ),
+                                      new MLabel($this->obj->datafim                 ,'blue'        ) );
+            $this->_info[]   = new MSeparator();
+
+            $this->obj->retrieveAssociation('publicacaoinicio');
+            $this->_info[]   = array( new MLabel("Publicação Início&nbsp;&nbsp;&nbsp;&nbsp;:"       ),
+                                      new MLabel($this->obj->publicacaoinicio->diplomaLegal->descricao.' '.
+                                                 $this->obj->publicacaoinicio->numero.' de '.
+                                                 $this->obj->publicacaoinicio->data.' - '.
+                                                 $this->obj->publicacaoinicio->autoridade,'blue') );
+
+            if ($this->obj->idpublicacaofim)
+            {
+                $this->obj->retrieveAssociation('publicacaofim');
+                $this->_info[]   = array( new MLabel("Publicação Término:"                              ),
+                                          new MLabel($this->obj->publicacaofim->diplomaLegal->descricao.' '.
+                                                     $this->obj->publicacaofim->numero.' de '.
+                                                     $this->obj->publicacaofim->data.' - '.
+                                                     $this->obj->publicacaofim->autoridade,'blue') );
+            }
+            $this->_info[]   = new MSeparator();
+        } // Detalhes
+
+
+}
+?>

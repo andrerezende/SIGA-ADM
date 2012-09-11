@@ -1,0 +1,142 @@
+<?
+class frmUoAlmoxarifadoEntradaMaterialEmpenho extends MCompoundForm
+{
+    protected $uoalmoxarifado;
+    protected $empenho;
+    function __construct($objUO)
+    {
+        global $MIOLO;
+        $this->uoalmoxarifado = $objUO;
+        $this->empenho = $MIOLO->getBusiness('adm','empenho',Form::getFormValue('idEmpenho'));
+		parent::__construct("Empenho {$this->empenho->numero}");
+        $this->EventHandler();
+    }
+    function CreateFields()
+    {
+        global $item;
+		$cf = new MCurrencyFormatter();
+        // info
+        $tipo = array("OR"=>"Original","CO"=>"Complemento","CA"=>"Complementação");
+        $tg = $this->manager->getBusiness('common','tabelageral');
+        $this->empenho->getEmpenhado();
+        $this->empenho->empenhado[0]->getLicitacao();
+        $this->empenho->getFornecedor();
+        $this->_info[]	= new MTextLabel('numeroEmpenho',$this->empenho->numero,'Empenho');
+        $this->_info[]	= new MTextLabel('status',strtoupper($tg->ListByTabela('AD_EMPENHOSTATUS')->result[$this->empenho->status-1][1]),'Status',array(2=>"EMPENHADO"));
+        $this->_info[]	= new MTextLabel('tipo',strtoupper($tipo[$this->empenho->tipoEmpenho]),'Tipo');
+        $this->_info[]	= new MTextLabel('numeroLicitacao',$this->empenho->empenhado[0]->itensLicitacao->licitacao->numero,'Licitação');
+        $this->_info[]	= new MTextLabel('fornecedor',$this->empenho->fornecedor->instituicao->nome,'Fornecedor');
+        $this->_info[]	= new MTextLabel('data',$this->empenho->dataEmpenho,'Data');
+        $this->_info[]	= new MTextLabel('txtValor',$cf->formatWithSymbol(round($cf->toDecimal($this->empenho->valorSaldo),2)),'Saldo');
+        $this->empenho->retrieveAssociation('notaFiscal');
+        if (is_array($this->empenho->notaFiscal))
+        {
+            $this->_form[] = $f = $this->manager->GetUI()->GetGrid('adm','gridUoAlmoxarifadoNotaFiscal',$this->empenho);
+        }
+        if (Form::getFormValue('idNotaFiscal'))
+        {
+            $this->_form[] = $f = $this->manager->GetUI()->GetGrid('adm','gridUoAlmoxarifadoNotaFiscalItem',$this->empenho);
+            if (Form::getFormValue('idItemNota'))
+            {
+                $itemNota = $this->manager->getBusiness('adm','itemnota',Form::getFormValue('idItemNota'));
+                $itemNota->retrieveAssociation('empenhado');
+                $this->_form[] = $f = $this->manager->GetUI()->GetForm('adm','frmUoAlmoxarifadoEntradaMaterialRequisicoes',$itemNota,'uoalmoxarifado');
+            }
+        }
+        else
+        {
+            if (round($cf->toDecimal($this->empenho->valorSaldo),2) > 0 && in_array($this->empenho->status,array('B',6)))
+            {
+                $this->_form[] = $f = $this->manager->GetUI()->GetForm('adm','frmUoAlmoxarifadoEntradaMaterial',$this->empenho,'uoalmoxarifado');
+            }
+        }
+        
+        $buttons = array(
+            new MButton('btnParcelar','Parcelar Empenho',$this->manager->GetActionURL('adm','main:uoalmoxarifado:main',$item,array('form'=>'entradamaterial','idEmpenho'=>Form::getFormValue('idEmpenho'),'event'=>'btnParcelar:click'))),
+            new MButton('btnFinalizar','Finalizar Empenho',$this->manager->GetActionURL('adm','main:uoalmoxarifado:main',$item,array('form'=>'entradamaterial','idEmpenho'=>Form::getFormValue('idEmpenho'),'event'=>'btnFinalizar:click'))),
+        );
+        $this->setButtons($buttons);
+        $this->setButtonAttr('btnParcelar','visible',false);
+        $this->setButtonAttr('btnFinalizar','visible',false);
+        if ($this->empenho->notaFiscal)
+        {
+            foreach ($this->empenho->notaFiscal as $nota)
+            {
+                if ($nota->isContabilizado() && $this->empenho->valor != $this->empenho->valorEntregue && $this->empenho->status == 'B')
+                {
+                    $this->setButtonAttr('btnParcelar','visible',true);
+                }
+            }
+        }
+        if ($this->empenho->valor == $this->empenho->valorEntregue && ($this->empenho->status == 'B' || $this->empenho->status == 6))
+        {
+            $this->setButtonAttr('btnFinalizar','visible',true);
+            $this->setButtonAttr('btnParcelar','visible',false);
+        }
+    }
+    function btnFinalizar_click()
+    {
+        global $item;
+        try 
+        {
+            $this->empenho->status = 3;
+            $this->empenho->beginTransaction();
+            $this->empenho->save();
+            $this->empenho->Log(OP_UPD,"Empenho {$this->empenho->idEmpenho} finalizado com sucesso.");
+            $this->empenho->retrieveAssociation('empenhado');
+            if ($this->empenho->empenhado)
+            {
+                foreach ($this->empenho->empenhado as $empenhado)
+                {
+                    $empenhado->retrieveAssociation('itemreq');
+                    if ($empenhado->itemreq)
+                    {
+                        foreach ($empenhado->itemreq as $material)
+                        {
+                            $material->status = 7;
+                            $material->save();
+                            $material->Log(OP_UPD,"Material {$material->codMaterial} da requisição {$material->idRequisicao} entregue com sucesso.");
+                        }
+                    }
+                }
+            }
+            $this->empenho->endTransaction();
+        }
+        catch(Exception $e) {$this->manager->Error($e->getMessage());}
+        $go = $this->manager->GetActionURL('adm','main:uoalmoxarifado:main',$this->empenho->idUoEntrega,array('form'=>'entradamaterial','idEmpenho'=>Form::getFormValue('idEmpenho')));
+        $this->manager->Information("Empenho {$this->empenho->numero} finalizado com sucesso.",$go);
+    }
+    function btnParcelar_click()
+    {
+        global $item;
+        try 
+        {
+            $this->empenho->status = 6;
+            $this->empenho->beginTransaction();
+            $this->empenho->save();
+            $this->empenho->Log(OP_UPD,"Empenho {$this->empenho->idEmpenho} parcelado com sucesso.");
+            $this->empenho->retrieveAssociation('empenhado');
+            if ($this->empenho->empenhado)
+            {
+                foreach ($this->empenho->empenhado as $empenhado)
+                {
+                    $empenhado->retrieveAssociation('itemreq');
+                    if ($empenhado->itemreq)
+                    {
+                        foreach ($empenhado->itemreq as $material)
+                        {
+                            $material->status = 7;
+                            $material->save();
+                            $material->Log(OP_UPD,"Material {$material->codMaterial} da requisição {$material->idRequisicao} entregue com sucesso.");
+                        }
+                    }
+                }
+            }
+            $this->empenho->endTransaction();
+        }
+        catch(Exception $e) {$this->manager->Error($e->getMessage());}
+        $go = $this->manager->GetActionURL('adm','main:uoalmoxarifado:main',$this->empenho->idUoEntrega,array('form'=>'entradamaterial','idEmpenho'=>Form::getFormValue('idEmpenho')));
+        $this->manager->Information("Empenho {$this->empenho->numero} parcelado com sucesso.",$go);
+    }
+ }
+?>

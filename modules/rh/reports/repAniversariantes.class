@@ -1,0 +1,163 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class repAniversariantes extends MPDFReport
+{
+    var $img;
+    var $timestamp;
+    var $krono;
+    var $situacaoFuncional;
+    var $mes, $dmy;
+    var $total;
+    var $tittadoc;
+
+    function __construct($TitulosOrdemTADOC)
+    {
+        global $MIOLO, $module, $page, $context, $self, $action, $perms;
+        $this->tittadoc = $TitulosOrdemTADOC[3];
+
+        $mes = MForm::GetFormValue('selMes');
+        $dmy = MForm::GetFormValue('seldmy');
+        $ctg = MForm::GetFormValue('selCtg');
+        $this->mes = $mes;
+        $this->dmy = $dmy;
+        $this->krono = new MKrono();
+        $this->situacaoFuncional = $MIOLO->GetBusiness('rh','situacaofuncional',$ctg);
+
+        parent::__construct(NULL, NULL, 55, NULL, 'landscape', 'a4');
+        $ui = $MIOLO->GetUI();
+        $this->img = $ui->GetImageSrc('logo_siga.png',$module);
+        $this->timestamp = date('d/m/Y G:i');
+        $this->pdf->ezStartPageNumbers(800, 540, 10, 'rigth', utf8_decode('Página: {PAGENUM}/{TOTALPAGENUM}'));
+        $this->pdf->ezSetMargins(100, 30, 20, 20);
+
+        $func = $MIOLO->GetBusiness('rh','funcionario');
+        $consulta = $func->listAniversariantes($mes, $ctg, $TitulosOrdemTADOC[1], $dmy, $TitulosOrdemTADOC[2]);
+        $this->total = count($consulta->result);
+
+        if ($this->total > 0)
+        {
+            //$consulta->result = $func->ColocaTitulaeEMail($consulta->result, $TitulosOrdemTADOC[0], $selCtg);
+
+            $this->GeneratePageHeader();
+            $this->GeneratePageFooter();
+
+            $columns[] = new MPDFReportColumn(    'idVinculo',utf8_decode('Matrícula'),'left',true, 7,true, null, true);
+            if (! $dmy)
+            {
+                $columns[] = new MPDFReportColumn('dtnsc'    ,'Nascimento','left',true, 8,true, null, true);
+            }
+
+            $columns[] = new MPDFReportColumn(    'nome'     ,'Nome'      ,'left',true,24,true ,null,true);
+
+            if ($ctg==2) //APOSENTADO
+            {
+                $columns[] = new MPDFReportColumn('endereco' ,utf8_decode('Endereço'),'left',true,22,true,null,true);
+                $columns[] = new MPDFReportColumn('municipio',utf8_decode('Município'),'left',true,10,true,null,true);
+                $columns[] = new MPDFReportColumn('bairro'   ,'Bairro'    ,'left',true,12,true,null,true);
+                $columns[] = new MPDFReportColumn('cep'      ,'CEP'       ,'left',true, 7,true,null,true);
+                $columns[] = new MPDFReportColumn('telefone' ,'Telefone'  ,'left',true, 9,true,null,true);
+            }
+            else
+            {
+                //$columns[] = new MPDFReportColumn('setor'    ,'Setor'     ,'left',true,30,true,null,true);
+                //$columns[] = new MPDFReportColumn('telefone' ,'Telefone'  ,'left',true, 9,true,null,true);
+            }
+
+            $this->SetWidth(100);
+            $this->SetColumns($columns);
+            $this->SetOption('showHeadings', 1);
+            $this->SetOption('showLines', 1);
+            $this->GenerateData($consulta->result);
+        }
+        else 
+        {
+            $this->SetWidth(100);
+            $this->SetOption('showHeadings', 0);
+            $this->SetOption('showLines', 1);
+            $x0 = $this->pdf->left;          
+            $this->pdf->ezSetDy(-32, 'makeSpace');
+            $y = $this->pdf->y;
+            $this->pdf->addText($x0 +50, $y - 50, 12, utf8_decode('Não foram encontrados registros'));
+        }
+    }
+    
+    
+    function GeneratePageHeader()
+    {
+        $x0 = $this->pdf->left;
+        $x1 = $this->pdf->right;
+        $h = $this->pdf->getFontHeight(10);
+        $header = $this->pdf->openObject();
+        $this->pdf->saveState();
+        $this->pdf->addPngFromFile($this->img, 40, 520 + $x0, 54, 27);
+        $this->pdf->addText($x0+85, 560, 12, 'IF - Instituto Federal');
+        $this->pdf->addText($x0+85, 560 -$h -$h , 10, utf8_decode('SIGA - Sistema Integrado de Gestão Acadêmica - Módulo Recursos Humanos'));
+        $y = 550 - $h - $h - 5;
+        $this->pdf->SetColor(0.4,0.4,0.4);
+        $this->pdf->filledRectangle($x0, $y-20, $x1-30, 16 );
+        $this->pdf->SetColor(1,1,1);
+        if ($this->dmy)
+        {
+            $this->pdf->addText($x0+5, $y-16, 10, utf8_decode("Aniversariantes no dia de ". $this->dmy . ' de '
+                                . strtolower($this->krono->GetMonthByNumber($this->mes))
+                                . ". (" . ucfirst(strtolower($this->situacaoFuncional->descricao))
+                                . $this->tittadoc . "). " . "Total: " . $this->total . "."));
+        }
+        else
+        {
+            $this->pdf->addText($x0+5, $y-16, 10, utf8_decode("Aniversariantes do mês de "
+                                . strtolower($this->krono->GetMonthByNumber($this->mes))
+                                . ". (" . ucfirst(strtolower($this->situacaoFuncional->descricao))
+                                . $this->tittadoc . "). " . "Total: " . $this->total . "."));
+        }
+        $this->pdf->restoreState();
+        $this->pdf->closeObject();
+        $this->pdf->addObject($header, 'all');
+    }
+
+    function GeneratePageFooter()
+    {
+        $x0 = $this->pdf->left;
+        $x1 = $this->pdf->right;
+        $footer = $this->pdf->openObject();
+        $this->pdf->saveState();
+        $this->pdf->SetStrokeColor(0, 0, 0);
+        $this->pdf->line($x0, 28, $x1, 28);
+        $this->pdf->addText($x0, 19, 9, $this->timestamp);
+        $this->pdf->restoreState();
+        $this->pdf->closeObject();
+        $this->pdf->addObject($footer, 'all');
+    }
+    
+    function GenerateData($data)
+    {
+        $this->pdf->ezSetDy(-5);
+        $this->SetData($data);
+        $this->rawdata = $this->GenerateTableData();
+        $this->GenerateBody($this->rawdata);
+    }
+
+    function Generate()
+    {
+        $this->SetOutput();
+        $this->Execute();
+    }
+}
+?>

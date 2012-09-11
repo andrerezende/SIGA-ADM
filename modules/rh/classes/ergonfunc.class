@@ -1,0 +1,106 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class BusinessRhErgonFunc extends MBusiness
+{
+	public $matricula;
+    public $nome;
+	public $cargo;
+
+    function __construct($data=NULL)
+    {
+       $this->Business('ergon',$data);
+    }
+
+    function OnCreate($data)
+    {
+        if (empty($data))
+        {
+        }
+        else
+        {
+            $this->GetById($data);
+        }
+    }
+
+    function GetById($id)
+    {
+        try
+        {
+            $sql = new sql('f.nome, p.cargo, c.nome as nomecargo, v.dtexerc','funcionarios f, vinculos v, provimentos p, cargos c', '(f.numero = v.numfunc) and (v.numfunc = p.numfunc) and (v.numero = p.numvinc) and (p.cargo = c.cargo) and (p.dtfim is NULL) and (v.matric = ?)');
+            $sql->SetParameters($id);
+            $query = $this->Query($sql);
+            $this->matricula = $id;
+            if (! $query->eof())
+            {
+               $this->nome = $query->fields('nome');
+               $this->cargo = $query->fields('cargo');
+               $this->nomeCargo = $query->fields('nomecargo');
+               $this->dataExercicio = $query->fields('dtexerc');
+            }
+            else
+            {
+               $this->matricula = NULL;
+               $this->nome = '';
+               $this->cargo = '';
+               $this->nomeCargo = '';
+               $this->dataExercicio = '';
+            }
+        }
+        catch (Exception $e)
+        {
+            throw new MDatabaseException('Erro ErgonFunc::GetById - ' . $e->getMessage());
+        }
+        return $this;
+    }
+
+    function GetTempoServico()
+    {
+        $sql = new sql('sum(a.total_dias) as av','AVERBACOES_CONTA a,vinculos v', '(v.numfunc = a.numfunc) and (v.numero = a.numvinc) and (v.matric = ?)');
+        $sql->SetParameters($this->matricula);
+        $query = $this->Query($sql);
+        $this->averbacao = $query->fields('av');
+        $sql = new sql('sum(a.quantidade) as fa','frequencias a,vinculos v', '(a.codfreq=142) and (v.numfunc=a.numfunc) and (v.numero=a.numvinc) and (v.matric = ?)');
+        $sql->SetParameters($this->matricula);
+        $query = $this->Query($sql);
+        $this->faltas = $query->fields('fa');
+        $sql = new sql('sum((a.dtfim-a.dtini)+1) as li','lic_afast a,vinculos v', '(a.codfreq=101 or a.codfreq=104 or a.codfreq=118) and (v.numfunc=a.numfunc) and (v.numero=a.numvinc) and (v.matric = ?)');
+        $sql->SetParameters($this->matricula);
+        $query = $this->Query($sql);
+        $this->licenca = $query->fields('li');
+
+        $k = new MKrono();
+        $this->exercicio = $k->DaysDiff($this->dataExercicio,$k->KDate('%d/%m/%Y'));
+
+        return $dias;
+
+/*
+
+        
+
+select idvinc,nome,SEXO,DTNASC,DTINGSP,GRUPOCARGO,DIASAVERB,DIASLICENCA,DIASFALTA,
+trunc(sysdate-DTINGSP)+diasaverb-diaslicenca-diasfalta as dias,
+round((trunc(sysdate-DTINGSP)+diasaverb-diaslicenca-diasfalta)/365.25,2) as anos
+from rh_contagem
+*/
+
+
+    }
+}
+?>

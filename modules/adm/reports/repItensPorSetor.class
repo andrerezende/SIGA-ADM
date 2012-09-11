@@ -1,0 +1,181 @@
+<?php
+class repItensPorSetor extends PDFReport
+{
+	var $img;
+	var $timestamp;
+    var $level = array();
+	var $idSetor;
+	var $setor;
+	var $objItemPatrimonio;
+	var $flagtermo;
+
+	function __construct()
+	{
+        global $MIOLO, $module, $page, $context, $self, $action, $perms;
+
+		parent::__construct(NULL, NULL, 55);
+        $ui = $MIOLO->GetUI();
+		$this->img = $ui->GetImageSrc('logo_siga.png',$module); 
+        $this->flagtermo = Form::GetFormValue('flagTermo');
+		$this->SetOption('fontSize',7);
+        $this->timestamp = date('d/m/Y G:i');
+		$this->pdf->ezStartPageNumbers(520, 800, 10, 'rigth', 'Página: {PAGENUM}');
+		$this->pdf->ezSetMargins(100, 30, 30, 30);
+		$this->GeneratePageHeader();
+		$this->GeneratePageFooter();
+		
+		$this->idSetor = Form::GetFormValue('idSetor');
+		$this->setor = Form::GetFormValue('setor');
+				
+		//exit(" FINALIZANDO ... ". $this->flagtermo);
+		
+		$this->objItemPatrimonio = $MIOLO->GetBusiness($module,'itempatrimonio');
+
+		//montagem do array de dados
+		$query = $this->objItemPatrimonio->RepItensPorSetor($this->idSetor);
+		$data0 = $query->result;
+		$data = array();
+		$soma11 = 0;
+		$soma12 = 0.0;
+		$k = -1;
+		for ($i = 0; $i < count($data0); $i++)
+		{
+			//$data0 = [0-subelemento, 1-idClassificador, 2-classificador, 3-descricao, 4-dataAquisicao, 5-valor, 6-idItemPatrimonio, 7-idEmpenhado]
+			if( ($data0[$i][1] != $data0[$i-1][1]) or (($data0[$i][7] != $data0[$i-1][7]) and ($data0[$i][7] != null)) or ($i == 0) or ($data0[$i][6] != $data0[$i-1][6]+1) or ($data0[$i][3] != $data0[$i-1][3]) )
+			//(idClassificador dif) ou (idEmpenhado dif e nao nulo) ou (primeiro) ou (idItemPatrimonio fora de sequencia) ou (descricao dif)
+			{
+				$k++;
+				//$data = [0-subelemento, 1-idClassificador, 2-classificador, 3-INICIAL, 4-FINAL, 5-descricao, 6-dataAquisicao, 7-QUANTIDADE, 8-valor, 9-idEmpenhado]
+				$data[$k] = array($data0[$i][0], $data0[$i][1], $data0[$i][2], $data0[$i][6], $data0[$i][6], $data0[$i][3], $data0[$i][4], 1, floatval(str_replace(',','.',$data0[$i][5])), $data0[$i][7]);
+			}
+			else
+			{
+				$data[$k] = array($data[$k][0], $data[$k][1], $data[$k][2], $data[$k][3], $data0[$i][6], $data[$k][5], $data[$k][6], $data[$k][7]+1, $data[$k][8]+floatval(str_replace(',','.',$data0[$i][5])), $data[$k][9]);
+			}
+		}
+		for($d = 0; $d < count($data); $d++)
+		{
+			$soma11 += $data[$d][7];//quantidade
+			$soma12 += floatval(str_replace(',','.',$data[$d][8]));//valor
+			$data[$d][8] = number_format(str_replace(',','.',$data[$d][8]),2,',','');
+		}
+		$summary1 = array(array(
+			"<b>Total:</b>",
+			"<b>$soma11</b>",
+			"<b>" . number_format(str_replace(',','.',$soma12),2,',','') . "</b>"
+		));
+
+		// define as colunas
+		$columns = array(
+			new PDFReportColumn('det0', '<b><i>SE</i></b>', 'center', false, 5, true),
+			new PDFReportColumn('det1', '<b><i>Cod</i></b>', 'center', false, 6, true),
+			new PDFReportColumn('det2', '<b><i>Classificador</i></b>', 'center', false, 12, true),
+			new PDFReportColumn('det3', '<b><i>Inicial</i></b>', 'center', false, 7, true),
+			new PDFReportColumn('det4', '<b><i>Final</i></b>', 'center', false, 7, true),
+			new PDFReportColumn('det5', '<b><i>Descrição</i></b>', 'center', false, 40, true),
+			new PDFReportColumn('det6', '<b><i>Data</i></b>', 'center', false, 9, true),
+			new PDFReportColumn('det7', '<b><i>Qte</i></b>', 'center', false, 5, true),
+			new PDFReportColumn('det8', '<b><i>Valor</i></b>', 'right', false, 9, true),
+		);
+
+		$sum1 = array(
+			new PDFReportColumn('texto0', 'texto0', 'right', false, 86, true),
+			new PDFReportColumn('texto1', 'texto1', 'center', false, 5, true),
+			new PDFReportColumn('texto2', 'texto2', 'right', false, 9, true),
+		);
+
+		$this->SetWidth(100);
+		$this->SetColumns($columns);
+		$colDetail = $this->columns;
+		$this->SetColumns($sum1);
+		$colSum1 = $this->columns;
+
+		// gera o report
+		$this->columns = $colDetail; 
+		$this->GenerateData($data);
+		$this->SetOption('showHeadings', 0);
+		$this->SetOption('showLines', 1);
+		$this->columns = $colSum1;
+		$this->GenerateData($summary1);
+	}
+
+	function GeneratePageHeader()
+	{
+		$this->idSetor = Form::GetFormValue('idSetor');
+		$this->setor = Form::GetFormValue('setor');
+		$x0 = $this->pdf->left;
+		$x1 = $this->pdf->right;
+		$h = $this->pdf->getFontHeight(12);
+		$header = $this->pdf->openObject();
+		$this->pdf->saveState();
+
+		$x00=$this->pdf->left;
+		$hh = $this->pdf->getFontHeight(12);
+		$this->pdf->addText($x00, 800, 12, $this->manager->getConf('instituicao.sigla')." - ".$this->manager->getConf('instituicao.nome'));
+		$this->pdf->addText($x00, 800 - $hh, 12, $this->manager->getConf('theme.system'));
+
+
+/*
+		$this->pdf->addPngFromFile($this->img, $x0, 780, 50, 25);
+                $this->pdf->addText($x0 + 60, 800, 12, 'EAFUDI - Escola Agrotécnica Federal de Uberlândia');
+		$this->pdf->addText($x0 + 60, 800 - $h, 12, 'Patrimônio da Escola Agrotécnica Federal de Uberlândia');
+		$this->pdf->addText($x0 + 60, 800 - $h - $h, 12, 'SIGA - Sistema Integrado de Gestão Acadêmica');
+*/
+
+		$this->pdf->SetStrokeColor(0, 0, 0);
+		$y = 800 - $h - $h - 5;
+		$this->pdf->line($x0, $y, $x1, $y);
+		$this->pdf->addText($x0, $y - 13, 12, "Relatório de Itens Patrimoniais por Setor: $this->idSetor   $this->setor");
+		$this->pdf->line($x0, $y - 15, $x1, $y - 15);
+		$this->pdf->restoreState();
+		$this->pdf->closeObject();
+		$this->pdf->addObject($header, 'all');
+		$this->pdf->ezSetDy(+15);
+		if($this->flagtermo != ""){
+			$this->pdf->ezText('',10);
+			$this->pdf->ezText("Declaro receber, em perfeitas condições de funcionamento e conservação, sob minha guarda e responsabilidade, os bens patrimoniais pertencentes a". $this->manager->getConf('instituicao.nome') ."abaixo relacionados,  observando rigorosa consistência entre estes e os registros da Divisão de Patrimônio,  comprometendo-me ainda  a  zelar para que permaneçam no/na " . $this->setor );
+			$this->pdf->ezText('',10);
+		}	
+	}
+
+	function GeneratePageFooter()
+	{
+		$x0 = $this->pdf->left;
+		$x1 = $this->pdf->right;
+		$footer = $this->pdf->openObject();
+		$this->pdf->saveState();
+		$this->pdf->SetStrokeColor(0, 0, 0);
+
+		if($this->flagtermo != ""){
+			$this->pdf->line($x0, 28, $x1, 28);
+			$this->pdf->addTextWrap($x0,90,200,7, 'Ciente,', 'left');
+			$this->pdf->addTextWrap($x0+350,90,200,7, 'Uberlândia, ____/____/____', 'left');
+			$this->pdf->addTextWrap($x0+345,75,200,7,  '________________________________________________', 'left');
+			$this->pdf->addTextWrap($x0,75,200,7, '________________________________________________', 'left');
+			$this->pdf->addTextWrap($x0+10,65,200,7, 'Divisão de Patrimônio', 'center');
+			$this->pdf->addTextWrap($x0+345,50,200,7, '________________________________________________', 'left');
+			$this->pdf->addTextWrap($x0+350,40,200,7, 'p/ OUTRAS DEPENDÊNCIAS', 'left');
+		}
+		
+		$this->pdf->addText($x0, 19, 9, $this->timestamp . ' EAF-UDI');
+		$this->pdf->restoreState();
+		$this->pdf->closeObject();
+		$this->pdf->addObject($footer, 'all');
+	}
+
+	function GenerateData($data)
+	{
+		$this->pdf->ezSetDy(-5);
+		$this->SetData($data);
+		$this->rawdata = $this->GenerateTableData();
+		$this->GenerateBody($this->rawdata);
+	}
+
+	function Generate()
+	{       
+		$this->SetOutput();
+		$this->Execute();
+	}
+
+}
+?>

@@ -1,0 +1,635 @@
+<?
+class frmAnulacaoEmpenho extends Form
+{
+    function __construct()
+    {
+		global $MIOLO, $module, $action, $event;
+		
+        $this->Form('Anulação/Cancelamento de Empenho');
+		$this->SetClose($MIOLO->GetActionURL($module,'main:financeiro'));
+		$this->page->SetAction($MIOLO->GetActionURL($module,$action));
+		$this->EventHandler();
+		$this->defaultButton = false;
+    }
+
+	function CreateFields()
+	{
+		global $MIOLO, $module, $action, $event;
+
+		$fields = array(
+            array(
+                new MTextField('empenho','','Empenho',20),
+                new MTextLabel('ou','-OU-','&nbsp;'),
+				new LookupTextField('fornecedor', '', 'Fornecedor', 60),
+            ),
+			new HiddenField('idFornecedor'),
+		);
+		$this->SetFields($fields);
+		$this->SetFieldAttr('fornecedor','module',$module);
+		$this->SetFieldAttr('fornecedor','item','fornecedor');
+		$this->SetFieldAttr('fornecedor','event','filler');
+		$this->SetFieldAttr('fornecedor','related', 'idFornecedor,fornecedor');
+
+		$buttons = array(
+			new FormButton('btnEmpenhos', 'Empenhos'),
+			new FormButton('btnAnulacao', 'Anular/Cancelar'),
+			new FormButton('btnVoltar', 'Voltar', $MIOLO->GetActionURL($module, $action) ),
+		);
+		$this->SetButtons($buttons);
+		$this->SetButtonAttr('btnLiquidacao', 'visible', false);
+		$this->SetButtonAttr('btnPagamento', 'visible', false);
+		$this->SetButtonAttr('btnAnulacao', 'visible', false);
+		$this->SetButtonAttr('btnVoltar', 'visible', false);
+	}
+
+	function btnEmpenhos_click()
+	{
+		global $MIOLO, $module, $action, $item, $theme;
+
+		$idFornecedor = $this->GetFormValue('idFornecedor');
+		$fornecedor = $this->GetFormValue('fornecedor');
+		$numero = $this->GetFormValue('empenho');
+		if( ($fornecedor == null) and ($numero == null) ) //não foi definido critério para o filtro
+		{
+		}
+		else
+		{
+			$empenho = $MIOLO->GetBusiness($module, 'empenho');
+			$licitacao = $MIOLO->GetBusiness($module, 'licitacao');
+			if($numero != null) //foi definido um empenho específico
+			{
+				$query = $empenho->ListByNumero($numero);
+				$i = 0;
+				if($query->result)
+				{
+					foreach($query->result as $r)
+					{
+						//proc licit
+						$query->result[$i][11] = $licitacao->numProcessoFormatado($query->result[$i][11]); 
+						$i++;
+					}
+				}
+				$idFornecedor = $query->result[0][5];
+				$fornecedor = $query->result[0][10];
+				if(!$idFornecedor)
+				{
+					$this->Error('Empenho não encontrado.');
+					return;
+				}
+			}
+			else
+			{
+				if($idFornecedor == null) //nao foi usado o lookup
+				{
+					$objFornecedor = $MIOLO->GetBusiness($module, 'fornecedor');
+					$dados = $objFornecedor->GetByDocumentoOuNome($fornecedor);
+					$idFornecedor = $dados[0];
+					$fornecedor = $dados[1];
+				}
+				$query = $empenho->ListByIdFornecedor($idFornecedor, "('1','2','B','6')");
+				$i = 0;
+				foreach($query->result as $r)
+				{
+					//proc licit
+					$query->result[$i][5] = $licitacao->numProcessoFormatado($query->result[$i][5]); 
+					$i++;
+				}
+			}
+		}
+
+		$item_aux = $item;
+		if( substr($item,0,2) == 'id' ) //$item veio do datagrid - usuario quer ver detalhes do empenho
+		{
+			$item = explode('-', $item);
+		}
+
+		//grid de empenhos
+		$columns = array(
+			new DataGridColumn('numero','Empenho','center',true, '13%',true, null),
+			new DataGridColumn('fornecedor','Fornecedor','left',false, '30%',true, null),
+			new DataGridColumn('dataEmpenho','Data Empenho','center',true, '12%',true, null),
+			new DataGridColumn('tipoEmpenho','Tipo','center',true, '8%',true, null),
+			new DataGridColumn('valor','Valor','center',true, '11%',true, null),
+			new DataGridColumn('numLic','Licitação','center',true, '13%',true, null),
+			new DataGridColumn('numProcesso','Processo','center',true, '13%',true, null),
+		);
+
+		$itemPag = ( ($item[1]) and (is_array($item)) ) ? $item[1] : $item;
+		$href_datagrid = $MIOLO->GetActionURL($module, $action, $itemPag, Array('event'=>'btnEmpenhos_click'));
+
+		$datagrid = new DataGrid2($query, $columns, $href_datagrid, 10, 0, 'grid1');
+		$datagrid->SetTitle(null);
+		$datagrid->SetLinkType('linkbutton');
+		$datagrid->SetWidth('99%');
+		
+		$href = $MIOLO->GetActionURL($module, $action, '%0%', array('event'=>'btnEmpenhosDetalhe_click') );
+		$datagrid->addActionIcon('Empenhar','select.gif',$href);
+		$datagrid->SetRowMethod('frmAnulacaoEmpenho', 'MyRowMethod');
+
+		$fields = array(
+			$datagrid,
+			new MHiddenField('idFornecedor', $idFornecedor),
+			new MHiddenField('fornecedor', $fornecedor),
+			new MHiddenField('empenho', $numero),
+		);
+
+		$this->SetFields($fields);
+
+		$this->SetButtonAttr('btnVoltar', 'visible', true);
+		$this->SetButtonAttr('btnEmpenhos', 'visible', false);
+		$this->AddField(new HiddenField('item_aux',$item_aux));
+
+	}
+
+	function btnEmpenhosDetalhe_click()
+	{
+		global $MIOLO, $module, $action, $item, $theme;
+
+		if( substr($item,0,2) == 'id' ) //$item veio do datagrid - usuario quer ver detalhes do empenho
+		{
+			$item = explode('-', $item);
+		}
+		if(!$item)
+		{
+			$item = $this->GetFormValue('idEmpenho');
+		}
+
+		//detalhes do empenho escolhido pelo usuario no datagrid
+		$empenho = $MIOLO->GetBusiness($module, 'empenho', $item);
+		$empenho->getEmpenhado();
+		$query2 = $empenho->ListDetalhesEmpenho();
+
+		$i = 0;
+		foreach($query2 as $r)
+		{
+			$query2[$i][3] = $empenho->numProcessoFormatado(); //proc pgto
+			if($query2[$i][10])
+			{
+				$query2[$i][10] = number_format(str_replace(',','.',$r[10]),2,',','.'); //vl emp
+			}
+			if($query2[$i][11])
+			{
+				$query2[$i][11] = number_format(str_replace(',','.',$r[11]),2,',','.'); //vl nf
+			}
+			$query2[$i][12] = number_format(str_replace(',','.',$r[12]),2,',','.'); //saldo
+			$i++;
+		}
+
+		$columns2 = array(
+			new GridColumn('idEmpenho','center',true, '0%',false),
+			new GridColumn('Empenho','center',true, '10%',true, null),
+			new GridColumn('Tipo','center',true, '5%',true, null),
+			new GridColumn('Proc Pgto','center',true, '10%',true, null),
+			new GridColumn('Nota Fiscal','center',true, '10%',true, null),
+			new GridColumn('Data Nota Fiscal','center',true, '10%',true, null),
+			new GridColumn('Data Liquidação','center',true, '10%',true, null),
+			new GridColumn('Ordem Bancária','center',false, '10%',true, null),
+			new GridColumn('Valor OB','center',true, '0%',false),
+			new GridColumn('Data OB','center',true, '10%',true, null),
+			new GridColumn('Vl Emp','center',true, '8%',true),
+			new GridColumn('Valor NF','center',true, '8%',true, null),
+			new GridColumn('Saldo','center',true, '9%',true, null),
+		);
+
+		$grid2 = new Grid($query2, $columns2, $href_datagrid, 0, 0, 'grid2');
+		$grid2->SetTitle('Dados do Empenho ' . $empenho->numero);
+		$grid2->SetLinkType('linkbutton');
+		$grid2->SetWidth('99%');
+		$grid2->AddActionSelect();
+		$grid2->SetRowMethod('frmAnulacaoEmpenho', 'MyRowMethod2');
+
+		$fields = array();
+		$fields[] = new Spacer(1);
+		$fields[] = $grid2;
+
+		$data = $this->GetFormValue('data');
+		$tabelaGeral = $MIOLO->GetBusiness('common','tabelageral');
+		$tabela = $tabelaGeral->ListByTabela('AD_MOTIVOANULACAOEMPENHO','item1');
+		$options = $tabela->result;
+		$opt = array();
+		foreach($options as $o)
+		{
+			$opt[] = array($o[1], $o[0]);
+		}
+		$fields[] = new MSpacer(1);
+		$fields[] = new MTextField('numeroAnulacao','','Número Anulação',15);
+		$fields[] = new MTextField('data',$data,'Data',15);
+		$fields[] = new MSpacer(1);
+		$fields[] = new MRadioButtonGroup('motivo','Motivo', $opt);
+		$fields[] = new HiddenField('item_aux',$item_aux);
+		$fields[] = new HiddenField('idEmpenho',$item);
+
+		$this->SetButtonAttr('btnAnulacao', 'visible', true);
+		$this->SetButtonAttr('btnVoltar', 'visible', true);
+		$this->SetButtonAttr('btnEmpenhos', 'visible', false);
+		$this->SetFields($fields);
+	}
+
+	function btnAnulacao_click()
+	{
+		global $MIOLO, $module, $action, $item;
+
+		$cf = new MCurrencyFormatter();
+
+		$data = $this->GetFormValue('data');
+		$numeroAnulacao = $this->GetFormValue('numeroAnulacao');
+
+		$erro = false;
+		if(!$numeroAnulacao)
+		{
+			$this->AddError('Por favor, informe o número da anulação');
+			$erro = true;
+		}
+		else
+		{
+			//testa se numero da anulação já existe
+			$empenhado = $MIOLO->GetBusiness('adm','empenhado');
+			if($empenhado->existeNumeroAnulacao($numeroAnulacao))
+			{
+				$this->AddError('Número da anulação já existe');
+				$erro = true;
+			}
+		}
+		if(!$data)
+		{
+			$this->AddError('Por favor, informe a data da anulação');
+			$erro = true;
+		}
+
+		$select =  $this->GetFormValue('selectgrid2');
+		if(!$select)
+		{
+			$this->AddError('Por favor, selecione os itens');
+			$erro = true;
+		}
+		else
+		{
+			$selected = array_shift($select);
+			$selected = explode('-', $selected);
+			$idEmpenho = $selected[0];
+
+			$empenho = $MIOLO->GetBusiness('adm','empenho',$idEmpenho);
+			$empenho->getEmpenhado();
+
+			$empenho->empenhado[0]->getOrcamento();
+			if($empenho->empenhado[0]->orcamento->ano == substr($data,6,4))
+			{
+				//se nao for informado o motivo, volta para o passo anterior
+				$motivo = $this->GetFormValue('motivo');
+				if(!$motivo)
+				{
+					$this->AddError('Por favor, informe o motivo');
+					$erro = true;
+				}
+			}
+		}
+		if($erro)
+		{
+			$this->btnEmpenhosDetalhe_click();
+			return;
+		}
+
+		//verifica status do empenho
+		$statusPossiveis = array('B','6','3','A');
+		if(!in_array($empenho->status, $statusPossiveis))
+		{
+			$MIOLO->Error('O status desse empenho não permite a operação.', $MIOLO->GetActionURL($module, $action, '', array('event'=>'btnEmpenhos_click', 'empenho'=>$empenho->numero)));
+			return;
+		}
+
+		$dados = array();
+		foreach($empenho->empenhado as $e)
+		{
+			if($e->status != '3')
+			{
+				$licitacao = $MIOLO->GetBusiness('adm','licitacao',$e->idLicitacao);
+				if(($licitacao->idTipoLicitacao == '1') or ($licitacao->idTipoLicitacao == '4'))//COMPRA
+				{
+					$e->getItemReq();
+					for($i = 0; $i < count($e->itemreq); $i++)
+					{
+						$material = $MIOLO->GetBusiness('adm','material',$e->itemreq[$i]->idMaterial);
+						$descricao = $material->descricao;
+						$valorEmpenhado = number_format(str_replace(',','.',$e->valorEmp),2,',','.');
+						$e->itemreq[$i]->getRequisicao()->getUoRequisitante(); 
+						if($motivo == 4)//pode anular por valor
+						{
+							$valorEmpenhadoUO = $e->GetValorEmpenhadoPorRequisicao($e->idEmpenhado, $e->itemreq[$i]->idRequisicao, '7');
+							$valorNotasUO = $e->GetValorNotasPorRequisicao($e->idEmpenhado, $e->itemreq[$i]->idRequisicao, '7');
+							$saldo = $cf->toDecimal($valorEmpenhadoUO) - $cf->toDecimal($valorNotasUO);
+						}
+						elseif(($motivo == 1) or ($motivo == 2) or ($motivo == 6))//pode anular por quantidade
+						{
+							$quantEmpenhadoUO = $e->GetQuantEmpenhadaPorRequisicao($e->idEmpenhado, $e->itemreq[$i]->idRequisicao, '7');
+							$quantNotasUO = $e->GetQuantNotasPorRequisicao($e->idEmpenhado, $e->itemreq[$i]->idRequisicao, '7');
+							$saldo = $cf->toDecimal($quantEmpenhadoUO) - $cf->toDecimal($quantNotasUO);
+						}
+						$dados[] = array($e->idEmpenhado.'-'.$e->itemreq[$i]->idRequisicao, $e->item, $e->itemreq[$i]->idRequisicao, $e->itemreq[$i]->requisicao->uoRequisitante->sigla, $descricao, $saldo, $e->quantidadeEmp, $valorEmpenhado);
+					}
+				}
+				elseif($licitacao->idTipoLicitacao == '2')//SERVICO
+				{
+					$e->getItemServExt();
+					for($i = 0; $i < count($e->itemServExt); $i++)
+					{
+						$servico = $MIOLO->GetBusiness('adm','servico',$e->itemServExt[$i]->idServico);
+						$descricao = $servico->descricao;
+						$valorEmpenhado = number_format(str_replace(',','.',$e->valorEmp),2,',','.');
+						$e->itemServExt[$i]->getRequisicao()->getUoRequisitante(); 
+						if($motivo == 4)//pode anular por valor
+						{
+							$valorEmpenhadoUO = $e->GetValorEmpenhadoPorRequisicao($e->idEmpenhado, $e->itemServExt[$i]->idRequisicao, '9');
+							$valorNotasUO = $e->GetValorNotasPorRequisicao($e->idEmpenhado, $e->itemServExt[$i]->idRequisicao, '9');
+							$saldo = $cf->toDecimal($valorEmpenhadoUO) - $cf->toDecimal($valorNotasUO);
+						}
+						elseif(($motivo == 1) or ($motivo == 2) or ($motivo == 6))//pode anular por quantidade
+						{
+							$quantEmpenhadoUO = $e->GetQuantEmpenhadaPorRequisicao($e->idEmpenhado, $e->itemServExt[$i]->idRequisicao, '9');
+							$quantNotasUO = $e->GetQuantNotasPorRequisicao($e->idEmpenhado, $e->itemServExt[$i]->idRequisicao, '9');
+							$saldo = $cf->toDecimal($quantEmpenhadoUO) - $cf->toDecimal($quantNotasUO);
+						}
+						$dados[] = array($e->idEmpenhado.'-'.$e->itemServExt[$i]->idRequisicao, $e->item, $e->itemServExt[$i]->idRequisicao, $e->itemServExt[$i]->requisicao->uoRequisitante->sigla, $descricao, $saldo, $e->quantidadeEmp, $valorEmpenhado);
+					}
+				}
+				elseif($licitacao->idTipoLicitacao == '3')//LIVRO
+				{
+					$e->getItemReqBib();
+					for($i = 0; $i < count($e->itemreqbib); $i++)
+					{
+						$material = $MIOLO->GetBusiness('adm','material',$e->itemreqbib[$i]->idMaterial);
+						$descricao = $material->descricao;
+						$valorEmpenhado = number_format(str_replace(',','.',$e->valorEmp),2,',','.');
+						$e->itemreqbib[$i]->getRequisicao()->getUoRequisitante(); 
+						$saldo = 0;
+						$dados[] = array($e->idEmpenhado.'-'.$e->itemreqbib[$i]->idRequisicao, $e->item, $e->itemreqbib[$i]->idRequisicao, $e->itemreqbib[$i]->requisicao->uoRequisitante->sigla, $descricao, $saldo, $e->quantidadeEmp, $valorEmpenhado);
+					}
+				}
+			}
+		}
+
+		$columns = array(
+			new GridColumn('idEmpenhadoIdRequisicao','center',true, '0%',false),
+			new GridColumn('Item','center',true, '5%',true),
+			new GridColumn('Requisição','center',true, '10%',true, null),
+			new GridColumn('Uo Requisitante','center',false, '15%',true, null),
+			new GridColumn('Descrição','left',false, '40%',true, null),
+			new GridColumn('Saldo','center',true, '10%',true, null),
+//			new GridColumn('Quantidade','center',true, '15%',true, null),
+//			new GridColumn('R$ Total','right',true, '15%',true, null),
+		);
+
+		$empenho->GetFornecedor();
+
+		//ajustes de acordo com a data informada: anulação ou cancelamento
+		if($empenho->empenhado[0]->orcamento->ano == substr($data,6,4))
+		{
+			$this->SetTitle('Anulação de Empenho');
+			$buttons = array(
+				new FormButton('btnAnulacaoConfirmar','Confirmar Anulação'),
+			);
+			if($motivo == 4)//pode anular por valor
+			{
+				$columns[] = new GridColumn('Valor a Anular','center',true, '20%',true, null);
+			}
+			elseif(($motivo == 1) or ($motivo == 2) or ($motivo == 6))//pode anular por quantidade
+			{
+				$columns[] = new GridColumn('Quantidade a Anular','center',true, '20%',true, null);
+			}
+		}
+		else
+		{
+			$this->SetTitle('Cancelamento de Empenho');
+			$buttons = array(
+				new FormButton('btnCancelamentoConfirmar','Confirmar Cancelamento'),
+			);
+			$this->SetFieldAttr('motivo','visible',false);
+		}
+
+		$grid = new Grid($dados, $columns, $href_datagrid, 0);
+		$grid->SetTitle('Itens do Empenho ' . $empenho->numero);
+		$grid->SetLinkType('linkbutton');
+		$grid->SetWidth('99%');
+		$grid->AddActionSelect();
+
+		//ajustes de rowmethod de acordo com a data informada: anulação ou cancelamento
+		if($empenho->empenhado[0]->orcamento->ano == substr($data,6,4))
+		{
+			if($motivo == 4)//pode anular por valor
+			{
+				$grid->SetRowMethod('frmAnulacaoEmpenho','MyRowMethodValores1');
+			}
+			elseif(($motivo == 1) or ($motivo == 2) or ($motivo == 6))//pode anular por quantidade
+			{
+				$grid->SetRowMethod('frmAnulacaoEmpenho','MyRowMethodValores2');
+			}
+		}
+
+		$tabelaGeral = $MIOLO->GetBusiness('common','tabelageral');
+		$tabela = $tabelaGeral->ListByTabela('AD_MOTIVOANULACAOEMPENHO','item1');
+		$options = $tabela->result;
+		foreach($options as $o)
+		{
+			$opt[$o[0]] = $o[1];
+		}
+		$fields = array(
+			new MTextField('fornecedor',$empenho->fornecedor->instituicao->nome,'Fornecedor',90),
+			new MTextField('empenho',$empenho->numero,'Empenho',15),
+			new MTextField('numeroAnulacao',$numeroAnulacao,'Número Anulação',15),
+			new MTextField('data',$data,'Data',15),
+			new MSelection('motivo',$motivo,'Motivo', $opt),
+			new MSpacer(1),
+			$grid,
+			new MHiddenField('idEmpenho', $selected[0]),
+		);
+		$this->SetFields($fields);
+
+		$this->SetFieldAttr('fornecedor','readonly',true);
+		$this->SetFieldAttr('empenho','readonly',true);
+		$this->SetFieldAttr('numeroAnulacao','readonly',true);
+		$this->SetFieldAttr('data','readonly',true);
+		$this->SetFieldAttr('motivo','readonly',true);
+		$this->SetButtons($buttons);
+		$this->SetButtonAttr('btnEmpenhos', 'visible', false);
+	}
+
+	function btnAnulacaoConfirmar_click()
+	{
+		global $MIOLO, $module, $action;
+
+		$cf = new MCurrencyFormatter();
+		$select = $this->GetFormValue('select');
+		if($select)
+		{
+			$selected = implode(',', $select);
+		}
+		$quant = $this->GetFormValue('quant');
+		$valores = $this->GetFormValue('valores');
+
+		$idEmpenho = $this->GetFormValue('idEmpenho');
+		$numeroAnulacao = $this->GetFormValue('numeroAnulacao');
+		$data = $this->GetFormValue('data');
+		$motivo = $this->GetFormValue('motivo');
+
+		if($motivo == '1' or $motivo == '2' or $motivo == '6')//por quantidade
+		{
+			$conf = $this->GetFormValue('conf');
+			if ($conf == 'sim')
+			{
+				$quant2 = $this->GetFormValue('quant2');
+				$quantaux = explode(';',$quant2);
+				$quant = array();
+				foreach($quantaux as $q)
+				{
+					$qi = explode('@',$q);
+					$quant[$qi[0]] = $qi[1];
+				}
+				$selected = $this->GetFormValue('selected2');
+			}
+			else
+			{
+				$quant2 = '';
+				foreach($quant as $i=>$q)
+				{
+					$quant2 .= $i . '@' . $q . ';';
+				}
+				$quant2 = substr($quant2,0,-1);
+				$action_sim = $this->manager->GetActionURL('adm','main:financeiro:anulacao','',array('event'=>'btnAnulacaoConfirmar_click', 'conf'=>'sim', 'quant2'=>$quant2, 'selected2'=>$selected, 'idEmpenho'=>$idEmpenho, 'numeroAnulacao'=>$numeroAnulacao, 'data'=>$data, 'motivo'=>$motivo));
+				$action_nao = $this->manager->GetActionURL('adm','main:financeiro:anulacao');
+
+
+				$valoresAnuladosConf = '';
+				foreach($select as $item)
+				{
+					$i = explode('-',$item);//0-idEmpenhado, 1-idRequisicao
+					$empenhadoDist = $MIOLO->GetBusiness('adm','empenhadodist');
+					$empenhadoDist->getById($i[0],$i[1]);
+					$empenhadoDist->retrieveAssociation('empenhado');
+					$quantidadeAnulada = $cf->toDecimal($quant[$item]);
+					$valorAnulado = $cf->toDecimal($empenhadoDist->valorUnitario);
+					$totalAnuladoItem = $quantidadeAnulada * $valorAnulado;
+
+					$valoresAnuladosConf .= "Valor anulado item " . $empenhadoDist->empenhado->item . ": R$ " . $totalAnuladoItem . "<BR>";
+				}
+
+				$this->manager->Question($valoresAnuladosConf . "<BR>Deseja confirmar a anulação?",$action_sim,$action_nao);
+			}
+		}
+		else
+		{
+			$conf = 'sim';
+		}
+
+		if($conf == 'sim')
+		{
+			$objEmpenho = $MIOLO->GetBusiness($module, 'empenho', $idEmpenho);
+			try
+			{
+				$objEmpenho->Anulacao($selected, $data, $motivo, $numeroAnulacao, $quant, $valores);
+
+				$action_ok = $MIOLO->GetActionURL($module, $action);
+				$MIOLO->Information("Anulação realizada com sucesso.", $action_ok);
+			}
+			catch (Exception $e)
+			{
+				$MIOLO->Error($e->getMessage(), $MIOLO->GetActionURL($module, $action, '', array()) );
+			}
+		}
+	}
+
+	function btnCancelamentoConfirmar_click()
+	{
+		global $MIOLO, $module, $action;
+
+		$idEmpenho = $this->GetFormValue('idEmpenho');
+
+		$data = $this->GetFormValue('data');
+		$motivo = $this->GetFormValue('motivo');
+		$objEmpenho = $MIOLO->GetBusiness($module, 'empenho');
+		try
+		{
+			$objEmpenho->Cancelamento($idEmpenho, $data, $motivo);
+
+			$action_ok = $MIOLO->GetActionURL($module, $action);
+			$MIOLO->Information("Cancelamento realizado com sucesso.", $action_ok);
+		}
+		catch (Exception $e)
+		{
+			$MIOLO->Error($e->getMessage(), $MIOLO->GetActionURL($module, $action, '', array()) );
+		}
+	}
+
+	// Método a ser executado antes de renderizar cada linha
+	function MyRowMethod($i, $row, $actions, $columns)
+	{
+		global $MIOLO, $module, $action;
+
+		$empenho = $MIOLO->GetBusiness($module, 'empenho', $row[0]);
+		$valores = $empenho->GetValores();
+		$valor = number_format(str_replace(',','.',$valores[0]),2,',','.');
+		$valores[1] = number_format(str_replace(',','.',$valores[1]),2,',','.');
+		$valores[2] = number_format(str_replace(',','.',$valores[2]),2,',','.');
+		$columns['valor']->control[$i]->SetValue($valor);
+		$saldo = 'Saldo Original: '. $valores[1] . "                  Saldo Complemento: " . $valores[2];
+		$columns['valor']->control[$i]->SetJsHint($saldo);
+		$columns['numero']->control[$i]->SetJsHint($empenho->obs);
+	}
+	// Método a ser executado antes de renderizar cada linha
+	function MyRowMethod2($i, $row, $actions, $columns)
+	{
+		global $MIOLO, $module, $action;
+
+		//Vl Emp e Valor NF não existem  OU  Tipo Emp não é OR nem CO
+		if( (($row[10] == '') and ($row[11] == '')) or (($row[2] != 'OR') and ($row[2] != 'CO')) )
+		{
+			$columns[12]->control[$i]->SetValue(''); // saldo
+		}
+
+		if($row[4])//NF
+		{
+			$id = explode('-', $row[0]);
+			$nota = $MIOLO->GetBusiness($module, 'notafiscal');
+			$nota->GetByNumero($row[4], $id[0]); //notaFiscal, idEmpenho
+			$nota->desconto = number_format(str_replace(',','.',$nota->desconto),2,',','.');
+			$desconto = "Desconto: " . $nota->desconto;
+			$columns[4]->control[$i]->SetJsHint($desconto);
+		}
+
+		if($row[6])//Data Liq
+		{
+			$liquidacao = $MIOLO->GetBusiness($module, 'liquidacao', $nota->idLiquidacao);
+			$liquidacao->valorIRRF = number_format(str_replace(',','.',$liquidacao->valorIRRF),2,',','.');
+			$liquidacao->valorINSS = number_format(str_replace(',','.',$liquidacao->valorINSS),2,',','.');
+			$liquidacao->valorISS = number_format(str_replace(',','.',$liquidacao->valorISS),2,',','.');
+			$descontos = "IN/SRF: " . $liquidacao->valorIRRF . ". INSS: " . $liquidacao->valorINSS . ". ISS: " . $liquidacao->valorISS . ".";
+			$columns[6]->control[$i]->SetJsHint($descontos);
+		}
+
+		if($row[7])//OB
+		{
+			$ordemBancaria = $MIOLO->GetBusiness($module, 'ordembancaria');
+			$valores = $ordemBancaria->GetByIdLiquidacao($liquidacao->idLiquidacao);
+			$valores[0] = number_format(str_replace(',','.',$valores[0]),2,',','.');
+			$valores[1] = number_format(str_replace(',','.',$valores[1]),2,',','.');
+			$descontos = "DARF: " . $valores[0] . ". GPS: " . $valores[1] . ".";
+			$columns[7]->control[$i]->SetJsHint($descontos);
+		}
+	}
+
+	// Método a ser executado antes de renderizar cada linha
+	function MyRowMethodValores1($i, $row, $actions, $columns)
+	{
+		global $MIOLO, $module, $item;
+
+		$textField = new MTextField("valores[$row[0]]",'','',6);
+		$columns[6]->control[$i] = $textField;
+	}
+
+	function MyRowMethodValores2($i, $row, $actions, $columns)
+	{
+		global $MIOLO, $module, $item;
+
+		$textField = new MTextField("quant[$row[0]]",'','',6);
+		$columns[6]->control[$i] = $textField;
+	}
+}
+?>

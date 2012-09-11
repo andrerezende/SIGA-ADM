@@ -1,0 +1,148 @@
+<?
+class frmCadAcessoBolsa extends Form
+{
+	function __construct()
+	{
+		parent::Form("Controle de Acesso a Bolsas");
+		$this->EventHandler();
+	}
+	
+	function CreateFields()
+	{
+		global $MIOLO,$module,$page,$self;
+
+        $urlBase = $MIOLO->getActionUrl($module,$self);
+        $page->setAction($urlBase);
+
+		$fields = Array(
+			new LookupTextField('lkpNome','','Usuário',20),
+			new HiddenField('hidIdUsuario',''),
+			new Selection('selBolsa','','Bolsa'),
+		);
+
+		$this->SetFields($fields);
+
+		$this->SetFieldAttr('lkpNome','module','adm');
+		$this->SetFieldAttr('lkpNome','item','usuariofuncionario');
+		$this->SetFieldAttr('lkpNome','event', 'btnDisparaLst:click',1);
+
+		$this->SetFieldAttr('selBolsa','visible',false);
+		
+		$buttons = Array(
+			new FormButton('btnPost','Enviar'),
+			new FormButton('btnDisparaLst','Cancelar')
+		);
+
+		$this->SetButtons($buttons);
+
+		$this->SetButtonAttr('btnPost','visible',false);
+		$this->SetButtonAttr('btnDisparaLst','visible',false);
+
+		$this->SetClose($MIOLO->GetActionURL($module,'main:sispag'));
+	}
+
+	function GetData()
+	{
+		$data = new FormData();
+		$data->idusuario = $this->GetFieldValue('hidIdUsuario');;	
+		$data->nomeuser = $this->GetFieldValue('lkpNome');
+		$data->idbolsa = $this->GetFieldValue('selBolsa');
+		return $data;
+	}
+
+	function btnDisparaLst_click($sender=null,$key='')
+	{
+		global $MIOLO,$module,$page;
+
+		$key = ($key!='') ? $key : $this->GetFormValue('hidIdUsuario');
+		$lstAcessoBolsa = $MIOLO->GetActionURL($module,'main:listaacessobolsa',$key);
+		$page->Redirect($lstAcessoBolsa);
+	}
+
+	function btnPreparaNovo_click()
+	{
+		global $MIOLO,$module,$item;
+
+		$objUsuario = $MIOLO->GetBusiness('common','usuario');
+		$user = $objUsuario->GetById($item);
+
+		$this->SetFieldValue('hidIdUsuario',$user->idUsuario);
+		$this->SetFieldValue('lkpNome',$user->nome);
+		$this->SetFieldAttr('lkpNome','readonly',true);
+
+		$objAcessoBolsa = $MIOLO->GetBusiness($module,'cadastrobolsa');
+		$query = $objAcessoBolsa->ListAll();
+		$this->SetFieldAttr('selBolsa','options',($query->result) ? $query->result : Array('vazio'=>'vazio'));
+
+		$this->SetFieldAttr('selBolsa','visible',true);
+		$this->SetButtonAttr('btnPost','visible',true);
+		$this->SetButtonAttr('btnDisparaLst','visible',true);
+	}
+
+	function btnPost_click()
+	{
+		global $MIOLO, $module, $self, $action;
+
+		$objAcessoBolsa = $MIOLO->GetBusiness($module,'cadacesso');
+		
+		
+		if ( $objAcessoBolsa )
+		{
+            $data = $this->GetData();            
+			$objAcessoBolsa->SetData($data);			
+			$lstAcessoBolsa = $MIOLO->GetActionURL($module,'main:listaacessobolsa',$objAcessoBolsa->idusuario);			
+			$ok = $objAcessoBolsa->Insert();
+		}
+
+		if ( $ok )
+		{
+			$MIOLO->Information('Informações registradas com sucesso.', $lstAcessoBolsa);
+			return true;
+		}
+		else
+		{
+			$MIOLO->Error('Usuário já possui acesso a bolsa.',$lstAcessoBolsa);
+			return true;
+		}
+		
+		$this->AddError($objAcessoBolsa->GetErrors());
+	}
+
+	function btnDelete_click()
+	{
+		global $MIOLO, $module, $item, $self, $action;
+
+		$vaux = explode('_',$item);
+		$iduser = $vaux[0];
+		$idbolsa = $vaux[1];
+
+		$lstAcessoBolsa = $MIOLO->GetActionURL($module,'main:listaacessobolsa',$iduser);
+		
+		$objAcessoBolsa = $MIOLO->GetBusiness($module,'cadacesso');
+		$objAcessoBolsa->GetById($iduser,$idbolsa);
+
+		$conf = $this->GetFormValue('conf');
+		if ( $conf == 'sim')
+		{
+			if ( $objAcessoBolsa->Delete() )
+			{
+				$MIOLO->Prompt(Prompt::Information("Excluído com sucesso.",$lstAcessoBolsa));
+			}
+			else
+			{
+				$MIOLO->Prompt(Prompt::Information( $objAcessoBolsa->GetErrors(),$lstAcessoBolsa));
+			}
+		}
+		elseif ( $conf == 'nao')
+		{
+			$MIOLO->Prompt(Prompt::Information('Exclusão cancelada.',$lstAcessoBolsa));
+		}
+		else
+		{
+			$action_sim = $MIOLO->GetActionURL($module,$self,$item, array('event'=>'btnDelete:click','conf'=>'sim'));
+			$action_nao = $MIOLO->GetActionURL($module,$self,$item, array('event'=>'btnDelete:click','conf'=>'nao'));
+			$MIOLO->Prompt(Prompt::Question("Confirma a exclusão de Acesso Bolsa ?",$action_sim, $action_nao));
+		}
+	}
+}
+?>

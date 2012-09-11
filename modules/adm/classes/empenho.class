@@ -1,0 +1,2536 @@
+<?
+class BusinessAdmEmpenho extends Business
+{
+	public $idEmpenho;
+	public $numero;
+	public $dataEmpenho;
+	public $tipoEmpenho;
+	public $tipoEntrega;
+	public $idFornecedor;
+	public $status;
+	public $modalidadeEmp;
+	public $idEmpenhoRef;
+	public $numPro;
+	public $obs;
+	public $idUoEntrega;
+	public $fornecedor;
+	public $empenhado;
+	public $empenhoRef;
+	public $notaFiscal;
+	public $processo;
+	public $valor;
+	public $valorPedido;
+	public $valorEntregue;
+	public $valorSaldo;
+	public $valorContabilizado;
+	
+	function __construct($data = null)
+	{
+		parent::__construct('sigaept', $data);
+	}
+
+
+	function OnCreate($id)
+	{
+		if (empty($id))
+		{
+			//            $this->initialize();
+		}
+		else
+		{
+			$this->GetById($id);
+		}
+	}
+
+
+	function getById($id)
+	{
+		$this->idEmpenho = $id;
+		$this->retrieve();
+        $this->getAtributos();
+		return $this;
+	}
+
+
+	function getAtributos()
+	{
+		if ($this->empenhado)
+		{
+			foreach ($this->empenhado as $empenhado)
+			{
+				$empenhado->getAtributos();
+			}
+		}
+		$this->getValor();
+		$this->getValorEntregue();
+		$this->getValorPedido();
+		$this->getValorContabilizado();
+		$this->getValorSaldo();
+	}
+
+
+    function getValor()
+    {
+        $cf = new MCurrencyFormatter();
+        $this->getEmpenhado();
+        if ($this->empenhado)
+        {
+            foreach ($this->empenhado as $empenhado)
+            {
+                $this->valor += $cf->toDecimal($empenhado->valorEmp);
+            }
+        }
+    }
+    function getValorEntregue()
+    {
+        $cf = new MCurrencyFormatter();
+        $this->getEmpenhado();
+        if ($this->empenhado)
+        {
+            foreach ($this->empenhado as $empenhado)
+            {
+                $empenhado->getItemNota();
+                if ($empenhado->itemNota)
+                {
+                    foreach ($empenhado->itemNota as $itemNota)
+                    {
+                        $empenhado->retrieveAssociation('licitacao');
+                        if ($empenhado->licitacao->idTipoLicitacao == 1)
+                        {
+                            $itemNota->getMovimento();
+                            if ($itemNota->movimento)
+                            {
+                                foreach ($itemNota->movimento as $movimento)
+                                {
+                                    $this->valorEntregue += $cf->toDecimal($movimento->valorTotal);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            $itemNota->retrieveAssociation('movimentoserv');
+                            if ($itemNota->movimentoserv)
+                            {
+                                foreach ($itemNota->movimentoserv as $movimento)
+                                {
+                                    $this->valorEntregue += $cf->toDecimal($movimento->valorTotal);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    function getValorPedido()
+    {
+        $cf = new MCurrencyFormatter();
+        $this->getEmpenhado();
+        if ($this->empenhado)
+        {
+            foreach ($this->empenhado as $empenhado)
+            {
+                $empenhado->getAtributos();
+                $this->valorPedido += $cf->toDecimal($empenhado->quantidadePedida) * $cf->toDecimal($empenhado->valorUnitario);
+            }
+        }
+    }
+    function getValorSaldo()
+    {
+        $cf = new MCurrencyFormatter();
+        $this->valorSaldo = $cf->toDecimal($this->valor) - $cf->toDecimal($this->valorContabilizado);
+    }
+    function getValorContabilizado()
+    {
+        $cf = new MCurrencyFormatter();
+        $this->getNotaFiscal();
+        if ($this->notaFiscal)
+        {
+            foreach ($this->notaFiscal as $nota)
+            {
+                $this->valorContabilizado += $cf->toDecimal($nota->valor);
+                $this->valorContabilizado += $cf->toDecimal($nota->desconto);
+            }
+        }
+    }
+	function ListByNumero($numero,$status=null,$type='like')
+	{
+        $criteria =  $this->getCriteria();
+        $criteria->addColumnAttribute('idEmpenho');
+        $criteria->addColumnAttribute('numero');
+		$criteria->addColumnAttribute('empenhado.licitacao.numero','licitacao');
+        $criteria->addColumnAttribute('dataEmpenho', 'dataEmpenho');
+        $criteria->addColumnAttribute('tipoEmpenho');
+        $criteria->addColumnAttribute('idFornecedor');
+        $criteria->addColumnAttribute('status');
+        $criteria->addColumnAttribute('tipoEntrega');
+        $criteria->addColumnAttribute('fornecedor.instituicao.nome','fornecedor');
+		$criteria->addColumnAttribute('empenhado.licitacao.numero','numLic');
+		$criteria->addColumnAttribute('empenhado.licitacao.numProcesso','numProcesso');
+		($type=='like')?$criteria->addCriteria('numero','like', "'%$numero%'"):$criteria->addCriteria('numero','=', "'$numero'");
+        if ($status) $criteria->addCriteria('status','=',"'{$status}'");
+        $criteria->addOrderAttribute('numero');
+		$criteria->setDistinct(true);
+		return $criteria->retrieveAsQuery();
+	}
+	
+	function GetByNumero($numero)
+	{
+        $criteria =  $this->getCriteria();
+		$criteria->addColumnAttribute('idEmpenho');
+        $criteria->AddColumnAttribute('numero');
+        $criteria->addCriteria('numero','=',"'$numero'");
+        $query = $criteria->retrieveAsQuery();
+		$this->idEmpenho = $query->result[0][0];
+		$this->retrieve();
+		return $this;
+	}
+
+
+    function getFornecedor()
+    {
+        $this->retrieveAssociation('fornecedor');
+        $this->fornecedor->retrieveAssociation('instituicao');
+        return $this->fornecedor->instituicao;
+    }
+
+	function ListForAlmoxarifado($idUo=null,$numero=null,$fornecedor=null)
+	{
+		if ($idUo)
+		{
+			$txtIdUo = " AND E.IDUO = {$idUo}";
+		}
+		if ($numero)
+		{
+			$txtNumero = " AND E.NUMERO = '{$numero}'";
+		}
+		if ($fornecedor)
+		{
+			$txtFornecedor = " AND IT.NOME LIKE '%{$fornecedor}%'";
+		}
+		$sql = new sql("E.IDEMPENHO,E.NUMERO,L.NUMERO,IT.NOME,TO_CHAR(E.DATAEMPENHO,'DD/MM/YYYY'),(SELECT SUM(EA.VALOREMP) FROM AD_EMPENHADO EA WHERE EA.IDEMPENHO = E.IDEMPENHO),(SELECT SUM(MO.VALORTOTAL) FROM AD_MOVIMENTO MO, AD_ITEMNOTA INO, AD_EMPENHADO EA WHERE MO.IDITEMNOTA = INO.IDITEMNOTA AND INO.IDEMPENHADO = EA.IDEMPENHADO AND EA.IDEMPENHO = E.IDEMPENHO),(SELECT SUM(N.VALORDESCONTO) FROM AD_NOTAFISCAL N WHERE N.IDEMPENHO = E.IDEMPENHO)","AD_EMPENHO E,AD_EMPENHADO EA,AD_LICITACAO L,AD_FORNECEDOR F,CM_INSTITUICAO IT,AD_ITEMREQ I,AD_MATERIAL M,AD_REQUISICAO R","(E.STATUS = 'B' OR E.STATUS = '6') AND E.IDEMPENHO = EA.IDEMPENHO AND E.IDFORNECEDOR = F.IDFORNECEDOR AND F.IDINSTITUICAO = IT.IDINSTITUICAO AND EA.IDLICITACAO = L.IDLICITACAO AND EA.IDLICITACAO = I.IDLICITACAO AND EA.ITEM = I.ITEM AND I.IDMATERIAL = M.IDMATERIAL AND L.IDTIPOLICITACAO = '1' AND CAST(M.IDELEMENTO AS TEXT) NOT LIKE '4%' AND I.IDREQUISICAO = R.IDREQUISICAO {$txtIdUo}{$txtNumero}{$txtFornecedor}");
+		$sql->setOrderBy('E.DATAEMPENHO,E.NUMERO');
+		$query = $this->Query($sql,$dataAtual);
+		
+		if ($query->result)
+		{
+			foreach ($query->result as $result)
+			{
+				$results[$result[0]] = $result;
+			}
+		}
+		return $results;
+	}
+
+    function ListForAlmoxarifadoEntrada($idUo=null,$numero=null,$fornecedor=null)
+	{
+        $sql = new sql("DISTINCT E.IDEMPENHO,E.NUMERO,L.NUMERO,IT.NOME,TO_CHAR(E.DATAEMPENHO,'DD/MM/YYYY'),(SELECT SUM(EA.VALOREMP) FROM AD_EMPENHADO EA WHERE EA.IDEMPENHO = E.IDEMPENHO)", "AD_EMPENHO E,AD_EMPENHADO EA,AD_LICITACAO L,AD_FORNECEDOR F,CM_INSTITUICAO IT,AD_ITEMREQ I,AD_MATERIAL M,AD_REQUISICAO R, AD_MOVIMENTO MOV", "E.IDEMPENHO = EA.IDEMPENHO AND E.IDFORNECEDOR = F.IDFORNECEDOR AND F.IDINSTITUICAO = IT.IDINSTITUICAO AND EA.IDLICITACAO = L.IDLICITACAO AND EA.IDLICITACAO = I.IDLICITACAO AND EA.ITEM = I.ITEM AND I.IDMATERIAL = M.IDMATERIAL AND L.IDTIPOLICITACAO = '1' AND CAST(M.IDELEMENTO AS TEXT) like '4%' AND I.IDREQUISICAO = R.IDREQUISICAO AND E.IDUO = {$idUo} AND (MOV.TIPOMOVIMENTO='1' OR MOV.TIPOMOVIMENTO='5') AND E.STATUS IN ('3','6') AND MOV.IDREQUISICAO = R.IDREQUISICAO AND MOV.IDMOVIMENTOREF IS NULL");
+		if($numero)
+		{
+			$sql->SetWhereAnd("E.NUMERO LIKE '%{$numero}%'");
+		}
+		if($fornecedor)
+		{
+			$sql->SetWhereAnd("IT.NOME LIKE '%{$fornecedor}%'");
+		}
+        $query = $this->Query($sql);
+
+		if ($query->result)
+        {
+            foreach ($query->result as $result)
+            {
+                $results[$result[0]] = $result;
+            }
+        }
+		return $results;
+	}
+    function ListForServico($numero=null,$fornecedor=null)
+	{
+        if ($numero)
+        {
+            $txtNumero = " AND E.NUMERO = '{$numero}'";
+        }
+        if ($fornecedor)
+        {
+            $txtFornecedor = " AND IT.NOME LIKE '%{$fornecedor}%'";
+        }
+        $sql = new sql("E.IDEMPENHO,E.NUMERO,L.NUMERO,IT.NOME,TO_CHAR(E.DATAEMPENHO,'DD/MM/YYYY'),(SELECT SUM(EA.VALOREMP) FROM AD_EMPENHADO EA WHERE EA.IDEMPENHO = E.IDEMPENHO),(SELECT SUM(NF.VALOR) FROM AD_NOTAFISCAL NF WHERE NF.IDEMPENHO = E.IDEMPENHO) FROM AD_EMPENHO E,AD_EMPENHADO EA,AD_LICITACAO L,AD_FORNECEDOR F,CM_INSTITUICAO IT,AD_ITEMREQSERVEXT I,AD_SERVICO M,AD_REQUISICAO R WHERE (E.STATUS = 'B' OR E.STATUS = '6') AND E.IDEMPENHO = EA.IDEMPENHO AND E.IDFORNECEDOR = F.IDFORNECEDOR AND F.IDINSTITUICAO = IT.IDINSTITUICAO AND EA.IDLICITACAO = L.IDLICITACAO AND EA.IDLICITACAO = I.IDLICITACAO AND EA.ITEM = I.ITEM AND I.IDSERVICO = M.IDSERVICO AND L.IDTIPOLICITACAO = '2' AND I.IDREQUISICAO = R.IDREQUISICAO {$txtNumero}{$txtFornecedor}");
+        $sql->setOrderBy('E.DATAEMPENHO,E.NUMERO');
+        $query = $this->Query($sql,$dataAtual);
+        if ($query->result)
+        {
+            foreach ($query->result as $result)
+            {
+                $results[$result[0]] = $result;
+            }
+        }
+		return $results;
+	}
+
+
+	function ListByPatrimonio($status,$numero=null,$fornecedor=null)
+	{
+		$criteria =  $this->getCriteria();
+		$criteria->addColumnAttribute('idEmpenho');
+		$criteria->addColumnAttribute('numero');
+			$criteria->addColumnAttribute('empenhado.licitacao.numero','numLicitacao');
+		$criteria->addColumnAttribute('fornecedor.instituicao.nome','fornecedor');
+		$criteria->addColumnAttribute('dataEmpenho');
+		$criteria->addCriteria('status','=',"'{$status}'");
+		if ($numero) $criteria->addCriteria('numero','=', "'{$numero}'");
+		if ($fornecedor) $criteria->addCriteria('fornecedor','like', "'%{$fornecedor}%'");
+		$criteria->addCriteria('CAST(empenhado.itemreq.material.codmaterial as text)','like',"'4%'");
+		$criteria->setDistinct('numero');
+		return $criteria->retrieveAsQuery();
+	}
+	
+    function ListByFornecedor($fornecedor,$status='%')
+	{
+        $criteria =  $this->getCriteria();
+		$criteria->setDistinct(true);
+        $criteria->addColumnAttribute('idEmpenho');
+        $criteria->addColumnAttribute('numero');
+		$criteria->addColumnAttribute('empenhado.licitacao.numero','licitacao');
+		$criteria->addColumnAttribute('dataEmpenho');
+        $criteria->addColumnAttribute('tipoEmpenho');
+        $criteria->addColumnAttribute('idFornecedor');
+        $criteria->addColumnAttribute('status');
+        $criteria->addColumnAttribute('tipoEntrega');
+        $criteria->addColumnAttribute('fornecedor.instituicao.nome','fornecedor');
+        $criteria->addCriteria('fornecedor.instituicao.nome','LIKE', "'%$fornecedor%'");
+		$criteria->setDistinct('idEmpenho');
+        if ($status) $criteria->addCriteria('status','LIKE',"'{$status}'");
+		$criteria->addOrderAttribute('fornecedor.instituicao.nome','fornecedor');
+        $criteria->addOrderAttribute('numero');
+        return $criteria->retrieveAsQuery();
+	}
+    function ListByNumeroOuFornecedor($numero=null,$fornecedor=null,$status=null)
+	{
+        $criteria =  $this->getCriteria();
+        $criteria->addColumnAttribute('idEmpenho');
+        $criteria->addColumnAttribute('numero');
+		$criteria->addColumnAttribute('empenhado.licitacao.numero','licitacao');
+        $criteria->addColumnAttribute('dataEmpenho');
+        $criteria->addColumnAttribute('tipoEmpenho');
+        $criteria->addColumnAttribute('idFornecedor');
+        $criteria->addColumnAttribute('status');
+        $criteria->addColumnAttribute('tipoEntrega');
+        $criteria->addColumnAttribute('fornecedor.instituicao.nome','fornecedor');
+        $cc = new CriteriaCondition();
+        $cc->addCriteria($criteria->getCriteria('numero','=',"'$numero'"));
+        $cc->addOrCriteria($criteria->getCriteria('fornecedor.instituicao.nome','LIKE',"'%$fornecedor%'"));
+        $criteria->addCriteria($cc);
+        if ($status) $criteria->addCriteria('status','=',"'{$status}'");
+        $criteria->addOrderAttribute('numero');
+        return $criteria->retrieveAsQuery();
+	}
+	
+	function ListAll()
+	{
+		$criteria =  $this->getCriteria();
+	    $criteria->addColumnAttribute('idEmpenho');
+		$criteria->addColumnAttribute('empenhado.licitacao.numero','licitacao');
+        $criteria->addColumnAttribute('numero');
+        $criteria->addColumnAttribute('dataEmpenho');
+        $criteria->addColumnAttribute('tipoEmpenho');
+        $criteria->addColumnAttribute('idFornecedor');
+        $criteria->addColumnAttribute('status');
+        $criteria->addColumnAttribute('tipoEntrega');
+        $criteria->addColumnAttribute('fornecedor.instituicao.nome','fornecedor');
+		$criteria->setDistinct(true);
+        return $criteria->retrieveAsQuery();
+	}
+
+	function ListAllSemLicitacao()
+	{
+		$criteria =  $this->getCriteria();
+	    $criteria->addColumnAttribute('idEmpenho');
+        $criteria->addColumnAttribute('numero');
+        $criteria->addColumnAttribute('fornecedor.instituicao.nome','fornecedor');
+		$criteria->addOrderAttribute('idEmpenho');
+        return $criteria->retrieveAsQuery();
+	}
+	function ListByStatus($status='%')
+	{
+		$criteria =  $this->getCriteria();
+		$criteria->setDistinct(true);
+        $criteria->addColumnAttribute('idEmpenho');
+		$criteria->addColumnAttribute('empenhado.licitacao.numero','licitacao');
+        $criteria->addColumnAttribute('numero');
+        $criteria->addColumnAttribute('dataEmpenho');
+        $criteria->addColumnAttribute('tipoEmpenho');
+        $criteria->addColumnAttribute('idFornecedor');
+        $criteria->addColumnAttribute('status');
+        $criteria->addColumnAttribute('tipoEntrega');
+		$criteria->addColumnAttribute('fornecedor.instituicao.nome','fornecedor');
+		$criteria->addCriteria('status','=',"'$status'");
+        $criteria->addOrderAttribute('idEmpenho');
+		$criteria->setDistinct('idEmpenho');
+
+        return $criteria->retrieveAsQuery();
+	}
+	function ListByLicitacao($licitacao='%',$status='%')
+	{
+		$criteria =  $this->getCriteria();
+		$criteria->setDistinct(true);
+        $criteria->addColumnAttribute('idEmpenho');
+		$criteria->addColumnAttribute('empenhado.licitacao.numero','licitacao');
+        $criteria->addColumnAttribute('numero');
+        $criteria->addColumnAttribute('dataEmpenho');
+        $criteria->addColumnAttribute('tipoEmpenho');
+        $criteria->addColumnAttribute('idFornecedor');
+        $criteria->addColumnAttribute('status');
+        $criteria->addColumnAttribute('tipoEntrega');
+	    if ($status) $criteria->addCriteria('status','like',"'{$status}'");
+        $criteria->addColumnAttribute('fornecedor.instituicao.nome','fornecedor');
+		$criteria->addCriteria('empenhado.licitacao.numero','like',"'$licitacao'");
+        $criteria->addOrderAttribute('idEmpenho');
+		$criteria->setDistinct('idEmpenho');
+        return $criteria->retrieveAsQuery();
+	}
+	function ListByIdLicitacao($idLicitacao='%',$status=null,$tipo=null)
+	{
+		$criteria =  $this->getCriteria();
+        $criteria->addColumnAttribute('idEmpenho');
+		$criteria->addColumnAttribute('empenhado.licitacao.numero','licitacao');
+        $criteria->addColumnAttribute('numero');
+        $criteria->addColumnAttribute('dataEmpenho');
+        $criteria->addColumnAttribute('tipoEmpenho');
+        $criteria->addColumnAttribute('idFornecedor');
+        $criteria->addColumnAttribute('status');
+        $criteria->addColumnAttribute('tipoEntrega');
+        $criteria->addColumnAttribute('fornecedor.instituicao.nome','fornecedor');
+        $criteria->addColumnAttribute('tabelaGeral.item2','statusDesc');
+		$criteria->addColumnAttribute('empenhado.licitacao.numero','numLic');
+        $criteria->addCriteria('tabelaGeral.tabela','=',"'AD_EMPENHOSTATUS'");
+        if($status) 
+		{
+			$criteria->addCriteria('status','IN',"{$status}");
+			if(stripos($status,'1') === 0)
+			{
+				$criteria->addCriteria('numero','is not', "null");
+			}
+		}
+		if($tipo)
+		{
+			$criteria->addCriteria('tipoEmpenho','IN',"{$tipo}");
+		}
+		$criteria->addCriteria('empenhado.licitacao.idLicitacao','=',"$idLicitacao");
+        $criteria->addOrderAttribute('idEmpenho');
+		$criteria->setDistinct('idEmpenho');
+        return $criteria->retrieveAsQuery();
+	}
+	function ListByIdFornecedor($idFornecedor, $status=null)
+	{
+	
+		$criteria =  $this->getCriteria();
+		$criteria->setDistinct(true);
+		$criteria->addColumnAttribute('idEmpenho');
+		$criteria->addColumnAttribute('numero');
+		$criteria->addColumnAttribute('dataEmpenho','dataEmpenho');
+		$criteria->addColumnAttribute('tipoEmpenho');
+		$criteria->addColumnAttribute('empenhado.licitacao.numero','numLic');
+		$criteria->addColumnAttribute('empenhado.licitacao.numProcesso','numProcesso');
+        $criteria->addColumnAttribute('fornecedor.instituicao.nome','fornecedor');
+        $criteria->addColumnAttribute('ug','ug');		
+		$criteria->addOrderAttribute('idEmpenho');
+		$criteria->addCriteria('idFornecedor','=', "{$idFornecedor}");
+		$criteria->addCriteria("tipoEmpenho in ('OR','CO')");
+		if($status)
+		{
+			$criteria->addCriteria('status','in', "{$status}");
+			if(stripos($status,'1') === 0)
+			{
+				$criteria->addCriteria('numero','is not', "null");
+			}
+		}
+		return $criteria->retrieveAsQuery();
+	    
+	}
+	function setNumProcesso($numero)
+	{
+		$this->numPro = $numero;
+	}
+	function ListDetalhesEmpenho()
+	{
+		if($this->tipoEmpenho != 'OR')
+		{
+			$tipo = $this->tipoEmpenho;
+			$ref = $this->idEmpenhoRef;
+			while($tipo != 'OR')
+			{
+				$criteria =  $this->getCriteria();
+				$criteria->addColumnAttribute('idEmpenho');
+				$criteria->addColumnAttribute('empenhado.idLicitacao');
+				$criteria->addColumnAttribute('empenhado.item');
+				$criteria->addColumnAttribute('tipoEmpenho');
+				$criteria->addColumnAttribute('idEmpenhoRef');
+				$criteria->addCriteria('idEmpenho','=', "$ref");
+				$query = $criteria->retrieveAsQuery();
+				$tipo = $query->result[0][3];
+				if($ref == $query->result[0][4])
+				{
+					break;
+				}
+				$ref = $query->result[0][4];
+			}
+			$idEmpenhoOR = $query->result[0][0];
+			$idLicitacaoOR = $query->result[0][1];
+			$itemOR = $query->result[0][2];
+		}
+		else
+		{
+			$idEmpenhoOR = $this->idEmpenho;
+			$idLicitacaoOR = $this->empenhado[0]->idLicitacao;
+			$itemOR = $this->empenhado[0]->item;
+		}
+
+		//OR
+		$criteria =  $this->getCriteria();
+		$criteria->addColumnAttribute('idEmpenho');
+		$criteria->addColumnAttribute('numero');
+		$criteria->addColumnAttribute('tipoEmpenho');
+		$criteria->addColumnAttribute('numpro');
+		$criteria->addCriteria('idEmpenho','=', "{$idEmpenhoOR}");
+//		$criteria->addCriteria('numero','is not', "null");
+		$or = $criteria->retrieveAsQuery();
+
+		//CA
+		$criteria =  $this->getCriteria();
+		$criteria->addColumnAttribute('idEmpenho');
+		$criteria->addColumnAttribute('numero');
+		$criteria->addColumnAttribute('tipoEmpenho');
+		$criteria->addColumnAttribute('numpro');
+		$criteria->addCriteria('tipoEmpenho','=', "'CA'");
+//		$criteria->addCriteria('numero','is not', "null");
+		$criteria->addCriteria('idEmpenhoRef','=', "{$idEmpenhoOR}");
+		$ca = $criteria->retrieveAsQuery();
+
+		//CO
+		$criteria =  $this->getCriteria();
+		$criteria->addColumnAttribute('idEmpenho');
+		$criteria->addColumnAttribute('numero');
+		$criteria->addColumnAttribute('tipoEmpenho');
+		$criteria->addColumnAttribute('numpro');
+		$criteria->addCriteria('tipoEmpenho','=', "'CO'");
+//		$criteria->addCriteria('numero','is not', "null");
+		$criteria->addCriteria('idEmpenhoRef','=', "{$idEmpenhoOR}");
+		$co = $criteria->retrieveAsQuery();
+
+		$result = array();
+		if($or->result)
+		{
+			$result = array_merge($result, $or->result);
+		}
+		if($ca->result)
+		{
+			$result = array_merge($result, $ca->result);
+		}
+		if($co->result)
+		{
+			$result = array_merge($result, $co->result);
+		}
+
+		//busca dados de notas fiscais, liquidações e ordens bancárias
+		//NF
+		$j = 0;
+		for($i = 0; $i < count($result); $i++)
+		{
+			$criteria =  $this->getCriteria();
+			$criteria->addColumnAttribute('notaFiscal.notaFiscal');
+			$criteria->addColumnAttribute('notaFiscal.dataNotaFiscal');
+			$criteria->addColumnAttribute('notaFiscal.valor', 'debito');
+			$criteria->addColumnAttribute('notaFiscal.idLiquidacao');
+			$criteria->addCriteria('idEmpenho','=', "{$result[$i][0]}");
+			$criteria->addOrderAttribute('notaFiscal.idNotaFiscal');
+			$query = $criteria->retrieveAsQuery();
+			if($query->result)
+			{
+				foreach($query->result as $r)
+				{
+					$result2[$j][0] = $result[$i][0];
+					$result2[$j][1] = $result[$i][1];
+					$result2[$j][2] = $result[$i][2];
+					$result2[$j][3] = $result[$i][3];
+					$result2[$j][4] = $r[0];
+					$result2[$j][5] = $r[1];
+					$result2[$j][11] = $r[2];
+					$result2[$j][12] = $r[3];
+					$j++;
+				}
+			}
+			else
+			{
+				$result2[$j] = $result[$i];
+				$j++;
+			}
+		}
+		$result = $result2;
+		//Liquidação
+		$j = 0;
+		for($i = 0; $i < count($result); $i++)
+		{
+			if($result[$i][12] != null)
+			{
+				$criteria =  $this->getCriteria();
+				$criteria->addColumnAttribute("notaFiscal.liquidacao.dataLiquidacao");
+				$criteria->addCriteria('notaFiscal.liquidacao.idLiquidacao','=', "{$result[$i][12]}");
+				$criteria->addCriteria('idEmpenho','=', "{$result[$i][0]}");
+				$criteria->addCriteria('notaFiscal.notaFiscal','=', "'{$result[$i][4]}'");
+				$query = $criteria->retrieveAsQuery();
+				if($query->result)
+				{
+					foreach($query->result as $r)
+					{
+						$result2[$j][0] = $result[$i][0];
+						$result2[$j][1] = $result[$i][1];
+						$result2[$j][2] = $result[$i][2];
+						$result2[$j][3] = $result[$i][3];
+						$result2[$j][4] = $result[$i][4];
+						$result2[$j][5] = $result[$i][5];
+						$result2[$j][11] = $result[$i][11];
+						$result2[$j][12] = $result[$i][12];
+						$result2[$j][6] = $r[0];
+						$j++;
+					}
+				}
+				else
+				{
+					$result2[$j] = $result[$i];
+					$j++;
+				}
+			}
+			else
+			{
+				$result2[$j] = $result[$i];
+				$j++;
+			}
+		}
+		$result = $result2;
+		//OB
+		$j = 0;
+		for($i = 0; $i < count($result); $i++)
+		{
+			if($result[$i][12] != null)
+			{
+				$criteria =  $this->getCriteria();
+				$criteria->addColumnAttribute('notaFiscal.liquidacao.ordemBancaria.numeroOrdemBancaria');
+				$criteria->addColumnAttribute('notaFiscal.liquidacao.ordemBancaria.valor');
+				$criteria->addColumnAttribute('notaFiscal.liquidacao.ordemBancaria.dataOrdemBancaria');
+				$criteria->addCriteria('notaFiscal.liquidacao.ordemBancaria.idLiquidacao','=', "{$result[$i][12]}");
+				$criteria->addCriteria('idEmpenho','=', "{$result[$i][0]}");
+				$query = $criteria->retrieveAsQuery();
+				if($query->result)
+				{
+					foreach($query->result as $r)
+					{
+						$result2[$i][0] = $result[$i][0];
+						$result2[$i][1] = $result[$i][1];
+						$result2[$i][2] = $result[$i][2];
+						$result2[$i][3] = $result[$i][3];
+						$result2[$i][4] = $result[$i][4];
+						$result2[$i][5] = $result[$i][5];
+						$result2[$i][11] = $result[$i][11];
+						$result2[$i][12] = $result[$i][12];
+						$result2[$i][6] = $result[$i][6];
+						$r[1] = number_format(str_replace(',','.',$r[1]),2,',','.');
+						$result2[$i][7] = ($result2[$i][7] == null) ? $r[0] : $result2[$i][7].'<BR>'.$r[0];
+						$result2[$i][8] = ($result2[$i][8] == null) ? $r[1] : $result2[$i][8].'<BR>'.$r[1];
+						$result2[$i][9] = ($result2[$i][9] == null) ? $r[2] : $result2[$i][9].'<BR>'.$r[2];
+					}
+					$j++;
+				}
+				else
+				{
+					$result2[$j] = $result[$i];
+					$j++;
+				}
+			}
+			else
+			{
+				$result2[$j] = $result[$i];
+				$j++;
+			}
+		}
+		$result = $result2;
+
+		//busca dados de credito, calcula saldo e concatena dados a serem passados p/ prox. telas por $item
+		for($i = 0; $i < count($result); $i++)
+		{
+			$r = $result[$i];
+			$criteria =  $this->getCriteria();
+			$criteria->addColumnAttribute('sum(empenhado.valorEmp)', 'credito');
+			$criteria->addCriteria('idEmpenho','=', "{$r[0]}");
+			$query = $criteria->retrieveAsQuery();
+			if($query->result)
+			{
+				$result[$i][10] = $query->result[0][0];
+				if($result[$i][1] == $result[$i-1][1])//se é mesmo empenho, o tipo é MO
+				{
+					$result[$i][2] = 'MO';
+					$result[$i][10] = '';
+				}
+			}
+			//saldo
+			if( ($result[$i][2] == 'OR') or ($result[$i][2] == 'CO') ) 
+			{
+				$saldos = $this->getValores();
+				if($result[$i][2] == 'OR')
+				{
+					$result[$i][12] = $saldos[1];
+				}
+				else //CO
+				{
+					$result[$i][12] = $saldos[2];
+				}
+			}
+			else
+			{
+				$result[$i][12] = 0;
+			}
+			//$item
+			$result[$i][0] = $result[$i][0] . '-' . $result[$i][3] . '-' . $result[$i][10];
+		}
+
+		return $result;
+	}
+
+	function GetDadosAnulacao()
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('idEmpenho');
+		$criteria->addColumnAttribute('empenhado.numeroAnulacao');
+		$criteria->addColumnAttribute('sum(empenhado.valorAnulado)');
+		$criteria->addCriteria('idEmpenho','=', "{$this->idEmpenho}");
+		$criteria->addCriteria('empenhado.numeroAnulacao','IS NOT', "NULL");
+		$criteria->addGroupAttribute('idEmpenho');
+		$criteria->addGroupAttribute('empenhado.numeroAnulacao');
+		$query = $criteria->retrieveAsQuery();
+		return $query->result;
+	}
+
+	function ListDetalhesEmpenhoLiquidacao($idFornecedor)
+	{
+		//busca dados gerais dos empenhos (ad_empenho)
+		$criteria =  $this->getCriteria();
+		$criteria->addColumnAttribute('idEmpenho');
+		$criteria->addColumnAttribute('numero');
+		$criteria->addColumnAttribute('tipoEmpenho');
+		$criteria->addColumnAttribute('numpro');
+		$criteria->addCriteria('idFornecedor','=', "{$idFornecedor}");
+		$criteria->addCriteria('numero','is not', "NULL");
+		$criteria->addCriteria('status','IN', "('3','6')");
+		$query = $criteria->retrieveAsQuery();
+		$result = $query->result;
+
+		//busca dados de liquidações e notas fiscais
+		$j = 0;
+		for($i = 0; $i < count($result); $i++)
+		{
+			$criteria =  $this->getCriteria();
+			$criteria->addColumnAttribute('notaFiscal.idNotaFiscal');
+			$criteria->addColumnAttribute('notaFiscal.notaFiscal');
+			$criteria->addColumnAttribute('notaFiscal.dataNotaFiscal');
+			$criteria->addColumnAttribute('empenhado.valorEmp', 'credito');
+			$criteria->addColumnAttribute('notaFiscal.valor', 'debito');
+			$criteria->addCriteria('idEmpenho','=', "{$result[$i][0]}");
+			$criteria->addCriteria('notaFiscal.idLiquidacao','is', "null");
+			$query = $criteria->retrieveAsQuery();
+			if($query->result)
+			{
+				$k = 1;
+				foreach($query->result as $r)
+				{
+					$result2[$j][0] = $result[$i][0];
+					$result2[$j][1] = $result[$i][1];
+					$result2[$j][2] = $result[$i][2];
+					$result2[$j][3] = $result[$i][3];
+					$result2[$j][4] = $r[0];
+					$result2[$j][5] = $r[1];
+					$result2[$j][6] = $r[2];
+					if($k == 1)
+					{
+						$result2[$j][7] = $r[3];
+					}
+					else
+					{
+						$result2[$j][7] = 0;
+					}
+					$result2[$j][8] = $r[4];
+					$j++;
+					$k++;
+				}
+			}
+			else
+			{
+				$result2[$j][0] = $result[$i][0];
+				$result2[$j][1] = $result[$i][1];
+				$result2[$j][2] = $result[$i][2];
+				$result2[$j][3] = $result[$i][3];
+				$j++;
+			}
+		}
+		$result = $result2;
+
+		//busca dados de credito e concatena dados para serem passados para próximas telas por $item
+		for($i = 0; $i < count($result); $i++)
+		{
+			$r = $result[$i];
+			$criteria =  $this->getCriteria();
+			$criteria->addColumnAttribute('empenhado.valorEmp', 'credito');
+			$criteria->addCriteria('idEmpenho','=', "{$r[0]}");
+			$query = $criteria->retrieveAsQuery();
+			if($query->result)
+			{
+				if($result[$i][1] != $result[$i-1][1])
+				{
+					$result[$i][7] = $query->result[0][0];
+				}
+				else //elimina creditos repetidos
+				{
+					$result[$i][7] = 0;
+				}
+			}
+			//$item
+			$result[$i][0] = $result[$i][0] . '-' . $result[$i][4];
+		}
+
+		return $result;
+	}
+
+	function ListDetalhesEmpenhoLiquidacaoByNumero($numero)
+	{
+		//busca idEmpenho OR
+		$criteria =  $this->getCriteria();
+		$criteria->addColumnAttribute('idEmpenho');
+		$criteria->addColumnAttribute('tipoEmpenho');
+		$criteria->addColumnAttribute('idEmpenhoRef');
+		$criteria->addCriteria('numero','=', "'{$numero}'");
+		$query = $criteria->retrieveAsQuery();
+		$result = $query->result;
+		while(($query->result[0][1] != 'OR') and ($query->result[0][0] != $query->result[0][2]))
+		{
+			$criteria =  $this->getCriteria();
+			$criteria->addColumnAttribute('idEmpenho');
+			$criteria->addColumnAttribute('tipoEmpenho');
+			$criteria->addColumnAttribute('idEmpenhoRef');
+			$criteria->addCriteria('idEmpenho','=', "{$query->result[0][2]}");
+			$query = $criteria->retrieveAsQuery();
+			$result = array_merge($result, $query->result);
+		}
+		$idEmpenhoOR = $query->result[0][0];
+
+		if($query->result[0][1] == 'OR')
+		{
+			//busca dados gerais dos empenhos (ad_empenho) OR
+			$criteria =  $this->getCriteria();
+			$criteria->addColumnAttribute('idEmpenho');
+			$criteria->addColumnAttribute('numero');
+			$criteria->addColumnAttribute('tipoEmpenho');
+			$criteria->addColumnAttribute('numpro');
+			$criteria->addCriteria('idEmpenho','=', "{$idEmpenhoOR}");
+			$criteria->addCriteria('status','in', "('3','6')");
+			$query = $criteria->retrieveAsQuery();
+			$or = $query->result;
+		}
+
+		//busca dados gerais dos empenhos (ad_empenho) CA
+		$criteria =  $this->getCriteria();
+		$criteria->addColumnAttribute('idEmpenho');
+		$criteria->addColumnAttribute('numero');
+		$criteria->addColumnAttribute('tipoEmpenho');
+		$criteria->addColumnAttribute('numpro');
+		$criteria->addCriteria('idEmpenhoRef','=', "{$idEmpenhoOR}");
+		$criteria->addCriteria('tipoEmpenho','=', "'CA'");
+		$criteria->addCriteria('status','in', "('3','6')");
+		$query = $criteria->retrieveAsQuery();
+		$ca = $query->result;
+
+		//busca dados gerais dos empenhos (ad_empenho) CO
+		$criteria =  $this->getCriteria();
+		$criteria->addColumnAttribute('idEmpenho');
+		$criteria->addColumnAttribute('numero');
+		$criteria->addColumnAttribute('tipoEmpenho');
+		$criteria->addColumnAttribute('numpro');
+		$criteria->addCriteria('idEmpenhoRef','=', "{$idEmpenhoOR}");
+		$criteria->addCriteria('tipoEmpenho','=', "'CO'");
+		$criteria->addCriteria('status','in', "('3','6')");
+		$query = $criteria->retrieveAsQuery();
+		$co = $query->result;
+
+		$result = array();
+		if($or)
+		{
+			$result = array_merge($result, $or);
+		}
+		if($ca)
+		{
+			$result = array_merge($result, $ca);
+		}
+		if($co)
+		{
+			$result = array_merge($result, $co);
+		}
+
+		//busca dados de liquidações e notas fiscais
+		$j = 0;
+		for($i = 0; $i < count($result); $i++)
+		{
+			$criteria =  $this->getCriteria();
+			$criteria->addColumnAttribute('notaFiscal.idNotaFiscal');
+			$criteria->addColumnAttribute('notaFiscal.notaFiscal');
+			$criteria->addColumnAttribute('notaFiscal.dataNotaFiscal');
+			$criteria->addColumnAttribute('null', 'credito');
+			$criteria->addColumnAttribute('notaFiscal.valor', 'debito');
+			$criteria->addCriteria('idEmpenho','=', "{$result[$i][0]}");
+			$criteria->addCriteria('notaFiscal.idLiquidacao','is', "null");
+			$query = $criteria->retrieveAsQuery();
+			if($query->result)
+			{
+				$k = 1;
+				foreach($query->result as $r)
+				{
+					$result2[$j][0] = $result[$i][0];
+					$result2[$j][1] = $result[$i][1];
+					$result2[$j][2] = $result[$i][2];
+					$result2[$j][3] = $result[$i][3];
+					$result2[$j][4] = $r[0];
+					$result2[$j][5] = $r[1];
+					$result2[$j][6] = $r[2];
+					if($k == 1)
+					{
+						$result2[$j][7] = $r[3];
+					}
+					else
+					{
+						$result2[$j][7] = 0;
+					}
+					$result2[$j][8] = $r[4];
+					$j++;
+					$k++;
+				}
+			}
+			else
+			{
+				$result2[$j][0] = $result[$i][0];
+				$result2[$j][1] = $result[$i][1];
+				$result2[$j][2] = $result[$i][2];
+				$result2[$j][3] = $result[$i][3];
+				$j++;
+			}
+		}
+		$result = $result2;
+
+		//busca dados de credito e concatena dados para serem passados para próximas telas por $item
+		for($i = 0; $i < count($result); $i++)
+		{
+			$r = $result[$i];
+			$criteria =  $this->getCriteria();
+			$criteria->addColumnAttribute('sum(empenhado.valorEmp)', 'credito');
+			$criteria->addCriteria('idEmpenho','=', "{$r[0]}");
+			$query = $criteria->retrieveAsQuery();
+			if($query->result)
+			{
+				if($result[$i][1] != $result[$i-1][1])
+				{
+					$result[$i][7] = $query->result[0][0];
+				}
+				else //elimina creditos repetidos
+				{
+					$result[$i][7] = 0;
+				}
+			}
+			//$item
+			$result[$i][0] = $result[$i][0] . '-' . $result[$i][4];
+		}
+
+		return $result;
+	}
+
+	function ListDetalhesEmpenhoPagamento($idFornecedor)
+	{
+		//liquidações a pagar que contêm $numero do empenho
+		$criteria = $this->getCriteria();
+		$criteria->setDistinct(true);
+		$criteria->addColumnAttribute("notaFiscal.liquidacao.idLiquidacao");
+		$criteria->addCriteria('idFornecedor','=', "{$idFornecedor}");
+//		$criteria->addCriteria('notaFiscal.liquidacao.pago','=', "'0'");
+        $criteria->addCriteria('notaFiscal.liquidacao.ordemBancaria.numeroOrdemBancaria','is', "null");
+		$criteria->setAssociationType('ordemBancaria', 'right');
+		$query = $criteria->retrieveAsQuery();
+
+		$result = array();
+		$i = 0;
+		if($query->result)
+		{
+			foreach($query->result as $r)
+			{
+				$criteria = $this->getCriteria();
+				$criteria->addColumnAttribute("numero");
+				$criteria->addColumnAttribute('tipoEmpenho');
+				$criteria->addColumnAttribute('numpro');
+				$criteria->addColumnAttribute("notaFiscal.liquidacao.dataLiquidacao");
+				$criteria->addColumnAttribute('notaFiscal.notaFiscal');
+				$criteria->addColumnAttribute('notaFiscal.dataNotaFiscal');
+				$criteria->addColumnAttribute("notaFiscal.liquidacao.valor");
+				$criteria->addCriteria('notaFiscal.liquidacao.idLiquidacao','=', "{$r[0]}");
+				$query2 = $criteria->retrieveAsQuery();
+				$result[$i] = array();
+				foreach($query2->result as $r2)
+				{
+					$result[$i][0] = $r[0];
+					$result[$i][1] = ($result[$i][1] == null) ? trim($r2[0]) : $result[$i][1] . '<BR>' . trim($r2[0]);
+					$result[$i][2] = ($result[$i][2] == null) ? $r2[1] : $result[$i][2] . '<BR>' . $r2[1];
+					$result[$i][3] = $r2[2];
+					$result[$i][4] = $r2[3];
+					$result[$i][5] = ($result[$i][5] == null) ? $r2[4] : $result[$i][5] . '<BR>' . $r2[4];
+					$result[$i][6] = ($result[$i][6] == null) ? $r2[5] : $result[$i][6] . '<BR>' . $r2[5];
+					$result[$i][7] = $r2[6];
+				}
+				$i++;
+			}
+		}
+		return $result;
+	}
+
+	function ListDetalhesEmpenhoPagamentoByNumero($numero)
+	{
+		//liquidações a pagar que contêm $numero do empenho
+		$criteria = $this->getCriteria();
+		$criteria->setDistinct(true);
+		$criteria->addColumnAttribute("notaFiscal.liquidacao.idLiquidacao");
+		$criteria->addCriteria('numero','=', "'$numero}'");
+		$criteria->addCriteria('notaFiscal.liquidacao.pago','=', "'0'");
+//        $criteria->addCriteria('notaFiscal.liquidacao.ordemBancaria.numeroOrdemBancaria','is', "null");
+//		$criteria->setAssociationType('ordemBancaria', 'right');
+		$query = $criteria->retrieveAsQuery();
+
+		$result = array();
+		$i = 0;
+		if($query->result)
+		{
+			foreach($query->result as $r)
+			{
+				$criteria = $this->getCriteria();
+				$criteria->addColumnAttribute("numero");
+				$criteria->addColumnAttribute('tipoEmpenho');
+				$criteria->addColumnAttribute('numpro');
+				$criteria->addColumnAttribute("notaFiscal.liquidacao.dataLiquidacao");
+				$criteria->addColumnAttribute('notaFiscal.notaFiscal');
+				$criteria->addColumnAttribute('notaFiscal.dataNotaFiscal');
+				$criteria->addColumnAttribute("notaFiscal.liquidacao.valor");
+				$criteria->addCriteria('notaFiscal.liquidacao.idLiquidacao','=', "{$r[0]}");
+				$query2 = $criteria->retrieveAsQuery();
+				$result[$i] = array();
+				foreach($query2->result as $r2)
+				{
+					$result[$i][0] = $r[0];
+					$result[$i][1] = ($result[$i][1] == null) ? trim($r2[0]) : $result[$i][1] . '<BR>' . trim($r2[0]);
+					$result[$i][2] = ($result[$i][2] == null) ? $r2[1] : $result[$i][2] . '<BR>' . $r2[1];
+					$result[$i][3] = $r2[2];
+					$result[$i][4] = $r2[3];
+					$result[$i][5] = ($result[$i][5] == null) ? $r2[4] : $result[$i][5] . '<BR>' . $r2[4];
+					$result[$i][6] = ($result[$i][6] == null) ? $r2[5] : $result[$i][6] . '<BR>' . $r2[5];
+					$result[$i][7] = $r2[6];
+				}
+				$i++;
+			}
+		}
+		return $result;
+	}
+
+	function getEmpenhado()
+    {
+        $this->retrieveAssociation('empenhado');
+        return $this->empenhado;
+    }
+
+	function getValores()
+	{
+		//valor (soma dos valorEmp em ad_empenhado para este empenho)
+		$criteria =  $this->getCriteria();
+		$criteria->addColumnAttribute('sum(empenhado.valorEmp)');
+		$criteria->addCriteria('idEmpenho','=', "{$this->idEmpenho}");
+		$query = $criteria->retrieveAsQuery();
+		$valor = $query->result[0][0];
+
+		//saldo [valorEmp - valorNF (desde que tenha OB)]
+		$criteria =  $this->getCriteria();
+		$criteria->addColumnAttribute('sum(empenhado.valorEmp)');
+		$criteria->addCriteria('idEmpenho','=', "{$this->idEmpenho}");
+		$criteria->addOrCriteria('idEmpenhoRef','=', "{$this->idEmpenho}");
+		$criteria->addCriteria('tipoEmpenho','=', "'CA'");
+		$query = $criteria->retrieveAsQuery();
+		$credito = $query->result[0][0];
+		$criteria =  $this->getCriteria();
+		$criteria->addColumnAttribute('sum(notaFiscal.valor)');
+//		$criteria->addCriteria('notaFiscal.liquidacao.pago','=', "'1'");
+//        $criteria->addCriteria('notaFiscal.liquidacao.ordemBancaria.numeroOrdemBancaria','is not', "null");
+//		$criteria->setAssociationType('ordemBancaria', 'right');
+		$criteria->addCriteria('idEmpenho','=', "{$this->idEmpenho}");
+		$criteria->addOrCriteria('idEmpenhoRef','=', "{$this->idEmpenho}");
+		$criteria->addCriteria('tipoEmpenho','=', "'CA'");
+		$query = $criteria->retrieveAsQuery();
+		$debito = $query->result[0][0];
+		$saldo = str_replace(',','.',$credito) - str_replace(',','.',$debito);
+
+		//saldoCO [valorEmp - valorNF para empenhos CO (desde que tenha OB)]
+		$criteria =  $this->getCriteria();
+		$criteria->addColumnAttribute('idEmpenho');
+		$criteria->addCriteria('tipoEmpenho','=', "'CO'");
+		$criteria->addCriteria('idEmpenhoRef','=', "{$this->idEmpenho}");
+		$query = $criteria->retrieveAsQuery();
+		$COs = '';
+		if($query->result)
+		{
+			foreach($query->result as $r)
+			{
+				$COs .= "'$r[0]',";
+			}
+			$COs = substr($COs, 0, -1);
+			$criteria =  $this->getCriteria();
+			$criteria->addColumnAttribute('sum(empenhado.valorEmp)');
+			$criteria->addCriteria('idEmpenho','in', "($COs)");
+			$criteria->addOrCriteria('idEmpenhoRef','in', "($COs)");
+			$criteria->addCriteria('tipoEmpenho','=', "'CA'");
+			$query = $criteria->retrieveAsQuery();
+			$creditoCO = $query->result[0][0];
+			$criteria =  $this->getCriteria();
+			$criteria->addColumnAttribute('sum(notaFiscal.valor)');
+			$criteria->addCriteria('idEmpenho','in', "($COs)");
+			$criteria->addOrCriteria('idEmpenhoRef','in', "($COs)");
+			$criteria->addCriteria('tipoEmpenho','=', "'CA'");
+//			$criteria->addCriteria('notaFiscal.liquidacao.pago','=', "'1'");
+//			$criteria->addCriteria('notaFiscal.liquidacao.ordemBancaria.numeroOrdemBancaria','is not', "null");
+//			$criteria->setAssociationType('ordemBancaria', 'right');
+			$query = $criteria->retrieveAsQuery();
+			$debitoCO = $query->result[0][0];
+			$saldoCO = str_replace(',','.',$creditoCO) - str_replace(',','.',$debitoCO);
+		}
+		else
+		{
+			$saldoCO = 0;
+		}
+		return array($valor,$saldo,$saldoCO);
+	}
+
+	function getOrcamentosEmpenhadosByLicitacaoData($licitacao, $data)
+	{
+		$dataInicio = substr($this->_db->CharToTimestamp($data . ' 00:00:00', 'dd/mm/yyyy hh24:mi:ss'), 1);
+		$dataFim = substr($this->_db->CharToTimestamp($data . ' 23:59:59', 'dd/mm/yyyy hh24:mi:ss'), 1);
+
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('idOrcamento');
+		$criteria->addColumnAttribute('sum(empenhado.valorEmp)');
+		$criteria->addCriteria("to_date(empenhado.dataOrcamento,'dd/mm/yyyy')",'>=',$dataInicio);
+		$criteria->addCriteria("to_date(empenhado.dataOrcamento,'dd/mm/yyyy')",'<=',$dataFim);
+		$criteria->addCriteria('empenhado.idLicitacao','=',$licitacao);
+		$criteria->addGroupAttribute('idOrcamento');
+		$query = $criteria->retrieveAsQuery();
+		return $query->result;
+	}
+
+	function getEmpenhosByLicitacaoData($licitacao, $data)
+	{
+		$dataInicio = substr($this->_db->CharToTimestamp($data . ' 00:00:00', 'dd/mm/yyyy hh24:mi:ss'), 1);
+		$dataFim = substr($this->_db->CharToTimestamp($data . ' 23:59:59', 'dd/mm/yyyy hh24:mi:ss'), 1);
+
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('idEmpenho');
+		$criteria->addColumnAttribute('sum(empenhado.valorEmp)');
+		$criteria->addColumnAttribute('numPro');
+		$criteria->addCriteria("to_date(empenhado.dataOrcamento,'dd/mm/yyyy')",'>=',$dataInicio);
+		$criteria->addCriteria("to_date(empenhado.dataOrcamento,'dd/mm/yyyy')",'<=',$dataFim);
+		$criteria->addCriteria('empenhado.idLicitacao','=',$licitacao);
+		$criteria->addGroupAttribute('idEmpenho');
+		$criteria->addGroupAttribute('numPro');
+		$query = $criteria->retrieveAsQuery();
+		return $query->result;
+	}
+
+	function getValorByLicitacaoData($licitacao, $data)
+	{
+		$dataInicio = substr($this->_db->CharToTimestamp($data . ' 00:00:00', 'dd/mm/yyyy hh24:mi:ss'), 1);
+		$dataFim = substr($this->_db->CharToTimestamp($data . ' 23:59:59', 'dd/mm/yyyy hh24:mi:ss'), 1);
+
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('sum(empenhado.valorEmp)');
+		$criteria->addCriteria("to_date(empenhado.dataOrcamento,'dd/mm/yyyy')",'>=',$dataInicio);
+		$criteria->addCriteria("to_date(empenhado.dataOrcamento,'dd/mm/yyyy')",'<=',$dataFim);
+		$criteria->addCriteria('empenhado.idLicitacao','=',$licitacao);
+		$query = $criteria->retrieveAsQuery();
+		return $query->result[0][0];
+	}
+
+	function getSaldo($idEmpenho)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('sum(empenhado.valorEmp)');
+		$criteria->addCriteria('idEmpenho','=',$idEmpenho);
+		$empenhado = $criteria->retrieveAsQuery();
+
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('notaFiscal.itens.quantidade');
+		$criteria->addColumnAttribute('notaFiscal.itens.valor');
+		$criteria->addCriteria('idEmpenho','=',$idEmpenho);
+		$criteria->addCriteria('notaFiscal.idLiquidacao','is',"not null");
+		$query = $criteria->retrieveAsQuery();
+
+		$nota = 0;
+		if($query->result != null)
+		{
+			foreach($query->result as $r)
+			{
+				$nota += ($r[0] * $r[1]);
+			}
+		}
+
+		$saldo = $empenhado->result[0][0] - $nota;
+		return $saldo;
+	}
+
+	function getTotaisEmpenho($idEmpenho)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('idEmpenho');
+		$criteria->addColumnAttribute('sum(empenhado.valorEmp)');
+		$criteria->addCriteria('idEmpenho','=',$idEmpenho);
+		$criteria->addGroupAttribute('idEmpenho');
+		$criteria->addGroupAttribute('numPro');
+		$query = $criteria->retrieveAsQuery();
+		return $query->result;
+	}
+
+	function GetEmpenhoReferencia($idEmpenho)
+	{
+		$criteria =  $this->getCriteria();
+		$criteria->setAutoAssociationAlias('E','R');
+		$criteria->addColumnAttribute('R.numero');
+		$criteria->addColumnAttribute('R.numPro');
+		$criteria->addColumnAttribute('E.tipoEmpenho');
+		$criteria->addCriteria('E.idEmpenhoRef', '=', 'R.idEmpenho');
+		$criteria->addCriteria('E.idEmpenho','=', "$idEmpenho");
+		$query = $criteria->retrieveAsQuery();
+		return $query->result[0];
+	}
+
+	function GetEmpenhosReferencia($idLicitacao, $selected, $order)
+	{
+		$itens = '';
+		foreach($selected as $s)
+		{
+			$itens .= "'$s',";
+		}
+		$itens = substr($itens, 0, -1);
+
+		$criteria = $this->getCriteria();
+		$criteria->AddColumnAttribute('idEmpenho');
+		$criteria->AddColumnAttribute('numero');
+		$criteria->AddColumnAttribute('empenhado.item');
+		$criteria->AddColumnAttribute('tipoEmpenho');
+		$criteria->addCriteria('empenhado.idLicitacao','=',$idLicitacao);
+//		$criteria->addCriteria('numero','is not','null');
+		$criteria->addCriteria('tipoEmpenho','in',"('OR','CO')");
+        $criteria->addOrderAttribute("$order");
+		return $criteria->retrieveAsQuery();
+	}
+
+	function DefineReferencia($idLicitacao,$itens,$empenho)
+	//id, itens selecionados no grid, empenhos que podem servir de referencia
+	//$itens = array(item1,...,itemN) N é último item selecionado
+	//$empenho é a relação que está no grid de baixo da tela
+	{
+		global $MIOLO, $module;
+
+		$objItemLicitacao = $MIOLO->GetBusiness($module, 'itemlicitacao');
+		$item = $objItemLicitacao->GetItens($idLicitacao);
+		$todosItens = array();
+		foreach($item->result as $i)
+		{
+			$todosItens[] = $i[0]; //array com todos os itens da licitacao
+		}
+		$totalItens = count($item->result); //total de itens da licitacao
+
+		//array de empenhos: $empenhos[$cod] = array(item1,...,itemN) N é total de itens do empenho
+		$empenhos = array();
+		foreach($empenho as $e)
+		{
+			$empenhos[$e[0]] = array();
+			if( is_array($empenhos[$e[0]]) )
+			{
+				$empenhos[$e[0]] = array_merge($empenhos[$e[0]], array($e[3]));
+			}
+			else
+			{
+				$empenhos[$e[0]] = array($e[3]);
+			}
+		}
+		$totalEmpenhos = count($empenhos);
+
+		//array de empenhos ordenados por id (ou seja, ordem cronológica)
+		$empOrd = array(); 
+		for($i = 0; $i < $totalEmpenhos; $i++)
+		{
+			foreach($empenhos as $id=>$empenho)
+			{
+				if(count($empenho) == $i)
+				{
+					$empOrd[] = array(
+						'id'=>$id,
+						'itens'=>$empenho
+					);
+				}
+			}
+		}
+
+		//define as referencias com base nos empenhos anteriores, comparando todos os itens
+		$ref = array();
+		foreach($itens as $item)
+		{
+			foreach($empOrd as $key=>$e)
+			{
+				$ok = true;
+				$r = '0';
+				if(in_array($item,$e['itens']))//item atual está no empenho atual
+				{
+					foreach($e['itens'] as $itemEmpenhado)
+					{
+						$itemEmpenhado = strval($itemEmpenhado);
+						if(!in_array($itemEmpenhado, $itens))
+						{
+							$ok = false;
+						}
+						$r = $e['id'];
+					}
+				}
+				if($ok)
+				{
+//					if( ( !isset($ref[$item]) ) or ($r != '0') ) //nao existe referencia para o item ainda
+					if( ( !isset($ref[$item]) ) and ($r != '0') ) //nao existe referencia para o item ainda
+					{
+						$ref[$item] = $r;
+					}
+				}
+			}
+		}
+
+		//busca referencias para os itens 
+		foreach($itens as $item)
+		{
+			if($ref[$item] == '0')
+			{
+				foreach($empOrd as $key=>$e)
+				{
+					if( in_array($item,$e['itens']) )
+					{
+						$ref[$item] = $e['id'];
+						break;
+					}
+				}
+			}
+		}
+
+		return $ref;
+	}
+
+	function GetProcessoPagamento($idEmpenho)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->AddColumnAttribute('numpro');
+		$criteria->addCriteria('idEmpenho','=',$idEmpenho);
+		$query = $criteria->retrieveAsQuery();
+		return $query->result[0][0];
+	}
+
+	function GetProcessoLicitacao($idEmpenho)
+	{
+		$criteria =  $this->getCriteria();
+		$criteria->addColumnAttribute('empenhado.licitacao.numProcesso');
+		$criteria->addCriteria('idEmpenho','=', "$idEmpenho");
+		$query = $criteria->retrieveAsQuery();
+		return $query->result[0][0];
+	}
+
+    function getNotaFiscalByNumero($numero)
+    {
+        global $MIOLO;
+        $this->retrieveAssociation('notaFiscal');
+        if ($this->notaFiscal)
+        {
+            foreach ($this->notaFiscal as $nota)
+            {
+                if ($nota->notaFiscal == $numero)
+                {
+                    return $nota;
+                }
+            }
+        }
+        $nota = $MIOLO->getBusiness('adm','notafiscal');
+        $nota->notaFiscal = $numero;
+        $nota->idEmpenho = $this->idEmpenho;
+        return $nota;
+    }
+    function getNotaFiscal($id=null)
+    {
+        global $MIOLO;
+        $this->retrieveAssociation('notaFiscal');
+        if ($this->notaFiscal)
+        {
+            if ($id)
+            {
+                foreach ($this->notaFiscal as $nota)
+                {
+                    if ($nota->idNotaFiscal == $id)
+                    {
+                        return $nota;
+                    }
+                }
+            }
+            return $this->notaFiscal;
+        }
+        return null;
+    }
+
+	function GetValorLiquidacao($idEmpenho, $data)
+	{
+		$data = date("Y/m/d", strtotime($data));
+		$criteria = $this->getCriteria();
+		$criteria->AddColumnAttribute('sum(notaFiscal.liquidacao.valor)');
+		$criteria->addCriteria('idEmpenho','=',$idEmpenho);
+		$criteria->addCriteria('notaFiscal.liquidacao.dataLiquidacao','=',"'$data'");
+		$query = $criteria->retrieveAsQuery();
+		return $query->result[0][0];
+	}
+
+	function Liquidacao($string_notas, $idFornecedor, $valorIRRF, $valorINSS, $valorISS, $dataLiquidacao, $obs)
+	{
+		global $MIOLO, $module;
+
+		$objEmpenho = $MIOLO->GetBusiness($module, 'empenho');
+		$objEmpenho->BeginTransaction();
+
+		//grava ad_liquidacao
+		$liquidacao = $MIOLO->GetBusiness($module, 'liquidacao');
+
+		$notaFiscal = $MIOLO->GetBusiness($module, 'notafiscal');
+		$notas = explode(',', $string_notas);
+		$valor = 0;
+		foreach($notas as $nota)
+		{
+			$valorNota = $notaFiscal->GetValorByNotaFiscal($nota);
+			$valorNota = str_replace(',','.',$valorNota);
+			$valor += $valorNota;
+		}
+
+		$liquidacao->setTransaction($objEmpenho->getTransaction());
+		$liquidacao->dataLiquidacao = $dataLiquidacao;
+		$liquidacao->valor = $valor;
+		$liquidacao->pago = '0';
+		$liquidacao->obs = $obs;
+		$liquidacao->valorIRRF = $valorIRRF;
+		$liquidacao->valorINSS = $valorINSS;
+		$liquidacao->valorISS = $valorISS;
+		$liquidacao->save();
+
+		//testa saldo para mudar status do empenho se necessário
+		$empenhos = $notaFiscal->GetIdEmpenhosByNotas($string_notas);
+		foreach($empenhos->result as $empenho)
+		{
+			$saldo = $this->getSaldo($empenho[0]);
+			$saldo = str_replace(',','.',$saldo);
+			$notasPorEmpenho = $notaFiscal->GetNotasByEmpenhoLiquidacao($empenho[0], $string_notas);
+			$valorNotaItensEmpenho = 0;
+			foreach($notasPorEmpenho as $n)
+			{
+				$valorNotaItensEmpenhoAtual = $notaFiscal->GetValorNotaItensEmpenho($n, $empenho[0]);
+				$valorNotaItensEmpenhoAtual = str_replace(',','.',$valorNotaItensEmpenhoAtual);
+				$valorNotaItensEmpenho += $valorNotaItensEmpenhoAtual;
+			}
+
+			if( ($saldo - $valorNotaItensEmpenho) <= 0)
+			{
+				//update status do empenho (A - liquidado)
+				$this->getById($empenho[0]);
+				$this->setTransaction($objEmpenho->getTransaction());
+				$this->status = 'A';
+				$this->save();
+			}
+		}
+
+		//grava idLiquidacao nas notas liquidadas
+		foreach($notas as $nota)
+		{
+			$notaFiscal->GetById($nota);
+			$notaFiscal->setTransaction($objEmpenho->getTransaction());
+			$notaFiscal->idLiquidacao = $liquidacao->idLiquidacao;
+			$notaFiscal->save();
+		}
+
+		$liquidacao->Log(OP_INS, "Liquidacao realizada: ".$liquidacao->idLiquidacao);
+
+		$objEmpenho->EndTransaction();
+
+		return $liquidacao->idLiquidacao;
+	}
+
+	function Pagamento($idLiquidacao, $numeroOrdemBancaria, $dataOrdemBancaria, $valor, $descontos, $DARF, $GPS, $dataGPS)
+	{
+		global $MIOLO, $module;
+
+		$valorOB = str_replace(',','.',$valor);
+
+		$ordemBancaria = $MIOLO->GetBusiness($module, 'ordembancaria');
+		$ordemBancaria->BeginTransaction();
+		$ordemBancaria->numeroOrdemBancaria = $numeroOrdemBancaria;
+		$ordemBancaria->dataOrdemBancaria = $dataOrdemBancaria;
+		$ordemBancaria->valor = $valorOB;
+		$ordemBancaria->DARF = $DARF;
+		$ordemBancaria->GPS = $GPS;
+		$ordemBancaria->dataGPS = $dataGPS;
+		$ordemBancaria->idLiquidacao = $idLiquidacao;
+
+
+		//testa se é necessário alterar campo pago de ad_liquidacao
+		$liquidacao = $MIOLO->GetBusiness($module, 'liquidacao', $idLiquidacao);
+		$valorOrdens = $ordemBancaria->GetValorOrdensByLiquidacao($idLiquidacao);
+		$valor = number_format(str_replace(',','.',$valor),2,'.','');
+
+		$valor = $valorOB;
+		
+		//$valor = floatval(str_replace(',','.',$valor));
+		$valorOrdens = floatval(str_replace(',','.',$valorOrdens));
+		$descontos = floatval(str_replace(',','.',$descontos));
+		$liquidacao->valor = floatval(str_replace(',','.',$liquidacao->valor));
+		$valorTotal = $valorOrdens + $valor + $descontos;
+
+		//Bug Pagamento
+		//var_dump('Valor Ordens',$valorOrdens ,'valor' ,$valor ,'descontos', $descontos,'Valor Total',$valorTotal,'Valor da Liquidação',$liquidacao->valor);
+		
+		//Bug Pagamento
+				
+		
+			
+			if($liquidacao->valor < floatval($valorTotal))		
+		{
+		$href = $MIOLO->GetActionURL($MIOLO->GetActionURL($module, 'main:financeiro:pagamento'));
+		//$MIOLO->information( 'O valor da nota excede o valor a ser pago', 'Operação Não Realizada', $href );
+		//$MIOLO->error('O valor da nota excede o valor a ser pago', $goto = '', $event = '', $halt = true)
+		error($msg = 'O valor da nota excede o valor a ser pago', $href, $caption = '', $event = '', $halt = true);
+		}
+		
+		
+		elseif($liquidacao->valor == floatval($valorTotal))
+		{
+			$liquidacao->setTransaction($ordemBancaria->getTransaction());
+			$liquidacao->pago = '1';
+			$liquidacao->save();
+		}
+
+		$ordemBancaria->save();
+		$ordemBancaria->Log(OP_INS, "Pagamento realizado: ".$ordemBancaria->idOrdemBancaria);
+		$ordemBancaria->EndTransaction();
+	}
+
+	function Anulacao($itens, $data, $motivo, $numeroAnulacao, $quant, $valores)
+	{
+		global $MIOLO;
+
+		$cf = new MCurrencyFormatter();
+		$itens = explode(',',$itens);
+		$arrayOrcs = array();//guarda operações relativas a orcamento: array[idOrcamento][i] = $valor
+		$arrayOrcamentos = array();//guarda operações relativas a orcamento interno: array[idUo][idRubrica][ano]['tipoOperacao'][i] = $valor
+		$arrayEmpenhados = array();//guarda operações relativas a empenhado: array[idEmpenhado][i] = [$valorAnulado, $quantidadeAnulada]
+
+		$this->BeginTransaction();
+		foreach($itens as $item)
+		{
+			$i = explode('-',$item);//0-idEmpenhado, 1-idRequisicao
+			$empenhado = $this->_miolo->GetBusiness('adm','empenhado',$i[0]);
+
+			if($empenhado->status == '2')//DISTRIBUIDO
+			{
+				//faz apenas para um dos n possíveis empenhadoDist, pois cada $item é referente a apenas um [idEmpenhado,idRequisicao]
+				$d = $MIOLO->GetBusiness('adm','empenhadodist');
+				$d->getById($i[0],$i[1]);
+				$d->retrieveAssociation('requisicao');
+
+				//definição de quantidade e valor anulado
+				if($motivo == 4)//pode anular por valor
+				{
+					$valorAnulado = $cf->toDecimal($valores[$item]);
+					$quantidadeAnulada = 0.0;
+				}
+				elseif(($motivo == 1) or ($motivo == 2) or ($motivo == 6))//pode anular por quantidade
+				{
+					$quantidadeAnulada = $cf->toDecimal($quant[$item]);
+					$valorAnulado = $cf->toDecimal($d->valorUnitario);
+				}
+				elseif(($motivo == 3) or ($motivo == 5))//pode anular apenas total empenhado
+				{
+					$quantidadeNotas = $empenhado->GetQuantNotasPorRequisicao($empenhado->idEmpenhado, $d->idRequisicao, $d->requisicao->idTipoReq);
+					$quantidadeAnulada = $cf->toDecimal($d->quantidade) - $cf->toDecimal($quantidadeNotas);
+					$valorAnulado = $cf->toDecimal($d->valorUnitario);
+				}
+
+				//updates nos orçamentos
+				if($motivo == 4)
+				{
+					$arrayOrcs[$empenhado->idOrcamento][] = $cf->toDecimal($valorAnulado);
+				}
+				else
+				{
+					$arrayOrcs[$empenhado->idOrcamento][] = $cf->toDecimal($valorAnulado) * $cf->toDecimal($quantidadeAnulada);
+				}
+				//updates nos empenhados
+				if($motivo == 4)
+				{
+					$arrayEmpenhados[$empenhado->idEmpenhado] = array($cf->toDecimal($arrayEmpenhados[$empenhado->idEmpenhado][0]) + $cf->toDecimal($valorAnulado), $cf->toDecimal($arrayEmpenhados[$empenhado->idEmpenhado][1]) + $cf->toDecimal($quantidadeAnulada));
+				}
+				else
+				{
+					$arrayEmpenhados[$empenhado->idEmpenhado] = array($cf->toDecimal($arrayEmpenhados[$empenhado->idEmpenhado][0]) + $cf->toDecimal($valorAnulado) * $cf->toDecimal($quantidadeAnulada), $cf->toDecimal($arrayEmpenhados[$empenhado->idEmpenhado][1]) + $cf->toDecimal($quantidadeAnulada));
+				}
+
+				$idUoReq = $d->requisicao->idUoRequisitante;
+				$idUoExec = $d->requisicao->idUoExecutante;
+				$ano = substr($d->requisicao->dataHoraAut,6,4);
+				if(!$ano)
+				{
+					$ano = substr($d->requisicao->dataHora,6,4);
+				}
+
+				if(($d->requisicao->idTipoReq == 6) || ($d->requisicao->idTipoReq == 7))//COMPRAS
+				{
+					$movimento = $this->_miolo->GetBusiness('adm', 'movimento');
+
+					$itemReq = $this->_miolo->GetBusiness('adm','itemreq');
+					$itemReq = $itemReq->getByIdLicitacaoItemIdRequisicao($empenhado->idLicitacao,$empenhado->item,$d->idRequisicao);
+
+					$valorPrevisao = $quantidadeAnulada * $cf->toDecimal($itemReq->precoEstimado);
+				}
+				elseif($d->requisicao->idTipoReq == 9)//SERVICO
+				{
+					$movimentoServ = $this->_miolo->GetBusiness('adm', 'movimentoserv');
+
+					$itemReqServ = $this->_miolo->GetBusiness('adm','itemservext');
+					$itemReqServ = $itemReqServ->getByIdLicitacaoItemIdRequisicao($empenhado->idLicitacao,$empenhado->item,$d->idRequisicao);
+
+					$valorPrevisao = $quantidadeAnulada * $cf->toDecimal($itemReqServ->valorEst);
+				}
+				if($motivo == 4)
+				{
+					$valorReal = $cf->toDecimal($valorAnulado);
+				}
+				else
+				{
+					$valorReal = $cf->toDecimal($quantidadeAnulada) * $cf->toDecimal($valorAnulado);
+				}
+
+				$requisicao = $this->_miolo->GetBusiness('adm','requisicao',$d->idRequisicao);
+				$requisita = $this->_miolo->getBusiness('adm','requisita');
+				$requisita->GetById($d->requisicao->idTipoReq, $idUoReq, $d->requisicao->getAno());
+				$executa = $this->_miolo->getBusiness('adm','executa');
+				$executa->GetById($d->requisicao->idTipoReq, $idUoExec, $d->requisicao->getAno());
+
+				$arrayOrcamentos[$idUoReq][$requisita->idRubrica][$ano]['removeDebito'][] = $valorReal;
+
+				$requisicao->Log(OP_UPD,"Requisicao ".$requisicao->idRequisicao.": anulacao de debito de ".$valorReal." na UO ".$requisicao->idUoRequisitante);
+
+				//adiciona previsão na uoreq somente para os motivos: 2 - ALTERACAO DE DOTACAO, 5 - ERRO NO CREDOR, 6 - POR INTERESSE DA ADMINISTRACAO
+				if(($motivo == '2') or ($motivo == '5') or ($motivo == '6'))
+				{
+					$arrayOrcamentos[$idUoReq][$requisita->idRubrica][$ano]['addPrevisao'][] = $valorPrevisao;
+					$requisicao->Log(OP_UPD,"Requisicao ".$requisicao->idRequisicao.": previsao de ".$valorPrevisao." na UO ".$requisicao->idUoRequisitante);
+
+					// Lançamento interno da previsão de débito
+					$lancamentoInt = $this->_miolo->getBusiness('adm','lancamentoint');
+					$lancamentoInt->tipoLancamento = '4'; //previsão de débito
+					$lancamentoInt->data = date("d/m/Y");                
+					$lancamentoInt->valor = $valorPrevisao;
+					$lancamentoInt->ano = date("Y");
+					$lancamentoInt->obs = "Anulacao de Empenho - motivo: " . $motivo;
+					$lancamentoInt->idUoRequisitante = $requisicao->idUoRequisitante;       
+					$lancamentoInt->idUoExecutante = $requisicao->idUoExecutante;
+					$lancamentoInt->idRubrica = $requisita->idRubrica;           
+					$lancamentoInt->idRequisicao = $requisicao->idRequisicao;
+					$lancamentoInt->idUsuario = $this->_miolo->GetLogin()->idkey;
+					$lancamentoInt->setTransaction($this->getTransaction());
+					$lancamentoInt->save();
+					$lancamentoInt->Log(OP_INS,"Lançamento Interno numero ".$lancamentoInt->idLancamentoInt." gerado com sucesso para a Requisicao ".$requisicao->idRequisicao.".");
+
+					//updates no itemreq
+					if(($d->requisicao->idTipoReq == 6) || ($d->requisicao->idTipoReq == 7))//COMPRAS
+					{
+						if($motivo == 4)//anulacao por valor
+						{
+							$itemReq->valorReal = ($itemReq->quantEmpenhada * $itemReq->valorReal - $valorAnulado) / $itemReq->quantEmpenhada;
+						}
+						else
+						{
+							if($itemReq->quantEmpenhada - $quantidadeAnulada == 0)
+							{
+								$itemReq->valorReal = 0;
+							}
+							else
+							{
+								$itemReq->valorReal = (($cf->toDecimal($itemReq->quantEmpenhada) * $cf->toDecimal($itemReq->valorReal)) - ($quantidadeAnulada * $valorAnulado)) / ($cf->toDecimal($itemReq->quantEmpenhada) - $quantidadeAnulada);
+							}
+						}
+						$itemReq->quantDevolvida = $cf->toDecimal($itemReq->quantDevolvida) - $cf->toDecimal($quantidadeAnulada);
+						$itemReq->quantEmpenhada = $cf->toDecimal($itemReq->quantEmpenhada) - $cf->toDecimal($quantidadeAnulada);
+						$itemReq->setTransaction($this->getTransaction());
+						$itemReq->save();
+					}
+					elseif($d->requisicao->idTipoReq == 9)//SERVICO
+					{
+						if($motivo == 4)//anulacao por valor
+						{
+							$itemReqServ->valorReal = ($itemReqServ->quantEmpenhada * $itemReqServ->valorReal - $valorAnulado) / $itemReqServ->quantEmpenhada;
+						}
+						else
+						{
+							if($itemReqServ->quantEmpenhada - $quantidadeAnulada == 0)
+							{
+								$itemReqServ->valorReal = 0;
+							}
+							else
+							{
+								$itemReqServ->valorReal = (($cf->toDecimal($itemReqServ->quantEmpenhada) * $cf->toDecimal($itemReqServ->valorReal)) - ($quantidadeAnulada * $valorAnulado)) / ($cf->toDecimal($itemReqServ->quantEmpenhada) - $quantidadeAnulada);
+							}
+						}
+						$itemReqServ->quantDevolvida = $cf->toDecimal($itemReqServ->quantDevolvida) - $cf->toDecimal($quantidadeAnulada);
+						$itemReqServ->quantEmpenhada = $cf->toDecimal($itemReqServ->quantEmpenhada) - $cf->toDecimal($quantidadeAnulada);
+						$itemReqServ->setTransaction($this->getTransaction());
+						$itemReqServ->save();
+					}
+				}
+				else//para os outros motivos, anula itemreq e requisição (quando for o caso)
+				{
+					if($requisicao->idTipoReq == 6)//PERMANENTE 
+					{
+						$requisicao->status = 'A';
+						$requisicao->setTransaction($this->getTransaction());
+						$requisicao->save();
+
+						$itemReq->status = '4';
+						$itemReq->setTransaction($this->getTransaction());
+						$itemReq->save();
+						$itemReq->Log(OP_UPD, "Status Item Req: Anulacao de Empenho idLicitacao $itemReq->idLicitacao item $itemReq->item idRequisicao $itemReq->idRequisicao idServico $itemReq->idServico status $itemReq->status");
+					}
+					elseif($requisicao->idTipoReq == 9)//SERVICO
+					{
+						$requisicao->status = 'A';
+						$requisicao->setTransaction($this->getTransaction());
+						$requisicao->save();
+						
+						$itemReqServ->status = '4';
+						$itemReqServ->setTransaction($this->getTransaction());
+						$itemReqServ->save();
+						$itemReqServ->Log(OP_UPD, "Status Item Req: Anulacao de Empenho idLicitacao $itemReqServ->idLicitacao item $itemReqServ->item idRequisicao $itemReqServ->idRequisicao idServico $itemReqServ->idServico status $itemReqServ->status");
+					}
+					elseif($requisicao->idTipoReq == 7)//CONSUMO
+					{
+						$itemReq->status = '4';
+						$itemReq->setTransaction($this->getTransaction());
+						$itemReq->save();
+						$itemReq->Log(OP_UPD, "Status Item Req: Anulacao de Empenho idLicitacao $itemReq->idLicitacao item $itemReq->item idRequisicao $itemReq->idRequisicao idServico $itemReq->idServico status $itemReq->status");
+					}
+				}
+
+				$arrayOrcamentos[$idUoExec][$executa->idRubrica][$ano]['removeCreditoExecutante'][] = $valorReal;
+
+				$requisicao->Log(OP_UPD,"Requisicao ".$requisicao->idRequisicao.": estorno de credito de ".$valorReal." na UO ".$requisicao->idUoExecutante);
+
+				// Lançamento interno do crédito/débito
+				$lancamentoInt = $this->_miolo->getBusiness('adm','lancamentoint');
+				$lancamentoInt->tipoLancamento = '6';//estorno crédito/débito
+				$lancamentoInt->data = date("d/m/Y");                
+				$lancamentoInt->valor = $valorReal;
+				$lancamentoInt->ano = date("Y");
+				$lancamentoInt->obs = "Anulacao de Empenho - motivo: " . $motivo;
+				$lancamentoInt->idUoRequisitante = $requisicao->idUoRequisitante;       
+				$lancamentoInt->idUoExecutante = $requisicao->idUoExecutante;
+				$lancamentoInt->idRubrica = $requisita->idRubrica;           
+				$lancamentoInt->idRequisicao = $requisicao->idRequisicao;
+				$lancamentoInt->idUsuario = $this->_miolo->GetLogin()->idkey;
+				$lancamentoInt->setTransaction($this->getTransaction());
+				$lancamentoInt->save();
+				$lancamentoInt->Log(OP_INS,"Lançamento Interno numero ".$lancamentoInt->idLancamentoInt." gerado com sucesso para a Requisicao ".$requisicao->idRequisicao.".");                    
+
+				//empenhadoDist
+				$d->quantidade = $cf->toDecimal($d->quantidade) - $quantidadeAnulada;
+				$d->setTransaction($this->getTransaction());
+				$d->save();
+			}
+		}
+
+		//updates nos empenhados -> array[idEmpenhado][i] = [$valorAnulado, $quantidadeAnulada]
+		foreach($arrayEmpenhados as $idEmpenhado=>$valores)
+		{
+			$empenhado = $this->_miolo->GetBusiness('adm','empenhado',$idEmpenhado);
+			$empenhado->status = '3';//ANULADO
+			$empenhado->valorAnulado = $cf->toDecimal($empenhado->valorAnulado) + $cf->toDecimal($valores[0]);
+			$empenhado->quantidadeAnulada = $cf->toDecimal($empenhado->quantidadeAnulada) + $cf->toDecimal($valores[1]);
+			$empenhado->valorEmp = $cf->toDecimal($empenhado->valorEmp) - $cf->toDecimal($valores[0]);
+			$empenhado->quantidadeEmp = $cf->toDecimal($empenhado->quantidadeEmp) - $cf->toDecimal($valores[1]);
+			$empenhado->numeroAnulacao = $numeroAnulacao;
+			$empenhado->motivoAnulacao = $motivo;
+			$empenhado->dataAnulacao = $data;
+			$empenhado->setTransaction($this->getTransaction());
+			$empenhado->save();
+			$this->Log(OP_UPD,"Anulacao de Empenho: " . $this->idEmpenho . " idEmpenhado: " . $i[0] . " idRequisicao " . $i[1]);
+		}
+
+		//updates nos orçamentos -> array[idOrcamento][i] = $valor
+		foreach($arrayOrcs as $idOrcamento=>$valores)
+		{
+			$orcamento = $this->_miolo->GetBusiness('adm','orcamento',$idOrcamento);
+			$valorTotalOrcamento = 0.0;
+			foreach($valores as $valor)
+			{
+				$orcamento->pago = $cf->toDecimal($orcamento->pago) - $cf->toDecimal($valor);
+				$valorTotalOrcamento = $cf->toDecimal($valorTotalOrcamento) + $cf->toDecimal($valor);
+			}
+			$orcamento->setTransaction($this->getTransaction());
+			$orcamento->save();
+
+			//insere orcamentoHist de anulação
+			$orcamentoHist = $this->_miolo->GetBusiness('adm', 'orcamentohist');
+			$orcamentoHist->idOrcamento = $idOrcamento;
+			$data2 = $data . ' ' . date('H:i:s');
+			$orcamentoHist->data = ":TO_DATE('$data2','DD/MM/YYYY HH24:MI:SS')";
+			$orcamentoHist->tipoOrc = '9';
+			$orcamentoHist->valor = $valorTotalOrcamento;
+			$orcamentoHist->setTransaction($this->getTransaction());
+			$orcamentoHist->save();
+		}
+
+		//updates nos orçamentos internos -> array[idUo][idRubrica][ano]['tipoOperacao'][i] = $valor
+		foreach($arrayOrcamentos as $uo=>$rubricas)
+		{
+			foreach($rubricas as $rubrica=>$anos)
+			{
+				foreach($anos as $ano=>$tipos)
+				{
+					$orcamento = $this->_miolo->GetBusiness('adm','orcamentointerno');
+					$orcamento->GetById($uo,$rubrica,$ano);
+					foreach($tipos as $tipo=>$valores)
+					{
+						foreach($valores as $valor)
+						{
+							if($tipo == 'removeDebito')
+							{
+								$orcamento->debito = $cf->toDecimal($orcamento->debito) - $cf->toDecimal($valor);
+							}
+							elseif($tipo == 'addPrevisao')
+							{
+								$orcamento->previsaoDebito = $cf->toDecimal($orcamento->previsaoDebito) + $cf->toDecimal($valor);
+							}
+							elseif($tipo == 'removeCreditoExecutante')
+							{
+								$orcamento->creditoExecutante = $cf->toDecimal($orcamento->creditoExecutante) - $cf->toDecimal($valor);
+							}
+						}
+					}
+					$orcamento->setTransaction($this->getTransaction());
+					$orcamento->save();
+				}
+			}
+		}
+/*
+		$this->getEmpenhado();
+		$totalAnulados = 0;
+		foreach($this->empenhado as $e)
+		{
+			if($e->status == '3')
+			{
+				$totalAnulados++;
+			}
+		}
+		//se total de itens já anulados + total de itens sendo anulados == total de itens do empenho, o empenho inteiro é anulado
+		if($totalAnulados + count($itens) == count($this->empenhado))
+		{
+			$this->status = '7';
+			$this->save();
+		}
+*/
+		$this->EndTransaction();
+	}
+
+	function Cancelamento($idEmpenho, $data, $motivo)
+	{
+		$empenho = $this->getById($idEmpenho);
+		$empenho->status = '8';
+		$empenho->dataAnulacao = $data;
+		$empenho->motivoAnulacao = $motivo;
+		$empenho->save();
+		$empenho->Log(OP_UPD,"Cancelamento de Empenho: " . $empenho->idEmpenho);
+	}
+
+	function getSubElemento($idEmpenho)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->AddColumnAttribute('empenhado.itemreq.material.idsubelemento');
+		$criteria->addCriteria('empenhado.idEmpenho','=',$idEmpenho);
+		return $criteria->retrieveAsQuery();
+	}
+
+    function numProcessoFormatado($num=null)
+    {
+        $num = ($num == null) ? $this->numPro : $num;
+        if ($num)
+        {
+            $ano = substr($num,0,4);
+            $serie = substr($num,5,5);
+            $codigo = substr($num,10,2);
+            return "$serie/$ano-$codigo";
+        }
+    }
+
+	function ListEmpenhosComNotasALiquidar()
+	{
+		$criteria = $this->getCriteria();
+		$criteria->SetDistinct(true);
+		$criteria->AddColumnAttribute('idEmpenho');
+		$criteria->AddColumnAttribute('numero');
+		$criteria->AddColumnAttribute('fornecedor.instituicao.nome','fornecedor');
+		$criteria->addCriteria('status','in',"('3','6')");	
+		$criteria->addCriteria('notaFiscal.idLiquidacao','is',"null");	
+        $criteria->addOrderAttribute('numero');
+        return $criteria->retrieveAsQuery();
+	}
+
+	function ListEmpenhosComItensADistribuir()
+	{
+		$criteria = $this->getCriteria();
+		$criteria->SetDistinct(true);
+		$criteria->AddColumnAttribute('idEmpenho');
+		$criteria->AddColumnAttribute('numero');
+		$criteria->AddColumnAttribute('fornecedor.instituicao.nome','fornecedor');
+		$criteria->addCriteria('status','=',"'2'");	
+        $criteria->addOrderAttribute('numero');
+        return $criteria->retrieveAsQuery();
+	}
+
+	function ListEmpenhosParaEstorno()
+	{
+		$criteria = $this->getCriteria();
+		$criteria->SetDistinct(true);
+		$criteria->AddColumnAttribute('idEmpenho');
+		$criteria->AddColumnAttribute('numero');
+		$criteria->AddColumnAttribute('empenhado.licitacao.numero', 'numLic');
+		$criteria->AddColumnAttribute('fornecedor.instituicao.nome','fornecedor');
+		$criteria->AddColumnAttribute('ug','ug');		
+		$criteria->addCriteria('status','in',"('1','B','2')");	
+        $criteria->addOrderAttribute('numero');
+        return $criteria->retrieveAsQuery();
+	}
+
+	function ListEmpenhosComNotasAPagar()
+	{
+		$criteria = $this->getCriteria();
+		$criteria->SetDistinct(true);
+		$criteria->AddColumnAttribute('idEmpenho');
+		$criteria->AddColumnAttribute('numero');
+		$criteria->AddColumnAttribute('notaFiscal.idNotaFiscal');
+		$criteria->AddColumnAttribute('fornecedor.instituicao.nome','fornecedor');
+		$criteria->addCriteria('status','=',"'A'");	
+		$criteria->addCriteria('notaFiscal.liquidacao.pago','=', "'0'");
+//        $criteria->addCriteria('notaFiscal.liquidacao.ordemBancaria.numeroOrdemBancaria','is', "null");
+//		$criteria->setAssociationType('ordemBancaria', 'right');
+        $criteria->addOrderAttribute('numero');
+        return $criteria->retrieveAsQuery();
+	}
+	
+	function ListBoletimDiarioEntrada($dataInicio, $dataFim, $iduoreq)
+	{
+		// Não existe mapeamento ainda entre empenho, movimento e requisição		
+		//var_dump($dataInicio,$dataFim,$iduoreq);
+		
+		$dataInicio = substr($this->_db->CharToTimestamp($dataInicio.' 00:00:00'),1);
+		$dataFim = substr($this->_db->CharToTimestamp($dataFim.' 23:59:59'),1);		
+		
+		$select = "ad_material.codmaterial,ad_material.descricao,ad_material.unidade, ad_empenho.numero,ad_notafiscal.notafiscal,ad_uo.idsetor,ad_requisicao.idrequisicao,ad_movimento.idordement,ad_movimento.quantidade,ad_movimento.valortotal,ad_movimento.tipomovimento";
+		$from  	= "ad_movimento,ad_requisicao,ad_material,ad_itemnota,ad_notafiscal,ad_empenho,ad_uo";		
+		$where	= "ad_movimento.idrequisicao = ad_requisicao.idrequisicao and ad_movimento.idmaterial = ad_material.idmaterial and ad_movimento.iditemnota = ad_itemnota.iditemnota and ad_itemnota.idnotafiscal = ad_notafiscal.idnotafiscal and ad_notafiscal.idempenho = ad_empenho.idempenho and ad_empenho.iduo = ad_uo.iduo and (ad_movimento.datamov >= $dataInicio) AND (ad_movimento.datamov <= $dataFim) AND ((ad_movimento.tipomovimento = 1) OR (ad_movimento.tipomovimento = 5) OR (ad_movimento.tipomovimento = 2)  OR (ad_movimento.tipomovimento = 6)) AND (ad_requisicao.iduoexec = $iduoreq)";	
+		$orderby = "";
+		$groupby = "";
+		
+		$sql = new sql(
+						$select,
+						$from,
+						$where,
+						$orderby,
+						$groupby
+						);		
+							  
+		$queryentrada = $this->Query($sql);
+		
+		
+		
+		
+		if ($queryentrada->result)
+		{
+			foreach ($queryentrada->result as $row)
+			{
+				
+				if (($row[10] == 2) || ($row[10] == 6))
+				{
+					
+					$row[9]= $row[9]* -1;			
+				
+				}			
+			}
+		}
+		//echo "<pre>";	
+		//var_dump($queryentrada->result);
+		
+		return $queryentrada->result;
+	}
+	
+	function ListBoletimDiarioSaida($dataInicio, $dataFim, $iduoreq)
+	{
+		// Não existe mapeamento ainda entre empenho, movimento e requisição		
+		//var_dump($dataInicio,$dataFim);
+		
+		$dataInicio = substr($this->_db->CharToTimestamp($dataInicio.' 00:00:00'),1);
+		$dataFim = substr($this->_db->CharToTimestamp($dataFim.' 23:59:59'),1);
+		
+				
+		$select = "ad_material.codmaterial,ad_material.descricao,ad_material.unidade, ad_empenho.numero,ad_notafiscal.notafiscal,ad_uo.idsetor,ad_requisicao.idrequisicao,ad_movimento.idordement,ad_movimento.quantidade,ad_movimento.valortotal,ad_movimento.tipomovimento";
+		$from  	= "ad_movimento,ad_requisicao,ad_material,ad_itemnota,ad_notafiscal,ad_empenho,ad_uo";		
+		$where	= "ad_movimento.idrequisicao = ad_requisicao.idrequisicao and ad_movimento.idmaterial = ad_material.idmaterial and ad_movimento.iditemnota = ad_itemnota.iditemnota and ad_itemnota.idnotafiscal = ad_notafiscal.idnotafiscal and ad_notafiscal.idempenho = ad_empenho.idempenho and ad_empenho.iduo = ad_uo.iduo and (ad_movimento.datamov >= $dataInicio) AND (ad_movimento.datamov <= $dataFim) AND ((ad_movimento.tipomovimento = 3) OR (ad_movimento.tipomovimento = 4)) AND (ad_requisicao.iduoexec = $iduoreq)";	
+		$orderby = "";
+		$groupby = "";
+		
+		$sql = new sql(
+						$select,
+						$from,
+						$where,
+						$orderby,
+						$groupby
+						);	
+		
+		$querysaida = $this->Query($sql);
+		//$queryestorno = $this->Query($sqlestorno);
+		
+		//var_dump($queryestorno->result);
+		
+		if ($querysaida->result)
+		{
+			foreach ($querysaida->result as $row)
+			{
+				
+				if ($row[10] == 4)
+				{
+					
+					$row[9]= $row[9]* -1;			
+				
+				}			
+			}
+		}
+		
+		//var_dump($querysaida->result);
+		
+		return $querysaida->result;
+	}
+	
+	function GetSaldoAtual($iduo)
+	{
+						
+		$select = "sum(valortotal)";
+		$from  	= "ad_estoque";		
+		$where	= "iduo = $iduo";	
+		$orderby = "";
+		$groupby = "";
+		
+		$sql = new sql(
+						$select,
+						$from,
+						$where,
+						$orderby,
+						$groupby
+						);	
+		
+		$query = $this->Query($sql);
+				
+		//var_dump($query->result);
+		
+		return $query->result;
+	}
+	
+	function ListResumoEmpenhoEntrada($dataInicio, $dataFim)
+	{
+		// Não existe mapeamento ainda entre empenho, movimento e requisição		
+		//var_dump($iduoreq,$dataInicio,$dataFim);
+		
+		$dataInicio = substr($this->_db->CharToTimestamp($dataInicio.' 00:00:00'),1);
+		$dataFim = substr($this->_db->CharToTimestamp($dataFim.' 23:59:59'),1);
+			
+		//$sql = new sql("ad_uo.iduo, ad_uo.nome, sum(ad_movimento.valortotal)", "ad_empenho,ad_movimento,ad_requisicao, ad_uo", "(ad_uo.iduo = ad_empenho.iduo) AND (ad_movimento.idrequisicao = ad_requisicao.idrequisicao) AND 
+		//			    (ad_empenho.iduo = ad_requisicao.iduoreq) AND (ad_movimento.datamov >= $dataInicio) AND (ad_movimento.datamov <= $dataFim)", "ad_uo.iduo, ad_uo.nome", "ad_uo.iduo, ad_uo.nome");
+		
+		//$sql = new sql("ad_empenho.numero, sum(ad_movimento.valortotal)", "ad_empenho,ad_empenhado,ad_movimento,ad_requisicao, ad_itemnota", "(ad_movimento.idrequisicao = ad_requisicao.idrequisicao) AND (ad_itemnota.idempenhado = ad_empenhado.idempenhado) AND 
+		//			    (ad_empenhado.idempenho = ad_empenho.idempenho) AND (ad_movimento.datamov >= $dataInicio) AND (ad_movimento.datamov <= $dataFim) AND (ad_movimento.tipomovimento = 1 OR ad_movimento.tipomovimento = 5) ", "ad_empenho.numero", "ad_empenho.numero");
+		
+		$sql = new sql("ad_empenho.numero, sum(ad_movimento.valortotal)", "ad_movimento,ad_itemnota, ad_empenho,ad_empenhado", "(ad_movimento.iditemnota = ad_itemnota.iditemnota) AND (ad_itemnota.idempenhado = ad_empenhado.idempenhado) AND 
+						(ad_empenhado.idempenho = ad_empenho.idempenho) AND (ad_movimento.datamov >= $dataInicio) AND (ad_movimento.datamov <= $dataFim) AND (ad_movimento.tipomovimento = 1 OR ad_movimento.tipomovimento = 5) ", "ad_empenho.numero", "ad_empenho.numero");
+		
+		
+		$query = $this->Query($sql);
+		return $query->result;
+	}
+	function ListResumoEmpenhoSaida($dataInicio, $dataFim)
+	{
+		// Não existe mapeamento ainda entre empenho, movimento e requisição		
+		//var_dump($iduoreq,$dataInicio,$dataFim);
+				
+		$dataInicio = substr($this->_db->CharToTimestamp($dataInicio.' 00:00:00'),1);
+		$dataFim = substr($this->_db->CharToTimestamp($dataFim.' 23:59:59'),1);
+			
+		//$sql = new sql("ad_uo.iduo, ad_uo.nome, sum(ad_movimento.valortotal)", "ad_empenho,ad_movimento,ad_requisicao, ad_uo", "(ad_uo.iduo = ad_empenho.iduo) AND (ad_movimento.idrequisicao = ad_requisicao.idrequisicao) AND 
+		//			    (ad_empenho.iduo = ad_requisicao.iduoreq) AND (ad_movimento.datamov >= $dataInicio) AND (ad_movimento.datamov <= $dataFim)", "ad_uo.iduo, ad_uo.nome", "ad_uo.iduo, ad_uo.nome");
+		
+		$sql = new sql("ad_uo.nome, sum(ad_movimento.valortotal)", "ad_empenho,ad_empenhado,ad_movimento,ad_requisicao, ad_itemnota, ad_uo", "(ad_movimento.idrequisicao = ad_requisicao.idrequisicao) AND (ad_itemnota.idempenhado = ad_empenhado.idempenhado) AND 
+					    (ad_empenhado.idempenho = ad_empenho.idempenho) AND (ad_movimento.datamov >= $dataInicio) AND (ad_movimento.datamov <= $dataFim) AND (ad_empenho.iduo = ad_uo.iduo) AND (ad_movimento.tipomovimento = 3)  ", "ad_uo.nome", "ad_uo.nome");		
+				
+		$query = $this->Query($sql);
+		return $query->result;
+	}
+	
+	function RepRelacaoEmpenhos($empenho, $licitacao, $dataInicial, $dataFinal, $idFornecedor, $rubrica)
+	{
+        $criteria = $this->getCriteria();
+		$criteria->setDistinct(true);
+        $criteria->addColumnAttribute('idEmpenho');
+        $criteria->addColumnAttribute('numero');
+        $criteria->addColumnAttribute('fornecedor.instituicao.nome','fornecedor');
+        $criteria->addColumnAttribute('dataEmpenho', 'dataEmpenho');
+        $criteria->addColumnAttribute('tipoEmpenho');
+        $criteria->addColumnAttribute('status');
+		$criteria->addColumnAttribute('sum(empenhado.valorEmp)', 'valor');
+        $criteria->addColumnAttribute('empenhado.licitacao.numero');
+        $criteria->addColumnAttribute('SUBSTR(empenhado.orcamento.idRubrica,1,6)');
+        $criteria->addColumnAttribute('empenhado.licitacao.numProcesso');
+        $criteria->addColumnAttribute('tabelaGeral.item2', 'statusDesc');
+		$criteria->addCriteria('tabelaGeral.tabela','=', "'AD_EMPENHOSTATUS'");
+		if($empenho)
+		{
+			$criteria->addCriteria('numero','like', "'%$empenho%'");
+		}
+		if($licitacao)
+		{
+			$criteria->addCriteria('empenhado.licitacao.numero','like', "'%$licitacao%'");
+		}
+		if($dataInicial)
+		{
+			$criteria->addCriteria("to_date(dataEmpenho, 'DD/MM/YYYY')", '>=', "to_date('$dataInicial','DD/MM/YYYY')");
+		}
+		if($dataFinal)
+		{
+			$criteria->addCriteria("to_date(dataEmpenho,'DD/MM/YYYY')", '<=', "to_date('$dataFinal','DD/MM/YYYY')");
+		}
+		if($idFornecedor)
+		{
+			$criteria->addCriteria('idFornecedor','=', "$idFornecedor");
+		}
+		if($rubrica)
+		{
+	        $criteria->addCriteria('SUBSTR(empenhado.orcamento.idRubrica,1,6)', 'like', "'%$rubrica%'");
+		}
+		$criteria->addGroupAttribute('idEmpenho');
+        $criteria->addGroupAttribute('numero');
+        $criteria->addGroupAttribute('fornecedor.instituicao.nome');
+        $criteria->addGroupAttribute('dataEmpenho');
+        $criteria->addGroupAttribute('tipoEmpenho');
+        $criteria->addGroupAttribute('status');
+        $criteria->addGroupAttribute('empenhado.licitacao.numero');
+        $criteria->addGroupAttribute('SUBSTR(empenhado.orcamento.idRubrica,1,6)');
+        $criteria->addGroupAttribute('empenhado.licitacao.numProcesso');
+        $criteria->addGroupAttribute('tabelaGeral.item2');
+        $criteria->addOrderAttribute('numero');
+		return $criteria->retrieveAsQuery();
+	}
+	
+	function ListDetalhesEmpenhoDistribuirByNumeroAndUg($numero,$ug)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('empenhado.licitacao.idTipoLicitacao');
+		$criteria->addCriteria('numero','=', "'{$numero}'");
+		$criteria->addCriteria('empenho.ug','=', "'$ug'");
+		$query = $criteria->retrieveAsQuery();
+		$tipo = $query->result[0][0];
+
+		/* Removida a referencia
+		$sql = new MSql('anoref','ad_controle');
+		$anoReferencia = $empenhado->Query($sql)->result[0][0];
+		*/
+		$anoReferencia = Date('Y');
+
+	
+		$criteria = $this->getCriteria();
+		$criteria->setDistinct(true);
+		$criteria->addColumnAttribute('empenhado.idEmpenhado');
+		$criteria->addColumnAttribute('empenhado.status');
+		$criteria->addColumnAttribute('empenhado.item');
+		$criteria->addColumnAttribute('numero');
+		$criteria->addColumnAttribute('empenhado.valorEmp');
+		$criteria->addColumnAttribute('empenhado.quantidadeEmp');
+		if($tipo == '1')//COMPRA
+		{
+			$criteria->addColumnAttribute('empenhado.itemreq.material.descricao');
+			$criteria->addCriteria('SUBSTR(empenhado.itemreq.requisicao.dataHora,7,4)','=',"'$anoReferencia'");
+		}
+		elseif($tipo == '2')//SERVICO
+		{
+			$criteria->addColumnAttribute('empenhado.itemServExt.servico.descricao');
+			$criteria->addCriteria('SUBSTR(empenhado.itemServExt.requisicao.dataHora,7,4)','=',"'$anoReferencia'");
+		}
+		$criteria->addCriteria('numero','=', "'{$numero}'");
+		$criteria->addCriteria('ug','=', "'$ug'");		
+		$criteria->addCriteria('empenhado.status','<>', "'3'");
+		$criteria->addOrderAttribute('empenhado.item');
+		return $criteria->retrieveAsQuery();
+	}
+
+	function GetEmpenhoStatusByIdLicitacao($idLicitacao)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->SetDistinct(true);
+		$criteria->addColumnAttribute('idEmpenho');
+		$criteria->addColumnAttribute('numero');
+		$criteria->addColumnAttribute('status');
+		$criteria->addCriteria('empenhado.idLicitacao','=',$idLicitacao);
+		$query = $criteria->retrieveAsQuery();
+		return $query->result;
+	}
+
+	function ListDetalhesEmpenhoLiquidadoByNumero($numero)
+	{
+		//busca idEmpenho OR
+		$criteria =  $this->getCriteria();
+		$criteria->addColumnAttribute('idEmpenho');
+		$criteria->addColumnAttribute('tipoEmpenho');
+		$criteria->addColumnAttribute('idEmpenhoRef');
+		$criteria->addCriteria('numero','=', "'{$numero}'");
+		$query = $criteria->retrieveAsQuery();
+		$result = $query->result;
+		while($query->result[0][1] != 'OR')
+		{
+			$criteria =  $this->getCriteria();
+			$criteria->addColumnAttribute('idEmpenho');
+			$criteria->addColumnAttribute('tipoEmpenho');
+			$criteria->addColumnAttribute('idEmpenhoRef');
+			$criteria->addCriteria('idEmpenho','=', "{$query->result[0][2]}");
+			$query = $criteria->retrieveAsQuery();
+			$result = array_merge($result, $query->result);
+		}
+		$idEmpenhoOR = $query->result[0][0];
+
+		//busca dados gerais dos empenhos (ad_empenho) OR
+		$criteria =  $this->getCriteria();
+		$criteria->addColumnAttribute('idEmpenho');
+		$criteria->addColumnAttribute('numero');
+		$criteria->addColumnAttribute('tipoEmpenho');
+		$criteria->addColumnAttribute('numpro');
+		$criteria->addCriteria('idEmpenho','=', "{$idEmpenhoOR}");
+
+
+        $condicao1 = new CriteriaCondition();
+        $ou1 = new CriteriaCondition();
+          $ou1->addCriteria($criteria->getCriteria('status','=', "'A'"));
+          $ou1->addOrCriteria($criteria->getCriteria('status','=', "'6'"));
+        $condicao1->addOrCriteria($ou1);
+        $criteria->addCriteria($condicao1);
+
+		
+		$query = $criteria->retrieveAsQuery();
+		$or = $query->result;
+
+		//busca dados gerais dos empenhos (ad_empenho) CA
+		$criteria =  $this->getCriteria();
+		$criteria->addColumnAttribute('idEmpenho');
+		$criteria->addColumnAttribute('numero');
+		$criteria->addColumnAttribute('tipoEmpenho');
+		$criteria->addColumnAttribute('numpro');
+		$criteria->addCriteria('idEmpenhoRef','=', "{$idEmpenhoOR}");
+		$criteria->addCriteria('tipoEmpenho','=', "'CA'");
+        $condicao2 = new CriteriaCondition();
+        $ou2 = new CriteriaCondition();
+          $ou2->addCriteria($criteria->getCriteria('status','=', "'A'"));
+          $ou2->addOrCriteria($criteria->getCriteria('status','=', "'6'"));
+        $condicao2->addOrCriteria($ou2);
+        $criteria->addCriteria($condicao2);
+		$query = $criteria->retrieveAsQuery();
+		$ca = $query->result;
+
+		//busca dados gerais dos empenhos (ad_empenho) CO
+		$criteria =  $this->getCriteria();
+		$criteria->addColumnAttribute('idEmpenho');
+		$criteria->addColumnAttribute('numero');
+		$criteria->addColumnAttribute('tipoEmpenho');
+		$criteria->addColumnAttribute('numpro');
+		$criteria->addCriteria('idEmpenhoRef','=', "{$idEmpenhoOR}");
+		$criteria->addCriteria('tipoEmpenho','=', "'CO'");
+        $condicao3 = new CriteriaCondition();
+        $ou3 = new CriteriaCondition();
+          $ou3->addCriteria($criteria->getCriteria('status','=', "'A'"));
+          $ou3->addOrCriteria($criteria->getCriteria('status','=', "'6'"));
+        $condicao3->addOrCriteria($ou3);
+        $criteria->addCriteria($condicao3);
+        
+		$query = $criteria->retrieveAsQuery();
+		$co = $query->result;
+
+		$result = array();
+		if($or)
+		{
+			$result = array_merge($result, $or);
+		}
+		if($ca)
+		{
+			$result = array_merge($result, $ca);
+		}
+		if($co)
+		{
+			$result = array_merge($result, $co);
+		}
+
+		//busca dados de liquidações e notas fiscais
+		$j = 0;
+		for($i = 0; $i < count($result); $i++)
+		{
+			$criteria =  $this->getCriteria();
+			$criteria->addColumnAttribute('notaFiscal.idNotaFiscal');
+			$criteria->addColumnAttribute('notaFiscal.notaFiscal');
+			$criteria->addColumnAttribute('notaFiscal.dataNotaFiscal');
+			$criteria->addColumnAttribute('null', 'credito');
+			$criteria->addColumnAttribute('notaFiscal.valor', 'debito');
+			$criteria->addCriteria('idEmpenho','=', "{$result[$i][0]}");
+			$criteria->addCriteria('notaFiscal.idLiquidacao','is not', "null");
+			$query = $criteria->retrieveAsQuery();
+			if($query->result)
+			{
+				$k = 1;
+				foreach($query->result as $r)
+				{
+					$result2[$j][0] = $result[$i][0];
+					$result2[$j][1] = $result[$i][1];
+					$result2[$j][2] = $result[$i][2];
+					$result2[$j][3] = $result[$i][3];
+					$result2[$j][4] = $r[0];
+					$result2[$j][5] = $r[1];
+					$result2[$j][6] = $r[2];
+					if($k == 1)
+					{
+						$result2[$j][7] = $r[3];
+					}
+					else
+					{
+						$result2[$j][7] = 0;
+					}
+					$result2[$j][8] = $r[4];
+					$j++;
+					$k++;
+				}
+			}
+			else
+			{
+				$result2[$j][0] = $result[$i][0];
+				$result2[$j][1] = $result[$i][1];
+				$result2[$j][2] = $result[$i][2];
+				$result2[$j][3] = $result[$i][3];
+				$j++;
+			}
+		}
+		$result = $result2;
+
+		//busca dados de credito e concatena dados para serem passados para próximas telas por $item
+		for($i = 0; $i < count($result); $i++)
+		{
+			$r = $result[$i];
+			$criteria =  $this->getCriteria();
+			$criteria->addColumnAttribute('sum(empenhado.valorEmp)', 'credito');
+			$criteria->addCriteria('idEmpenho','=', "{$r[0]}");
+			$query = $criteria->retrieveAsQuery();
+			if($query->result)
+			{
+				if($result[$i][1] != $result[$i-1][1])
+				{
+					$result[$i][7] = $query->result[0][0];
+				}
+				else //elimina creditos repetidos
+				{
+					$result[$i][7] = 0;
+				}
+			}
+			//$item
+			$result[$i][0] = $result[$i][0] . '-' . $result[$i][4];
+		}
+
+		return $result;
+	}
+	
+	function alteraLiquidacaoPagamento($idLiquidacao,$idOrdemBancaria,$string_notas, $valorIRRF, $valorINSS,
+                                        $valorISS, $dataLiquidacao, $obs, $numeroOrdemBancaria, $dataOrdemBancaria,
+                                        $valorOB, $descontos, $DARF, $GPS, $dataGPS)
+    {
+         global $MIOLO, $module;
+
+         $objEmpenho = $MIOLO->GetBusiness($module, 'empenho');
+         $objEmpenho->BeginTransaction();
+
+         $liquidacao = $MIOLO->GetBusiness($module, 'liquidacao', $idLiquidacao);
+         $ordemBancaria = $MIOLO->GetBusiness($module, 'ordembancaria', $idOrdemBancaria);
+
+         $objEmpenho->Log(OP_UPD,"Liquidacao Alterada: ".$idLiquidacao.
+                ", ValorIRRF: ".$liquidacao->valorIRRF.
+                ", ValorINSS: ".$liquidacao->valorINSS.
+                ", ValorISS: ".$liquidacao->valorISS.
+                ", DataLiq: ".$liquidacao->dataLiquidacao.
+                //", Observacao: ".$objLiquidacao->obs.
+                ", Pagamento Alterado: ".$idOrdemBancaria.
+                ", OrdemBanc: ".$ordemBancaria->numeroOrdemBancaria.
+                ", DataOrdemBanc: ".$ordemBancaria->dataOrdemBancaria.
+                ", DARF: ".$ordemBancaria->DARF.
+                ", GPS: ".$ordemBancaria->GPS.
+                ", DataGPS: ".$ordemBancaria->dataGPS.
+                ", Valor: ".$ordemBancaria->valor
+
+                );
+         
+         $notaFiscal = $MIOLO->GetBusiness($module, 'notafiscal');
+		 $notas = explode(',', $string_notas);
+		 $valorNotas = 0;
+		 foreach($notas as $nota)
+		 {
+			$valorNota = $notaFiscal->GetValorByNotaFiscal($nota);
+			$valorNota = str_replace(',','.',$valorNota);
+			$valorNotas += $valorNota;
+		 }
+         
+         $liquidacao->setTransaction($objEmpenho->getTransaction());
+
+		 $liquidacao->dataLiquidacao  = $dataLiquidacao;
+		 $liquidacao->valor           = $valorNotas;
+		 $liquidacao->obs             = $obs;
+		 $liquidacao->valorIRRF       = $valorIRRF;
+		 $liquidacao->valorINSS       = $valorINSS;
+		 $liquidacao->valorISS        = $valorISS;
+		 $liquidacao->save();
+		 
+
+		 if ($idOrdemBancaria != '')
+		 {
+		    $ordemBancaria->setTransaction($objEmpenho->getTransaction());
+		    $ordemBancaria->numeroOrdemBancaria  = $numeroOrdemBancaria;
+            $ordemBancaria->dataOrdemBancaria    = $dataOrdemBancaria;
+            $ordemBancaria->valor                = $valorOB;
+            $ordemBancaria->DARF                 = $DARF;
+            $ordemBancaria->GPS                  = $GPS;
+            $ordemBancaria->dataGPS              = $dataGPS;
+            $ordemBancaria->save();
+         }
+
+         $objEmpenho->EndTransaction();
+    }
+
+	function GetUOReq($idEmpenho)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('empenhado.licitacao.idTipoLicitacao');
+		$criteria->addCriteria('idEmpenho','=', "$idEmpenho");
+		$query = $criteria->retrieveAsQuery();
+		$tipo = $query->result[0][0];
+
+		$criteria = $this->getCriteria();
+		if(($tipo == '1') || ($tipo == '4'))//COMPRA
+		{
+			$criteria->addColumnAttribute('empenhado.itemreq.requisicao.uoRequisitante.sigla');
+		}
+		elseif($tipo == '2')//SERVICO
+		{
+			$criteria->addColumnAttribute('empenhado.itemServExt.requisicao.uoRequisitante.sigla');
+		}
+		elseif($tipo == '3')//LIVRO
+		{
+			$criteria->addColumnAttribute('empenhado.itemreqbib.requisicao.uoRequisitante.sigla');
+		}
+		$criteria->addCriteria('idEmpenho','=', "$idEmpenho");
+		$query = $criteria->retrieveAsQuery();
+		return $query->result[0][0];
+	}
+	
+	function excluiLiquidacaoPagamento($idLiquidacao,$idOrdemBancaria,$idEmpenho,$idNotaFiscal)
+	{
+    	global $MIOLO, $module;
+        $objLiquidacao = $MIOLO->GetBusiness($module, 'liquidacao', $idLiquidacao);
+        $objOrdemBancaria = $MIOLO->GetBusiness($module, 'ordembancaria', $idOrdemBancaria);
+        $notaFiscal = $MIOLO->GetBusiness($module, 'notafiscal');
+
+        $objEmpenho = $MIOLO->GetBusiness($module, 'empenho', $idEmpenho);
+        try
+        {
+            $NotasFiscais = $notaFiscal->GetIdNotaByIdLiquidacao($idLiquidacao);
+            $objNotaFiscal = $MIOLO->GetBusiness($module, 'notafiscal',$idNotaFiscal);
+            $objNotaFiscal->beginTransaction();
+            //apaga idliquidacao da notafiscal
+            $objNotaFiscal->idLiquidacao = NULL;
+            $objNotaFiscal->save();
+            //se houver somente uma nota entao apaga liquidacao e o pagamento
+            if (count($NotasFiscais) == 1)
+            {
+                //apaga pagamento se existe
+                if ($idOrdemBancaria != '')
+	       	    {
+                     $objOrdemBancaria->setTransaction($objNotaFiscal->getTransaction());
+                     $objOrdemBancaria->delete();
+                }
+                //apaga liquidacao
+                $objLiquidacao->setTransaction($objNotaFiscal->getTransaction());
+                $objLiquidacao->delete();
+                //volta status do empenho
+                $objEmpenho->setTransaction($objNotaFiscal->getTransaction());
+                if ($objEmpenho->status == 'A')
+                {
+                    $objEmpenho->status = '3';
+                    $objEmpenho->save();
+                }
+            }
+            $objNotaFiscal->endTransaction();
+        }
+        catch (Exception $e)
+		{
+			$MIOLO->Error($e->getMessage(), $MIOLO->GetActionURL($module, $action, '', array()) );
+		}
+	}
+
+	function ListByRequisicao($idRequisicao)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->setDistinct(true);
+		$criteria->addColumnAttribute('numero');
+		$criteria->addColumnAttribute('empenhado.empenhadoDist.quantidade');
+		$criteria->addColumnAttribute('empenhado.empenhadoDist.valorUnitario');
+		$criteria->addCriteria('empenhado.empenhadoDist.idRequisicao','=', $idRequisicao);
+		$criteria->addCriteria('empenhado.empenhadoDist.quantidade','>', 0);
+		$query = $criteria->retrieveAsQuery();
+		return $query->result;
+	}
+
+	function GetMotivoAnulacao($idEmpenho=null)
+	{
+		if(!$idEmpenho)
+		{
+			$idEmpenho = $this->idEmpenho;
+		}
+		$criteria = $this->getCriteria();
+		$criteria->setDistinct(true);
+		$criteria->addColumnAttribute('empenhado.tabelaGeral.item2','motivoAnulacao');
+		$criteria->addCriteria('idEmpenho','=', $idEmpenho);
+		$criteria->addCriteria('empenhado.tabelaGeral.tabela','=', "'AD_MOTIVOANULACAOEMPENHO'");
+		$query = $criteria->retrieveAsQuery();
+		return $query->result[0][0];
+	}
+}
+?>

@@ -1,0 +1,837 @@
+<?
+class BusinessAdmEmpenhado extends Business
+{
+	public $idEmpenhado;
+	public $valorEmp;
+	public $quantidadeEmp;
+	public $idEmpenho;
+	public $idLicitacao;
+	public $item;
+	public $dataOrcamento;
+	public $status;
+	public $idOrcamento;
+	public $dataAnulacao;
+	public $motivoAnulacao;
+	public $valorAnulado;
+	public $numeroAnulacao;
+	public $quantidadeAnulada;
+	
+	public $licitacao;
+	public $itensLicitacao;
+	public $itemreq;
+	public $itemreqbib;
+	public $empenho;
+	public $itemServExt;
+	public $patrimonio;
+    public $orcamento;
+
+    public $quantidadePedida;
+    public $quantidadeEmpenhada;
+    public $quantidadeEntregue;
+    public $quantidadeSaldo;
+    public $quantidadePedidaPendente;
+    public $valorEntregue;
+    public $valorSaldo;
+    public $valorUnitario;
+    public $empenhadoDist;
+    
+	function __construct($data = null)
+	{
+		parent::__construct('sigaept', $data);
+        $this->getQuantidadeReq();
+	}
+    
+    function getQuantidadeReq()
+    {
+		$cf = new MCurrencyFormatter();
+        if ($this->itemLicitacao->itemreq)
+        {
+            foreach ($this->itemLicitacao->itemreq as $material)
+            {
+                $this->quantidadeReq += $cf->toDecimal($material->quantPedida);
+            }
+        }
+    }
+
+    function getAtributos()
+    {
+        $this->getQuantidadeReq();
+        $this->getQuantidadePedida();
+        $this->getQuantidadeEmpenhada();
+        $this->getQuantidadeEntregue();
+        $this->getQuantidadeRecebida();
+        $this->getQuantidadeSaldo();
+        $this->getQuantidadePedidaPendente();
+        $this->getValorEntregue();
+        $this->getValorSaldo();
+        $this->getValorUnitario();
+    }
+
+    function OnCreate($data)
+    {
+        if (empty($data))
+        {
+//            $this->initialize();
+        }
+        else
+        {
+            $this->GetById($data);
+        }
+    }
+
+	function getById($id)
+	{
+		$this->idEmpenhado = $id;
+		$this->retrieve();
+		return $this;
+	}
+    function getItemReq($idRequisicao=null,$idMaterial=null)
+    {
+        if (!$this->itemreq) $this->retrieveAssociation('itemreq');
+        if ($idRequisicao && $idMaterial)
+        {
+            if ($this->itemreq)
+            {
+                foreach ($this->itemreq as $material)
+                {
+                    if ($idRequisicao == $material->idRequisicao && $idMaterial == $material->idMaterial)
+                    {
+                        return $material;
+                    }
+                }   
+            }
+        }
+        return $this->itemreq;
+    }
+    function getItemServExt($idRequisicao=null,$idServico=null)
+    {
+        if (!$this->itemServExt) $this->retrieveAssociation('itemServExt');
+        if ($idRequisicao && $idServico)
+        {
+            if ($this->itemServExt)
+            {
+                foreach ($this->itemServExt as $servico)
+                {
+                    if ($idRequisicao == $servico->idRequisicao && $idServico == $servico->idServico)
+                    {
+                        return $servico;
+                    }
+                }   
+            }
+        }
+        return $this->itemServExt;
+    }
+    function getItemReqBib($idRequisicao=null,$idMaterial=null)
+    {
+        if (!$this->itemreqbib) $this->retrieveAssociation('itemreqbib');
+        if ($idRequisicao && $idMaterial)
+        {
+            if ($this->itemreqbib)
+            {
+                foreach ($this->itemreqbib as $material)
+                {
+                    if ($idRequisicao == $material->idRequisicao && $idMaterial == $material->idMaterial)
+                    {
+                        return $material;
+                    }
+                }   
+            }
+        }
+        return $this->itemreqbib;
+    }
+    function getQuantidadeEntregue()
+    {
+		$cf = new MCurrencyFormatter();
+        $this->getItemReq();
+        $this->retrieveAssociation('itemServExt');
+        if ($this->itemreq)
+        {
+            foreach ($this->itemreq as $material)
+            {
+                $this->quantidadeEntregue += $cf->toDecimal($material->quantAutorizada);
+            }
+        }
+        elseif ($this->itemServExt)
+        {
+            foreach ($this->itemServExt as $servico)
+            {
+                $this->quantidadeEntregue += $cf->toDecimal($servico->quantEntregue);
+            }
+        }
+    }
+    function getItemNota($idItemNota=null)
+    {
+        if (!$this->itemNota) $this->retrieveAssociation('itemNota');
+        if ($idItemNota)
+        {
+            if ($this->itemNota)
+            {
+                foreach ($this->itemNota as $itemNota)
+                {
+                    if ($idItemNota = $itemNota->idItemNota) return $itemNota;
+                }
+            }
+        }
+        return $this->itemNota;        
+    }
+    function getItensLicitacao()
+    {
+        if (!$this->itensLicitacao) $this->retrieveAssociation('itensLicitacao');
+        return $this->itensLicitacao;
+    }
+    function getLicitacao()
+    {
+        $this->getItensLicitacao();
+        if (!$this->itensLicitacao->licitacao) $this->itensLicitacao->retrieveAssociation('licitacao');
+        return $this->itensLicitacao->licitacao;
+    }
+    function getQuantidadeRecebida()
+    {
+		$cf = new MCurrencyFormatter();
+        $this->getItemNota();
+        if ($this->itemNota)
+        {
+            foreach ($this->itemNota as $itemNota)
+            {
+                $this->quantidadeRecebida += $cf->toDecimal($itemNota->quantidade);
+            }
+        }
+    }
+    function getQuantidadePedida()
+    {
+		$cf = new MCurrencyFormatter();
+        $this->getItemReq();
+        if ($this->itemreq)
+        {
+            foreach ($this->itemreq as $material)
+            {
+                $this->quantidadePedida += $cf->toDecimal($material->quantPedida);
+            }
+        }
+    }
+    function getQuantidadeEmpenhada()
+    {
+		$cf = new MCurrencyFormatter();
+        $this->getItemReq();
+        if ($this->itemreq)
+        {
+            foreach ($this->itemreq as $material)
+            {
+                $this->quantidadeEmpenhada += $cf->toDecimal($material->quantEmpenhada);
+            }
+        }
+    }
+    function getQuantidadeSaldo()
+    {
+		$cf = new MCurrencyFormatter();
+        $this->quantidadeSaldo = $cf->toDecimal($this->quantidadeEmp) - $cf->toDecimal($this->quantidadeRecebida);
+    }
+    function getQuantidadePedidaPendente()
+    {
+		$cf = new MCurrencyFormatter();
+        $this->quantidadePedidaPendente = $cf->toDecimal($this->quantidadePedida) - $cf->toDecimal($this->quantidadeEntregue);
+    }
+    function getValorEntregue()
+    {
+		$cf = new MCurrencyFormatter();
+        $this->getItemNota();
+        if ($this->itemNota)
+        {
+            foreach ($this->itemNota as $itemNota)
+            {
+                $this->valorEntregue += $cf->toDecimal($itemNota->quantidade) * round($cf->toDecimal($itemNota->valor),2);
+            }
+        }
+    }
+    function getValorSaldo()
+    {
+		$cf = new MCurrencyFormatter();
+        $this->valorSaldo = $cf->toDecimal($this->valorEmp) - $cf->toDecimal($this->valorEntregue);
+    }
+    function getValorUnitario()
+    {
+		$cf = new MCurrencyFormatter();
+        if ($this->isPersistent() && ($cf->toDecimal($this->quantidadeEmp) > 0))
+        {
+			if($cf->toDecimal($this->quantidadeEmp) > 0)
+			{
+				$this->valorUnitario = $cf->toDecimal($this->valorEmp) / $cf->toDecimal($this->quantidadeEmp);
+			}
+			else
+			{
+				$this->valorUnitario = 0;
+			}
+        }
+	}
+	
+	function ListByIdEmpenho($idEmpenho)
+	{//lista itens de material
+	
+        $criteria =  $this->getCriteria();
+        $criteria->addCriteria('idEmpenho','=', "$idEmpenho");
+		$criteria->AddColumnAttribute('idEmpenhado');
+		$criteria->AddColumnAttribute('item');
+		$criteria->AddColumnAttribute('itemreq.material.descricao');
+		$criteria->AddColumnAttribute('quantidadeEmp');
+		$criteria->AddColumnAttribute('valorEmp');
+		$criteria->AddColumnAttribute('orcamento.rubrica.idRubrica');
+		//$criteria->AddColumnAttribute('itemreq.idRequisicao');
+		$criteria->addOrderAttribute('idEmpenhado');
+		$criteria->setDistinct(true);
+		//$this->retrieve();
+        return $criteria->retrieveAsQuery();
+	}
+	
+	function ListAcervoByIdEmpenho($idEmpenho)
+	{//lista itens de material
+	
+        $criteria =  $this->getCriteria();
+        $criteria->addCriteria('idEmpenho','=', "$idEmpenho");
+		$criteria->AddColumnAttribute('idEmpenhado');
+		$criteria->AddColumnAttribute('item');
+		$criteria->AddColumnAttribute('itemreqbib.material.descricao');
+		$criteria->AddColumnAttribute('quantidadeEmp');
+		$criteria->AddColumnAttribute('valorEmp');
+		$criteria->AddColumnAttribute('orcamento.rubrica.idRubrica');
+		//$criteria->AddColumnAttribute('itemreq.idRequisicao');
+		$criteria->addOrderAttribute('idEmpenhado');
+		$criteria->setDistinct(true);
+		//$this->retrieve();
+        return $criteria->retrieveAsQuery();
+	}	
+	function getByIdEmpenho($idEmpenho)
+	{//lista qualquer tipo de empenho
+        $criteria =  $this->getCriteria();
+        $criteria->addCriteria('idEmpenho','=', "$idEmpenho");
+		$criteria->AddColumnAttribute('idEmpenhado');
+		$criteria->AddColumnAttribute('idEmpenho');
+		$criteria->AddColumnAttribute('idLicitacao');
+		$criteria->AddColumnAttribute('licitacao.idTipoLicitacao');
+		$criteria->addOrderAttribute('idEmpenhado');
+		$this->retrieve();
+        return $criteria->retrieveAsQuery();
+	}
+
+	function ListAll()
+	{
+		$criteria =  $this->getCriteria();
+		$criteria->AddColumnAttribute('item');
+		$criteria->AddColumnAttribute('quantidadeEmp');
+		$criteria->AddColumnAttribute('valorEmp');
+        $criteria->addOrderAttribute('idEmpenhado');
+        return $criteria->retrieveAsQuery();
+	}
+
+	function ListItensAPatrimoniar()
+	{
+		$criteria = $this->getCriteria();
+         	
+		$cc = new CriteriaCondition;
+		$cc->addCriteria($criteria->getCriteria('status','<>','2'));
+		$cc->addOrCriteria($criteria->getCriteria('status','IS','NULL'));
+
+		$criteria->AddColumnAttribute('idEmpenhado');
+		$criteria->AddColumnAttribute('itemreq.material.descricao');
+		$criteria->AddColumnAttribute('quantidadeEmp');
+		$criteria->addCriteria('substr(CAST(itemreq.material.idelemento as text),1,1) ','=','4');	
+		$criteria->addCriteria($cc);
+        $criteria->addOrderAttribute('material.descricao');
+        return $criteria->retrieveAsQuery();
+	}
+
+	function ListItensAPatrimoniarPorEmpenho($idEmpenho)
+	{
+		/*
+		$linha="DISTINCT ad_empenhado.idempenhado, ad_material.descricao, ad_empenhado.quantidadeemp,".
+		$linha.="(SELECT count(ad_itempatrimonio.iditempatrimonio) FROM ad_empenhado, ad_empenho, ad_itempatrimonio".
+		$linha.=" WHERE ((ad_empenho.idempenho = $idEmpenho) AND (ad_itempatrimonio.ativo = 'S'))".
+		$linha.=" and (ad_empenhado.idempenho = ad_empenho.idempenho) and (ad_empenhado.idempenhado = ad_itempatrimonio.idempenhado)".
+		$linha.=" AND ((ad_empenhado.idempenhado = ad_itempatrimonio.idempenhado) as quantidadePat)".
+		$linha.=" , \"ad_empenhado, ad_empenho, ad_itemreq, ad_material, ad_itempatrimonio".
+		$linha.=" , \"((ad_empenho.idempenho = $idEmpenho) AND (ad_empenho.status in ('B','3','6','A'))".
+		$linha.=" AND (ad_empenhado.quantidadeEmp > (SELECT count(*))".
+		$linha.=" FROM ad_itempatrimonio i WHERE i.idempenhado = ad_empenhado.idempenhado and i.ativo = 'S'))".
+		$linha.=" AND (substr(ad_material.idelemento,1,1) = '4')  and (ad_empenhado.idempenho = ad_empenho.idempenho)".
+		$linha.=" and (ad_empenhado.idlicitacao = ad_itemreq.idlicitacao) and (ad_empenhado.item = ad_itemreq.item)".
+		$linha.=" and (ad_itemreq.idmaterial = ad_material.idmaterial)".
+		$linha.=" and (ad_empenhado.idempenhado = ad_itempatrimonio.idempenhado(+))\", \"ad_material.descricao ASC;".
+		*/
+		
+//	$sql = new MSql("DISTINCT ad_empenhado.idempenhado, ad_material.descricao, ad_empenhado.quantidadeemp, (SELECT count(ad_itempatrimonio.iditempatrimonio) FROM ad_empenhado E, ad_empenho, ad_itempatrimonio WHERE ((ad_empenho.idempenho = $idEmpenho) AND (ad_itempatrimonio.ativo = 'S')) and (E.idempenho = ad_empenho.idempenho) and (E.idempenhado = ad_itempatrimonio.idempenhado) AND ad_empenhado.idempenhado = ad_itempatrimonio.idempenhado) as quantidadePat", "ad_empenhado, ad_empenho, ad_itemreq, ad_material, ad_itempatrimonio", "((ad_empenho.idempenho = $idEmpenho) AND (ad_empenho.status in ('B','3','6','A')) AND (ad_empenhado.quantidadeEmp > (SELECT count(*) FROM ad_itempatrimonio i WHERE i.idEmpenhado = ad_empenhado.idEmpenhado and i.ativo = 'S') ) AND (substr(ad_material.idelemento,1,1) = '4') AND (ad_itemreq.quantpedida - ad_itemreq.quantentregue > 0)) and (ad_empenhado.idempenho = ad_empenho.idempenho) and (ad_empenhado.idlicitacao = ad_itemreq.idlicitacao) and (ad_empenhado.item = ad_itemreq.item) and (ad_itemreq.idmaterial = ad_material.idmaterial)", "ad_material.descricao ASC");
+
+//Alterad em 04/12/2009, em virtude do elevado tempo de execução.
+//	$sql = new MSql("DISTINCT ad_empenhado.idempenhado, ad_material.descricao, ad_empenhado.quantidadeemp, (SELECT count(ad_itempatrimonio.iditempatrimonio) FROM ad_empenhado E, ad_empenho, ad_itempatrimonio WHERE ((ad_empenho.idempenho = $idEmpenho) AND (ad_itempatrimonio.ativo = 'S')) and (E.idempenho = ad_empenho.idempenho) and (E.idempenhado = ad_itempatrimonio.idempenhado) AND ad_empenhado.idempenhado = ad_itempatrimonio.idempenhado) as quantidadePat", "ad_empenhado, ad_empenho, ad_itemreq, ad_material, ad_itempatrimonio", "((ad_empenho.idempenho = $idEmpenho) AND (ad_empenho.status in ('B','3','6','A')) AND (ad_empenhado.quantidadeEmp > (SELECT count(*) FROM ad_itempatrimonio i WHERE i.idEmpenhado = ad_empenhado.idEmpenhado and i.ativo = 'S') ) AND (substr(ad_material.idelemento,1,1) = '4')) and (ad_empenhado.idempenho = ad_empenho.idempenho) and (ad_empenhado.idlicitacao = ad_itemreq.idlicitacao) and (ad_empenhado.item = ad_itemreq.item) and (ad_itemreq.idmaterial = ad_material.idmaterial)", "ad_material.descricao ASC");
+$sql = new MSql("DISTINCT ad_empenhado.idempenhado, substr(ad_material.descricao,1,50)as descricao, ad_empenhado.quantidadeemp, (SELECT count(ad_itempatrimonio.iditempatrimonio) FROM ad_empenhado E, ad_empenho, ad_itempatrimonio WHERE ((ad_empenho.idempenho = $idEmpenho) AND (ad_itempatrimonio.ativo = 'S')) and (E.idempenho = ad_empenho.idempenho) and (E.idempenhado = ad_itempatrimonio.idempenhado) AND ad_empenhado.idempenhado = ad_itempatrimonio.idempenhado) as quantidadePat", "ad_empenhado, ad_empenho, ad_itemreq, ad_material, ad_itempatrimonio", "((ad_empenho.idempenho = $idEmpenho) AND (ad_empenho.status in ('B','3','6','A')) AND (ad_empenhado.quantidadeEmp > (SELECT count(*) FROM ad_itempatrimonio i WHERE i.idEmpenhado = ad_empenhado.idEmpenhado and i.ativo = 'S') ) AND (substr(CAST(ad_material.idelemento as text),1,1) = '4')) and (ad_empenhado.idempenho = ad_empenho.idempenho) and (ad_empenhado.idlicitacao = ad_itemreq.idlicitacao) and (ad_empenhado.item = ad_itemreq.item) and (ad_itemreq.idmaterial = ad_material.idmaterial)");
+
+		$query = $this->Query($sql);
+//$sql=new MSql("DISTINCT ad_empenhado.idempenhado, ad_material.descricao, ad_empenhado.quantidadeemp, (SELECT count(ad_itempatrimonio.iditempatrimonio) FROM ad_empenhado E, ad_empenho, ad_itempatrimonio WHERE ((ad_empenho.idempenho = $idEmpenho) AND (ad_itempatrimonio.ativo = 'S')) and (E.idempenho = ad_empenho.idempenho) and (E.idempenhado = ad_itempatrimonio.idempenhado) AND ad_empenhado.idempenhado = ad_itempatrimonio.idempenhado) as quantidadePat", "ad_empenhado, ad_empenho, ad_itemreq, ad_material, ad_itempatrimonio", "((ad_empenho.idempenho = $idEmpenho) AND (ad_empenho.status in ('B','3','6','A')) AND (ad_empenhado.quantidadeEmp > (SELECT count(*) FROM ad_itempatrimonio i WHERE i.idEmpenhado = ad_empenhado.idEmpenhado and i.ativo = 'S') ) AND (substr(ad_material.idelemento,1,1) = '4') AND (ad_itemreq.quantpedida - ad_itemreq.quantentregue > 0) and (ad_empenhado.idempenho = ad_empenho.idempenho) and (ad_empenhado.idlicitacao = ad_itemreq.idlicitacao) and (ad_empenhado.item = ad_itemreq.item) and (ad_itemreq.idmaterial = ad_material.idmaterial)", "ad_material.descricao ASC");
+
+//$sql=new MSql($linha);
+		
+	//	$query = $this->Query($sql);
+		return $query;
+/*
+		$criteria = $this->getCriteria();
+
+		$subCriteria = $this->getCriteria();
+		$subCriteria->AddColumnAttribute('count(patrimonio.idItemPatrimonio)', 'quantidadePat');
+		$subCriteria->addCriteria('empenho.idEmpenho','=',$idEmpenho);
+		$subCriteria->addCriteria('patrimonio.ativo','=',"'S'");
+
+		$cc = new CriteriaCondition;
+		$cc->addCriteria($criteria->getCriteria('status','<>','2'));
+		$cc->addOrCriteria($criteria->getCriteria('status','IS','NULL'));
+
+		$criteria->SetDistinct(true);
+		$criteria->AddColumnAttribute('idEmpenhado');
+		$criteria->AddColumnAttribute('itemreq.material.descricao');
+		$criteria->AddColumnAttribute('quantidadeEmp');
+//		$criteria->AddColumnAttribute('count(patrimonio.idItemPatrimonio)', 'quantidadePat');
+		$criteria->AddColumnAttribute($subCriteria, 'quantidadePat');
+//		$criteria->addCriteria('patrimonio.ativo','=',"'S'");
+		$criteria->addCriteria('empenho.idEmpenho','=',$idEmpenho);
+		$criteria->addCriteria('empenho.status','in',"('2','6')");	
+		$criteria->addCriteria('substr(itemreq.material.idelemento,1,1) ','=','4');	
+		$criteria->addCriteria($cc);
+//		$criteria->addGroupAttribute('idEmpenhado');
+//		$criteria->addGroupAttribute('material.descricao');
+//		$criteria->addGroupAttribute('quantidadeEmp');
+		$criteria->addOrderAttribute('material.descricao');
+		$criteria->setAssociationType('patrimonio','right');
+        return $criteria->retrieveAsQuery();
+*/
+	}
+	
+	function ListItensAPatrimoniarPorEmpenho2($idEmpenho)
+	{
+		//Alterado 04/12/2009
+		//$sql = new MSql("DISTINCT ad_empenhado.idempenhado,ad_material.descricao,ad_empenhado.quantidadeemp, (SELECT count(ad_itempatrimonio.iditempatrimonio) FROM ad_empenhado E, ad_empenho, ad_itempatrimonio WHERE ((ad_empenho.idempenho = $idEmpenho) AND (ad_itempatrimonio.ativo = 'S')) and (E.idempenho = ad_empenho.idempenho) and (E.idempenhado = ad_itempatrimonio.idempenhado) AND ad_empenhado.idempenhado = ad_itempatrimonio.idempenhado) as quantidadePat","ad_empenhado,ad_empenho,ad_itemreq,ad_material","((ad_empenho.idempenho = $idEmpenho) AND (ad_empenho.status in ('B','3','6','A')) AND (ad_empenhado.quantidadeEmp > (SELECT count(*) FROM ad_itempatrimonio i WHERE i.idEmpenhado = ad_empenhado.idEmpenhado and i.ativo = 'S') ) AND (substr(ad_material.idelemento,1,1) = '4')) and (ad_empenhado.idempenho = ad_empenho.idempenho) and (ad_empenhado.idlicitacao = ad_itemreq.idlicitacao) and (ad_empenhado.item = ad_itemreq.item) and (ad_itemreq.idmaterial = ad_material.idmaterial)","ad_material.descricao ASC","ad_empenhado.idempenhado, ad_material.descricao , ad_empenhado.quantidadeemp");
+		$sql = new MSql("DISTINCT ad_empenhado.idempenhado,substr(ad_material.descricao,1,50)as descricao,ad_empenhado.quantidadeemp, (SELECT count(ad_itempatrimonio.iditempatrimonio) FROM ad_empenhado E, ad_empenho, ad_itempatrimonio WHERE ((ad_empenho.idempenho = $idEmpenho) AND (ad_itempatrimonio.ativo = 'S')) and (E.idempenho = ad_empenho.idempenho) and (E.idempenhado = ad_itempatrimonio.idempenhado) AND ad_empenhado.idempenhado = ad_itempatrimonio.idempenhado) as quantidadePat","ad_empenhado,ad_empenho,ad_itemreq,ad_material","((ad_empenho.idempenho = $idEmpenho) AND (ad_empenho.status in ('B','3','6','A')) AND (ad_empenhado.quantidadeEmp > (SELECT count(*) FROM ad_itempatrimonio i WHERE i.idEmpenhado = ad_empenhado.idEmpenhado and i.ativo = 'S') ) AND (substr(CAST(ad_material.idelemento as text),1,1) = '4')) and (ad_empenhado.idempenho = ad_empenho.idempenho) and (ad_empenhado.idlicitacao = ad_itemreq.idlicitacao) and (ad_empenhado.item = ad_itemreq.item) and (ad_itemreq.idmaterial = ad_material.idmaterial)","descricao ASC","ad_empenhado.idempenhado ,descricao ,ad_empenhado.quantidadeemp");
+		$query = $this->Query($sql);
+		return $query;
+
+	}
+	function ListEmpenhosComItensAPatrimoniar()
+	{
+		$sql = new MSql("DISTINCT ad_empenho.idempenho,ad_empenho.numero,TO_CHAR(AD_EMPENHO.DATAEMPENHO,'DD/MM/YYYY') as dataEmpenho,cm_instituicao.nome as fornecedor", "ad_empenhado,ad_itemreq,ad_material,ad_empenho,ad_fornecedor,cm_instituicao", "(substr(CAST(ad_material.idelemento as text),1,1) = '4') AND (ad_empenho.status in ('B','3','6','A')) AND (ad_empenhado.status = '2') AND (ad_empenhado.quantidadeEmp > (SELECT count(*) FROM ad_itempatrimonio i WHERE i.idEmpenhado = ad_empenhado.idEmpenhado and i.ativo = 'S') )  and (ad_empenhado.idlicitacao=ad_itemreq.idlicitacao) and (ad_empenhado.item=ad_itemreq.item) and (ad_itemreq.idmaterial=ad_material.idmaterial) and (ad_empenhado.idempenho=ad_empenho.idempenho) and (ad_empenho.idfornecedor=ad_fornecedor.idfornecedor) and (ad_fornecedor.idinstituicao=cm_instituicao.idinstituicao)", "ad_empenho.numero ASC");
+		$query = $this->Query($sql);
+		return $query;
+
+/*		
+		$criteria = $this->getCriteria();
+		$criteria->SetDistinct(true);
+		$criteria->AddColumnAttribute('empenho.idEmpenho');
+		$criteria->AddColumnAttribute('empenho.numero');
+		$criteria->AddColumnAttribute('empenho.dataEmpenho','dataEmpenho');
+		$criteria->AddColumnAttribute('empenho.fornecedor.instituicao.nome','fornecedor');
+		$criteria->addCriteria('substr(itemreq.material.idelemento,1,1) ','=',"'4'");
+		$criteria->addCriteria('empenho.status','in',"('B','6')");	
+		$criteria->addCriteria('status','=',"'2'");	
+		$criteria->addCriteria('itemreq.quantPedida-itemreq.quantAutorizada','>',"0");	
+        $criteria->addOrderAttribute('empenho.numero');
+        return $criteria->retrieveAsQuery();
+*/
+	}
+
+	function ListEmpenhosComItensAPatrimoniarAcervo()
+	{
+//		$sql = new MSql("DISTINCT ad_empenho.idempenho,ad_empenho.numero,TO_CHAR(AD_EMPENHO.DATAEMPENHO,'DD/MM/YYYY') as dataEmpenho,cm_instituicao.nome as fornecedor FROM ad_empenhado,ad_material,ad_empenho,ad_fornecedor,cm_instituicao,ad_itemreqbib WHERE (substr(ad_material.idelemento,1,1) = '4') AND (ad_empenho.status in ('B','3','6','A')) AND (ad_empenhado.status = '2') AND (ad_empenhado.quantidadeEmp > (SELECT count(*) FROM ad_itempatrimonio i WHERE i.idEmpenhado = ad_empenhado.idEmpenhado and i.ativo = 'S') ) and (ad_empenhado.idlicitacao=ad_itemreqbib.idlicitacao) and (ad_empenhado.item=ad_itemreqbib.item) and (ad_itemreqbib.idmaterial=ad_material.idmaterial) and (ad_empenhado.idempenho=ad_empenho.idempenho) and (ad_empenho.idfornecedor=ad_fornecedor.idfornecedor) and (ad_fornecedor.idinstituicao=cm_instituicao.idinstituicao) ORDER BY ad_empenho.numero ASC");
+$sql = new MSql("DISTINCT ad_empenho.idempenho,ad_empenho.numero,TO_CHAR(AD_EMPENHO.DATAEMPENHO,'DD/MM/YYYY') as dataEmpenho,cm_instituicao.nome as fornecedor FROM ad_empenhado,ad_material,ad_empenho,ad_fornecedor,cm_instituicao,ad_itemreqbib, ad_requisicao WHERE (substr(CAST(ad_material.idelemento),1,1) = '4') AND (ad_empenho.status in ('B','3','6','A')) AND (ad_empenhado.status = '2') AND (ad_empenhado.quantidadeEmp > (SELECT count(*) FROM ad_itempatrimonio i WHERE i.idEmpenhado = ad_empenhado.idEmpenhado and i.ativo = 'S') ) and (ad_empenhado.idlicitacao=ad_itemreqbib.idlicitacao) and (ad_empenhado.item=ad_itemreqbib.item) and (ad_itemreqbib.idmaterial=ad_material.idmaterial) and (ad_empenhado.idempenho=ad_empenho.idempenho) and (ad_empenho.idfornecedor=ad_fornecedor.idfornecedor) and (ad_fornecedor.idinstituicao=cm_instituicao.idinstituicao) and ad_requisicao.idrequisicao = ad_itemreqbib.idrequisicao and ad_requisicao.tiporequisicao = 13  ORDER BY ad_empenho.numero ASC");
+		$query = $this->Query($sql);
+		return $query;
+	}
+	
+	function GetDadosItemAPatrimoniar($idEmpenhado)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->AddColumnAttribute('idEmpenhado');
+		$criteria->AddColumnAttribute('itemreq.material.idMaterial');
+		$criteria->AddColumnAttribute('itemreq.material.descricao');
+		$criteria->AddColumnAttribute('empenho.numPro');
+		$criteria->AddColumnAttribute('itemreq.material.idsubelemento');
+		$criteria->AddColumnAttribute('valorEmp');
+		$criteria->AddColumnAttribute('quantidadeEmp');
+		$criteria->AddColumnAttribute('itemreq.mapa.marcaModelo');
+		$criteria->addCriteria('idEmpenhado','=',$idEmpenhado);
+        return $criteria->retrieveAsQuery();
+	}
+
+	function GetDadosItemAPatrimoniarAcervo($idEmpenhado)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->AddColumnAttribute('idEmpenhado');
+		$criteria->AddColumnAttribute('itemreqbib.material.idMaterial');
+		$criteria->AddColumnAttribute('itemreqbib.material.descricao');
+		$criteria->AddColumnAttribute('empenho.numPro');
+		$criteria->AddColumnAttribute('itemreqbib.material.idsubelemento');
+		$criteria->AddColumnAttribute('valorEmp');
+		$criteria->AddColumnAttribute('quantidadeEmp');
+		$criteria->AddColumnAttribute('itemreqbib.mapa.marcaModelo');
+		$criteria->addCriteria('idEmpenhado','=',$idEmpenhado);
+        return $criteria->retrieveAsQuery();
+	}
+	
+	function GetQuantidadeEmpenhadaByIdItemLicitacao($idLicitacao, $item)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->AddColumnAttribute('sum(quantidadeEmp)');
+		$criteria->addCriteria('idLicitacao','=',$idLicitacao);
+		$criteria->addCriteria('item','=',$item);
+		$criteria->addCriteria('status','=',"'2'");//distribuido
+        $query = $criteria->retrieveAsQuery();
+		return $query->result[0][0];
+	}
+	function ListItensServExtEmpenhadosByEmpenho($idEmpenho)
+	{//lista itens de serviço
+		$criteria =  $this->getCriteria();
+		$criteria->setDistinct(true);
+		$criteria->AddColumnAttribute('idEmpenhado');
+		$criteria->AddColumnAttribute('item');
+		$criteria->AddColumnAttribute('itemServExt.servico.descricao');
+		$criteria->AddColumnAttribute('quantidadeEmp');
+		$criteria->AddColumnAttribute('valorEmp');
+		$criteria->AddColumnAttribute('orcamento.rubrica.idRubrica');
+		//$criteria->AddColumnAttribute('itemServExt.idRequisicao');
+	    $criteria->addCriteria('idEmpenho','=',$idEmpenho);
+        $criteria->addOrderAttribute('idEmpenhado');
+		$this->retrieve();
+        return $criteria->retrieveAsQuery();
+	}
+	function ListRequisicaoByIdEmpenho($idEmpenho)
+	{
+        $criteria =  $this->getCriteria();
+        $criteria->addCriteria('idEmpenho','=', $idEmpenho);
+		$criteria->SetDistinct('itemreq.idRequisicao');
+		$criteria->AddColumnAttribute('itemreq.idRequisicao');
+		$this->retrieve();
+        return $criteria->retrieveAsQuery();
+	}
+	function ListRequisicaoServicoByIdEmpenho($idEmpenho)
+	{
+        $criteria =  $this->getCriteria();
+        $criteria->addCriteria('idEmpenho','=', $idEmpenho);
+		$criteria->SetDistinct(true);
+		$criteria->AddColumnAttribute('itemServExt.idRequisicao');
+        return $criteria->retrieveAsQuery();
+	}
+	function ListRequisicaoBibliotecaByIdEmpenho($idEmpenho)
+	{
+        $criteria =  $this->getCriteria();
+        $criteria->addCriteria('idEmpenho','=', $idEmpenho);
+		$criteria->SetDistinct('itemreqbib.idRequisicao');
+		$criteria->AddColumnAttribute('itemreqbib.idRequisicao');
+		$this->retrieve();
+        return $criteria->retrieveAsQuery();
+	}
+
+	function GetIdEmpenhoByIdItemLicitacao($idLicitacao, $item)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->AddColumnAttribute('idEmpenho');
+		$criteria->addCriteria('idLicitacao','=',$idLicitacao);
+		$criteria->addCriteria('item','=',$item);
+        $query = $criteria->retrieveAsQuery();
+		return $query->result[0][0];
+	}
+
+	function GetCountUOReqs($idEmpenhado)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('licitacao.idTipoLicitacao');
+		$criteria->addCriteria('idEmpenhado','=',$idEmpenhado);
+		$query = $criteria->retrieveAsQuery();
+		$tipo = $query->result[0][0];
+
+		/* Removida a referencia
+		$sql = new MSql('anoref','ad_controle');
+		$anoReferencia = $empenhado->Query($sql)->result[0][0];
+		*/
+		$anoReferencia = Date('Y');
+
+		$criteria = $this->getCriteria();
+		if(($tipo == '1') or ($tipo == '4'))//COMPRA
+		{
+			$criteria->AddColumnAttribute('count(itemreq.idRequisicao)');
+			$criteria->addCriteria('itemreq.status','<>',"'0'");
+			$criteria->addCriteria('SUBSTR(itemreq.requisicao.dataHora,7,4)','=',"'$anoReferencia'");
+		}
+		elseif($tipo == '2')//SERVICO
+		{
+			$criteria->AddColumnAttribute('count(itemServExt.idRequisicao)');
+			$criteria->addCriteria('itemServExt.status','<>',"'0'");
+			$criteria->addCriteria('SUBSTR(itemServExt.requisicao.dataHora,7,4)','=',"'$anoReferencia'");
+		}
+		elseif($tipo == '3')//LIVRO
+		{
+			$criteria->AddColumnAttribute('count(itemreqbib.idRequisicao)');
+			$criteria->addCriteria('itemreqbib.status','<>',"'0'");
+			$criteria->addCriteria('SUBSTR(itemreqbib.requisicao.dataHora,7,4)','=',"'$anoReferencia'");
+		}
+		$criteria->addCriteria('idEmpenhado','=',$idEmpenhado);
+        $query = $criteria->retrieveAsQuery();
+		return $query->result[0][0];
+	}
+
+	function GetQuantPedidaUOReqs($idEmpenhado)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('licitacao.idTipoLicitacao');
+		$criteria->addCriteria('idEmpenhado','=',$idEmpenhado);
+		$query = $criteria->retrieveAsQuery();
+		$tipo = $query->result[0][0];
+
+		/* Removida a referencia
+		$sql = new MSql('anoref','ad_controle');
+		$anoReferencia = $empenhado->Query($sql)->result[0][0];
+		*/
+		$anoReferencia = Date('Y');
+
+		$criteria = $this->getCriteria();
+		if($tipo == '1')//COMPRA
+		{
+			$criteria->AddColumnAttribute('sum(itemreq.quantPedida)');
+			$criteria->addCriteria('SUBSTR(itemreq.requisicao.dataHora,7,4)','=',"'$anoReferencia'");
+		}
+		elseif($tipo == '2')//SERVICO
+		{
+			$criteria->AddColumnAttribute('sum(itemServExt.quantidade)');
+			$criteria->addCriteria('SUBSTR(itemServExt.requisicao.dataHora,7,4)','=',"'$anoReferencia'");
+		}
+		$criteria->addCriteria('idEmpenhado','=',$idEmpenhado);
+        $query = $criteria->retrieveAsQuery();
+		return $query->result[0][0];
+	}
+
+	function GetQuantEmpenhadaUOReqs($idEmpenhado)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('licitacao.idTipoLicitacao');
+		$criteria->addCriteria('idEmpenhado','=',$idEmpenhado);
+		$query = $criteria->retrieveAsQuery();
+		$tipo = $query->result[0][0];
+
+		/* Removida a referencia
+		$sql = new MSql('anoref','ad_controle');
+		$anoReferencia = $empenhado->Query($sql)->result[0][0];
+		*/
+		$anoReferencia = Date('Y');
+
+		$criteria = $this->getCriteria();
+		if($tipo == '1')//COMPRA
+		{
+			$criteria->AddColumnAttribute('sum(itemreq.quantEmpenhada)');
+			$criteria->addCriteria('SUBSTR(itemreq.requisicao.dataHora,7,4)','=',"'$anoReferencia'");
+		}
+		elseif($tipo == '2')//SERVICO
+		{
+			$criteria->AddColumnAttribute('sum(itemServExt.quantEmpenhada)');
+			$criteria->addCriteria('SUBSTR(itemServExt.requisicao.dataHora,7,4)','=',"'$anoReferencia'");
+		}
+		$criteria->addCriteria('idEmpenhado','=',$idEmpenhado);
+        $query = $criteria->retrieveAsQuery();
+		return $query->result[0][0];
+	}
+
+	function GetQuantDevolvidaUOReqs($idEmpenhado)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('licitacao.idTipoLicitacao');
+		$criteria->addCriteria('idEmpenhado','=',$idEmpenhado);
+		$query = $criteria->retrieveAsQuery();
+		$tipo = $query->result[0][0];
+
+		/* Removida a referencia
+		$sql = new MSql('anoref','ad_controle');
+		$anoReferencia = $empenhado->Query($sql)->result[0][0];
+		*/
+		$anoReferencia = Date('Y');
+
+		$criteria = $this->getCriteria();
+		if($tipo == '1')//COMPRA
+		{
+			$criteria->AddColumnAttribute('sum(itemreq.quantDevolvida)');
+			$criteria->addCriteria('SUBSTR(itemreq.requisicao.dataHora,7,4)','=',"'$anoReferencia'");
+		}
+		elseif($tipo == '2')//SERVICO
+		{
+			$criteria->AddColumnAttribute('sum(itemServExt.quantDevolvida)');
+			$criteria->addCriteria('SUBSTR(itemServExt.requisicao.dataHora,7,4)','=',"'$anoReferencia'");
+		}
+		$criteria->addCriteria('idEmpenhado','=',$idEmpenhado);
+        $query = $criteria->retrieveAsQuery();
+		return $query->result[0][0];
+	}
+
+	function GetQuantEntregueUOReqs($idEmpenhado)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('licitacao.idTipoLicitacao');
+		$criteria->addCriteria('idEmpenhado','=',$idEmpenhado);
+		$query = $criteria->retrieveAsQuery();
+		$tipo = $query->result[0][0];
+
+		/* Removida a referencia
+		$sql = new MSql('anoref','ad_controle');
+		$anoReferencia = $empenhado->Query($sql)->result[0][0];
+		*/
+		$anoReferencia = Date('Y');
+
+		$criteria = $this->getCriteria();
+		if($tipo == '1')//COMPRA
+		{
+			$criteria->AddColumnAttribute('sum(itemreq.quantEntregue)');
+			$criteria->addCriteria('SUBSTR(itemreq.requisicao.dataHora,7,4)','=',"'$anoReferencia'");
+		}
+		elseif($tipo == '2')//SERVICO
+		{
+			$criteria->AddColumnAttribute('sum(itemServExt.quantEntregue)');
+			$criteria->addCriteria('SUBSTR(itemServExt.requisicao.dataHora,7,4)','=',"'$anoReferencia'");
+		}
+		$criteria->addCriteria('idEmpenhado','=',$idEmpenhado);
+        $query = $criteria->retrieveAsQuery();
+		return $query->result[0][0];
+	}
+
+	function GetQuantLicitadaUOReqs($idEmpenhado)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->AddColumnAttribute('mapaLicitacao.quantidade');
+		$criteria->addCriteria('mapaLicitacao.vencedor','=',"'1'");
+		$criteria->addCriteria('idEmpenhado','=',$idEmpenhado);
+        $query = $criteria->retrieveAsQuery();
+		return $query->result[0][0];
+	}
+
+	function getValorTotal($idLicitacao,$statusRequisicao,$statusItensReq)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('licitacao.idTipoLicitacao');
+        $criteria->addCriteria('licitacao.idLicitacao','=', "$idLicitacao");
+		$query0 = $criteria->retrieveAsQuery();
+
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('sum(valorEmp)');
+		$criteria->addCriteria('idLicitacao','=', "$idLicitacao");
+		if($query0->result[0][0] == '1')//COMPRA
+		{
+	        $criteria->addCriteria('itemreq.status', 'in', "$statusItensReq");
+	        $criteria->addCriteria('itemreq.requisicao.status', 'in', "$statusRequisicao");
+		}
+		elseif($query0->result[0][0] == '2')//SERVICO
+		{
+	        $criteria->addCriteria('itemServExt.status', 'in', "$statusItensReq");
+		    $criteria->addCriteria('itemServExt.requisicao.status', 'in', "$statusRequisicao");
+		}
+		$query = $criteria->retrieveAsQuery();
+		return $query->result[0][0];
+	}
+
+	function GetIdRequisicaoByIdEmpenhado($idEmpenhado)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->AddColumnAttribute('itemreq.idRequisicao');
+		$criteria->addCriteria('idEmpenhado','=', $idEmpenhado);
+		$query = $criteria->retrieveAsQuery();
+		return $query->result[0][0];
+	}
+
+	function GetIdRequisicaoByIdEmpenhadoAcervo($idEmpenhado)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->AddColumnAttribute('itemreqbib.idRequisicao');
+		$criteria->addCriteria('idEmpenhado','=', $idEmpenhado);
+		$query = $criteria->retrieveAsQuery();
+		return $query->result[0][0];
+	}
+	
+	function getOrcamento()
+    {
+        $this->retrieveAssociation('orcamento');
+        return $this->orcamento;
+    }
+
+	function GetQuantEmpenhadaPorRequisicao($idEmpenhado, $idRequisicao)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->AddColumnAttribute('sum(empenhadoDist.quantidade)');
+		$criteria->addCriteria('empenhadoDist.idEmpenhado','=', $idEmpenhado);
+		$criteria->addCriteria('empenhadoDist.idRequisicao','=', $idRequisicao);
+		$query = $criteria->retrieveAsQuery();
+		return $query->result[0][0];
+	}
+
+	function GetValorEmpenhadoPorRequisicao($idEmpenhado, $idRequisicao)
+	{
+		$sql = new MSql('sum(quantidade*valorunitario)', 'ad_empenhadodist', "idempenhado = $idEmpenhado and idrequisicao = $idRequisicao");
+		$query = $this->Query($sql);
+		return $query->result[0][0];
+	}
+
+	function GetQuantNotasPorRequisicao($idEmpenhado, $idRequisicao, $tipoReq='7')
+	{
+		$criteria = $this->getCriteria();
+		if(($tipoReq == '6') or ($tipoReq == '7'))
+		{
+			$criteria->AddColumnAttribute('sum(itemNota.movimento.quantidade)');
+			$criteria->addCriteria('itemNota.movimento.idRequisicao','=', $idRequisicao);
+		}
+		elseif($tipoReq == '9')
+		{
+			$criteria->AddColumnAttribute('sum(itemNota.movimentoServ.quantidade)');
+			$criteria->addCriteria('itemNota.movimentoServ.idRequisicao','=', $idRequisicao);
+		}
+		$criteria->addCriteria('itemNota.idEmpenhado','=', $idEmpenhado);
+		$query = $criteria->retrieveAsQuery();
+		return $query->result[0][0];
+	}
+
+	function GetValorNotasPorRequisicao($idEmpenhado, $idRequisicao, $tipoReq='7')
+	{
+		$criteria = $this->getCriteria();
+		if(($tipoReq == '6') or ($tipoReq == '7'))
+		{
+			$criteria->AddColumnAttribute('sum(itemNota.movimento.valorTotal)');
+			$criteria->addCriteria('itemNota.movimento.idRequisicao','=', $idRequisicao);
+		}
+		elseif($tipoReq == '9')
+		{
+			$criteria->AddColumnAttribute('sum(itemNota.movimentoServ.valorTotal)');
+			$criteria->addCriteria('itemNota.movimentoServ.idRequisicao','=', $idRequisicao);
+		}
+		$criteria->addCriteria('itemNota.idEmpenhado','=', $idEmpenhado);
+		$query = $criteria->retrieveAsQuery();
+		return $query->result[0][0];
+	}
+
+	function existeNumeroAnulacao($numeroAnulacao)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->AddColumnAttribute('idEmpenhado');
+		$criteria->addCriteria('numeroAnulacao','=', "'$numeroAnulacao'");
+		$query = $criteria->retrieveAsQuery();
+		if($query->result[0][0])
+		{
+			return true;
+		}
+		else
+		{
+			return false;
+		}
+	}
+	
+	function ListItensAPatrimoniarPorEmpenhoAcervo($idEmpenho)
+	{
+		$sql = new MSql("DISTINCT ad_empenhado.idempenhado, substr(ad_material.descricao,1,50)as descricao, ad_empenhado.quantidadeemp, (SELECT count(ad_itempatrimonio.iditempatrimonio) FROM ad_empenhado E, ad_empenho, ad_itempatrimonio WHERE ((ad_empenho.idempenho = $idEmpenho) AND (ad_itempatrimonio.ativo = 'S')) and (E.idempenho = ad_empenho.idempenho) and (E.idempenhado = ad_itempatrimonio.idempenhado) AND ad_empenhado.idempenhado = ad_itempatrimonio.idempenhado) as quantidadePat", "ad_empenhado, ad_empenho, ad_itemreqbib, ad_material, ad_itempatrimonio", "((ad_empenho.idempenho = $idEmpenho) AND (ad_empenho.status in ('B','3','6','A')) AND (ad_empenhado.quantidadeEmp > (SELECT count(*) FROM ad_itempatrimonio i WHERE i.idEmpenhado = ad_empenhado.idEmpenhado and i.ativo = 'S') ) AND (substr(CAST(ad_material.idelemento as text),1,1) = '4')) and (ad_empenhado.idempenho = ad_empenho.idempenho) and (ad_empenhado.idlicitacao = ad_itemreqbib.idlicitacao) and (ad_empenhado.item = ad_itemreqbib.item) and (ad_itemreqbib.idmaterial = ad_material.idmaterial)");
+		$query = $this->Query($sql);
+		return $query;
+	
+	}
+
+	function ListItensAPatrimoniarPorEmpenhoAcervo2($idEmpenho)
+	{
+		$sql = new MSql("DISTINCT ad_empenhado.idempenhado,substr(ad_material.descricao,1,50)as descricao,ad_empenhado.quantidadeemp, (SELECT count(ad_itempatrimonio.iditempatrimonio) FROM ad_empenhado E, ad_empenho, ad_itempatrimonio WHERE ((ad_empenho.idempenho = $idEmpenho) AND (ad_itempatrimonio.ativo = 'S')) and (E.idempenho = ad_empenho.idempenho) and (E.idempenhado = ad_itempatrimonio.idempenhado) AND ad_empenhado.idempenhado = ad_itempatrimonio.idempenhado) as quantidadePat","ad_empenhado,ad_empenho,ad_itemreqbib,ad_material","((ad_empenho.idempenho = $idEmpenho) AND (ad_empenho.status in ('B','3','6','A')) AND (ad_empenhado.quantidadeEmp > (SELECT count(*) FROM ad_itempatrimonio i WHERE i.idEmpenhado = ad_empenhado.idEmpenhado and i.ativo = 'S') ) AND (substr(CAST(ad_material.idelemento as text),1,1) = '4')) and (ad_empenhado.idempenho = ad_empenho.idempenho) and (ad_empenhado.idlicitacao = ad_itemreqbib.idlicitacao) and (ad_empenhado.item = ad_itemreqbib.item) and (ad_itemreqbib.idmaterial = ad_material.idmaterial)","descricao ASC","ad_empenhado.idempenhado ,descricao ,ad_empenhado.quantidadeemp");
+		$query = $this->Query($sql);
+		return $query;	
+	}
+}
+?>

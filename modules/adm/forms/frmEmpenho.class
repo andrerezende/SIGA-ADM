@@ -1,0 +1,183 @@
+<?
+class frmEmpenho extends Form
+{
+	function __construct()
+	{   
+		parent::__construct('Empenhar Licitações');
+		$this->EventHandler();
+	}
+
+	Function CreateFields()
+	{
+		global $MIOLO,$module,$item,$self;
+
+		$objLicitacao = $MIOLO->GetBusiness($module,'licitacao');
+		$fields = Array(
+			new Separator('<b>Informe a Licitação:</b>'),
+			new LookupTextField('lkpLicitacao','','Número da Licitação',20),
+			new HiddenField('status','4') //Vencedores Definidos
+		);
+		$this->SetFields($fields);
+		$this->SetFieldAttr('lkpLicitacao','module',$module);
+		$this->SetFieldAttr('lkpLicitacao','item','Licitacao');
+		$this->SetFieldAttr('lkpLicitacao','event','btnListVencedores:click');
+		$this->SetFieldAttr('lkpLicitacao','filter','status,lkpLicitacao');
+
+		$buttons = Array(
+	        	new FormButton('btnFinaliza','Finalizar Gravação de Empenhos'),
+			new FormButton('btnVoltar','Voltar',$MIOLO->GetActionURL($module,'sectionsFinancas'))
+		);
+		$this->SetButtons($buttons);
+		$this->SetButtonAttr('btnFinaliza','visible',false);
+	}
+	
+	/*------------------------------------------------
+
+	Método btnListVencedores_click()
+
+	------------------------------------------------*/
+	function btnListVencedores_click($key='')
+	{
+		global $MIOLO,$module,$page,$self,$item, $theme;
+
+		$objLicitacao = $MIOLO->GetBusiness($module,'licitacao');
+		
+		$item = ($key != '') ? $key : $item;		
+		$idLicitacao = $item;	
+	
+		$objLicitacao->GetById($idLicitacao);
+		$list = $objLicitacao->ListVencedoresByLicitacao($idLicitacao);
+
+                $columns = array(
+			   new GridColumn('Código','center',true,'10%',true),
+			   new GridColumn('Nome','left',true,'72%',true),
+                );
+		
+                $grid = new Grid($list, $columns, $this->listURL,15,0);
+                $grid->SetTitle('Relação de Vencedores da Licitação n&ordm; '.$objLicitacao->numero);
+	 	$href_edit = $MIOLO->GetActionURL($module,'main:empenho','%0%_%2%', array('event'=>'btnGetDadosEmpenho:click'));
+                $grid->AddActionText('alt','Criar Empenho',$href_edit);
+
+		$fields = Array(
+			$grid,
+			new Hiddenfield('idLicitacao',$idLicitacao)
+		);
+		$this->SetFields($fields);
+		$this->SetButtonAttr('btnAdicionaEmpenho','visible',true);
+		$this->SetButtonAttr('btnFinaliza','visible',true);
+	}
+
+	/*------------------------------------------------
+
+	btnGetDadosEmpenho_click()
+
+	------------------------------------------------*/
+	function btnGetDadosEmpenho_click()
+	{
+		global $MIOLO,$module,$item;
+
+		$item = explode("_",$item);
+		$idFornecedor = trim($item[0]);
+		$idLicitacao = trim($item[1]);
+
+		$objLicitacao = $MIOLO->GetBusiness($module,'licitacao');
+		
+		// Se já foi feito empenho para este fornecedor dá aviso
+		if ($objLicitacao->EstaEmpenhado($idLicitacao,$idFornecedor))
+		{
+			$action = $MIOLO->GetActionURL($module, 'empenho','',array('event'=>'btnListVencedores:click','item'=>$idLicitacao));
+		        $MIOLO->Information('Um empenho para este fornecedor já foi gerado.',$action);
+		}
+		else
+		{
+			//Pega o somatorio dos itens vencidos por este fornecedor
+			$valorEmpenho = $objLicitacao->GetValorEmpenhoByLicitacaoFornecedor($idLicitacao,$idFornecedor);
+			$valorEmpenho2 = number_format(str_replace(',','.',$valorEmpenho),2,',','');
+
+			$fields = Array(
+				new Separator('<b>Informe a Licitação:</b>'),
+				new TextField('numero','','Número',20),
+				new TextField('tipoEmpenho','','Tipo',20),
+				new TextField('tipoEntrega','','Entrega',20),
+				new TextField('valorEmpenho2','R$ '.$valorEmpenho2,'Valor',20),
+				new HiddenField('valorEmpenho',$valorEmpenho),
+				new HiddenField('idFornecedor',$idFornecedor),
+				new HiddenField('idLicitacao',$idLicitacao) 
+			);
+                        
+			$this->SetFields($fields);
+	        	$this->SetFieldAttr('valorEmpenho2','readonly',true);
+			
+			$buttons = Array(
+	                	new FormButton('btnCriaEmpenho','Criar Empenho'),
+			);
+			$this->SetButtons($buttons);
+			$this->SetButtonAttr('btnVoltar','visible',false);
+		}
+	}
+
+	/*------------------------------------------------
+
+	btnGetDadosEmpenho_click()
+
+	------------------------------------------------*/
+	function btnCriaEmpenho_click()
+	{
+		global $MIOLO,$module,$item;
+
+		$objLicitacao = $MIOLO->GetBusiness($module,'licitacao');
+		
+		$numero = $this->GetFormValue('numero');
+	 	$tipoEmpenho = $this->GetFormValue('tipoEmpenho');
+	 	$tipoEntrega = $this->GetFormValue('tipoEntrega');
+	 	$valorEmpenho = $this->GetFormValue('valorEmpenho');
+	 	$idFornecedor = $this->GetFormValue('idFornecedor');
+	 	$idLicitacao = $this->GetFormValue('idLicitacao');
+		$dataEmpenho = date("d/m/Y");
+		$idEmpenho = $objLicitacao->GetNewIdEmpenho();
+
+		//Insere um registro na tabela de empenho
+	
+		if ($objLicitacao->CriaEmpenho($idEmpenho,$numero,$idFornecedor,$dataEmpenho,$tipoEmpenho,$tipoEntrega,$valorEmpenho))
+			$ok = true;
+		
+		// Grava o idempenho nos itens de licitacao
+		$ok2 = true;
+		$list = $objLicitacao->ListItemLicitacaoByVencedores($idLicitacao,$idFornecedor);
+		foreach ($list as $ls)
+		{
+			$item = $ls[0];
+			if (!$objLicitacao->SetIdEmpenhoAtItemLicitacao($idEmpenho,$idLicitacao,$item))
+				$ok2 = false;
+		}
+	
+		if ($ok && $ok2)	
+		{
+			$action = $MIOLO->GetActionURL($module, 'empenho','',array('event'=>'btnListVencedores:click','item'=>$idLicitacao));
+		        $MIOLO->Information('Empenho n&ordm; '.$numero.' gerado com sucesso.',$action);
+		}
+		
+	}
+
+	/*------------------------------------------------
+
+	btnFinaliza_click()
+	
+	Finaliza a Gravação de Empenhos
+
+	------------------------------------------------*/
+	function btnFinaliza_click()	
+	{
+		global $MIOLO, $module,$item, $page, $theme, $action;
+	
+		$idLicitacao = $this->GetFormValue('idLicitacao');   
+		$objLicitacao = $MIOLO->GetBusiness($module,'licitacao');
+		$objLicitacao->GetById($idLicitacao);
+		if ($objLicitacao->SetStatus("5"))
+		{	
+			$action = $MIOLO->GetActionURL($module, 'sectionsFinancas', '','');
+			$MIOLO->Information('Inclusão de empenhos concluida com sucesso.',$action);
+		}
+	}
+}
+?>

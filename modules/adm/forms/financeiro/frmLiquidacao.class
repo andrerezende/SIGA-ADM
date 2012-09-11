@@ -1,0 +1,386 @@
+<?
+class frmLiquidacao extends Form
+{
+    function __construct()
+    {
+		global $MIOLO, $module, $action;
+		
+        $this->Form('Liquidação');
+		$this->SetClose($MIOLO->GetActionURL($module,'main:financeiro:liquidacao'));
+		$this->page->SetAction($MIOLO->GetActionURL($module,$action));
+		$this->EventHandler();
+		$this->defaultButton = false;
+    }
+
+	function CreateFields()
+	{
+		global $MIOLO, $module, $action, $item, $theme;
+
+		$empenho = $MIOLO->GetBusiness($module, 'empenho');
+		$query = $empenho->ListEmpenhosComNotasALiquidar();
+		$columns = array(
+			new MDataGridColumn('numero','Número','center',false, '15%'),
+			new MDataGridColumn('fornecedor','Fornecedor','left', true, '85%'),
+		);
+		$href_datagrid = $MIOLO->GetActionURL($module,$action,$item);
+		$datagrid = new MDataGrid2($query, $columns, $href_datagrid,0);
+		$datagrid->SetTitle('Relação de Empenhos com Notas a Liquidar');
+		$href = $MIOLO->GetActionURL($module, $action, '%1%', array('event'=>'btnEmpenhos_click', 'empenho2'=>'%1%'));
+		$datagrid->SetWidth('99%');
+		$datagrid->SetClose(null);
+		$datagrid->addActionIcon('Selecionar','select.gif',$href);
+
+		$fields = array(
+            array(
+                new MTextField('empenho','','Empenho',20),
+                new MTextLabel('ou','-OU-','&nbsp;'),
+				new LookupTextField('fornecedor', '', 'Fornecedor', 60),
+            ),
+			new HiddenField('idFornecedor'),
+//			new FormButton('btnEmpenhos', 'Empenhos'),
+			$datagrid
+		);
+		$this->SetFields($fields);
+		$this->SetFieldAttr('fornecedor','module',$module);
+		$this->SetFieldAttr('fornecedor','item','fornecedor');
+		$this->SetFieldAttr('fornecedor','event','filler');
+		$this->SetFieldAttr('fornecedor','related', 'idFornecedor,fornecedor');
+
+		$buttons = array(
+			new FormButton('btnEmpenhos', 'Empenhos'),
+			new FormButton('btnLiquidacao', 'Liquidação'),
+			new FormButton('btnVoltar', 'Voltar', $MIOLO->GetActionURL($module, $action) ),
+		);
+		$this->SetButtons($buttons);
+		$this->SetButtonAttr('btnLiquidacao', 'visible', false);
+		$this->SetButtonAttr('btnVoltar', 'visible', false);
+	}
+
+	function btnEmpenhos_click()
+	{
+		global $MIOLO, $module, $action, $item, $theme;
+
+		$idFornecedor = $this->GetFormValue('idFornecedor');
+		$fornecedor = $this->GetFormValue('fornecedor');
+		$numero = $this->GetFormValue('empenho');
+		if($numero == null)
+		{
+			$numero = $this->GetFormValue('empenho2');
+		}
+		if($fornecedor == "")
+		{
+			$fornecedor = null;
+		}
+
+		if( ($fornecedor == null) and ($numero == null) ) //não foi definido critério para o filtro
+		{
+		}
+		else
+		{
+			if($numero != null) //foi definido um empenho específico
+			{
+				$empenho = $MIOLO->GetBusiness($module, 'empenho');
+				$dados = $empenho->ListByNumero($numero);
+				$idFornecedor = $dados->result[0][5];
+				$fornecedor = $dados->result[0][10];
+			}
+			else
+			{
+				if($idFornecedor == null) //nao foi usado o lookup
+				{
+					$objFornecedor = $MIOLO->GetBusiness($module, 'fornecedor');
+					$dados = $objFornecedor->GetByDocumentoOuNome($fornecedor);
+					$idFornecedor = $dados[0];
+					$fornecedor = $dados[1];
+				}
+			}
+		}
+
+		$item_aux = $item;
+
+		$fields = array(
+			new HiddenField('idFornecedor', $idFornecedor),
+			new HiddenField('fornecedor', $fornecedor),
+		);
+
+		$empenho = $MIOLO->GetBusiness($module, 'empenho', $item[1]);
+		$empenho->getEmpenhado();
+
+		if($numero == null) //não foi definido um empenho específico
+		{
+			$query2 = $empenho->ListDetalhesEmpenhoLiquidacao($idFornecedor);
+		}
+		else //foi definido um empenho específico
+		{
+			$query2 = $empenho->ListDetalhesEmpenhoLiquidacaoByNumero($numero);
+		}
+
+		$nota = $MIOLO->GetBusiness($module, 'notafiscal');
+		$i = 0;
+		if($query2)
+		{
+			foreach($query2 as $r)
+			{
+				$query2[$i][3] = $empenho->numProcessoFormatado($query2[$i][3]); //processo
+				$query2[$i][7] = number_format(str_replace(',','.',$r[7]),2,',','.'); //vl emp
+				$query2[$i][8] = number_format(str_replace(',','.',$r[8]),2,',','.'); //vl nf
+				$query2[$i][9] = number_format(str_replace(',','.',$r[9]),2,',','.'); //saldo
+				$i++;
+			}
+		}
+
+		$columns2 = array(
+			new GridColumn('idEmpenho','center',true, '0%',false),
+			new GridColumn('Empenho','center',true, '13%',true, null),
+			new GridColumn('Tipo','center',true, '12%',true, null),
+			new GridColumn('Proc Pgto','center',true, '15%',true, null),
+			new GridColumn('idNotaFiscal','center',true, '0%',false),
+			new GridColumn('Nota Fiscal','center',true, '15%',true, null),
+			new GridColumn('Data Nota Fiscal','center',true, '15%',true, null),
+			new GridColumn('Valor Empenho','center',true, '16%',true, null),
+			new GridColumn('Valor NF','center',true, '16%',true, null),
+//			new GridColumn('Saldo','center',true, '12%',true, null),
+		);
+
+		$grid2 = new Grid($query2, $columns2, $href_datagrid, 0, 0, 'grid2');
+		$grid2->SetTitle('Fornecedor: ' . $fornecedor);
+		$grid2->SetLinkType('linkbutton');
+		$grid2->SetWidth('99%');
+		$grid2->AddActionSelect();
+		$grid2->SetRowMethod('frmLiquidacao', 'MyRowMethod');
+
+		$fields[] = $grid2;
+
+		$this->SetButtonAttr('btnLiquidacao', 'visible', true);
+
+		$this->SetFields($fields);
+
+		$this->SetButtonAttr('btnVoltar', 'visible', true);
+		$this->SetButtonAttr('btnEmpenhos', 'visible', false);
+		$this->AddField(new HiddenField('item_aux',$item_aux));
+	}
+
+	function btnLiquidacao_click()
+	{
+		global $MIOLO, $module, $action, $item;
+
+		$cf = new MCurrencyFormatter();
+		$item_aux = $this->GetFormValue('item_aux');
+		$this->SetTitle('Liquidação');
+		$select = $this->GetFormValue('selectgrid2');
+
+		//testa de foi selecionado algum empenho
+		if($select == null)
+		{
+			$MIOLO->Error('Por favor, selecione os empenhos', $MIOLO->GetActionURL($module, $action) );
+			return;
+		}
+
+		//primeira nota selecionada
+		$selected = reset($select);
+		$selected = explode('-', $selected);
+
+		//monta conjunto com notas e testa se foram selecionados apenas empenhos de mesmo numPro
+		$empenho = $MIOLO->GetBusiness($module, 'empenho', $selected[0]);
+		$id = explode('-',$selected[0]);
+		$numPro = $empenho->GetProcessoPagamento($id[0]);
+		$numPro = $empenho->numProcessoFormatado($numPro);
+		$notas = '(';
+		foreach($select as $sel)
+		{
+			$s = explode('-',$sel);
+			$id = $empenho->GetProcessoPagamento($s[0]);
+			$id = $empenho->numProcessoFormatado($id);
+			if($id != $numPro)
+			{
+				$MIOLO->Error('Empenhos selecionados possuem Processos de Pagamento diferentes.', $MIOLO->GetActionURL($module, $action) );
+				return;
+			}
+			if($s[1] != null)
+			{
+				$notas .= $s[1] . ",";
+			}
+		}
+		$notas = substr($notas, 0, -1) . ')';
+
+		$nota = $MIOLO->GetBusiness($module, 'notafiscal');
+		$query = $nota->GetNotasParaLiquidar($notas);
+		//totalização
+		$valorTotal = 0;
+		for($i = 0; $i < count($query->result); $i++)
+		{
+			$valor = str_replace(',','.',$query->result[$i][4]);
+			$valorTotal += $valor;
+			$query->result[$i][4] = number_format(str_replace(',','.',$query->result[$i][4]),2,',','.');//val
+		}
+		$valorTotal = number_format(str_replace(',','.',$valorTotal),2,',','.');
+		$query->result[][0] = ' ';
+		$query->result[count($query->result)-1][1] = ' ';
+		$query->result[count($query->result)-1][2] = ' ';
+		$query->result[count($query->result)-1][3] = '<b>Valor A Liquidar</b>';
+		$query->result[count($query->result)-1][4] = $valorTotal;
+
+		//busca dados sobre o empenho
+		$valorEmpenho = $empenho->valor;
+		$empenho->getFornecedor();
+		$fornecedor = $empenho->fornecedor->instituicao->nome;
+		$valorEmpenho = 'R$ ' . number_format(str_replace(',','.',$valorEmpenho),2,',','.');
+		$notaFiscal = $MIOLO->GetBusiness('adm','notafiscal');
+		$notasEmpenho = $notaFiscal->GetNotasByIdEmpenho($empenho->idEmpenho);
+		$valorNotas = 0.0;
+		if($notasEmpenho->result)
+		{
+			foreach($notasEmpenho->result as $n)
+			{
+				$valorNotas = $cf->toDecimal($valorNotas) + $cf->toDecimal($n[3]);
+			}
+		}
+		$saldoEmpenho = $cf->toDecimal($valorEmpenho) - $cf->toDecimal($valorNotas);
+		$saldoEmpenho = 'R$ ' . number_format(str_replace(',','.',$saldoEmpenho),2,',','.');
+
+		$columns = array(
+			new DataGridColumn('numero','Empenho','center',true, '25%',true, null),
+			new DataGridColumn('notaFiscal','Nota Fiscal','center',true, '25%',true, null),
+			new DataGridColumn('dataNotaFiscal','Data','center',true, '25%',true, null),
+			new DataGridColumn('valor','Valor R$','center',true, '25%',true, null),
+		);
+
+		$gridNota = new DataGrid2($query, $columns, '', 0);
+		$gridNota->SetTitle('Notas Fiscais');
+		$gridNota->SetLinkType('linkbutton');
+		$gridNota->SetWidth('70%');
+
+		$procPagamento = $empenho->numProcessoFormatado();
+		$empenho->getEmpenhado();
+		$licitacao = $MIOLO->GetBusiness($module, 'licitacao', $empenho->empenhado[0]->idLicitacao);
+		$procLicitacao = $licitacao->numProcessoFormatado();
+		$fields = array(
+			new MTextField('fornecedor',$fornecedor, 'Fornecedor',90),
+			new MTextField('processo',$procPagamento,'Processo Pagamento',15),
+			new MTextField('procLic',$procLicitacao,'Processo Licitação',15),
+			new Spacer(1),
+			new MTextField('valorEmpenho',$valorEmpenho, 'Valor Empenho',20),
+			new MTextField('saldoEmpenho',$saldoEmpenho, 'Saldo Empenho',20),
+			new Spacer(1),
+			$gridNota,
+			new Spacer(2),
+			new MTextField('valorIRRF','','Valor IN/SRF',15),
+			new MTextField('valorINSS','','Valor INSS',15),
+			new MTextField('valorISS','','Valor ISS',15),
+			new MCalendarField('dataLiquidacao',date("d/m/Y"),'Data Liquidação',20),
+			new MMultiLineField('obs','','Observação','',3,60),
+		);
+		$this->SetFields($fields);
+		$this->SetFieldAttr('fornecedor','readonly',true);
+		$this->SetFieldAttr('empenho','readonly',true);
+		$this->SetFieldAttr('procLic','readonly',true);
+		$this->SetFieldAttr('valorEmpenho','readonly',true);
+		$this->SetFieldAttr('saldoEmpenho','readonly',true);
+		$buttons = array(
+			new FormButton('btnLiquidacaoConfirmar','Confirmar'),
+		);
+		$this->SetButtons($buttons);
+		$this->SetButtonAttr('btnEmpenhos', 'visible', false);
+		$this->SetButtonAttr('btnVoltar', 'visible', true);
+		$this->AddField(new HiddenField('item_aux',$item_aux));
+		$this->AddField(new HiddenField('notas',substr($notas, 1, -1)));
+		$this->AddField(new HiddenField('idFornecedor', $idFornecedor));
+	}
+
+	function btnLiquidacaoConfirmar_click()
+	{
+		global $MIOLO, $module, $action;
+
+		$item = $this->GetFormValue('item_aux');
+		$notas = $this->GetFormValue('notas');
+
+		$objEmpenho = $MIOLO->GetBusiness($module, 'empenho');
+
+		$idFornecedor = $this->GetFormValue('idFornecedor');
+		$valorIRRF = $this->GetFormValue('valorIRRF');
+		$valorINSS = $this->GetFormValue('valorINSS');
+		$valorISS = $this->GetFormValue('valorISS');
+		$dataLiquidacao = $this->GetFormValue('dataLiquidacao');
+		$obs = $this->GetFormValue('obs');
+		$processo = $this->GetFormValue('processo');
+
+		try
+		{
+			if($processo)
+			{
+				$objProcesso = $MIOLO->GetBusiness('protocolo', 'processo');
+				$objProcesso->getByNumeroFormatado($processo);
+				$arrayNotas = explode(',', $notas);
+				$objNota = $MIOLO->GetBusiness('adm', 'notafiscal');
+				foreach($arrayNotas as $nota)
+				{
+					$objNota->GetById($nota);
+					$objNota->retrieveAssociation('itens');
+					foreach($objNota->itens as $i)
+					{
+						$i->retrieveAssociation('empenhado');
+						$idEmpenho = $i->empenhado->idEmpenho;
+						$objEmpenho->GetById($idEmpenho);
+						$objEmpenho->numPro = $objProcesso->numProcesso;
+						$objEmpenho->save();
+					}
+				}
+			}
+
+			$liquidacao = $objEmpenho->Liquidacao($notas, $idFornecedor, $valorIRRF, $valorINSS, $valorISS, $dataLiquidacao, $obs);
+
+			//se ainda houver nfs para o empenho, volta já para a segunda tela 
+			$notaFiscal = $MIOLO->GetBusiness('adm', 'notafiscal');
+			if($notaFiscal->existeNotaNaoLiquidadaPorEmpenho($objEmpenho->idEmpenho) > 0)
+			{
+				$action_ok = $MIOLO->GetActionURL($module, $action, '', array('event'=>'btnEmpenhos_click', 'empenho'=>$objEmpenho->numero));
+			}
+			else
+			{
+				$action_ok = $MIOLO->GetActionURL($module, $action);
+			}
+
+			$action_report = $MIOLO->GetActionURL($module, $action,'',array('event'=>'report', 'liquidacao'=>$liquidacao, 'idFornecedor'=>$idFornecedor, 'notas'=>$notas));
+
+			$bot_report = new MButtonWindow('', '&nbsp;&nbsp;Imprimir&nbsp;&nbsp;', $action_report);
+			$bot_voltar = new MButton('', '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;OK&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;', $action_ok);
+
+			$MIOLO->Information("Liquidação realizada com sucesso<BR><BR><BR>&nbsp;".$bot_report->generate()."&nbsp;&nbsp;".$bot_voltar->generate(), 'NONE');
+		}
+		catch (Exception $e)
+		{
+			$MIOLO->Error($e->getMessage(), $MIOLO->GetActionURL($module, $action, '', array()) );
+		}
+	}
+
+	function report()
+	{
+		global $MIOLO,$module;
+		$ui = $MIOLO->GetUI();
+
+		$notas = $this->GetFormValue('notas');
+		$idFornecedor = $this->GetFormValue('idFornecedor');
+		$liquidacao = $this->GetFormValue('liquidacao');
+
+		$data = array('liquidacao'=>$liquidacao, 'idFornecedor'=>$idFornecedor, 'notas'=>$notas);
+		$report = $ui->GetReport($module,'repLiquidacao',$data);
+		$report->Generate();
+	}
+
+	// Método a ser executado antes de renderizar cada linha
+	function MyRowMethod($i, $row, $actions, $columns)
+	{
+		global $MIOLO, $module, $action;
+
+		$id = explode('-', $row[0]);
+		$empenho = $MIOLO->GetBusiness($module, 'empenho', $id[0]);
+		$valores = $empenho->GetValores();
+		$valor = number_format(str_replace(',','.',$valores[0]),2,',','.');
+		$valores[1] = number_format(str_replace(',','.',$valores[1]),2,',','.');
+		$valores[2] = number_format(str_replace(',','.',$valores[2]),2,',','.');
+//		$columns['valor']->control[$i]->SetValue($valor);
+		$saldo = 'Saldo Original: '. $valores[1] . "                  Saldo Complemento: " . $valores[2];
+		$columns[7]->control[$i]->SetJsHint($saldo);
+	}
+}
+?>

@@ -1,0 +1,112 @@
+<?php
+class BusinessProtocoloSetor extends MBusiness
+{
+    var $idSetor;
+    var $sigla;
+    var $siglas;
+    var $siglai;
+    var $dataInicio;
+    var $dataFim;
+    var $nome;
+    var $tipo;
+    var $fone;
+    var $fax;
+    var $obs;
+    var $paiRelat;
+    var $localizacao;
+    function __construct($data=NULL)
+    {
+        parent::__construct('common',$data);
+    }
+    function OnCreate($idSetor)
+    {
+        if ($idSetor) $this->GetById($idSetor);
+    }
+    function GetById($id)
+    {
+       $this->idSetor = $id;
+       $this->retrieve();
+       return $this;
+    }
+    function getBySigla($sigla)
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->addColumnAttribute('idSetor');
+        $criteria->addCriteria('sigla','=',"'$sigla'");
+        $this->getById($criteria->retrieveAsQuery()->result[0][0]);
+    }
+	function listAll()
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->addCriteria('dataFim','is', "null");
+        $criteria->addOrderAttribute('sigla');
+        return $criteria->retrieveAsQuery();
+    }
+	function selAll()
+    {
+        $setores = $this->listAll()->chunkResult();
+        return array_combine($setores,$setores);
+    }
+	function selAllById()
+    {
+        return $this->listAll()->chunkResult();
+    }
+    function novoAcesso($setorFilho)
+    {
+        global $MIOLO;
+        $acesso = $MIOLO->getBusiness('protocolo','setoracesso');
+        $acesso->setor = $this->sigla;
+        $acesso->setorFilho = $setorFilho;
+        try 
+        {
+            $acesso->save();
+        }
+        catch(Exception $e) {$this->addError($e->getMessage());}
+    }
+
+	function ListBySigla($sigla)
+    {
+        $sigla = strtoupper($sigla);
+        $criteria =  $this->getCriteria();
+        $criteria->AddColumnAttribute('idSetor');
+        $criteria->AddColumnAttribute('nome');
+        $criteria->addCriteria('sigla','LIKE', "'$sigla%'");
+        $criteria->addOrderAttribute('sigla');
+        return $criteria->retrieveAsQuery();
+    }
+
+    function getAcesso()
+    {
+        $this->retrieveAssociation('filhos');
+    }
+
+    function getSetorAcesso($id)
+    {
+        if ( $this->filhos )
+        {
+            foreach ( $this->filhos as $f )
+            {
+                if ( $f->setorFilho == $id )
+                {
+                    return $f;
+                }
+            }
+        }
+        return $NULL;
+    }
+
+    function deleteAcesso($id)
+    {
+        $acesso = $this->getSetorAcesso($id);
+        $acesso->delete();
+    }
+
+    function getSetoresPais()
+    {
+        $criteria =  $this->getCriteria();
+		$criteria->addColumnAttribute('paiRelat');
+        $criteria->addGroupAttribute('paiRelat');
+        return $criteria->retrieveAsQuery()->result;
+    }
+}
+?>

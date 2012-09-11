@@ -1,0 +1,287 @@
+<?php
+class repUoAlmoxarifadoMovimentacao extends MPDFReport {
+
+	var $img;
+	var $timestamp;
+	var $uoalmoxarifado;
+	var $dataRel;
+
+	function __construct($objUo) {
+		global $MIOLO, $module, $page, $context, $self, $action, $perms;
+		$this->uoalmoxarifado = $objUo;
+		$this->timestamp = date('d/m/Y G:i');
+		$ui = $MIOLO->GetUI();
+		$this->img = $ui->GetImageSrc('logo_siga.jpg', 'adm');
+		// obtem os movimentos por período
+		$k = new MKrono();
+		$inicio = Form::getFormValue('dataInicio');
+		$fim = Form::getFormValue('dataFim');
+		$movimento = $MIOLO->getBusiness('adm', 'movimento');
+		/*
+		  $subcriteriaEntrada = $movimento->getCriteria();
+		  $subcriteriaEntrada->addColumnAttribute('material.subelemento.idSubElemento');
+		  $subcriteriaEntrada->addCriteria('dataMovimento','>=',"'{$k->invertDate($inicio)}'");
+		  $subcriteriaEntrada->addCriteria('dataMovimento','<=',"'{$k->invertDate($fim)}'");
+		  $subcriteriaEntrada->addCriteria('itemNota.empenhado.empenho.idUoEntrega','=',"'{$this->uoalmoxarifado->idUo}'");
+		  $subcriteriaEntrada->addCriteria('idMovimentoRef','is',"null");
+		  $subcriteriaEntrada->addGroupAttribute('material.subelemento.idSubElemento');
+		  $subcriteriaSaida = $movimento->getCriteria();
+		  $subcriteriaSaida->addColumnAttribute('material.subelemento.idSubElemento');
+		  $subcriteriaSaida->addCriteria('dataMovimento','>=',"'{$k->invertDate($inicio)}'");
+		  $subcriteriaSaida->addCriteria('dataMovimento','<=',"'{$k->invertDate($fim)}'");
+		  $subcriteriaSaida->addCriteria('requisicao.idUoExecutante','=',"'{$this->uoalmoxarifado->idUo}'");
+		  $subcriteriaSaida->addCriteria('idMovimentoRef','is',"null");
+		  $subcriteriaSaida->addGroupAttribute('material.subelemento.idSubElemento');
+		 */
+		$estoque = $MIOLO->getBusiness('adm', 'estoque');
+		$criteria = $estoque->getCriteria();
+		$criteria->addColumnAttribute('material.subelemento.idElemento');
+		$criteria->addColumnAttribute('material.subelemento.idSubElemento');
+		$criteria->addColumnAttribute('material.subelemento.descricao');
+		$criteria->addColumnAttribute('sum(valorTotal)');
+		$criteria->addCriteria('idUo', '=', "'{$this->uoalmoxarifado->idUo}'");
+		/*
+		  $cc = new CriteriaCondition();
+		  $cc->addCriteria($criteria->getCriteria('material.idsubelemento','in',$subcriteriaEntrada));
+		  $cc->addOrCriteria($criteria->getCriteria('material.idsubelemento','in',$subcriteriaSaida));
+		  $criteria->addCriteria($cc);
+		 */
+		$criteria->addGroupAttribute('material.subelemento.idElemento');
+		$criteria->addGroupAttribute('material.subelemento.idSubElemento');
+		$criteria->addGroupAttribute('material.subelemento.descricao');
+		$criteria->addOrderAttribute('material.subelemento.idSubElemento');
+		$saldos = $criteria->retrieveAsQuery()->result;
+		if ($saldos) {
+			$cf = new MCurrencyFormatter();
+			foreach ($saldos as $saldo) {
+				$this->dataRel[$saldo[1]][0] = "{$saldo[0]}.{$saldo[1]}";
+				$this->dataRel[$saldo[1]][1] = "{$saldo[2]}";
+				$this->dataRel[$saldo[1]][2] = $cf->toDecimal($saldo[3]);
+				$this->dataRel[$saldo[1]][3] = 0;
+				$this->dataRel[$saldo[1]][4] = 0;
+				$this->dataRel[$saldo[1]][5] = $cf->toDecimal($saldo[3]);
+			}
+			$criteria = $movimento->getCriteria();
+			$criteria->addColumnAttribute('distinct(idMovimento)');
+			$criteria->addColumnAttribute('material.subelemento.idSubElemento');
+			$criteria->addColumnAttribute('valorTotal');
+			$criteria->addCriteria('dataMovimento', '>', "'{$k->invertDate($fim)}'");
+			$criteria->addCriteria('itemNota.empenhado.empenho.idUoEntrega', '=', "'{$this->uoalmoxarifado->idUo}'");
+			$criteria->addCriteria('idMovimentoRef', 'is', "null");
+			$criteria->addGroupAttribute('idMovimento');
+			$criteria->addGroupAttribute('material.subelemento.idSubElemento');
+			$criteria->addGroupAttribute('valorTotal');
+			$criteria->addOrderAttribute('material.subelemento.idSubElemento');
+			$entradasADescontar = $criteria->retrieveAsQuery()->result;
+			if ($entradasADescontar) {
+				foreach ($entradasADescontar as $entrada) {
+					$this->dataRel[$entrada[1]][2] -= $cf->toDecimal($entrada[2]);
+					$this->dataRel[$entrada[1]][5] -= $cf->toDecimal($entrada[2]);
+				}
+			}
+			$criteria = $movimento->getCriteria();
+			$criteria->addColumnAttribute('distinct(idMovimento)');
+			$criteria->addColumnAttribute('material.subelemento.idSubElemento');
+			$criteria->addColumnAttribute('valorTotal');
+			$criteria->addCriteria('dataMovimento', '>', "'{$k->invertDate($fim)}'");
+			$criteria->addCriteria('requisicao.idUoExecutante', '=', "'{$this->uoalmoxarifado->idUo}'");
+			$criteria->addCriteria('idMovimentoRef', 'is', "null");
+			$criteria->addGroupAttribute('idMovimento');
+			$criteria->addGroupAttribute('material.subelemento.idSubElemento');
+			$criteria->addGroupAttribute('valorTotal');
+			$criteria->addOrderAttribute('material.subelemento.idSubElemento');
+			$saidasADescontar = $criteria->retrieveAsQuery()->result;
+			if ($saidasADescontar) {
+				foreach ($saidasADescontar as $saida) {
+					$this->dataRel[$saida[1]][2] += $cf->toDecimal($saida[2]);
+					$this->dataRel[$saida[1]][5] += $cf->toDecimal($saida[2]);
+				}
+			}
+			$criteria = $movimento->getCriteria();
+			$criteria->addColumnAttribute('distinct(idMovimento)');
+			$criteria->addColumnAttribute('material.subelemento.idSubElemento');
+			$criteria->addColumnAttribute('valorTotal');
+			$criteria->addCriteria('dataMovimento', '>=', "'{$k->invertDate($inicio)}'");
+			$criteria->addCriteria('dataMovimento', '<=', "'{$k->invertDate($fim)}'");
+			$criteria->addCriteria('itemNota.empenhado.empenho.idUoEntrega', '=', "'{$this->uoalmoxarifado->idUo}'");
+			$criteria->addCriteria('tipoMovimento', '=', "'1'");
+			$criteria->addCriteria('idMovimentoRef', 'is', "null");
+			$criteria->addGroupAttribute('idMovimento');
+			$criteria->addGroupAttribute('material.subelemento.idSubElemento');
+			$criteria->addGroupAttribute('valorTotal');
+			$criteria->addOrderAttribute('material.subelemento.idSubElemento');
+			$entradas = $criteria->retrieveAsQuery()->result;
+			if ($entradas) {
+				foreach ($entradas as $entrada) {
+					$this->dataRel[$entrada[1]][2] = $cf->toDecimal($this->dataRel[$entrada[1]][2]) - $cf->toDecimal($entrada[2]);
+					$this->dataRel[$entrada[1]][3] = $cf->toDecimal($this->dataRel[$entrada[1]][3]) + $cf->toDecimal($entrada[2]);
+				}
+			}
+			$criteria = $movimento->getCriteria();
+			$criteria->addColumnAttribute('distinct(idMovimento)');
+			$criteria->addColumnAttribute('material.subelemento.idElemento');
+			$criteria->addColumnAttribute('material.subelemento.idSubElemento');
+			$criteria->addColumnAttribute('valorTotal');
+			$criteria->addCriteria('dataMovimento', '>=', "'{$k->invertDate($inicio)}'");
+			$criteria->addCriteria('dataMovimento', '<=', "'{$k->invertDate($fim)}'");
+			$criteria->addCriteria('itemNota.empenhado.empenho.idUoEntrega', '=', "'{$this->uoalmoxarifado->idUo}'");
+			$criteria->addCriteria('tipoMovimento', '=', "'5'");
+			$criteria->addCriteria('idMovimentoRef', 'is', "null");
+			$criteria->addGroupAttribute('idMovimento');
+			$criteria->addGroupAttribute('material.subelemento.idElemento');
+			$criteria->addGroupAttribute('material.subelemento.idSubElemento');
+			$criteria->addGroupAttribute('valorTotal');
+			$criteria->addOrderAttribute('material.subelemento.idSubElemento');
+			$entradaSaidas = $criteria->retrieveAsQuery()->result;
+			if ($entradaSaidas) {
+				foreach ($entradaSaidas as $entradaSaida) {
+					if (!$this->dataRel[$entradaSaida[1]][0]) {
+						$subelemento = $MIOLO->getBusiness('adm', 'subelemento');
+						$subelemento->getById($entradaSaida[1], $entradaSaida[2]);
+						$this->dataRel[$entradaSaida[2]][0] = "$subelemento->idElemento.$subelemento->idSubElemento";
+						$this->dataRel[$entradaSaida[2]][1] = $subelemento->descricao;
+					}
+					$this->dataRel[$entradaSaida[2]][3] = $cf->toDecimal($this->dataRel[$entradaSaida[2]][3]) + $cf->toDecimal($entradaSaida[3]);
+					$this->dataRel[$entradaSaida[2]][4] = $cf->toDecimal($this->dataRel[$entradaSaida[2]][4]) + $cf->toDecimal($entradaSaida[3]);
+				}
+			}
+			$criteria = $movimento->getCriteria();
+			$criteria->addColumnAttribute('distinct(idMovimento)');
+			$criteria->addColumnAttribute('material.subelemento.idSubElemento');
+			$criteria->addColumnAttribute('valorTotal');
+			$criteria->addCriteria('dataMovimento', '>=', "'{$k->invertDate($inicio)}'");
+			$criteria->addCriteria('dataMovimento', '<=', "'{$k->invertDate($fim)}'");
+			$criteria->addCriteria('requisicao.idUoExecutante', '=', "'{$this->uoalmoxarifado->idUo}'");
+			$criteria->addCriteria('idMovimentoRef', 'is', "null");
+			$criteria->addGroupAttribute('idMovimento');
+			$criteria->addGroupAttribute('material.subelemento.idSubElemento');
+			$criteria->addGroupAttribute('valorTotal');
+			$criteria->addOrderAttribute('material.subelemento.idSubElemento');
+			$saidas = $criteria->retrieveAsQuery()->result;
+			if ($saidas) {
+				foreach ($saidas as $saida) {
+					$this->dataRel[$saida[1]][2] = $cf->toDecimal($this->dataRel[$saida[1]][2]) + $cf->toDecimal($saida[2]);
+					$this->dataRel[$saida[1]][4] = $cf->toDecimal($this->dataRel[$saida[1]][4]) + $cf->toDecimal($saida[2]);
+				}
+			}
+			foreach ($this->dataRel as $key => $movimento) {
+				if ($movimento[1]) {
+					$this->dataRel[$key] = array($movimento[0], $movimento[1], $cf->formatWithSymbol($movimento[2]), $cf->formatWithSymbol($movimento[3]), $cf->formatWithSymbol($movimento[4]), $cf->formatWithSymbol($movimento[5]));
+				} else {
+					$this->dataRel[$key] = array($movimento[0], $movimento[1], $cf->formatWithSymbol($movimento[2]), $cf->formatWithSymbol($movimento[3]), $cf->formatWithSymbol($movimento[4]), $cf->formatWithSymbol($movimento[5]));
+				}
+			}
+		}
+		ksort($this->dataRel);
+		$columns = array(
+			new MPDFReportColumn('codigo', utf8_decode('<b>CÓDIGO</b>'), 'right', true, 12, true),
+			new MPDFReportColumn('especificacao', utf8_decode('<b>ESPECIFICAÇÃO</b>'), 'left', true, 32, true),
+			new MPDFReportColumn('saldoanterior', '<b>SALDO ANTERIOR</b>', 'right', true, 14, true),
+			new MPDFReportColumn('entradas', '<b>ENTRADAS</b>', 'right', true, 14, true),
+			new MPDFReportColumn('saidas', utf8_decode('<b>SAÍDAS</b>'), 'right', true, 14, true),
+			new MPDFReportColumn('saldoatual', '<b>SALDO ATUAL</b>', 'right', true, 14, true),
+		);
+		parent::__construct($this->dataRel, $columns, 1000000);
+		$this->getPDF()->setFont('Courier.afm');
+		$this->GeneratePageAllHeader();
+		$this->GeneratePageFirstHeader();
+		$this->GeneratePageAllFooter();
+		$this->SetColumnAttr('codigo', 'index', 0);
+		$this->SetColumnAttr('especificacao', 'index', 1);
+		$this->SetColumnAttr('saldoanterior', 'index', 2);
+		$this->SetColumnAttr('entradas', 'index', 3);
+		$this->SetColumnAttr('saidas', 'index', 4);
+		$this->SetColumnAttr('saldoatual', 'index', 5);
+		$this->SetOption('fontSize', 8);
+		$this->SetOption('titleFontSize', 10);
+		$this->SetTitle(utf8_decode('MOVIMENTAÇÃO NO PERÍODO ') . $inicio . ' A ' . $fim);
+		$this->SetOption('showTableTitle', 1);
+		//$this->SetRowMethod('repAluno', 'MyRowMethod');
+	}
+
+	function MyRowMethod($row, $columns, $slot, $obj) {
+		if (substr($row[1], 0, 1) == 'F') {
+			$row[1] .= '**';
+		}
+	}
+
+	function GeneratePageFirstHeader() {
+		global $MIOLO;
+		$this->pdf->ezSetMargins(80, 50, 25, 25);
+		$x0 = $this->pdf->left;
+		$x1 = $this->pdf->right;
+		$h = $this->pdf->getFontHeight(8);
+		$header = $this->pdf->openObject();
+		$this->pdf->saveState();
+		$ui = $MIOLO->GetUI();
+		$img = $ui->GetImageSrc('logo_siga.png', 'adm');
+
+		//$this->pdf->addPngFromFile($img, $x0, 800, 338, 135);
+
+		$this->pdf->addText(200, 800, 8, $this->manager->getConf('instituicao.nome'));
+		$this->pdf->addText(200, 800 - $h, 8, utf8_encode($this->uoalmoxarifado->nome) . '   -   CONSUMO');
+		$this->pdf->addTextWrap($x0, 800 - $h, $x1 - $x0, 8, "{$this->timestamp}", 'right');
+		$this->pdf->addText(200, 800 - $h - $h, 8, 'COORDENADORIA DE SUPRIMENTOS');
+		$this->pdf->restoreState();
+		$this->pdf->closeObject();
+		$this->pdf->addObject($header, 'add');
+	}
+
+	function GeneratePageAllHeader() {
+		$inicio = Form::getFormValue('dataInicio');
+		$fim = Form::getFormValue('dataFim');
+		$this->pdf->ezSetMargins(50, 50, 25, 25);
+		$x0 = $this->pdf->left;
+		$x1 = $this->pdf->right;
+		$h = $this->pdf->getFontHeight(8);
+		$header = $this->pdf->openObject();
+		$this->pdf->saveState();
+		$this->pdf->SetStrokeColor(0, 0, 0);
+		$this->pdf->line($x0, 820, $x1, 820);
+		$this->pdf->addTextWrap($x0, 822, $x1 - $x0, 6, utf8_decode('MOVIMENTAÇÃO NO PERÍODO DE ') . $inicio . ' A ' . $fim, 'right');
+		$this->pdf->restoreState();
+		$this->pdf->closeObject();
+		$this->pdf->addObject($header, 'all');
+	}
+
+	function GeneratePageFooter() {
+		$footer = $this->pdf->openObject();
+		$cf = new MCurrencyFormatter();
+		if ($this->dataRel) {
+			foreach ($this->dataRel as $data) {
+				$saldoAnterior += $cf->toDecimal($data[2]);
+				$totalEntrada += $cf->toDecimal($data[3]);
+				$totalSaida += $cf->toDecimal($data[4]);
+				$saldoAtual += $cf->toDecimal($data[5]);
+			}
+		}
+		$this->pdf->saveState();
+		$this->pdf->SetStrokeColor(0, 0, 0);
+		$this->pdf->ezSetMargins(50, 300, 25, 25);
+		$this->pdf->ezText("", 15);
+		$this->pdf->ezText('_________________________________________________________________________________________________________________', 8);
+		$this->pdf->ezText("", 10);
+		$this->pdf->ezText("<b>SALDO ANTERIOR......: </b> {$cf->formatWithSymbol($saldoAnterior)}\n<b>TOTAL ENTRADAS......: </b> {$cf->formatWithSymbol($totalEntrada)}\n<b>TOTAL SAIDAS........: </b> {$cf->formatWithSymbol($totalSaida)}\n<b>SALDO ATUAL.........: </b> {$cf->formatWithSymbol($saldoAtual)}", 8);
+		$this->pdf->ezText('_________________________________________________________________________________________________________________', 8);
+		$this->pdf->ezText("", 60);
+		$this->pdf->ezText("____________________________________________\n{$this->uoalmoxarifado->nome}\nGERENTE", 9, array('justification' => 'center'));
+		$this->pdf->restoreState();
+		$this->pdf->closeObject();
+		$this->pdf->addObject($footer, 'add');
+	}
+
+	function GeneratePageAllFooter() {
+		$x0 = $this->pdf->left;
+		$x1 = $this->pdf->right;
+		$footer = $this->pdf->openObject();
+		$this->pdf->saveState();
+		$this->pdf->SetStrokeColor(0, 0, 0);
+		$this->pdf->line($x0, 23, $x1, 23);
+		$this->pdf->addText($x0, 15, 6, 'CGCO/DSI');
+		$this->pdf->ezStartPageNumbers($x1, 15, 6, 'left', '{PAGENUM}');
+		$this->pdf->restoreState();
+		$this->pdf->closeObject();
+		$this->pdf->addObject($footer, 'all');
+	}
+
+}

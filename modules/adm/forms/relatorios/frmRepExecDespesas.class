@@ -1,0 +1,471 @@
+<?
+class frmRepExecDespesas extends Form
+{	
+	protected $uo;
+    
+    function __construct()
+    {
+        global $MIOLO;
+        $this->uo = $MIOLO->getBusiness('adm','uo');
+        $this->Form('Relatório de Execução de Despesas');
+        $this->EventHandler();       
+    }
+
+	function CreateFields()
+	{		
+		$uos = $this->uo->listUos();
+        $listaUos = array('%'=>array('%','TODAS'))+$uos->result;
+      
+		$fields = Array(
+            new MSelection('idUo','','Selecione a Uo',$listaUos),
+			new MCalendarField('dataInicio','','Data Inicial',10,'informe a data inicial do relatório.'),
+			new MCalendarField('dataFim','','Data Final',10,'informe a data final do relatório.'),
+		);
+		
+		$this->SetFields($fields);
+		$buttons = Array
+		(
+			new FormButton('btnGerarRelatorio', 'Gerar Relatório','pdf')
+		);
+		$this->SetButtons($buttons);
+	}
+
+	function btnGerarRelatorio_click()
+	{		
+        $uo = $this->uo;
+		$cf = new MCurrencyFormatter();
+        $data = $this->getData();
+        $uo->getById($data->idUo);
+        // idUoRequisitante, idTipoReq, idRequisicao
+        $reqs = $uo->listUoReqByData($data->idUo,$data->dataInicio,$data->dataFim)->result;
+        $report = new MEzPDFReport('2','portrait');
+        $h = $report->pdf->getFontHeight(10);
+        //$ui = $this->manager->GetUI();
+        //$report->pdf->ezImage($ui->GetImage('','logonet.png'),5,50,'none','left',0);
+        $report->pdf->addText(110,810       ,10,'UNIVERSIDADE FEDERAL DE JUIZ DE FORA');
+        $report->pdf->addText(110,810-$h    ,10,'COORDENADORIA DE SUPRIMENTOS - COSUP');
+        $report->pdf->addText(110,810-(2*$h),10,'SISTEMA INTEGRADO DE GESTÃO ACADÊMICA - SIGA');
+        $report->pdf->ezText('',60);
+        $report->pdf->ezText('EXECUÇÃO DE DESPESAS DA UO '.$uo->sigla,16,array('justification'=>'center'));
+        $report->pdf->ezText('',20);
+        foreach ($reqs as $req)
+        {
+            $requisicao = $this->manager->getBusiness('adm','requisicao');
+            $requisicao->getById($req[2]);
+            $requisicao->retrieveAssociation('usuario');
+            $item = $requisicao->getItem();
+            $dados[$requisicao->idTipoReq][$requisicao->idRequisicao]['nome'] = $requisicao->usuario->pessoa->nome;
+            $dados[$requisicao->idTipoReq][$requisicao->idRequisicao]['notafiscal'] = $item->notaFiscal;
+            $dados[$requisicao->idTipoReq][$requisicao->idRequisicao]['empresa'] = '';
+            $dados[$requisicao->idTipoReq][$requisicao->idRequisicao]['valorestimado'] = $item->valorEstimado;
+            $dados[$requisicao->idTipoReq][$requisicao->idRequisicao]['valorreal'] = $item->valorReal;
+            $totalValorEstimado[$requisicao->idTipoReq] += $item->valorEstimado;
+            $totalValorReal[$requisicao->idTipoReq] += $item->valorReal;
+        }
+        foreach ($dados as $idTipoReq => $dado)
+        {
+            $totalUoValorEstimado += $totalValorEstimado[$idTipoReq];
+            $totalUoValorReal += $totalValorReal[$idTipoReq];
+            unset($dataRel);
+			$tipoReq = $this->manager->getBusiness('adm','tiporeq');
+			$tipoReq->getById($idTipoReq);
+            $report->pdf->ezText('',20);
+            $report->pdf->ezText('TIPO DE REQUISIÇÃO: '.$tipoReq->descricao,9,array('justification'=>'left'));
+            $report->pdf->ezText('',3); 
+            $cols = array('USUÁRIO','FATURA/NF','EMPRESA','VALOR ESTIMADO','VALOR REAL');
+            $options['textCol'] = array(0,0,0);
+            $options['shaded'] = 1;
+            $options['showLines'] = 1;
+            $options['fontSize'] = 10;
+            $options['width'] = 540;
+            $options['xPos'] = 'left';
+            $options['xOrientation'] = 'right';            
+            foreach ($dado as $idRequisicao => $requisicao)
+            {
+                $dataRel[] = array(
+                    $requisicao['nome'],
+                    $requisicao['notafiscal'],
+                    $requisicao['empresa'],		                        
+                    $cf->formatWithSymbol($cf->toDecimal($requisicao['valorestimado'])),
+                    $cf->formatWithSymbol($cf->toDecimal($requisicao['valorreal'])),
+                );
+            }
+            $dataRel[] = array(
+                'TOTAL',
+                '',
+                '',		                        
+                $cf->formatWithSymbol($cf->toDecimal($totalValorEstimado[$idTipoReq])),
+                $cf->formatWithSymbol($cf->toDecimal($totalValorReal[$idTipoReq])),
+            );
+			$report->pdf->ezTable($dataRel,$cols,'',$options);
+        }
+        unset($dataRel);
+        $cols = array('VALOR ESTIMADO TOTAL','VALOR REAL TOTAL');
+        $dataRel[] = array(
+            $cf->formatWithSymbol($cf->toDecimal($totalUoValorEstimado)),
+            $cf->formatWithSymbol($cf->toDecimal($totalUoValorReal)),
+        );
+        $report->pdf->ezText('',20);
+        $report->pdf->ezText('TOTAL DA UO '.$uo->sigla,9,array('justification'=>'left'));
+        $report->pdf->ezText('',3); 
+		$report->pdf->ezTable($dataRel,$cols,'',$options);
+	    $report->Execute();
+    }
+
+}
+       /* 
+        if($data->idUo == '%')    
+        {
+		
+			$report = new MEzPDFReport('2','portrait');
+	        //$cols = array('TIPO DE REQUISIÇÃO','FATURA/NF','EMPRESA','USUÁRIO','VALOR ESTIMADO','VALOR REAL');
+	        $cols = array('USUÁRIO','FATURA/NF','EMPRESA','VALOR ESTIMADO','VALOR REAL');
+	        $options['textCol'] = array(0,0,0);
+	        $options['shaded'] = 1;
+	        $options['showLines'] = 1;
+	        $options['fontSize'] = 10;
+	        $options['width'] = 540;
+	        $options['xPos'] = 'left';
+	        $options['xOrientation'] = 'right';            
+	
+			$h = $report->pdf->getFontHeight(10);
+	        //$ui = $this->manager->GetUI();
+	        //$report->pdf->ezImage($ui->GetImage('','logonet.png'),5,50,'none','left',0);
+			$report->pdf->addText(110,810       ,10,'UNIVERSIDADE FEDERAL DE JUIZ DE FORA');
+			$report->pdf->addText(110,810-$h    ,10,'COORDENADORIA DE SUPRIMENTOS - COSUP');
+			$report->pdf->addText(110,810-(2*$h),10,'SISTEMA INTEGRADO DE GESTÃO ACADÊMICA - SIGA');
+			    
+			$report->pdf->ezText('',4);
+			$report->pdf->addText(150,810-(5*$h),15,'RELATÓRIO DE EXECUÇÃO DE DESPESAS');
+			$report->pdf->addText(200,810-(6*$h),10,"PERÍODO DE ".$data->dataInicio." ATÉ ".$data->dataFim);		    
+			    
+			$uos = $this->uo->listUos();
+			foreach($uos->result as $aux)
+			{
+				$idUos[] = $aux[0];						
+			}
+			
+			
+			foreach ($idUos as $idUo)        		
+        	{   
+   		
+        		$this->uo->getById($idUo);   
+        		$this->uo->retrieveAssociation('solicitadas');	
+        		
+        		//$report = new MEzPDFReport('2','portrait');
+        		$options['textCol'] = array(0,0,0);
+		        $options['shaded'] = 1;
+		        $options['showLines'] = 1;
+		        $options['fontSize'] = 10;
+		        $options['width'] = 540;
+		        $options['xPos'] = 'left';
+		        $options['xOrientation'] = 'right'; 
+	        		
+	        	$h = $report->pdf->getFontHeight(10);
+		        $ui = $this->manager->GetUI();
+		        $report->pdf->ezImage($ui->GetImage('','logonet.png'),5,50,'none','left',0);
+				$report->pdf->addText(110,810       ,10,'UNIVERSIDADE FEDERAL DE JUIZ DE FORA');
+				$report->pdf->addText(110,810-$h    ,10,'COORDENADORIA DE SUPRIMENTOS - COSUP');
+				$report->pdf->addText(110,810-(2*$h),10,'SISTEMA INTEGRADO DE GESTÃO ACADÊMICA - SIGA');
+				    
+				$report->pdf->ezText('',4);
+				$report->pdf->addText(150,810-(5*$h),15,'RELATÓRIO DE EXECUÇÃO DE DESPESAS');
+				$report->pdf->addText(200,810-(6*$h),10,"PERÍODO DE ".$data->dataInicio." ATÉ ".$data->dataFim);
+        		
+        		$report->pdf->ezText('',12);
+				$report->pdf->ezText('UO: '.$this->uo->nome.' - Data: '.date('d/m/Y'),9,array('justification'=>'center'));            
+			    $report->pdf->ezText('',20);
+	    
+				if($this->uo->solicitadas)
+				{
+
+					foreach ($this->uo->solicitadas as $requisicao)
+		            {
+		                $item = $requisicao->getItem(); 
+	                                          
+						if($requisicao->dataHora >= $data->dataInicio && $requisicao->dataHora <= $data->dataFim)                
+						{
+							switch ($requisicao->idTipoReq)
+			            	{
+			                    case 7:
+			                    case 8:
+			                    case 9:
+			                    break;
+			            		default:
+			                        if ($requisicao->status == 'E')
+			                        {
+			            	            $dados[$requisicao->idTipoReq][$requisicao->idUsuarioRequisitante]['valorReal']     += $item->valorReal;
+			            	            $dados[$requisicao->idTipoReq][$requisicao->idUsuarioRequisitante]['valorEstimado'] += $item->valorEstimado;
+			            	            
+			            	            $estimadoUo += $item->valorEstimado;
+				            	        $realUo     += $item->valorReal;
+				            	            
+				            	        $estimadoUoTotal += $item->valorEstimado;
+				            			$realUoTotal     += $item->valorReal;
+			                        }
+			                    break;
+			            	}
+		                }
+		            }
+		
+		            if(is_array($dados))
+		            {
+			            foreach ($dados as $idTipoReq => $requisitantes)
+			            {
+			            	
+			            	$tipoReq = $this->manager->getBusiness('adm','tiporeq');
+			                $tipoReq->getById($idTipoReq);
+			                foreach ($requisitantes as $idUsuarioRequisitante => $valores)
+			                {
+			                    $usuario = $this->manager->getBusiness('common','usuario');
+			                    $usuario->getById($idUsuarioRequisitante);
+			                    $cf = new MCurrencyFormatter();
+			                    $dadosAssociativos[$tipoReq->descricao][$usuario->pessoa->nome]['valorReal']     = $valores['valorReal'];
+			                    $dadosAssociativos[$tipoReq->descricao][$usuario->pessoa->nome]['valorEstimado'] = $valores['valorEstimado'];
+			                }
+			            }
+		            }
+		
+		            if(is_array($dadosAssociativos))
+		            {
+		            	ksort($dadosAssociativos);
+		            	
+			            foreach ($dadosAssociativos as $tipoRequisicao => $requisitantes)
+			            {
+			            	foreach ($requisitantes as $usuario => $valores)
+			                {
+			                	$estimadoTipoReq += $valores['valorEstimado'];		                	
+			                	$realTipoReq     += $valores['valorReal']; 
+			                	
+			                	$valores['valorEstimado'] = $cf->formatWithSymbol($cf->toDecimal($valores['valorEstimado']));
+					        	$valores['valorReal']     = $cf->formatWithSymbol($cf->toDecimal($valores['valorReal']));
+					        	
+			                	$dataRel[] = array(
+			                        $usuario,
+			                        '',
+			                        '',		                        
+			                        $valores['valorEstimado'],
+			                        $valores['valorReal']
+			                    ); 
+			                     
+			                }
+			                
+			              	$report->pdf->ezText('',20);
+				 		    $report->pdf->ezText('TIPO DE REQUISIÇÃO: '.$tipoRequisicao,9,array('justification'=>'left'));
+				 		    $report->pdf->ezText('',3); 
+			                
+				 		    $cf = new MCurrencyFormatter();		
+					        $estimadoTipoReq = $cf->formatWithSymbol($cf->toDecimal($estimadoTipoReq));
+					        $realTipoReq     = $cf->formatWithSymbol($cf->toDecimal($realTipoReq));           
+					            
+					        $dataRel[] = array(
+			                'TOTAL',
+			                '',
+			                '',
+			                $estimadoTipoReq,
+			                $realTipoReq
+			            	);  
+				            
+				            $report->pdf->ezTable($dataRel,$cols,'',$options);
+				            
+				            unset($estimadoTipoReq);
+					        unset($realTipoReq);
+			                unset($dataRel);
+			                
+			            }
+		            }
+
+	            }
+	            
+	             	
+				$report->pdf->ezText('',20);
+			    $report->pdf->ezText('SOMA TOTAL',9,array('justification'=>'left'));
+			    $report->pdf->ezText('',3);
+	        	
+	        	$cf = new MCurrencyFormatter();		
+		        $estimadoUoTotal = $cf->formatWithSymbol($cf->toDecimal($estimadoUoTotal));
+		        $realUoTotal     = $cf->formatWithSymbol($cf->toDecimal($realUoTotal));           
+		            
+		        $dataRel[] = array(
+                'TOTAL',     
+                $estimadoUoTotal,
+                $realUoTotal
+            	); 
+            	
+            	$cols = array('UO: '.$this->uo->sigla,'VALOR ESTIMADO','VALOR REAL');
+		        $report->pdf->ezTable($dataRel,$cols,'',$options);	
+	        	$report->pdf->ezNewPage(); 
+	        	
+	        	$cols = array('USUÁRIO','FATURA/NF','EMPRESA','VALOR ESTIMADO','VALOR REAL');
+            	
+            	unset($dadosAssociativos);
+            	unset($dados);
+            
+            	unset($estimadoUoTotal);
+		        unset($realUoTotal);
+		        
+		         	  
+	        	
+				unset($dataRel);   	        	     	
+	        }
+	        
+            	
+            	unset($dadosAssociativos);
+            	unset($dados);
+            
+            	unset($estimadoUo);
+		        unset($realUo); 
+		        
+		        $report->pdf->ezNewPage(); 	  
+	        	
+				unset($dataRel);   	        	     	
+
+        	
+        	$report->Execute();
+        	
+        }     
+        
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////          
+
+        else 
+        {    
+	        $this->uo->getById($data->idUo);
+			$this->uo->retrieveAssociation('solicitadas');		
+			
+			if ($this->uo->solicitadas)
+	        {
+	        	$report = new MEzPDFReport('2','portrait');
+	            $cols = array('USUÁRIO','FATURA/NF','EMPRESA','VALOR ESTIMADO','VALOR REAL');
+	            $options['textCol'] = array(0,0,0);
+	            $options['shaded'] = 1;
+	            $options['showLines'] = 1;
+	            $options['fontSize'] = 10;
+	            $options['width'] = 540;
+	            $options['xPos'] = 'left';
+	            $options['xOrientation'] = 'right';            
+	
+			    $h = $report->pdf->getFontHeight(10);
+	            $ui = $this->manager->GetUI();
+	            $report->pdf->ezImage($ui->GetImage('','logonet.png'),5,50,'none','left',0);
+			    $report->pdf->addText(110,810       ,10,'UNIVERSIDADE FEDERAL DE JUIZ DE FORA');
+			    $report->pdf->addText(110,810-$h    ,10,'COORDENADORIA DE SUPRIMENTOS - COSUP');
+			    $report->pdf->addText(110,810-(2*$h),10,'SISTEMA INTEGRADO DE GESTÃO ACADÊMICA - SIGA');
+			    $report->pdf->addText(150,810-(5*$h),15,'RELATÓRIO DE EXECUÇÃO DE DESPESAS');
+			    $report->pdf->ezText('',4);
+			    $report->pdf->addText(200,810-(6*$h),10,"PERÍODO DE ".$data->dataInicio." ATÉ ".$data->dataFim);		    
+			    
+				$report->pdf->ezText('',12);
+	 		    $report->pdf->ezText('UO: '.$this->uo->nome.' - Data: '.date('d/m/Y'),9,array('justification'=>'center'));
+	 		    $report->pdf->ezText('',20);
+	 		    
+   	            foreach ($this->uo->solicitadas as $requisicao)
+	            {
+	                $item = $requisicao->getItem(); 
+                                          
+					if($requisicao->dataHora >= $data->dataInicio && $requisicao->dataHora <= $data->dataFim)                
+					{
+						switch ($requisicao->idTipoReq)
+		            	{
+		                    case 7:
+		                    case 8:
+		                    case 9:
+		                    break;
+		            		default:
+		                        if ($requisicao->status == 'E')
+		                        {
+		                        	$usuario = $this->manager->getBusiness('common','usuario');
+		                        	$usuario->getById($requisicao->idUsuarioRequisitante);
+		                        	
+		                        	$dados[$requisicao->idTipoReq]['nome'] = $usuario->nome;
+		                        	$dados[$requisicao->idTipoReq]['notaFiscal'] = $item->notaFiscal;
+		                        	$dados[$requisicao->idTipoReq]['empresa'] = '';//$item->getEmpresa();
+		                        
+		            	            $dados[$requisicao->idTipoReq]['valorReal']    = $item->valorReal;
+		            	           	$dados[$requisicao->idTipoReq]['valorEstimado'] = $item->valorEstimado;
+		            	            
+		            	    
+		                        }
+		                    break;
+		            	}
+	                }
+	            }
+	
+	            
+	            if(is_array($dados))
+	            {
+	            	$cf = new MCurrencyFormatter();
+	            	ksort($dados);
+	            	
+		            foreach ($dados as $tipoRequisicao => $requisicoesByTipo)
+		            {
+		            
+		            	unset($estimadoTipoReq);
+		            	unset($realTipoRq);
+		            
+		            	foreach ($requisicoesByTipo as $requisicao)
+		            	{
+		            		$estimadoTipoReq += $requisicao['valorEstimado'];
+			            	$realTipoReq     += $requisicao['valorReal'];
+		            		 
+		                	$requisicao['valorEstimado'] = $cf->formatWithSymbol($cf->toDecimal($requisicao['valorEstimado']));
+				        	$requisicao['valorReal']     = $cf->formatWithSymbol($cf->toDecimal($requisicao['valorReal']));
+				       		$dataRel[] = $requisicao;
+		            	}
+		            	
+		            	$estimadoTotal += $estimadoTipoReq;
+		            	$realTotal += $realTipoReq;
+		            }
+		                
+		            $report->pdf->ezText('',20);
+			 		$report->pdf->ezText('TIPO DE REQUISIÇÃO: '.$tipoRequisicao,9,array('justification'=>'left'));
+			 		$report->pdf->ezText('',3); 
+		                
+				    $estimadoTotal = $cf->formatWithSymbol($cf->toDecimal($estimadoTotal));
+				    $realTotal     = $cf->formatWithSymbol($cf->toDecimal($realTotal));           
+				            
+				        $dataRel[] = array(
+		                'TOTAL',
+		                '',
+		                '',
+		                $estimadoTipoReq,
+		                $realTipoReq
+		            	);  
+			            
+			            $report->pdf->ezTable($dataRel,$cols,'',$options);
+			            
+			            unset($estimadoTipoReq);
+				        unset($realTipoReq);
+		                unset($dataRel);
+		                
+		            
+	            }
+	            
+	            $report->pdf->ezText('',20);
+			    $report->pdf->ezText('SOMA TOTAL',9,array('justification'=>'left'));
+			    $report->pdf->ezText('',3);
+	            
+	            $cf = new MCurrencyFormatter();		
+		        $estimadoUoTotal = $cf->formatWithSymbol($cf->toDecimal($estimadoUoTotal));
+		        $realUoTotal = $cf->formatWithSymbol($cf->toDecimal($realUoTotal)); 
+
+		        $dataRel[] = array(
+                'TOTAL',
+                $estimadoUoTotal,
+                $realUoTotal
+            	);  
+	            $cols = array('UO: '.$this->uo->sigla,'VALOR ESTIMADO','VALOR REAL');
+	            $report->pdf->ezTable($dataRel,$cols,'',$options);
+	            
+	            $report->Execute();
+	        }
+	        else
+	        {
+	            $this->addError('Ops...Não foi possível gerar o Relatório!');
+	        }
+        }
+		
+
+	}		
+}
+*/
+?>

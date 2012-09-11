@@ -1,0 +1,136 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmAverbacaoNew extends MForm
+{
+    protected $objVinculo;
+    
+    function __construct($objVinculo)
+    {
+        $this->objVinculo = $objVinculo;
+        parent::__construct('Incluir Nova Averbação');
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+        $tabelaGeral = $this->manager->GetBusiness('common','tabelageral');
+        $query = $tabelaGeral->listByTabela('RH_TIPOTEMPO');
+        $fields = array(
+            new MTextField('processo','23071.','Processo','21','Máx. 21 caracteres'),
+            new MCalendarField('dataInicio','','Data Início'),
+            new MCalendarField('dataFim','','Data Fim'),
+            new MSelection('tipoTempo','','Tipo Tempo'),
+            new MTextField('instituicao','','Instituição',50)
+        );
+        
+        $this->SetFields($fields);
+        $this->setFieldAttr('tipoTempo','options',$query->chunkResult());
+        
+        $buttons = array(
+            new FormButton('btnNew', 'Incluir Averbação')
+            );
+        $this->SetButtons($buttons);
+
+        $validators = array(
+           new MRequiredValidator('processo'),
+           new MRequiredValidator('dataInicio'),
+           new MRequiredValidator('dataFim'),
+           new MRequiredValidator('instituicao')
+        );
+        $this->setValidators($validators);
+    }
+
+    function btnNew_click()
+    {
+        $data = $this->GetData();
+        $averbacao = $this->objVinculo->getAverbacao('new');
+        $averbacao->SetData($data);
+        $averbacao->setTotalDias();
+        $err = FALSE;
+        $k = new MKrono();
+        // Início ... Modificação para averbação JUDICIAL
+
+        //var_dump($data->tipoTempo);
+        // caso a avervação NÃO seja judicial ele passa pelas regras de negócio
+        if ( $data->tipoTempo != "AJD" )
+        {
+
+            if ( $this->objVinculo->existeAverbacao($averbacao->dataInicio,$averbacao->dataFim) )
+            {
+                $this->addError("Já existe averbação lançada no período.");
+                $err = TRUE;
+            }
+            
+            
+            if ( $k->compareDate($averbacao->dataInicio,'>=',$this->objVinculo->dataExercicio)  ||  $k->compareDate($averbacao->dataFim,'>=',$this->objVinculo->dataExercicio) )
+            {
+                if ( $licenca = $this->objVinculo->getLicAfastByPeriodo($averbacao->dataInicio,$averbacao->dataFim) )
+                {
+                    if ( $licenca->semOnus() )
+                    {
+                        $err = FALSE;
+                    }
+                    else
+                    {
+                        $err = TRUE;
+                    }
+                }
+                else
+                {
+                    $this->addInfo("Não é permitida a averbação de períodos de tempo concomitantes com o período de tempo do servidor na Instituição. Data de exercício do servidor: ".$this->objVinculo->dataExercicio);
+                    $err = TRUE;
+                }
+            }
+
+        } // Averbação Judicial
+
+        // Fim ... Modificação para averbação JUDICIAL
+
+        if ( $k->compareDate($averbacao->dataFim,'<=',$averbacao->dataInicio) )
+        {
+            $this->addError("Não é permitido o lançamento de averbação com data fim menor ou igual à data de início.");
+            $err = TRUE;
+        }
+
+        $this->objVinculo->getFuncionario();
+        if ( $k->compareDate($averbacao->dataInicio,'<=',$this->objVinculo->funcionario->pessoa->datanasc) )
+        {
+            $this->addError("Não é permitido o lançamento de averbação com data de início anterior à data de nascimento do servidor.");
+            $err = TRUE;
+        }
+       
+        if ( ! $err )
+        {
+            try
+            {
+                $averbacao->save();
+                $averbacao->log(OP_INS,"vinculo: ".$averbacao->idVinculo." data de inicio: ".$averbacao->dataInicio." data fim: ".$averbacao->dataFim." processo: ".$averbacao->processo." instituicao: ".$averbacao->instituicao. $averbacao->idAverbacao);
+                $go = $this->manager->GetActionURL('rh','main:vinculo',$this->objVinculo->idVinculo,array("form"=>"averbacao","id"=>$averbacao->idAverbacao));
+                $this->page->Redirect($go);
+            }
+            catch ( Exception $e )
+            {
+                $this->addError($e->getMessage);
+            }
+        }
+    }
+
+ }
+?>

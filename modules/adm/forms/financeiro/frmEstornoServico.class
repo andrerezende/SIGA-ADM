@@ -1,0 +1,209 @@
+<?
+class frmEstornoServico extends MForm
+{
+    function __construct()
+    {
+        global $MIOLO;
+		parent::__construct("Estorno de Serviço");
+		$this->SetClose($this->manager->GetActionURL('adm','main:financeiro:estornoservico'));
+        $this->EventHandler();
+		$this->defaultButton = false;
+    }
+
+    function CreateFields()
+    {
+		global $MIOLO, $module;
+
+		$fields = array(
+			new MTextField('empenho', '', 'Empenho', 20),
+		);
+       	$this->SetFields($fields);
+
+		$button = array(
+			new FormButton('btnNotas','Listar Notas'),
+			new FormButton('btnConfirmarEstorno','Confirmar Estorno'),
+			new FormButton('btnVoltar','Voltar', $MIOLO->GetActionURL($module, $action)),
+		);
+       	$this->SetButtons($button);
+		$this->SetButtonAttr('btnConfirmarEstorno','visible',false);
+		$this->SetButtonAttr('btnVoltar','visible',false);
+	}
+
+	function btnNotas_click()
+	{
+		global $MIOLO, $module, $action;
+		
+		$cf = new MCurrencyFormatter();
+		$empenho = $this->GetFormValue('empenho');
+		$objEmpenho = $MIOLO->GetBusiness('adm','empenho');
+		$objEmpenho->GetByNumero($empenho);
+		if(!$objEmpenho->idEmpenho)
+		{
+			$MIOLO->Error('Empenho não encontrado.', $MIOLO->GetActionURL($module, $action) );
+		}
+		$objEmpenho->getEmpenhado();
+		if ($objEmpenho->empenhado)
+			$objEmpenho->empenhado[0]->getLicitacao();
+			
+		if($objEmpenho->empenhado[0]->itensLicitacao->licitacao->idTipoLicitacao != '2')
+		{
+			$MIOLO->Error('Empenho não é de serviço.', $MIOLO->GetActionURL($module, $action) );
+		}
+		$objEmpenho->getNotaFiscal();
+		if(!$objEmpenho->notaFiscal)
+		{
+			$MIOLO->Error('Empenho não possui notas fiscais cadastradas.', $MIOLO->GetActionURL($module, $action) );
+		}
+
+		$data = array();
+		if($objEmpenho->notaFiscal)
+		{
+			foreach($objEmpenho->notaFiscal as $n)
+			{
+				$data[] = array($n->idNotaFiscal, $n->notaFiscal, $n->dataNotaFiscal, $cf->toDecimal($n->valor));
+			}
+		}
+		$columns = array(
+			new MGridColumn('idNotaFiscal','center', true,'0%', false),
+			new MGridColumn('Nota Fiscal','center', true,'33%'),
+			new MGridColumn('Data','center', true,'34%'),
+			new MGridColumn('Valor R$','right', true,'33%'),
+		);
+
+		$grid = new MGrid($data, $columns, '', 0);
+		$href = $MIOLO->GetActionURL($module,$action,'%0%',array('event'=>'btnEstornar_click'));
+		$grid->addActionIcon('Estornar','select.gif',$href);
+		$this->SetFields($grid);
+		$this->SetTitle('Estorno de Servico - Empenho ' . $empenho);
+
+		$this->SetButtonAttr('btnVoltar','visible',true);
+		$this->SetButtonAttr('btnNotas','visible',false);
+	}
+
+	function btnEstornar_click()
+	{
+		global $MIOLO, $module, $action, $item;
+
+		$cf = new MCurrencyFormatter();
+		$notaFiscal = $MIOLO->GetBusiness('adm','notafiscal', $item);
+		$query = $notaFiscal->ListItens($item);
+		for($i = 0; $i < count($query); $i++)
+		{
+			$query[$i][2] = $cf->toDecimal($query[$i][2]);
+			$query[$i][3] = $cf->toDecimal($query[$i][3]);
+		}
+		$columns = array(
+			new MGridColumn('Descrição','left', false,'55%'),
+			new MGridColumn('Código','center', true,'15%'),
+			new MGridColumn('Quantidade','center', true,'15%'),
+			new MGridColumn('Valor R$','right', true,'15%'),
+		);
+		$grid = new MGrid($query, $columns, '', 0);
+		$this->SetFields($grid);
+		$this->SetTitle('Estorno de Servico - Nota Fiscal ' . $notaFiscal->notaFiscal);
+		
+		$this->SetButtonAttr('btnNotas','visible',false);
+		$this->SetButtonAttr('btnVoltar','visible',true);
+		$this->SetButtonAttr('btnConfirmarEstorno','visible',true);
+	}
+
+	function btnConfirmarEstorno_click()
+	{
+		global $MIOLO, $module, $action, $item;
+
+		$cf = new MCurrencyFormatter();
+		$notaFiscal = $MIOLO->GetBusiness('adm','notafiscal', $item);
+		$idEmpenho = $notaFiscal->idEmpenho;
+		$idNotaFiscal = $notaFiscal->idNotaFiscal;
+		$notaFiscal->BeginTransaction();
+		foreach($notaFiscal->itens as $i)
+		{
+			$movimentoServ = $MIOLO->GetBusiness('adm','movimentoserv');
+			$movimentoServ->GetByIdItemNotaNaoEstornado($i->idItemNota);
+
+			//Novo movimento (estorno)
+			$novoMovimento = $MIOLO->GetBusiness($module, 'movimentoserv');
+			$novoMovimento->tipoMovimento = '2';//ESTORNO ENTRADA
+			$novoMovimento->dataMovimento = date('d/m/Y');
+			$novoMovimento->quantidade = $movimentoServ->quantidade;
+			$novoMovimento->valorTotal = $movimentoServ->valorTotal;
+			$novoMovimento->idRequisicao = $movimentoServ->idRequisicao;
+			$novoMovimento->idMovimentoRef = $movimentoServ->idMovimento;
+			$novoMovimento->setTransaction($notaFiscal->getTransaction());
+			$novoMovimento->save();
+
+			//Grava idMovimentoRef (id do novo movimento de estorno) no original
+			$movimentoServ->idItemNota = '';
+			$movimentoServ->idMovimentoRef = $novoMovimento->idMovimento;
+			$movimentoServ->setTransaction($notaFiscal->getTransaction());
+			$movimentoServ->save();
+
+			//status do itemreq e quantentregue
+			$i->retrieveAssociation('empenhado');
+			$i->empenhado->retrieveAssociation('empenhadoDist');
+			foreach($i->empenhado->empenhadoDist as $e)
+			{
+				//status da requisicao e do itemreq
+				$objRequisicao = $MIOLO->GetBusiness($module, 'requisicao');
+				$objRequisicao->GetById($movimentoServ->idRequisicao);
+				$itemReqServExt = $MIOLO->GetBusiness($module, 'itemservext');
+				$itemReqServExt->GetById($movimentoServ->idRequisicao);
+				
+				$movimentoReq = $movimentoServ->GetByRequisicaoItemNotaTipo($movimentoServ->idRequisicao);
+				if(count($movimentoReq->result) > 1)//existe outro movimento para mesma requisicao
+				{
+					$objRequisicao->status = '8';//EXECUTADA PARCIALMENTE
+					if($itemReqServExt->status != 'A')
+					{
+						$itemReqServExt->status = '8';//EMPENHO PARCELADO
+					}
+				}
+				else//não existe outro movimento para mesma requisicao
+				{
+					$objRequisicao->status = '7';//LIBERADA PARA EXECUCAO
+					if($itemReqServExt->status != 'A')
+					{
+						$itemReqServExt->status = '6';//EMPENHADO
+					}
+				}
+				$itemReqServExt->quantEntregue = $cf->toDecimal($itemReqServExt->quantEntregue) - $cf->toDecimal($movimentoServ->quantidade);
+
+				$objRequisicao->setTransaction($notaFiscal->getTransaction());
+				$objRequisicao->save();
+				
+				$itemReqServExt->setTransaction($notaFiscal->getTransaction());
+				$itemReqServExt->save();
+			}
+
+			$i->setTransaction($notaFiscal->getTransaction());
+			$i->delete();
+		}
+
+		$notaFiscal->delete();
+
+		//status do empenho
+		$notasEmpenho = $notaFiscal->GetNotasByIdEmpenho($idEmpenho);
+		$haNotas = false;//<- verifica se há NFs para o empenho (para atualizar status do empenho)
+		foreach($notasEmpenho->result as $n)
+		{
+			if($n[0] != $idNotaFiscal)
+			{
+				$haNotas = true;
+			}
+		}
+		$empenho = $MIOLO->GetBusiness('adm','empenho',$idEmpenho);
+		if($haNotas)//há alguma NF para o empenho
+		{
+			$empenho->status = '6';//ENTREGA PARCELADA
+		}
+		else//não há NF para o empenho
+		{
+			$empenho->status = 'B';//DISTRIBUÍDO
+		}
+		$empenho->setTransaction($notaFiscal->getTransaction());
+		$empenho->save();
+
+		$notaFiscal->EndTransaction();
+	}
+}
+?>

@@ -1,0 +1,122 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?
+class frmReservaAtendidaBiblioteca extends Form
+{
+	var $objUnidade;
+	var $objReserva;
+	var $objSituacao;
+
+	function frmReservaAtendidaBiblioteca()
+    {  
+		global $MIOLO, $action, $module;
+
+		$this->objUnidade = $MIOLO->GetBusiness($module,'unidade');
+		$this->Form('Reservas Atendidas por Biblioteca');
+		$this->EventHandler();
+  		$this->defaultButton = false;
+  		// Botão 'fechar', direcionando para o handler biblioteca/main/circulacao/reserva
+		$this->SetClose($this->manager->GetActionURL($module, 'main:circulacao:reserva'));  		
+
+	}
+   
+    function CreateFields()
+    {
+		if (! $this->page->IsPostBack()){
+			// Campos que aparecem no formulário
+			$options = $this->objUnidade->ListDescricaoUnidade();
+			$fields = Array (
+				new Selection('selBiblioteca','','Unidade',$options,false),
+				);
+			$this->SetFields($fields);
+
+			// Botões que aparecem no formulário
+			$buttons = Array(
+				new FormButton('btnProcurar', 'Procurar'),
+	    		);
+			$this->SetButtons($buttons);
+
+			// validators
+//			$this->AddValidator(new RequiredValidator('selBiblioteca'));
+		}
+	}
+
+	function btnProcurar_click()
+	{
+		global $MIOLO, $module, $self, $theme, $action, $page, $item;
+
+		if($item==null)
+			$idunidade = $this->GetFormValue('selBiblioteca');
+		else
+			$idunidade = $item;
+
+		$this->objUnidade = $MIOLO->GetBusiness($module,'unidade');
+		$unidade = $this->objUnidade->GetByCodigo($idunidade);
+
+		//datagrid
+		$this->SetTitle(NULL);
+
+		$columns = array(
+			new DataGridColumn('login','Cód Usuário','center',true, '10%',true, null, false, false),
+			new DataGridColumn('nome','Nome','center',false, '25%',true, null, false, false),
+			new DataGridColumn('numerodotombo','Exemplar','center',true, '10%',true, null, false, false),
+			new DataGridColumn('titulo','Título','left',false, '25%',true, null, false, false),
+			new DataGridColumn('datahoradareserva','Solicitação','center',false, '10%',true, null, false, false),
+			new DataGridColumn('datahoraentrada','Entrada','center',false, '10%',true, null, false, false),
+			new DataGridColumn('datahoralimite','Limite','center',false, '10%',true, null, false, false),
+		);
+
+		//Instancia o objeto emprestimo
+	    $this->objReserva = $MIOLO->GetBusiness($module,'reserva');
+
+		$query = $this->objReserva->ListReservaAtendidaBiblioteca($idunidade);
+
+		$href_datagrid = $MIOLO->GetActionURL($module,$action,$idunidade,Array('event'=>'btnProcurar_click'));
+		$page->SetAction($href_datagrid);
+
+		$datagrid = new DataGrid2($query, $columns, $href_datagrid,20);
+		$datagrid->SetTitle('Reservas Atendidas - ' . $unidade->descricao);
+		$datagrid->SetWidth('99%');
+
+		$fields = array(
+						$datagrid,
+		);
+
+		$this->SetFields($fields);
+
+		$this->SetButtonAttr('btnProcurar','visible',false);
+		$buttons = Array(
+			new FormButton('btnVoltar', 'Voltar', $MIOLO->GetActionURL($module = $module, $action = $action)),
+			new FormButton('btnRep','Gerar Relatório','PDF'),
+   		);
+		$this->SetButtons($buttons);
+
+	}
+
+    function btnRep_click()
+    {   global $MIOLO, $module;
+
+        $ui = $MIOLO->GetUI();
+        $report = $ui->GetReport($module,'repResAtendidaBib');
+        $report->Generate();
+    }
+
+}
+?>

@@ -1,0 +1,192 @@
+<?
+MIOLO::Import('modules::protocolo::controls::linkprocesso');
+class frmProcessosFind extends MForm
+{
+	protected $processo;
+	protected $setoracesso;
+	protected $setor;
+	protected $perms;
+	public $grid2;
+	
+	function __construct()
+	{
+		global $MIOLO;
+		$this->processo = $MIOLO->getBusiness('protocolo','processo');
+		$this->setoracesso = $MIOLO->getBusiness('protocolo','setoracesso');
+		$this->setor = $MIOLO->getBusiness('protocolo','setor');
+		$this->perms  = $MIOLO->getPerms();
+		parent::__construct('Pesquisa de processos');
+		$this->SetClose($this->manager->GetActionURL('protocolo','main'));
+		$this->eventHandler();
+	}
+
+	function CreateFields()
+	{
+
+		//      grid
+			$grid = $this->manager->GetUI()->GetGrid('protocolo','gridProcessos');
+			//10-04-2012 Tiago Macedo
+			$grid->SetTitle('Processos dos últimos 7 dias');
+
+		//      busca de processos
+		$btnFind = new ButtonFind();
+		$btnFind->SetName('btnLista');
+
+		if( strlen(trim(Form::GetFormValue('dataIni'))) == 10 ){
+			$dataIni = Form::GetFormValue('dataIni');
+		}else{
+			$dataIni = '';
+		}
+
+		$findAdvanced = new LinkProcesso('lnkBuscaAvancada', false);
+		$findAdvanced->setBuscaAvancada();
+		$linkFindAdvanced = array(new MSpacer('5px'), $findAdvanced);
+
+		$busca  = Form::GetFormValue('busca');
+		if (!$buscaPor = Form::GetFormValue('buscaPor')) $buscaPor = 'numProcesso';		
+		$formBusca = new MThemeBox('&nbsp;&nbsp;Busca de processos',
+			array(
+				new MTextField('busca',$busca,'', 58),
+				$btnFind,
+				new MSpacer(1),
+				new MText('','criado em'),
+				new CalendarField('dataIni',$dataIni,'Início',10),
+				$linkFindAdvanced,
+			)
+		);
+		$formBusca->width = '72%';
+		$formBusca->float = 'left';
+		$formBusca->padding = '6px';
+//		Vitor Pacheco - 17/02/2011
+		$formBusca->height = '145px';
+
+//		menu
+		$novo = new LinkProcesso('lnkNovo',FALSE);
+		$novo->setNew();
+		$linkNovo = array($novo,new MSpacer('5px'));
+		$vago = new LinkProcesso('lnkVago',FALSE);
+		$vago->setNewVago();
+		$linkVago = ($this->perms->checkAccess('PROT_ADMIN', A_ACCESS)) ? array($vago,new MSpacer('5px')) : null;
+		$consulta = new LinkProcesso('lnkConsulta',FALSE);
+		$consulta->setConsulta();
+		$linkConsulta = array($consulta,new MSpacer('5px'));
+		$documentacao = new LinkProcesso('lnkDocumentacao',FALSE);
+		$documentacao->setDocumentacao();
+		$linkDocumentacao = array($documentacao,new MSpacer('5px'));
+		
+		$processosabertos = new LinkProcesso('lnkProcessosAbertos',FALSE);
+		$processosabertos->setProcessosAbertos();
+		$linkProcessosAbertos = array($processosabertos,new MSpacer('5px'));
+
+		//03/04/2012 - Tiago Macedo
+		$processostramitados = new LinkProcesso('lnkProcessostramitados',FALSE);
+		$processostramitados->setProcessosTramitados();
+		$linkProcessostramitados = array($processostramitados,new MSpacer('5px'));
+                
+                // 31-10-2011 - Daniel Bonfim
+                $processosPendentes = new LinkProcesso('lnkProcessosPendentes',FALSE);
+		$processosPendentes->setProcessosPendentes();
+		$linkProcessosPendentes = array($processosPendentes,new MSpacer('5px'));
+
+		$irpf = new LinkProcesso('lnkTeste',FALSE);
+		$irpf->setIRPF();
+		// 27/06/2011 - Daniel Bonfim
+		$linkIRPF = ($this->perms->checkAccess('PROT_RPF', A_ACCESS)) ? array($irpf,new MSpacer('5px')) : null;
+		
+		// 12/09/2011 - Daniel Bonfim
+		$processosMaxNumanda = new LinkProcesso('lnkProcessosMaxNumanda',FALSE);
+		$processosMaxNumanda->setProcessosMaxNumanda();
+		$linkProcessosMaxNumanda = array($processosMaxNumanda,new MSpacer('5px'));
+                
+		// 19/09/2011 - Daniel Bonfim
+		$usuarios = new LinkProcesso('lnkUsuarios',FALSE);
+		$usuarios->setUsuarios();
+		$linkUsuarios = array($usuarios,new MSpacer('5px'));
+                
+		// 19/09/2011 - Daniel Bonfim
+		$usuariosPorSetor = new LinkProcesso('lnkUsuariosPorSetor',FALSE);
+		$usuariosPorSetor->setUsuariosPorSetor();
+		$linkUsuariosPorSetor = array($usuariosPorSetor,new MSpacer('5px'));
+
+		$formLink = new MThemeBox(
+			'&nbsp;&nbsp;Outras opções',
+			array(
+				$linkNovo,
+				$linkVago,
+				$linkDocumentacao,
+				$linkProcessosAbertos,
+				$linkProcessostramitados,
+                                $linkProcessosPendentes,
+				$linkIRPF,
+				$linkProcessosMaxNumanda,
+				$linkUsuarios,
+				$usuariosPorSetor
+			)
+		);
+
+		$formLink->width = '24%';
+		$formLink->float = 'right';
+		$formLink->padding = '6px';
+//		Vitor Pacheco - 17/02/2011
+                //Daniel Bonfim 19/09/2011
+		$formLink->height = '260px';
+
+		//      listagem de processos
+
+		$opcoes = array(
+			"entrada"=>"Entrada",
+			"saida"=>"Saída",
+//			"anexado"=>"anexado",
+//			"arquivado"=>"arquivado",
+//			"apensado"=>"apensado",
+		);
+
+		$perms = $this->perms->checkAccess('PROT_ADMIN', A_ACCESS);
+//		Vitor Pacheco - 17/02/2011
+		$lista = Form::GetFormValue('lista');
+        $listaPor = Form::GetFormValue('listaPor');
+        $setores = ($this->perms->checkAccess('PROT_ADMIN', A_ACCESS)) ? $this->setor->selAll() : $this->setoracesso->selSetoresAcesso($this->processo->getSetorUsuario());
+        $formListar = new MThemeBox(
+			'&nbsp;&nbsp;Listar processos',
+			array(
+				new MText('','Aguardando'),
+				new MSelection('lista',$lista,'',$opcoes),
+				new MText('','No setor'),
+				new MSelection('listaPor',$listaPor,'',$setores),
+				new MButton('btnLista','Listar')
+			)
+		);
+        $formListar->float = 'left';
+        $formListar->padding = '6px';
+        $formListar->height = '50px';
+        $formListar->width = '66%';
+
+		//      fields
+		$fields = array(
+			new Spacer('5px'),
+			$formBusca,
+			$formLink,
+//			Vitor Pacheco - 17/02/2011
+			$formListar,
+			$grid,
+		);
+		$this->SetFields($fields);
+		//10-04-2012 Tiago Macedo
+		$this->grid2 = $grid;
+		//      buttons
+		$this->defaultButton = false;
+
+		// Define o campo a ser focado
+		$this->page->onLoad("MIOLO_GetElementById('busca').focus();");
+	}
+
+	//10-04-2012 Tiago Macedo
+    public function btnLista_Click(){
+		global $MIOLO;
+
+		$this->grid2->setTitle('Resultado da busca');
+		
+		$MIOLO->GetActionURL('protocolo','main:processos:find');
+
+	}	 
+}

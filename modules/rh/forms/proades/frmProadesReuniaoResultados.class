@@ -1,0 +1,123 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmProadesReuniaoResultados extends MForm
+{
+    private $reuniao;
+    
+	function __construct($reuniao)
+	{
+        $this->reuniao = $reuniao; 
+        
+		parent::__construct('Resultados Parciais');
+		$this->EventHandler();
+	}
+    
+	function CreateFields()
+	{
+        $tabelaGeral = $this->manager->getBusiness('common','tabelageral');
+        
+        $query = $tabelaGeral->listByTabela('RH_RESULTREUNIAO');
+
+		$this->reuniao->retrieveAssociation('proades');
+		$proades = $this->reuniao->proades;
+
+        $numero = $this->reuniao->numero;
+        if ( $numero != 1 )
+        {
+            $i = $numero;
+            for ( $i = $numero; $i > 0; $i-- )
+            {
+                $arrMetas[] = ($i-1);
+            }
+        }
+        else
+        {
+            $arrMetas[] = 0;
+        }
+
+        if ( $numero == 3 )
+        {
+            $arrMetas[] = 3;
+        }
+		$qryMetas = $proades->listMetas($arrMetas);
+
+        $fields = array(
+				new MSeparator('Aponte o resultado para cada meta e clique no bot&atilde;o Enviar.'),
+				array(
+					new MSelection('idMeta','','Meta',$qryMetas->result),
+					new MSelection('resultado','','Resultado',$query->result)
+				)
+        ); 
+        
+        $this->SetFields($fields);		
+
+        $buttons = array(
+            new MButton('btnSalvar','Enviar')
+        );
+
+        $this->setButtons($buttons);
+        $this->setButtonAccess();
+	}
+
+	function btnSalvar_click()
+	{
+		$data = $this->GetData();
+		try
+		{
+			$resultadoReuniao = $this->manager->getBusiness('rh','resultadoreuniaometa');
+			$resultadoReuniao->setData($data);
+			$resultadoReuniao->idReuniao = $this->reuniao->idReuniao;
+            $resultadoReuniao->save();
+            $this->addInfo("Resultado salvo com sucesso!");
+		}
+		catch (Exception $e)
+		{
+			$this->AddError($e->GetMessage());
+		}
+	}
+
+    function btnExcluir_click()
+    {
+        $idMeta = $this->getFormValue('idMeta');
+
+        $resultado = $this->manager->getBusiness('rh','resultadoreuniaometa');
+        $resultado->getById($this->reuniao->idReuniao,$idMeta);
+        try
+        {
+            $resultado->delete();
+            $go = $this->manager->getActionUrl('rh','main:proades:reuniao',$this->reuniao->idReuniao,array('form'=>'resultados'));
+            $this->page->redirect($go);
+        }
+        catch ( Exception $e )
+        {
+            $this->addError($e->getMessage());
+        }
+    }
+
+    function setButtonAccess()
+    {
+        $perms = $this->manager->getPerms();
+        foreach ( $this->buttons as $button )
+        {
+            $this->setButtonAttr($button->name,'visible',$perms->checkAccess('rh_proadesexecutefase2',A_ACCESS));
+        }
+    }
+}
+?>

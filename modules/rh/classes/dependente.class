@@ -1,0 +1,221 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+MIOLO::Import('modules::rh::classes::exception');
+
+class BusinessRhDependente extends MBusiness
+{
+    public $idFuncionario;
+    public $idDependente;
+    public $parentesco;
+    public $idPessoa;
+    public $pessoa;
+    public $dependencias;
+   
+    function __construct($data=null)
+    {
+       parent::__construct('sigaept',$data);
+    }
+
+    function OnCreate($data)
+    {
+        if (empty($data))
+        {
+//            $this->initialize();
+        }
+        else
+        {
+            $this->GetById($data);
+        }
+    }
+
+    function GetById($id)
+    {
+       $this->idDependente = $id;
+       $this->retrieve();
+       return $this;
+    }
+    
+    function GetByPessoa($id)
+    {
+        $criteria =  $this->getCriteria();
+        $criteria->addCriteria('idPessoa','=',"'{$id}'");
+		$cursor = $criteria->retrieveAsCursor();
+		return $cursor->getObject();
+    } 
+
+/*
+    function SetData($data)
+    {
+	   $this->parentesco = $data->parentesco;
+	   $this->idPessoa = $data->idPessoa;
+       foreach($data->dependencias as $d0)
+       {
+           if (isset($this->dependencias[$d0[0]]))
+           {
+              $this->dependencias[$d0[0]]->dataInicio = $d0[1];
+              $this->dependencias[$d0[0]]->dataFim = $d0[2];
+           }
+           else
+           {
+              $this->AddDependencia($d0[0],$d0[1],$d0[2]);
+           }
+       }
+	}
+
+    function GetData()
+    {
+        $data = new FormData();
+        $data->parentesco = $this->parentesco;
+		$data->idPessoa = $this->idPessoa;
+        $data->dependencias = array();
+        if (count($this->dependencias))
+        {
+            foreach($this->dependencias as $d)
+            {
+                $data->dependencias[] = array($d->idTipoDependencia,$d->dataInicio,$d->dataFim);
+            }
+        }
+        return $data;
+    }
+*/
+    function AddDependencia($tipo, $dataInicio, $dataFim)
+    {  global $MIOLO;
+       $d = $MIOLO->GetBusiness('rh','dependencia');
+       $d->idTipoDependencia = $tipo;
+       $d->dataInicio = $dataInicio;
+       $d->dataFim = $dataFim;
+       $this->dependencias[] = $d;
+    }
+
+	function GetDependencias()
+	{ 
+        $this->retrieveAssociation('dependencias');
+        if ($this->dependencias != NULL)
+        {
+            if ( is_array($this->dependencias) )
+            {
+                global $MIOLO;
+                $tabelaGeral = $MIOLO->getBusiness('common','tabelageral');
+                foreach( $this->dependencias as $d )
+                {
+                    $tabelaGeral->getByItem('RH_TIPODEPENDENCIA',trim($d->idTipoDependencia));
+                    $d->tipoDependencia = $tabelaGeral->item2;
+                    $dependenciasAux[] = $d;
+                }
+                $this->dependencias = $dependenciasAux;
+
+            }
+            else
+            {
+                $this->dependencias = array($this->dependencias);  
+            }
+        }
+	}
+
+    function getDependencia($id)
+    {
+        global $MIOLO;
+        if ($this->dependencias != NULL)
+		{
+			foreach($this->dependencias as $d)
+		    {
+			    if ($d->idTipoDependencia == $id)
+				    return $d;
+	        }
+		}
+	    $d = $MIOLO->GetBusiness('rh','dependencia');
+        $d->idDependente = $this->idDependente;
+        return $d;
+    }
+	
+	function VerifyDependencias()
+	{
+		global $MIOLO;
+		
+		if ($this->dependencias != null)
+		{
+	 		foreach($this->dependencias as $dep)
+       		{          
+       		   	if (($dep->dataInicio == null))	
+          			 return FALSE;                
+       		}
+			return true;
+			
+		}
+		return false;
+		
+	}
+	
+	function VerifyDependenciasFim()
+	{
+		global $MIOLO;
+		
+		$this->retrieveassociation('dependencias');
+		if ($this->dependencias != null)
+		{
+	 		foreach($this->dependencias as $dep)
+       		{          
+       		   	if (($dep->dataFim == null))	
+          			 return FALSE;                
+       		}
+			return true;
+			
+		}
+		return false;
+		
+	}
+
+	function getIdPessoa()
+	{
+		global $MIOLO;
+		
+	 	if ($this->idPessoa != null)
+		return true;
+		else return false;
+		
+	}
+    
+    function save($depFim)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addCriteria('idPessoa','=',$this->idPessoa);
+        $query = $criteria->retrieveAsQuery();
+        if ( $query->eof())
+        {
+            $op = ( $this->isPersistent() ) ? OP_UPD : OP_INS;
+            parent::save();
+            $this->log($op,"id funcionario: $this->idFuncionario, id dependente: $this->idDependente, pessoa: $this->idPessoa, parentesco: $this->parentesco");
+        }
+        else if($depFim)
+        {
+            $op = ( $this->isPersistent() ) ? OP_UPD : OP_INS;
+            parent::save();
+            $this->log($op,"id funcionario: $this->idFuncionario, id dependente: $this->idDependente, pessoa: $this->idPessoa, parentesco: $this->parentesco");
+        }
+        else 
+        {
+        	throw new Exception("O dependente já está associado a um outro vínculo.");
+        }
+        
+        
+    }
+	
+}
+?>

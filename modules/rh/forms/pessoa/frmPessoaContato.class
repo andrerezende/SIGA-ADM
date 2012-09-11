@@ -1,0 +1,140 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+MIOLO::Import('modules::common::controls::selectionuf');
+MIOLO::Import('modules::rh::controls::selectionref');
+/**
+ * Formulário de edição de contato de pessoa
+ */
+class frmPessoaContato extends Form
+{
+	/**
+	 * Objeto pessoa
+	 * @access protected
+	 * @var BusinessDetestePessoa
+	 */
+	protected $pessoa;
+	
+	public function __construct($pessoa)
+	{
+		global $MIOLO, $module, $item;
+
+        $this->pessoa = $pessoa;
+		parent::__construct('Contato');
+        $this->EventHandler();
+	}
+
+    public function CreateFields()
+    {
+        $perms = $this->manager->getPerms();
+		$fields = array(
+			new MTextField('endereco','','Endereço',60),
+			new MTextField('bairro','','Bairro',60),
+            new MLookupFieldValue('municipio','','Cidade',40),
+			new MTextField('cep','','CEP',12),
+//			new MTextField('uf','','UF',2),
+			array(
+				new MTextField('telefone','','Telefone',18),
+				new MTextField('celular','','Celular',18),
+				new MTextField('email','','Email',50),
+				
+			),
+            new MHiddenField('idMunicipio'),
+		);
+		$this->SetFields($fields);
+		$validators = array(
+			new MMaskValidator('cep','','99999999','required'),
+		);
+		$this->SetValidators($validators);
+		
+        $this->SetFieldAttr('municipio','module','rh');
+	    $this->SetFieldAttr('municipio','item','municipio');
+	    $this->SetFieldAttr('municipio','event', 'filler');
+   	    $this->SetFieldAttr('municipio','related', 'idMunicipio,municipio');
+
+		$this->cep->AddAttribute('maxlength','8');
+
+
+
+
+//        $this->setFieldAttr('uf','readonly',TRUE);
+        $this->SetData();
+		$buttons = array(
+			new FormButton('btnSalvar','Enviar')
+		);
+		$this->SetButtons($buttons);
+        $this->setButtonAttr('btnSalvar','visible',$perms->checkAccess('rh_pessoas',A_ACCESS));
+    }
+
+	function SetData()  
+	{
+        $this->pessoa->retrieveAssociation('municipio');
+        $data = $this->pessoa;
+        $this->SetFieldValue('endereco', $data->endereco);
+        $this->SetFieldValue('bairro', $data->bairro);
+//        $this->SetFieldValue('uf', $data->municipio->idUF);
+        $this->SetFieldValue('municipio', $data->municipio->municipio . ' ['. trim($data->municipio->idUF) . ']');
+        $this->SetFieldValue('telefone', $data->telefone);
+        $this->SetFieldValue('celular', $data->celular);
+        $this->SetFieldValue('email', $data->email);
+        $this->setFieldValue('idMunicipio',$data->idmunicipio);
+		$this->setFieldValue('cep',$data->cep);
+	}
+
+	function GetData()  
+	{
+        $data = $this->pessoa;
+		$data->endereco = $this->GetFieldValue('endereco');
+		$data->bairro   = $this->GetFieldValue('bairro');
+		//$data->uf       = $this->GetFieldValue('uf');
+		$data->cidade   = $this->GetFieldValue('cidade');
+		$data->telefone = $this->GetFieldValue('telefone');
+		$data->celular  = $this->GetFieldValue('celular');
+		$data->email    = $this->GetFieldValue('email');
+		$data->cep		= $this->GetFieldValue('cep');
+		return $data;
+	}
+
+	/**
+	 * btnSalvar click
+	 */
+	public function btnSalvar_click()
+	{
+		$this->pessoa->SetData($this->GetData());
+    $this->pessoa->idmunicipio = $this->getFormValue('idMunicipio');        
+        
+    try
+		{
+		  $operacao  = OP_UPD;  
+			$descricao = "Atualização dos dados de contato. Id pessoa: ".
+										$this->pessoa->idpessoa." Via rh";
+		  
+			$this->pessoa->beginTransaction();
+		  $this->pessoa->save();
+      $this->pessoa->log($operacao,$descricao);
+			$this->AddInfo('Dados atualizados');
+		  $this->pessoa->endTransaction();
+		}
+		catch (exception $e)
+		{
+		  $this->AddError($e->getMessage());
+		}
+	}
+}
+?>

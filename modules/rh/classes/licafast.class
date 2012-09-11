@@ -1,0 +1,918 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+global $MIOLO;
+$MIOLO->Uses('classes/exception.class','rh');
+
+class BusinessRhLicAfast extends MBusiness
+{
+    public $idVinculo;
+    public $dataInicio;
+    public $dataFim;
+    public $motivo;
+    public $tipoLicenca;
+    public $idGrupoOcorrencia;
+    public $idOcorrencia;
+    public $idPublicacao;
+    public $idCidCategoria;
+    public $idCidSubCategoria;
+    public $ocorrencia;
+    public $vinculo;
+    public $publicacao;
+    
+    public $k;
+    public $tipoLicAfast;
+    public $cid;
+
+    //ocorrências na forma $idGrupoOcorrencia . $idOcorrencia
+    public $ocorrenciasFaltas    = array('343','3142','3996'                              ), //faltas injustificadas
+           $ocorrenciasLicSaude  = array('418','419','3113','319','318','366','374','3116',  //licenças de saúde
+                                         '425','330','3171','370','325','371','373','372' ), //acidente de trabalho
+           $ocorrenciasLicAcomp  = array('416','3100','3133'                              ), //acompanhamento de familiar
+           $ocorrenciaslicSemRem = array('380','378','379','3175','3104'                  ), //licenças sem remuneração
+           $ocorrenciasLPA       = '3103',
+           $gruposaposentadoria  = array(5,11,12,13,47),
+           $gruposexclusao       = array(2,5,11,12,13,47);
+           //ou E XCPGTO = 'S'
+
+
+    function __construct($data=null)
+    {
+        global $MIOLO;
+        $this->tipoLicAfast = $MIOLO->getBusiness('rh','tipolicafast');
+        $this->k = new MKrono();
+        parent::__construct('sigaept',$data);
+    }
+
+     function GetById($id,$data, $proxy=true)
+    {
+       $this->idVinculo = $id;
+       $this->dataInicio = $data;
+       if ($proxy)
+       {
+           $this->retrieveAsProxy();
+       }
+       else
+       {
+           $this->retrieve();
+       }
+       return $this;
+    }
+
+    function getFrequenciaByVinculo($idVinculo, $mes, $ano)
+    {
+        $first = '01';
+        $last = mktime(0, 0, 0, $mes+1, 0, $ano);
+        $lastday = strftime("%d", $last);
+        for($i=1; $i <= $lastday; $i++)
+        {
+            $frequencia[(int)$i] = '';
+        }
+        $dtIni = $this->_db->CharToDate('01/'.$mes.'/'.$ano);
+        $dtFim = $this->_db->CharToDate($lastday.'/'.$mes.'/'.$ano);
+        $criteria =  $this->getCriteria();
+        $criteria->addColumnAttribute('dataInicio');
+        $criteria->addColumnAttribute('dataFim');
+        $criteria->addColumnAttribute('ocorrencia.mnemonico');
+        $criteria->addCriteria('idVinculo','=', "$idVinculo");
+        $criteria->addCriteria('dataInicio','>=', "$dtIni");
+        $criteria->addCriteria('dataFim','<=', "$dtFim");
+        $query = $criteria->retrieveAsQuery();
+        $query->MoveFirst();
+        while (!$query->eof)
+        {
+            $ini = substr($query->fields('dataInicio'),0,2);
+            $fim = substr($query->fields('dataFim'),0,2);
+            for($i=$ini; $i <= $fim; $i++)
+            {
+                $frequencia[(int)$i] = $query->fields('mnemonico');
+            }
+            $query->MoveNext();
+        }
+        return $frequencia;
+    }
+
+    function getFrequenciaBySetor($idSetor, $mes, $ano)
+    {
+        global $MIOLO;
+
+        $mapa = array();
+        $provimento = $MIOLO->GetBusiness('rh','provimento');
+        $query = $provimento->ListBySetor($idSetor);
+        $query->MoveFirst();
+        while (!$query->eof)
+        {
+            $idVinculo = $query->fields('idVinculo');
+            $nome = $query->fields('nome');
+            $frequencia = $this->GetFrequenciaByVinculo($idVinculo, $mes, $ano);
+            $mapa[] = array($idVinculo, $nome, $frequencia);
+            $query->MoveNext();
+        }
+        return $mapa;
+    }
+
+    function listLicAfasts($idSetor,$dataRef = NULL,$ocorrencia = NULL)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('idVinculo');
+        $criteria->addColumnAttribute('vinculo.funcionario.pessoa.nome');
+        $criteria->addColumnAttribute('vinculo.provimentos.regimeJuridico');
+        $criteria->addColumnAttribute('dataInicio','datainicio');
+        $criteria->addColumnAttribute('dataFim','datafim');
+        //$criteria->addColumnAttribute('vinculo.regimeJuridico');
+        $criteria->addColumnAttribute('tipoLicenca');
+        //Aguardando carga no banco
+        //$criteria->addColumnAttribute('vinculo.provimentos.situacaofuncional.descricao');
+        $criteria->addColumnAttribute('vinculo.provimentos.cargo.descricao');
+        $criteria->addColumnAttribute('ocorrencia.descricao');
+        $criteria->addColumnAttribute('ocorrencia.idOcorrencia');
+        $criteria->addCriteria('vinculo.provimentos.dataFim','is','null');
+        if ( is_array($idSetor) )
+        {
+            $criteria->addCriteria('vinculo.provimentos.idSetor','IN',$idSetor);
+        }
+        else
+        {
+            $criteria->addCriteria('vinculo.provimentos.idSetor','=',$idSetor);
+        }
+        if ($ocorrencia)
+        {
+            if ( is_array($ocorrencia) )
+            {
+                $criteria->addCriteria('idOcorrencia','IN',$ocorrencia);
+            }
+            else
+            {
+                $criteria->addCriteria('idOcorrencia','=',$ocorrencia);
+            }
+        }
+        if ( $dataRef )
+        {
+            $dataRef = new InvertDate($dataRef);
+            $criteria->addCriteria('dataInicio','>=',"'{$dataRef->date}'");
+        }
+        return $criteria->retrieveAsQuery();
+    }
+
+    function listOcorrByRegimeJur($idSituacao,$sexo=FALSE)
+    {
+        global $MIOLO;
+        
+        $ocorrencia = $MIOLO->getBusiness('rh','ocorrencia');
+        $criteria = $ocorrencia->getCriteria();
+        $criteria->addColumnAttribute('idOcorrencia');
+        $criteria->addColumnAttribute('descricao');
+        $criteria->addCriteria('situacaoFuncional.idSituacao','=',"'$idSituacao'");
+        $criteria->addCriteria('idGrupoOcorrencia','=','3');
+        
+        $tipoLicAfast = $MIOLO->getBusiness('rh','tipolicafast');        
+        $excecoes = array("FERIAS","CESSAO");
+        foreach ( $excecoes as $e )
+        {
+            $tipoLicAfast->getByTipo($e);
+            $tipoLicAfast->getOcorrencias();
+            if ( is_array($tipoLicAfast->ocorrencias) )
+                foreach ( $tipoLicAfast->ocorrencias as $o )
+                    $ids[] = $o->idOcorrencia;
+        }
+        if ( is_array($ids) )
+        {
+            $criteria->addCriteria('idOcorrencia','NOT IN',$ids);
+        }
+        if ( $sexo )
+        {
+            $cc = new CriteriaCondition();
+            $cc->addCriteria($criteria->getCriteria('sexo','=',"'$sexo'"));
+            $cc->addOrCriteria($criteria->getCriteria('sexo','is',"null"));
+            $criteria->addCriteria($cc);
+        }
+        
+        $criteria->addOrderAttribute('descricao');
+        return $criteria->retrieveAsQuery();        
+    }
+
+    function listOcorrEstagio($idSituacao,$sexo=FALSE)
+    {
+        global $MIOLO;
+
+        /*$ocorrencia = $MIOLO->getBusiness('rh','ocorrencia');
+        $criteria = $ocorrencia->getCriteria();
+        $criteria->addColumnAttribute('idOcorrencia');
+        $criteria->addColumnAttribute('descricao');
+        $criteria->addCriteria('situacaoFuncional.idSituacao','=',"'$idSituacao'");
+        $criteria->addCriteria('idGrupoOcorrencia','=','03');
+        $criteria->addCriteria('tipoLicAfasts.tipoLicAfast','=',"'ESTAGIOPROBATORIO'");
+        $criteria->addOrderAttribute('descricao');
+        $criteria->addGroupAttribute('idOcorrencia');
+        $criteria->addGroupAttribute('descricao');
+        //var_dump($criteria->retrieveAsQuery());die();
+        $tipoLicAfast = $MIOLO->getBusiness('rh','tipolicafast');        
+        $excecoes = array("FERIAS","CESSAO");*/
+
+        $tipoLicAfast = $MIOLO->getBusiness('rh','tipolicafast');        
+        $excecoes = array("FERIAS","CESSAO");
+        
+        /*$where = "rh_grupolicafast.idocorrencia=rh_ocorrencia.idocorrencia AND 
+        rh_grupolicafast.idgrupoocorrencia=rh_ocorrencia.idgrupoocorrencia AND       
+        rh_situacaoocorrencia.idsituacao=rh_situacaofuncional.idsituacao AND        
+        rh_tipolicafast.idtipolicafast=rh_grupolicafast.idtipolicafast) AND ((rh_situacaofuncional.idsituacao = 
+        '$idSituacao')   AND     (rh_ocorrencia.idgrupoocorrencia = '03') AND (rh_tipolicafast.tipoLicAfast =   
+        'ESTAGIOPROBATORIO') AND (rh_ocorrencia.idocorrencia NOT IN ('7')) AND (((rh_ocorrencia.sexo = 'F') OR 
+        (rh_ocorrencia.sexo is null)) )) GROUP BY rh_ocorrencia.idocorrencia,rh_ocorrencia.descricao ORDER BY 
+        rh_ocorrencia.descricao ASC;"*/
+
+        $where = "rh_grupolicafast.idocorrencia=rh_ocorrencia.idocorrencia AND 
+        rh_grupolicafast.idgrupoocorrencia=rh_ocorrencia.idgrupoocorrencia AND       
+        rh_situacaoocorrencia.idsituacao=rh_situacaofuncional.idsituacao AND    
+        (rh_tipolicafast.idtipolicafast=rh_grupolicafast.idtipolicafast) AND ((rh_situacaofuncional.idsituacao = 
+        '$idSituacao') AND (rh_ocorrencia.idgrupoocorrencia = '03') AND (rh_tipolicafast.tipoLicAfast = 'ESTAGIOPROBATORIO'))";
+
+        foreach ( $excecoes as $e )
+        {
+            $tipoLicAfast->getByTipo($e);
+            $tipoLicAfast->getOcorrencias();
+            foreach ( $tipoLicAfast->ocorrencias as $o )
+            {
+                $ids[] = $o->idOcorrencia;
+            }
+        }
+        
+        if ( is_array($ids) )
+        {
+            //$criteria->addCriteria('idOcorrencia','NOT IN',$ids);
+            $where = $where . "AND (rh_ocorrencia.idocorrencia NOT IN ('7'))";
+        }
+        
+        if ( $sexo )
+        {
+            //$cc = new CriteriaCondition();
+            //$cc->addCriteria($criteria->getCriteria('sexo','=',"'$sexo'"));
+            //$cc->addOrCriteria($criteria->getCriteria('sexo','is',"null"));
+            //$criteria->addCriteria($cc);
+            //$where = $where . "AND (((rh_ocorrencia.sexo = 'F') OR (rh_ocorrencia.sexo is null)))";
+	        $where = $where . "AND (((rh_ocorrencia.sexo = 'F') OR (rh_ocorrencia.sexo = '')))";
+        }
+
+        $sql = new MSql('rh_ocorrencia.idocorrencia,rh_ocorrencia.descricao','rh_grupolicafast, rh_ocorrencia, 
+        rh_situacaofuncional, rh_situacaoocorrencia, rh_tipolicafast',$where." GROUP BY       
+        rh_ocorrencia.idocorrencia,rh_ocorrencia.descricao ORDER BY rh_ocorrencia.descricao ASC");
+        $query = $this->Query($sql);
+        return $query;
+        //return $criteria->retrieveAsQuery();
+    }
+
+    function getLicAfastSimultanea($isPersistent)
+    {
+        return $this->vinculo->licAfastSimultanea($this->dataInicio,$this->dataFim,$isPersistent);
+    }
+    
+    /**
+     * overriding do método da classe persistente. 
+     * inclui os metodos para verificacao das regras de negocio
+     */
+    
+    function save()
+    {
+        global $MIOLO;
+        /**
+         * Trata licAfast simultâneas
+         */
+
+        /*
+        if ( $this->isPersistent() )
+        {
+            //TODO: Refactoring: dividir o método save em pequenos métodos para executar os testes separadamente. 
+            parent::save();
+            return;
+        }
+        */
+        
+        $simul = $this->getLicAfastSimultanea($this->isPersistent());
+        if ( $simul )
+        {
+            //coincide com mais de uma licença
+            if ( count($simul) != 1 && count($simul) != 0 )
+            {
+                $falta = TRUE;
+                foreach ( $simul as $l )
+                {
+                    if ( $this->isTipo("FALTA",$l->idOcorrencia) )
+                    {
+                        $falta = $falta && TRUE;
+                    }
+                    else
+                    {
+                        $falta = $falta && FALSE;
+                    }
+                }
+                //todas são faltas
+                if ( $falta )
+                {
+                    foreach ( $simul as $l )
+                    {
+                        $l->delete();
+                    }
+                }
+                else
+                {
+                    throw new ESimpleRnException("Já existem licenças no período informado. Confira as datas de início e fim.");
+                }
+            }
+            //coincide com apenas uma
+            else
+            {
+                //retira o objeto do array
+                $l = array_pop($simul);
+                $l->retrieveAssociation('ocorrencia');
+                
+                //verifica se a licença simultânea é férias
+                if ( $this->isTipo("FERIAS",$l->idOcorrencia) )
+                {
+                    if ( $this->isTipo("SAUDE",$this->idOcorrencia) )
+                    {
+                        //guarda a diferença entre os dias do início das férias e da licenca de saúde
+                        $dias =$this->k->daysDiff($l->dataInicio,$this->dataInicio);
+                   
+                        if ( $dias >= 0 )
+                        {
+                            throw new ESimpleRnException('As férias não podem ser suspensas por motivo de saúde.');
+                        }
+                        else
+                        {   
+                            throw new ECancelaFeriasException('As férias serão canceladas!',$l->dataInicio);
+                        }
+                        
+                    }
+                    elseif ( !$this->isTipo("PROGRAMATREINAMENTO",$this->idOcorrencia) )
+                    {
+                        throw new ESimpleRnException("Licença coincide com ".$l->ocorrencia->descricao.". Verifique as datas de início e fim.");
+                    }
+
+                }
+                elseif ( $this->isTipo("FALTA",$l->idOcorrencia) )
+                {
+                    $l->delete();
+                }
+                else
+                {
+                    throw new ESimpleRnException("Licença coincide com ".$l->ocorrencia->descricao.". Verifique as datas de início e fim.");
+                }
+            }
+            
+        }
+        else
+        {
+            if ( $this->isTipo("PRAZOMAXIMO") )
+            {
+
+                //A ocorrência de licença/afastamento 133 refere-se a uma prorrogação da ocorrência 100, por isso só poderá ser permitido seu lançamento no caso de já ter sido lançado para o funcionário a usufruição do prazo máximo de usufruição da ocorrência 100.
+                if ( $this->idOcorrencia == 133 )
+                {
+                    if ( $prazo100 = $this->vinculo->getPrazoProrrogacao($this,100) )
+                    {
+                        $grupoOcorrencia = $MIOLO->getBusiness('rh','grupoocorrencia',3);
+                        $grupoOcorrencia->getOcorrencias();
+                        $ocorrencia = $grupoOcorrencia->getOcorrencia(100);
+                        
+                        $prazoMax = $ocorrencia->getPrazoMaximo();
+                        if ( $prazo100 < $prazoMax )
+                        {
+                            $diferenca = $prazoMax - $prazo100 ;
+                            throw new ESimpleRnException("A licença só podera ser lançada após usufruição do prazo máximo da ocorrência 100. Ainda restam $diferenca dias");
+                        }
+                        
+                    }
+                    else
+                    {
+                        throw new ESimpleRnException("A ocorrência 133 é uma prorrogação da ocorrência 100 e só poderá ser lançada após essa.");
+                    }
+                    
+                }
+
+                $this->retrieveAssociation('ocorrencia');
+                $prazo = $this->getPrazo();
+                if ( ! $this->isPersistent() )
+                {
+                    $prazo += $this->vinculo->getPrazoProrrogacao($this);
+                }
+                if ( $prazo > $this->ocorrencia->getPrazoMaximo() )
+                {
+                    if ( $this->isTipo("SAUDEEST") )
+                    {
+                        throw new EExtrapolaPrazoException("Prazo excedido, porém permitido.",$this->dataInicio); 
+                    }
+                    else
+                    {
+                        $diferenca = $prazo - $this->ocorrencia->getPrazoMaximo() ;
+                        throw new ESimpleRnException("A licença/afastamento está excedendo o prazo máximo de ".$this->ocorrencia->prazoMaximo." dias. Excede em $diferenca dia(s).");
+                    }
+                }
+
+                if ( $this->idOcorrencia == 104 )
+                {
+                    //verificar se existe registro de lançamento de licença para ocorrencia 111
+                    if ( $lic111 = $this->vinculo->getLastLicAfastByOcorrencia(111) )
+                    {
+                    
+                        $periodo = $this->k->daysDiff($lic111->dataFim,$this->dataInicio);
+                        $prazo = $lic111->getPrazo();
+
+                        if ( $periodo < $prazo )
+                        {
+                            throw new ESimpleRnException("Ainda não decorreu período igual ou maior ao de afastamento para estudo ou missão no exterior.    ");
+                        }
+                    }
+                }
+            }
+        }
+        if ( $this->isTipo("PROGRAMATREINAMENTO") )
+        {
+            if ( $this->vinculo->emEstagioProbatorio() )
+            {
+                throw new EAfastamentoEstagioException("Licença inicialmente não permitida para servidor em estágio probatório.",$this->dataInicio); 
+            }
+        }
+        parent::save();
+    }
+
+    function saveForced()
+    {
+        parent::save();
+    }
+    
+    function isTipo($tipo,$idOcorrencia = '')
+    {
+        $idOcorrencia = ( $idOcorrencia ) ? $idOcorrencia : $this->idOcorrencia;
+        
+        $this->tipoLicAfast->getByTipo($tipo);
+        $this->tipoLicAfast->getOcorrencias();
+if (!$this->tipoLicAfast->ocorrencias)
+                $this->tipoLicAfast->ocorrencias = array();
+        foreach ( $this->tipoLicAfast->ocorrencias as $o )
+        {
+            if ( $o->idOcorrencia == $idOcorrencia )
+                return TRUE;
+        }
+        return FALSE;
+    }
+
+    function setDataFim($dataFim)
+    {
+        $this->dataFim = $dataFim;
+    }
+
+    function getPrazo()
+    {
+        return  $this->k->daysDiff($this->dataInicio,$this->dataFim);        
+    }
+
+    function finaliza($dataFim)
+    {
+        $this->setDataFim($dataFim);
+        parent::save();
+    }
+
+    function getCid()
+    {
+        $this->retrieveAssociation('cid');       
+    }
+    
+    function contagemLicAfast($idVinculo, $dataInicio, $dataFim,  $matriz)
+    {
+        global $MIOLO;
+        
+        // inversão das datas para tratamento no banco de dados
+        $dataInicioInvertida = $this->k->InvertDate($dataInicio);
+        $dataFimInvertida = $this->k->InvertDate($dataFim);     
+        
+        $criteria =  $this->getCriteria();
+        $criteria->addColumnAttribute('dataInicio');
+        $criteria->addColumnAttribute('dataFim');
+    
+        $criteria->addCriteria('idVinculo','=', "'$idVinculo'");
+
+        //restringe o período para contagem de licenças e/ou afastamentos
+        $criteria->addCriteria('dataInicio','>', "'$dataInicioInvertida'");
+        $criteria->addCriteria('dataFim','<', "'$dataFimInvertida'");   
+        
+        // colocando na query os grupos e as respectivas ocorrencias
+        
+        if (is_array($matriz)) 
+        {
+            $ccAux2 = new CriteriaCondition;    
+            foreach ($matriz as $key => $value) 
+            {
+                if (is_array($value))
+                {
+                    $ccAux = new CriteriaCondition;
+                    foreach ($value as $key2 => $value2) 
+                    {
+                        $cc = new CriteriaCondition;
+                        $cc->addCriteria($criteria->getCriteria('idGrupoOcorrencia','=', $key));                
+                        $cc->addCriteria($criteria->getCriteria('idOcorrencia','=', $value2));
+                        $ccAux->addOrCriteria($cc);
+                    }
+                    $ccAux2->addOrCriteria($ccAux);
+
+                $criteria->addCriteria($ccAux2);
+                }
+            }
+        }        
+        
+        $query = $criteria->retrieveAsQuery();
+        
+        
+        $diasDesconto = 0;
+/*      
+        adiciona mais um array de datas ao conjunto de resposta  
+        $dt = array("08/09/2005", "17/09/2005"); 
+        array_push($query->result, $dt);
+*/      
+        if (is_array($query->result))
+        {
+            foreach ($query->result as $licenca) 
+            {
+                $licenca = $this->k->daysDiff($licenca[0],$licenca[1]);
+                if ($licenca == 0)
+                {
+                    $diasDesconto++;
+                }
+                else
+                {
+                    $diasDesconto += $licenca;
+                }
+            }
+        }
+
+        return $diasDesconto;
+    }
+    
+    function semOnus()
+    {
+        return $this->ocorrencia->excPgto == 'S';
+    }
+
+    function listLicAfastsByTipo($tipo,$dataRef=NULL)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('idVinculo');
+        $criteria->addColumnAttribute('vinculo.funcionario.pessoa.nome');
+        $criteria->addColumnAttribute('vinculo.provimentos.setor.sigla');
+        $criteria->addColumnAttribute('dataInicio');
+        $criteria->addColumnAttribute('dataFim');
+        $criteria->addCriteria('ocorrencia.tipoLicAfasts.tipoLicAfast','=',"'$tipo'");
+        $criteria->addCriteria('vinculo.provimentos.dataFim','IS','null');
+        $dataRef = new InvertDate($dataRef);
+        $criteria->addCriteria('dataInicio','<=',"'{$dataRef->date}'");
+        $criteria->addCriteria('dataFim','>=',"'{$dataRef->date}'");
+        $criteria->addOrderAttribute('vinculo.funcionario.pessoa.nome');
+        //$criteria->addOrderAttribute('dataInicio');
+        return $criteria->retrieveAsQuery();
+    }
+    
+    function getLicencasPorMesAno($mes,$ano,$ultimoDiaDoMes)
+    {
+        $dataInicio = "'$ano/$mes/01'";
+        $dataFim = "'$ano/$mes/$ultimoDiaDoMes'";
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('idVinculo');
+        $criteria->addColumnAttribute('vinculo.funcionario.pessoa.nome');
+        $criteria->addColumnAttribute('dataInicio');
+        $criteria->addColumnAttribute('dataFim');
+        $criteria->addColumnAttribute('ocorrencia.descricao');
+        $criteria->addColumnAttribute('tipoLicenca');
+        $criteria->addCriteria('dataInicio','<=',$dataFim);
+        $criteria->addCriteria('dataFim','>=',$dataInicio);
+        $criteria->addCriteria('UPPER(ocorrencia.descricao)','<>',"'FERIAS'");
+        $criteria->addOrderAttribute('vinculo.funcionario.pessoa.nome');
+        return $criteria->retrieveAsQuery();    
+    }
+    
+
+    //guarda os meses nos quais ocorreu alguma falta
+    function FaltasNaoJustificadas($licAfasts)
+    {
+        //isola as ocorrências de falta
+        foreach ($licAfasts as $licAfast)
+        {
+            if ( in_array($licAfast->idGrupoOcorrencia.$licAfast->idOcorrencia , $this->ocorrenciasFaltas) )
+            {
+                $faltas[] = $licAfast;
+            }
+        }
+
+        if ($faltas)
+        {
+            foreach ($faltas as $licAfast) //percorre os períodos de falta
+            {
+                $data = $licAfast->dataInicio;
+                //percorre o período, para o caso de, se ele contiver mais de um mês, guardar, então, todos os meses contidos
+                do
+                {
+                    $mes = substr($data,3,2);
+                    $ano = substr($data,6,4);
+                    $meses[$ano.$mes] = TRUE;  //guarda mês onde ocorreu alguma falta
+
+                    $mes ++;
+                    if ($mes == '13')
+                    {
+                        $mes = '01';
+                        $ano ++;
+                    }
+                    $mes = str_pad($mes, 2, "0", STR_PAD_LEFT);
+                    $data = '01/' . $mes . '/' . $ano;  //muda data de teste para guardar o próximo mês contido no mesmo período
+                } while ( $this->k->CompareDate($data, '<=', $licAfast->dataFim) ); //terminou o período
+            }
+        }
+    } // FaltasNaoJustificadas
+
+
+/* __________________________________________________________________________________________________________
+    
+    => PROVIMENTOS: Aposentadoria com possivel retorno e Exclusao
+    => Cessao (tipoonus) e Licafast (excluipagamento)
+       exemplo: se afastado com exclusao de pagamento entao nao conta
+       exemplo: se afastado SEM exclusao de pagamento entao     CONTA (ou seja, a partir de tal data conta)
+   __________________________________________________________________________________________________________ */
+
+    //função: monta matriz com os anos de exercício,
+    //com os totais anuais de faltas injustificadas e as licenças de saúde e para acompanhamento de familiar
+    function AcumulaFaltaseLicencas($objVinculo)
+    {
+        global $MIOLO;
+
+        //$lic[][0] : Ano (do ingresso do servidor até o ano presente)
+        //$lic[][1] : Faltas não justificadas
+        //$lic[][2] : '202', licenças de saúde
+        //$lic[][3] : '083', licenças para acompanhar doença de familiar
+        //$lic[][4] : LPA
+        //$lic[][5] : dias do ano efetivamente trabalhados
+
+        $ocorrencia = $MIOLO->getBusiness('rh','ocorrencia');
+        $datatestefim = date('d/m/Y');    //presente
+
+        //(passo 1) percorre os provimentos para verificar se há exclusão
+        $count = count($objVinculo->provimentos) - 1;
+        for ($i = $count; $i >= 0; $i --)
+        {
+            $idGrupoOcorrencia = $objVinculo->provimentos[$i]->idGrupoOcorrencia;
+            $idOcorrencia      = $objVinculo->provimentos[$i]->idOcorrencia;
+            $dataInicio        = $objVinculo->provimentos[$i]->dataInicio;
+            $dataFim           = $objVinculo->provimentos[$i]->dataFim;
+            if ( in_array($idGrupoOcorrencia,$this->gruposexclusao)  or  ($idGrupoOcorrencia . $idOcorrencia == '1904') )
+            {
+                //limita o período de teste ao dia anterior à exclusão
+                $datatestefim = $this->k->operation('-',$dataInicio,'1%D');
+                break;   //ocorrência de exclusão: não testa as próximas ocorrências encerra teste
+            }
+            $ocorrencia->GetByGrupoId($idGrupoOcorrencia,$idOcorrencia);
+            if ($ocorrencia->excPgto == 'S')
+            {
+                $anoinicial = substr($dataInicio,6,4);
+                $anofinal   = substr($dataFim   ,6,4);
+                //se data anotada passa de um ano para outro, divide-a em duas ou mais,
+                //cada data resultante com um ano do intervalo
+                if ($anoinicial <> $anofinal)
+                {
+                    $provsexcPgto[$anoinicial] = $provsexcPgto[$anoinicial] + $this->k->daysDiff($dataInicio, '31/12/'.$anoinicial) + 1;
+                    for ($anomeio = ($anoinicial+1); $anomeio < ($anofinal); $anomeio++)
+                    {
+                        $provsexcPgto[$anomeio] = $provsexcPgto[$anomeio] + $this->k->daysDiff('01/01/'.$anomeio , '31/12/'.$anomeio) + 1; //ano ou anos no meio
+                    }
+                    $provsexcPgto[$anofinal] = $provsexcPgto[$anofinal] + $this->k->daysDiff('01/01/'.$anofinal, $dataFim) + 1; //ano final
+                }
+                else
+                {
+                    $provsexcPgto[$anoinicial] = $this->k->daysDiff($dataInicio,$dataFim) + 1;
+                }
+                //$copia = array($idGrupoOcorrencia,$idOcorrencia,$dataInicio,$dataFim);
+                //se tal guarda no ano - divide datas
+            }
+        } //for
+
+        //(passo 2) prepara matriz para receber os cálculos
+          $anoinicial = substr($objVinculo->dataExercicio,6,4); //ano de ingresso
+
+          //(2.1) prepara ano inicial
+          $lic[$anoinicial][0] = $anoinicial;
+          $lic[$anoinicial][1] = $lic[$anoinicial][2] = $lic[$anoinicial][3] = $lic[$anoinicial][4] = NULL;
+          $lic[$anoinicial][5] = $this->k->daysDiff($objVinculo->dataExercicio, '31/12/'.$anoinicial) + 1;
+
+          $anofinal   = substr($datatestefim,6,4);
+          $anoinicial ++;
+
+          //(2.2) prepara anos dentro do intervalo entre o ingresso e o presente
+          for ($ano = $anoinicial; $ano < $anofinal; $ano ++)
+          {
+              $lic[$ano][0] = $ano;
+              $lic[$ano][1] = $lic[$ano][2] = $lic[$ano][3] = $lic[$ano][4] = NULL;
+              if ( date("L",mktime(0, 0, 0, 1, 1, $ano)) ) //se ano em questão é bissexto
+              {
+                  $lic[$ano][5] = 366;
+              }
+              else
+              {
+                  $lic[$ano][5] = 365;
+              }
+          }
+
+          //(2.3) prepara ano presente
+          $lic[$anofinal][0] = $anofinal;
+          $lic[$anofinal][1] = $lic[$anofinal][2] = $lic[$anofinal][3] = $lic[$anofinal][4] = NULL;
+          $lic[$anofinal][5] = $this->k->daysDiff('01/01/'.$anofinal,$datatestefim) + 1;
+
+        //(passo 3) percorre a matriz de afastamentos para anotar os de interesse
+          if ($objVinculo->licAfast)
+          {
+              foreach ($objVinculo->licAfast as $reg)
+              {
+                  $anoinicial = substr($reg->dataInicio,6,4);
+                  $anofinal   = substr($reg->dataFim   ,6,4);
+
+                  //se data anotada passa de um ano para outro, divide-a em duas ou mais,
+                  //cada data resultante com um ano do intervalo
+                  if ($anoinicial <> $anofinal)
+                  {
+                      $this->TestaFaltaseLicencas(    $reg->idGrupoOcorrencia . $reg->idOcorrencia,
+                                                      $reg->dataInicio  , '31/12/'.$anoinicial, $lic); //ano inicial
+                      for ($anomeio = ($anoinicial+1); $anomeio < ($anofinal); $anomeio++)
+                      {
+                          $this->TestaFaltaseLicencas($reg->idGrupoOcorrencia . $reg->idOcorrencia,
+                                                      '01/01/'.$anomeio , '31/12/'.$anomeio   , $lic); //ano ou anos no meio
+                      }
+                      $this->TestaFaltaseLicencas(    $reg->idGrupoOcorrencia . $reg->idOcorrencia,
+                                                      '01/01/'.$anofinal, $reg->dataFim       , $lic); //ano final
+                  }
+                  else
+                  {
+                      $this->TestaFaltaseLicencas($reg->idGrupoOcorrencia . $reg->idOcorrencia,
+                                                  $reg->dataInicio  ,$reg->dataFim        , $lic);
+                  }
+                  $ocorrencia->GetByGrupoId($reg->idGrupoOcorrencia,$reg->idOcorrencia);
+                  if ($ocorrencia->excPgto == 'S')
+                  {
+                      //$lics[ano]  =  $lics[ano] -  
+                      //{ fazer do mesmo jeito do acima para $provs}
+                  }
+              }
+          }
+
+        $return[] = array( ''      , '', '', '', '', '' );    //separador para matriz de totais     (índice 0)
+        $return[] = array( 'Totais', 0 , 0 , 0 , 0 , 0  );    //matriz de totais, em cima da tabela (índice 1)
+        $return[] = array( ''      , '', '', '', '', '' );    //separador para matriz de totais     (índice 2)
+
+/* neste ponto
+    1- foi montada a matriz anos até o limite Final-por_Exclusão
+    2- foram varridos os licafast e gravados no matriz anos, com o defeito do ano 2007 com -29 faltas
+    3- falta tirar os dias de ExcluiPagto com $provsexcPgto
+*/
+
+/*_____________________________________________________________________________________________
+|    mudança de cargo por reenquadramento, sem mudar a descrição, o que o usuário não entende  |
+|    averbação: docência dentro de serviço público, docência identificável pela descrição      |
+|_____________________________________________________________________________________________*/
+
+        //(passo 4) copia a matriz para uso em MTableRaw (o índice era em anos e passa a ser sequencial)
+          foreach ($lic as $reg)
+          {
+              $reg5 = $reg[5]           - $reg[1] - $reg[2] - $reg[3];                       //calcula os dias do ano efetivamente trabalhados
+              $return[] = array( $reg[0], $reg[1] , $reg[2] , $reg[3] , $reg[4], $reg[5] );  //copia a matriz, com índice sequencial (cria a partir do 3)
+              $return[1][1] += $reg[1];  //total de faltas, índice 1: totais                 
+              $return[1][2] += $reg[2];  //total de licenças de saúde
+              $return[1][3] += $reg[3];  //total de licenças para acompanhar doença de familiar
+              $return[1][4] += $reg[4];  //total de LPA
+              $return[1][5] += $reg5;    //total de dias efetivamente trabalhados
+            }
+
+
+        return $return;
+    } // AcumulaFaltaseLicencas
+
+
+
+    function TestaFaltaseLicencas($Grupo_Ocorrencia, $dataInicio, $dataFim, &$lic)
+    {
+        $ano = substr($dataInicio,6,4);
+        if     ( in_array($Grupo_Ocorrencia , $this->ocorrenciasFaltas  ) )
+        {
+            $lic[$ano][1] = $lic[$ano][1] + $this->k->daysDiff($dataInicio,$dataFim) + 1;  //faltas;
+        }
+        elseif ( in_array($Grupo_Ocorrencia , $this->ocorrenciasLicSaude) )
+        {
+            $lic[$ano][2] = $lic[$ano][2] + $this->k->daysDiff($dataInicio,$dataFim) + 1;  //202 - licenças de saúde e acidente
+        }
+        elseif ( in_array($Grupo_Ocorrencia , $this->ocorrenciasLicAcomp) )
+        {
+            $lic[$ano][3] = $lic[$ano][3] + $this->k->daysDiff($dataInicio,$dataFim) + 1;  //083 - licenças para acompanhar doença de familiar';
+        }
+        elseif (          $Grupo_Ocorrencia == $this->ocorrenciasLPA )
+        {
+            $lic[$ano][4] = $lic[$ano][4] + $this->k->daysDiff($dataInicio,$dataFim) + 1;  //083 - licenças para acompanhar doença de familiar';
+        }
+    } // TestaFaltaseLicencas
+
+
+    function ContaFaltasnoIntervalo($licAfast, $inicio, $fim)
+    {
+        $return = 0;
+        if ($this->licAfast)
+        {
+            //percorre a matriz de afastamentos para somar as faltas
+            foreach ($licAfast as $reg)
+            {
+                if ( in_array($reg->idGrupoOcorrencia . $reg->idOcorrencia , $this->ocorrenciasFaltas) )
+                {
+                    /*se afastamento a ser testado está dentro do intervalo, exemplo:
+
+                    $inicio 01/01/1980, normalmente data de ingresso
+                    $fim    16/12/1998, por exemplo data Emenda Constitucional 20 (EC20)
+                    afastamento $reg->dataInicio 01/12/1998  a  $reg->dataFim 31/12/1998 (de propósito englobando a data da EC20)
+
+                    if (01/01/1980 <= 31/12/1998)  and  (16/12/1998 >= 01/12/1998): afastamento de interesse, dentro do intervalo
+
+                        if ( 01/01/1980 > 01/12/1998 )  //início do teste além do início do afastamento, então limita data
+                                                          //de início do afastamento ao teste
+                        if ( 16/12/1998 < 31/12/1998 )  //fim do teste aquém do término do afastamento, então limita data
+                                                          //de término do afastamento ao teste (situação mais comum que a anterior)
+                    */
+                    if ( ($this->k->CompareDate($inicio, '<=', $reg->dataFim)) and ($this->k->CompareDate($fim, '>=', $reg->dataInicio)) )
+                    {
+                        $regdataInicio = $reg->dataInicio;
+                        $regdataFim    = $reg->dataFim;
+                        if ( $this->k->CompareDate($inicio, '>', $reg->dataInicio) ) //início do teste além do início do afastamento, então
+                        {
+                            $regdataInicio = $inicio;  //limita data de início do afastamento ao teste
+                        }
+                        if ( $this->k->CompareDate($fim   , '<', $reg->dataFim   ) ) //fim do teste aquém do término do afastamento, então
+                        {
+                            $regdataFim = $fim;        //limita data de término do afastamento ao teste (situação mais comum que a anterior)
+                        }
+                        $return = $return + $this->k->daysDiff($regdataInicio,$regdataFim) + 1;  //faltas;
+                    }
+                }
+            }
+            return $return;
+        }
+        else
+        {
+            return $return;
+        }
+    } // ContaFaltasnoIntervalo
+
+
+    function ContaLicSemRemuneracaonoIntervalo($licAfast, $inicio, $fim)
+    {
+        $return = 0;
+
+        if ($this->licAfast)
+        {
+            //percorre a matriz de afastamentos para somar as licenças sem remuneração
+            foreach ($licAfast as $reg)
+            {
+                if ( in_array($reg->idGrupoOcorrencia . $reg->idOcorrencia , $this->ocorrenciaslicSemRem) )
+                {
+                    //se afastamento a ser testado está dentro do intervalo
+                    //exemplo vide ContaFaltasnoIntervalo()
+                    if ( ($this->k->CompareDate($inicio, '<=', $reg->dataFim)) and ($this->k->CompareDate($fim, '>=', $reg->dataInicio)) )
+                    {
+                        $regdataInicio = $reg->dataInicio;
+                        $regdataFim    = $reg->dataFim;
+                        if ( $this->k->CompareDate($inicio, '>', $reg->dataInicio) ) //início do teste além do início do afastamento, então
+                        {
+                            $regdataInicio = $inicio;  //limita data de início do afastamento, para o teste
+                        }
+                        if ( $this->k->CompareDate($fim   , '<', $reg->dataFim   ) ) //fim do teste aquém do término do afastamento, então
+                        {
+                            $regdataFim = $fim;        //limita data de término do afastamento, para o teste
+                        }
+                        $return = $return + $this->k->daysDiff($regdataInicio,$regdataFim) + 1;  //licença;
+                    }
+                }
+            }
+            return $return;
+        }
+        else
+        {
+            return $return;
+        }
+    } // ContaLicSemRemuneracaonoIntervalo
+
+
+}
+?>

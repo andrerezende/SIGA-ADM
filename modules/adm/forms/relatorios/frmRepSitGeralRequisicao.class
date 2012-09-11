@@ -1,0 +1,172 @@
+<?
+class frmRepSitGeralRequisicao extends Form
+{
+	protected $uo;
+	protected $requisicao;
+	protected $tiporeq;
+	private $objRequisicao;
+	
+	
+	function __construct()
+    {
+		global $MIOLO;
+		$this->uo = $MIOLO->GetBusiness('adm','uo');
+		$this->requisicao = $MIOLO->GetBusiness('adm','requisicao');
+		$this->tiporeq = $MIOLO->GetBusiness('adm','tiporeq');
+        parent::__construct('Situação geral de requisições');
+		$this->SetClose($this->manager->GetActionURL('adm','main:relatorios'));
+        $this->eventHandler();
+    }
+
+    function CreateFields()
+    {
+		global $perms,$MIOLO,$manager,$module;
+        
+    	$uo = $this->uo;      	
+
+        $options = array( array('Material', 'material' ),
+                         array('Serviço', 'servico' ),
+                        );
+
+        $this->addField(new MRadioButtonGroup( 'tipo', 'Tipo de busca: ', $options,'material','', 'horizontal', 'css' ));
+        $this->AddField(new MTextField('edtNumReq','','Nº Req',30, 'Para mais de uma requisicao separar com vírgula'));
+        $this->AddField(new MSpacer(1));
+
+		$uo = $MIOLO->GetBusiness($module,'uo');
+		$usuarioUo = $uo->listByUsuario2($this->manager->getLogin()->idkey);
+		
+
+		if ($usuarioUo->result == null)
+		{
+			$MIOLO->error("Não existe UOs associadas a este usuário. ");
+		}
+
+		
+		if (($perms->CheckAccess('ADM_ABRELICITACAO',A_EXECUTE)) or ($perms->CheckAccess('ADM_CONSULTAEMPENHO',A_EXECUTE)))
+        {
+			$opt = $this->uo->listUosOrdemNome();
+			$options['%'] = 'TODAS';
+			foreach($opt->result as $o)
+			{
+				$options[$o[0]] = $o[1];
+			}		
+			$this->addField(new MSelection('idUo','','UO',$options));
+			
+        }
+        else if(count($usuarioUo->result) >= 2) //Se forem duas ou mais UOs
+        {
+			foreach($usuarioUo->result as $o)
+			{
+				$options[$o[0]] = $o[1];
+			}		
+			$this->addField(new MSelection('idUo','','UO',$options));
+        }
+        else //Se for apenas uma UO
+        {
+        	$this->addField(new MTextField('idUo',$usuarioUo->result[0][0],'UO',5,$usuarioUo->result[0][1],'',true));     	
+        }
+
+        $this->addField(new MTextField('descricao','','Descrição',30,''));
+        $this->addField(new MCalendarField('dataInicio','','Data Inicial'));
+        $this->addField(new MCalendarField('dataFim','','Data Final'));
+
+		$this->addButton(new MButton('btnPost','Buscar'));
+		
+		
+		//echo "<pre>";
+		//var_dump($this->manager->getLogin());
+		
+	}
+
+   function btnPost_click()
+   {
+	 global $MIOLO, $module,$self,$item,$theme;
+
+		$ui = $MIOLO->GetUI();
+	     
+		$data = $this->getData();
+	
+		$data->idUo = $data->idUo == "" ? "%" : $data->idUo;
+
+		$data->descricao = $data->descricao == "" ? "" : strtoupper($data->descricao);
+	//	if ($data->descricao == "")
+//		{
+		   $objRequisicao = $MIOLO->GetBusiness($module,'requisicao');
+           $query = $objRequisicao->listByNumeroReqUoDatas($data);
+//        }
+    /*    else
+        {
+           $objItemReq = $MIOLO->GetBusiness($module,'itemreq');
+           $query = $objItemReq->listByUoAndDescricao($data);
+
+        }
+	*/
+		$hrefWindow = $MIOLO->getActionURL( $module, $self, '%1%', array( 'event' => 'btnImprimir:click' ));
+	    
+		$btnWindow =  new MButtonWindow('btnWindow', 'Imprimir', $hrefWindow,'target_report');
+		 
+		$columns = array(
+				new MGridColumn('Requisição','left','','10%'),
+				new MGridColumn('Data/Hora','center','','20%'),
+				new MGridColumn('Tipo','center','','20%'),
+				new MGridColumn('Observação','center','','40%'),
+				new MGridColumn('Requisitante','center','','20%')
+			);
+				
+		//$href_grid = $MIOLO->getActionURL($module, $self);
+		$href_grid = $MIOLO->GetActionURL($module,$action,$item, array('event'=>'btnPost:click') );
+		
+		$datagrid = new MGrid($query,$columns,$href_grid);
+		$datagrid->SetTitle('Requisições');
+		$datagrid->SetLinkType('hyperlink');
+		
+		
+		$href = $MIOLO->GetActionURL($module, $action,'%0%', array('event'=>'btnSelecionar_click', 'idRequisicao' => '%0%') );
+		$datagrid->addActionText('Imprimir','Imprimir',$href);
+		
+		
+		$this->setFormValue('idRequisicao', null);
+		$theme->clearContent();
+		$theme->AppendContent(new MSpacer(1));
+		$theme->AppendContent($datagrid);
+	
+		 
+   }
+   
+   
+   function btnSelecionar_click()
+   {global $MIOLO, $module,$self,$item,$theme;
+   		$idRequisicao = $this->getFormValue('idRequisicao');
+		if($idRequisicao)
+		{
+			$form = new MForm('Requisição: ' . $idRequisicao);
+	   		
+	   		$buttons = array(
+				new MButton('btnImprimir','Gerar Relatório','PDF'),
+			);
+			$form->SetButtons($buttons);
+	   		
+	   		$theme->appendContent($form);
+		}
+   }
+   
+   
+   
+     
+   function btnImprimir_click()
+	{		    
+	    global $MIOLO, $module;
+
+	 	$ui = $MIOLO->GetUI();
+     	$report = $ui->GetReport($module,'repRequisicaoSitGeral');
+     	$report->Generate();  
+    }
+   
+   
+   
+   
+   
+   
+   
+}
+?>

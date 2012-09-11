@@ -1,0 +1,154 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+class BusinessBibliotecaPreCatalogacao extends Business
+{
+
+//	var $idprecatalogacao;
+//	var $descricao;
+//	var $mnemonico;
+//	var $objLog;
+
+	function BusinessBibliotecaPreCatalogacao($data = null)
+	{global $MIOLO,$module;
+
+      $this->Business('sigaept', $data);
+
+	   $this->objLog = $MIOLO->GetBusiness($module,'log');
+
+	}
+
+/*	function GetData()
+	{
+		$data = new FormData();
+		$data->idprecatalogacao = $this->idprecatalogacao;
+		$data->descricao = $this->descricao;
+		$data->mnemonico = $this->mnemonico;
+		$data->key = $this->idprecatalogacao;
+
+		return $data;
+	}
+*/
+
+	function SetData($data)
+	{
+		$this->idprecatalogacao = $data->idprecatalogacao;
+		$this->descricao = $data->descricao;
+		$this->mnemonico = $data->mnemonico;
+	}
+
+/*	function GetByCodigo($idprecatalogacao)
+	{
+
+		$sql = new sql('idprecatalogacao,descricao,mnemonico','bt_precatalogacao','idprecatalogacao = ?');
+	
+		$query = $this->Query($sql,$idprecatalogacao);
+
+		if ( !$query->eof() )
+			$this->SetData($query->GetRowObject());
+
+	return $this;
+	}
+*/
+    function LastNumeroObra()
+	{    
+	  $sql = new sql("nextval('seq_bt_obra_numerodaobra')");
+      $query = $this->Query($sql);
+	  return $query->result[0][0];
+	}
+
+	function LastIdObra()
+	{    
+	  $sql = new sql("nextval('seq_bt_obra')");
+      $query = $this->Query($sql);
+	  return $query->result[0][0];
+	}
+		
+	function LastIdMaterial()
+	{    
+	  $sql = new sql("nextval('seq_bt_material')");
+      $query = $this->Query($sql);
+	  return $query->result[0][0];
+	}
+	
+	function Insert(& $data){
+//		global $MIOLO,$module;
+//		$objEstado = $MIOLO->GetBusiness($module,'estado');
+//		$a = $objEstado->GetByCodigo(1);
+	
+		$sql = new sql('idobra, numerodaobra, titulo, autor, edicao, localpublicacao, editora, datapublicacao, classificacao, qtdvolumes, idgenero', 'bt_obra');
+		
+		$values = array($data->idobra, $data->numerodaobra, $data->titulo, $data->autor, $data->edicao, $data->localdepublicacao, $data->editora, $data->datadepublicacao, $data->classificacao, $data->qtdvolumes, $data->keygenero);
+
+		$ok = $this->Execute($sql->Insert($values));
+		
+		// se o Insert na tabela bt_obra foi bem sucedido, iremos partir para a tabela bt_material
+		if ($ok){
+			// Preparando os dados para o Loop
+								//| campo | subcampo | variavel associada
+								//|       |          |
+			if ($data->titulo <> null)
+				$campos[] = array ( '245' ,    'a'   , $data->titulo);
+			if ($data->autor <> null)
+				$campos[] = array ( '100' ,    'a'	 , $data->autor);
+			if ($data->edicao <> null)
+				$campos[] = array ( '250' ,    'a'	 , $data->edicao);
+			if ($data->localdepublicacao <> null)
+				$campos[] = array ( '260' ,    'a'	 , $data->localdepublicacao);
+			if ($data->editora <> null)
+				$campos[] = array ( '260' ,    'b'	 , $data->editora);
+			if ($data->datadepublicacao <> null)
+				$campos[] = array ( '260' ,    'c'	 , $data->datadepublicacao);
+			if ($data->classificacao <> null)
+				$campos[] = array ( '852' ,    'a'	 , $data->classificacao);
+			if ($data->keygenero <> null)
+				$campos[] = array ( '902' ,    'a'	 , $data->keygenero);
+            if ($data->isbn <> null)
+                $campos[] = array ( '14' ,    'a'    , $data->isbn);
+
+			for ($i = 0;$i <= count($campos)-1;$i++){
+				// devemos buscar qual o idetiqueta deste campo
+				$idetiqueta = $campos[$i][0];
+				$sql = new sql('idetiqueta','bt_etiqueta','tag=\'' . $idetiqueta . '\'');
+				$query = $this->Query($sql);
+	
+				if ( !$query->eof() ){
+					$idetiqueta = $query->GetRowObject()->idetiqueta;
+					$conteudo = $campos[$i][2];
+					$idmaterial = $this->LastIdMaterial();
+
+					// Agora que temos a etiqueta, basta gravar em bt_material
+					$sql = new sql('idobra, idetiqueta, subcampo, conteudo, idmaterial','bt_material');
+					$values = array ($data->idobra, $idetiqueta, $campos[$i][1], $conteudo, $idmaterial);
+
+					$this->Execute($sql->Insert($values));
+				}
+			}
+		}
+		return $ok;
+	}
+}
+?>

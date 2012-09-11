@@ -1,0 +1,141 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+MIOLO::IMPORT('modules::biblioteca::classes::pesquisa');
+
+class BusinessBibliotecaPesquisaNumerica extends Pesquisa
+{
+	function BusinessBibliotecaPesquisaNumerica($data = null)
+	{
+	  $this->Business('sigaept', $data);
+	}
+	
+	function Listar($data)
+	{
+		global $perms;
+		//se usuario tiver perfil de BIB_PRECATALOGACAO, não haverá restrições. Se não tiver, só retornam obras com campo 852 (classificação, idetiqueta 189) preenchido.
+		if($perms->CheckAccess('BIB_PRECATALOGACAO',A_ACCESS,false))
+		{
+			if ($data->tiponum == 'no')
+			{
+				$sql = new sql('idobra','bt_obra',"numerodaobra=$data->busca");
+			}
+			else if ($data->tiponum == 'ce')
+			{
+				$sql = new sql('idobra','bt_exemplar',"numerodotombo='$data->busca'");
+			}
+			else if ($data->tiponum == 'ni')
+			{
+				$sql = new sql('idexemplar','bt_exemplar',"numinventario like '%$data->busca%'");
+			}
+		}
+		else
+		{
+			if ($data->tiponum == 'no')
+			{
+				$sql = new sql('idobra','bt_obra',"numerodaobra=$data->busca AND idobra in (SELECT distinct idobra FROM bt_material WHERE idetiqueta = 189 and subcampo='a')");
+			}
+			else if ($data->tiponum == 'ce')
+			{
+				$sql = new sql('idobra','bt_exemplar',"numerodotombo='$data->busca' AND idobra in (SELECT distinct idobra FROM bt_material WHERE idetiqueta = 189 and subcampo='a')");
+			}
+		}
+
+		$query = $this->Query($sql);
+    	return $query;
+	}
+
+
+	function ListarOutros($data, $camposPesquisa)
+	{
+		global $MIOLO, $module;
+
+		switch ($data->tiponum)
+        {
+            case 'isbn': $idetiqueta = 14; break;
+			case 'issn': $idetiqueta = 15; break;
+			case 'ch': $idetiqueta = 189; break;
+        }
+
+		$this->getEtiquetas($camposPesquisa);
+		foreach ($this->etiquetas as $etiqueta)
+		{
+			foreach($etiqueta as $key=>$subcampo)
+			{
+				// verifica se campo aparece no datagrid: propriedade "true"
+		    	if ($subcampo[2])
+			    {
+                    $inShow .= (($inShow != '') ? ',' : '(') . '(' . $subcampo[0] . ',' . "'$key')";  
+		        }
+	        }
+		}
+
+		$inShow .= (($inShow != '') ? ')' : '');
+
+		if ($data->tiponum == 'ch')
+		{
+			$ch = explode(' ',strtoupper($data->busca));
+			if (($ch[0]) AND ($ch[1]) AND ($ch[2]))
+			{
+				$from = "bt_obra o, bt_material mm, (SELECT distinct idobra FROM bt_material WHERE idetiqueta = " . $idetiqueta . " AND subcampo = 'a' AND upper(conteudo) LIKE '" . $ch[0] . "%') m1, (SELECT distinct idobra FROM bt_material WHERE idetiqueta = " . $idetiqueta . " AND subcampo = 'b' AND upper(conteudo) LIKE '" . $ch[1] . "%') m2, (SELECT distinct idobra FROM bt_material WHERE idetiqueta = " . $idetiqueta . " AND subcampo = 'c' AND upper(conteudo) LIKE '" . $ch[2] . "%') m3";
+
+				$sql = new sql("mm.idobra,mm.idetiqueta,mm.subcampo,mm.conteudo,o.numerodaobra", $from, "mm.idobra = m1.idobra AND m1.idobra = m2.idobra AND m1.idobra = m3.idobra AND mm.idobra = o.idobra AND (mm.idetiqueta,mm.subcampo) IN $inShow", "mm.idobra,mm.idetiqueta,mm.subcampo");
+			}
+			elseif (($ch[0]) AND (!$ch[1]) AND (!$ch[2]))
+			{
+				$from = "bt_obra o, bt_material mm, (SELECT distinct idobra FROM bt_material WHERE idetiqueta = " . $idetiqueta . " AND subcampo = 'a' AND upper(conteudo) LIKE '" . $ch[0] . "%') m1";
+
+				$sql = new sql("mm.idobra,mm.idetiqueta,mm.subcampo,mm.conteudo,o.numerodaobra", $from, "mm.idobra = m1.idobra AND mm.idobra = o.idobra AND (mm.idetiqueta,mm.subcampo) IN $inShow", "mm.idobra,mm.idetiqueta,mm.subcampo");
+			}
+			elseif (($ch[0]) AND ($ch[1]) AND (!$ch[2]))
+			{
+				$from = "bt_obra o, bt_material mm, (SELECT distinct idobra FROM bt_material WHERE idetiqueta = " . $idetiqueta . " AND subcampo = 'a' AND upper(conteudo) LIKE '" . $ch[0] . "%') m1, (SELECT distinct idobra FROM bt_material WHERE idetiqueta = " . $idetiqueta . " AND subcampo = 'b' AND upper(conteudo) LIKE '" . $ch[1] . "%') m2";
+
+				$sql = new sql("mm.idobra,mm.idetiqueta,mm.subcampo,mm.conteudo,o.numerodaobra", $from, "mm.idobra = m1.idobra AND m1.idobra = m2.idobra AND mm.idobra = o.idobra AND (mm.idetiqueta,mm.subcampo) IN $inShow", "mm.idobra,mm.idetiqueta,mm.subcampo");
+			}
+			elseif (($ch[0]) AND (!$ch[1]) AND ($ch[2]))
+			{
+				$from = "bt_obra o, bt_material mm, (SELECT distinct idobra FROM bt_material WHERE idetiqueta = " . $idetiqueta . " AND subcampo = 'a' AND upper(conteudo) LIKE '" . $ch[0] . "%') m1, (SELECT distinct idobra FROM bt_material WHERE idetiqueta = " . $idetiqueta . " AND subcampo = 'c' AND upper(conteudo) LIKE '" . $ch[2] . "%') m3";
+
+				$sql = new sql("mm.idobra,mm.idetiqueta,mm.subcampo,mm.conteudo,o.numerodaobra", $from, "mm.idobra = m1.idobra AND m1.idobra = m3.idobra AND mm.idobra = o.idobra AND (mm.idetiqueta,mm.subcampo) IN $inShow", "mm.idobra,mm.idetiqueta,mm.subcampo");
+			}
+		}
+		else
+		{
+			$termo = strtoupper($this->RetirarCaracteresEspeciais($data->busca));
+			$termo = addslashes($termo);
+			$from = "bt_obra o, bt_material mm, (SELECT distinct idobra FROM bt_material WHERE idetiqueta = " . $idetiqueta . " AND subcampo = 'a' AND upper(conteudo) =  '" . $termo . "') m ";
+
+			$sql = new sql("mm.idobra,mm.idetiqueta,mm.subcampo,mm.conteudo,o.numerodaobra", $from, "mm.idobra = m.idobra AND mm.idobra = o.idobra AND (mm.idetiqueta,mm.subcampo) IN $inShow", "mm.idobra,mm.idetiqueta,mm.subcampo");
+		}
+
+		$this->objPesquisaSimples = $MIOLO->GetBusiness($module,'pesquisasimples');
+		$query = $this->objPesquisaSimples->Listar($data, $camposPesquisa,null,null,$sql);
+
+		return $query;
+	}
+}
+?>

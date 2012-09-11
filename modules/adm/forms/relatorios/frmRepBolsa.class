@@ -1,0 +1,149 @@
+<?
+class frmRepBolsa extends Form
+{	
+	protected $bolsa;
+    
+    function __construct()
+    {
+        global $MIOLO;
+        $this->bolsa = $MIOLO->getBusiness('adm','bolsista');
+        $this->Form('Relatório de Bolsas Acadêmicas');
+        $this->EventHandler();       
+    }
+
+	function CreateFields()
+	{		
+		$fields = Array(
+			new MCalendarField('dataInicio','','Data Inicial',10,'informe a data inicial do relatório.'),
+			new MCalendarField('dataFim','','Data Final',10,'informe a data final do relatório.'),
+		);
+		
+		$this->SetFields($fields);
+		$buttons = Array
+		(
+			new FormButton('btnGerarRelatorio', 'Gerar Relatório','pdf'),
+			//new FormButton('btnGerarCSV', 'Gerar Planilha')
+		);
+		$this->SetButtons($buttons);
+	}
+
+	function btnGerarRelatorio_click()
+	{	
+		global $MIOLO;
+		$data = $this->getData();		
+		if($data->dataInicio == '' || $data->dataFim == '')
+		{
+	    	$this->manager->Error('Favor Selecionar as Datas de Início e Término do Relatório!');
+	    }
+	    else 
+		{		
+			$report = new MEzPDFReport('2','portrait');			
+			$h  = $report->pdf->getFontHeight(10);
+			$ui = $this->manager->GetUI();
+			$image = $ui->GetImageSrc('logonet.png');//correção, erro no quente
+			$report->pdf->ezImage($image,5,50,'none','left',0); //correção, erro no quente
+			//$report->pdf->ezImage($ui->GetImage('','logonet.png'),5,50,'none','left',0);
+			$report->pdf->addText(110,810       ,10,'UNIVERSIDADE FEDERAL DE JUIZ DE FORA');
+			$report->pdf->addText(110,810-$h    ,10,'CGCO - CENTRO DE GESTÃO DO CONHECIMENTO ORGANIZACIONAL');
+			$report->pdf->addText(110,810-(2*$h),10,'SIGA - SISTEMA INTEGRADO DE GESTÃO ACADÊMICA');
+			$report->pdf->ezSetY(810-3*$h);
+			$report->pdf->ezText ('RELATÓRIO DE BOLSAS ACADÊMICAS',16,array('justification'=>'center'));
+			$report->pdf->addText(200,810-(6*$h),10,"PERÍODO DE ".$data->dataInicio." ATÉ ".$data->dataFim);
+			$report->pdf->ezText ('',40);			
+			$options['textCol']      = array(0,0,0);
+			$options['shaded']       = 1;
+			$options['showLines']    = 1;
+			$options['fontSize']     = 10;
+			$options['width']        = 540;
+			$options['xPos']         = 'left';
+			$options['xOrientation'] = 'right';
+			
+			$this->bolsa = $MIOLO->getBusiness('adm','bolsista');
+			$dados = $this->bolsa->listBolsasAcademicas($data->dataInicio,$data->dataFim)->result;
+			//var_dump($dados);
+			
+			$cod = "";
+			$cols = array('<b>BOLSA</b>','<b>QTD BOLSAS</b>');
+			$report->pdf->ezTable($dataRel,$cols,'',$options);
+			$report->pdf->ezText ('CURSO: '.$dados[0][1].' - '.$dados[0][2],13,array('justification'=>'left'));
+			$codCursoAnterior = $dados[0][1];
+
+			foreach($dados as $val)
+			{
+				$qtd      = $val[0];
+				$codCurso = $val[1];
+				$curso    = $val[2];				
+				$bolsa    = $val[3];	
+
+				if(($codCurso != $codCursoAnterior))
+				{
+
+					$codCursoAnterior = $codCurso;
+					$cols = array('<b>BOLSA</b>','<b>QTD BOLSAS</b>');
+					$report->pdf->ezText ('',5);
+					$report->pdf->ezTable($dataRel,$cols,'',$options);
+					$report->pdf->ezText ('',10);
+					$report->pdf->ezText ('CURSO: '.$codCurso.' - '.$curso,13,array('justification'=>'left'));
+					unset($dataRel);
+					$dataRel[] = array($bolsa, $qtd);
+
+				}
+				else
+				{
+					$dataRel[] = array($bolsa, $qtd);
+				}
+				
+			}
+			$report->pdf->ezText ('',5);
+			$cols = array('<b>BOLSA</b>','<b>QTD BOLSAS</b>');
+			$report->pdf->ezTable($dataRel,$cols,'',$options);
+			$report->Execute();
+		}		
+    }
+
+	function btnGerarCSV_click()
+	{
+/*
+		$data = $this->getData();		
+
+	    $veiculo = $this->veiculo;	
+		$placas  = $veiculo->listAllByData($data->dataInicio,$data->dataFim);//->result;
+		
+		if(is_array($placas->result))
+		{
+			foreach($placas->result as $aux)
+		    {
+		    	$placa[]           = $aux[0];
+		    	$odometroSaida[]   = $aux[1];
+		    	$odometroChegada[] = $aux[2];
+		    }
+		    
+		    $dataRel[] = array('PLACA','MARCA','MODELO','KILOMETROS PERCORRIDOS');
+		    foreach ($placa as $id => $p)
+		    {
+		    	$marca[]  = $veiculo->listMarcaByPlaca($p)->result; 	    		    	
+		    	$modelo[] = $veiculo->listModeloByPlaca($p)->result; 
+
+		    	$dataRel[] = array($p,
+		    					   $marca[$id][0][0],
+		    					   $modelo[$id][0][0],
+		    					   $odometroChegada[$id]-$odometroSaida[$id].' Km',
+		    					   );	
+		    					   
+		    	$totalKilometros += $odometroChegada[$id]-$odometroSaida[$id];	    	
+		    }
+		    
+		    //$dataRel[] = array('','','','');			          
+		    $dataRel[] = array('TOTAL','','',$totalKilometros.' Km');			          
+	        
+	        $placas->result = $dataRel;
+			$placas->getCSV("Relatório de  kilometros percorridos- de ".$data->dataInicio." até ".$data->dataFim);
+		}
+		else 
+		{
+			$this->addError('Nenhum veículo foi utilizado no período de '.$data->dataInicio.' a '.$data->dataFim.'. <br>Portanto, nenhum relatório será gerado!');	
+		}				    	    
+*/
+	}
+}
+?>

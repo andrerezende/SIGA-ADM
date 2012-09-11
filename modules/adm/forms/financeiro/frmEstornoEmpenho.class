@@ -1,0 +1,876 @@
+<?
+class frmEstornoEmpenho extends Form
+{
+	function __construct()
+    {
+		global $MIOLO;
+
+		$this->Form('Estorno de Empenho');
+		$this->SetClose($this->manager->GetActionURL('adm','main:financeiro'));
+		$this->page->SetAction($MIOLO->GetActionURL($module,$action));
+        $this->EventHandler();
+		$this->defaultButton = false;
+    }
+
+    function CreateFields()
+    {
+		global $MIOLO, $module, $action, $item, $theme;
+
+		$empenho = $MIOLO->GetBusiness($module, 'empenho');
+		$query = $empenho->ListEmpenhosParaEstorno();
+		$columns = array(
+			new MDataGridColumn('idEmpenho','Código','center',false, '10%'),
+			new MDataGridColumn('numero','Número','center',false, '15%'),
+			new MDataGridColumn('numLic','Licitação','center',false, '15%'),
+			new MDataGridColumn('fornecedor','Fornecedor','left', true, '60%'),
+			new MDataGridColumn('ug','UG','left', true, '20%'),
+		);
+		$href_datagrid = $MIOLO->GetActionURL($module,$action,$item);
+		$datagrid = new MDataGrid2($query, $columns, $href_datagrid,0);
+		$datagrid->SetTitle('Relação de Empenhos');
+		$href = $MIOLO->GetActionURL($module, $action, '%1%', array('event'=>'btnEmpenhos_click', 'empenho2'=>'%1%','idEmpenho2'=>'%0%'));
+		$datagrid->SetWidth('99%');
+		$datagrid->SetClose(null);
+		$datagrid->addActionIcon('Selecionar','select.gif',$href);
+
+		$fields = array(
+            array(
+//				new MTextField('idEmpenho','','Código',15),
+				new MLookupTextField('licitacao','','Licitação',15),
+				new MTextLabel('ou1','-OU-','&nbsp;'),
+				new MTextField('empenho','','Empenho',20),
+                new MTextLabel('ou2','-OU-','&nbsp;'),
+				new LookupTextField('fornecedor', '', 'Fornecedor', 60),
+            ),
+			new MHiddenField('idFornecedor'),
+//			new MButton('btnEmpenhos', 'Empenho'),
+//			$datagrid
+		);
+		$this->SetFields($fields);
+		$this->SetFieldAttr('fornecedor','module',$module);
+		$this->SetFieldAttr('fornecedor','item','fornecedor');
+		$this->SetFieldAttr('fornecedor','event','filler');
+		$this->SetFieldAttr('fornecedor','related', 'idFornecedor,fornecedor');
+
+		$this->SetFieldAttr('licitacao','module',$module);
+		$this->SetFieldAttr('licitacao','item','licitacao');
+		$this->SetFieldAttr('licitacao','event','filler');
+		$this->SetFieldAttr('licitacao','related', '"",licitacao');
+		
+		
+		$buttons = array(
+			new MButton('btnEmpenhos', 'Empenho'),
+			new FormButton('btnEstorno', 'Confirmar Estorno'),
+			new FormButton('btnVoltar', 'Voltar', $MIOLO->GetActionURL($module, $action) ),
+		);
+		$this->SetButtons($buttons);
+		$this->SetButtonAttr('btnEstorno', 'visible', false);
+		$this->SetButtonAttr('btnVoltar', 'visible', false);
+	}
+
+	function btnEmpenhos_click()
+	{
+		global $MIOLO, $module, $action, $item, $theme;
+
+		$idFornecedor = $this->GetFormValue('idFornecedor');
+		$fornecedor = $this->GetFormValue('fornecedor');
+		$numero = $this->GetFormValue('empenho');
+		$numeroLicitacao = $this->GetFormValue('licitacao');
+		$licitacao = $MIOLO->GetBusiness($module, 'licitacao');
+		$idLicitacao = $licitacao->GetIdBynumero($numeroLicitacao);
+		if( ($fornecedor == null) and ($numero == null) and ($idLicitacao == null) ) //não foi definido critério para o filtro
+		{
+		}
+		else
+		{
+			$empenho = $MIOLO->GetBusiness($module, 'empenho');
+			$licitacao = $MIOLO->GetBusiness($module, 'licitacao');
+			if($numero != null) //foi definido um empenho específico
+			{
+				$query = $empenho->ListByNumero($numero);
+				$i = 0;
+				if($query->result)
+				{
+					foreach($query->result as $r)
+					{
+						//proc licit
+						$query->result[$i][11] = $licitacao->numProcessoFormatado($query->result[$i][11]); 
+						$i++;
+					}
+				}
+				$idFornecedor = $query->result[0][5];
+				$fornecedor = $query->result[0][10];
+				if(!$idFornecedor)
+				{
+					$this->Error('Empenho não encontrado.');
+					return;
+				}
+			}
+			else
+			{
+				if($idLicitacao != null)//foi definida uma licitação específica
+				{
+					$query = $empenho->ListByIdLicitacao($idLicitacao, "('1','2','B')", "('OR','CO')");
+					$i = 0;
+					if($query->result)
+					{
+						foreach($query->result as $r)
+						{
+							//proc licit
+							$query->result[$i][11] = $licitacao->numProcessoFormatado($query->result[$i][11]); 
+							$i++;
+						}
+					}
+					$idFornecedor = $query->result[0][5];
+					$fornecedor = $query->result[0][8];
+					if(!$idFornecedor)
+					{
+						$this->Error('Licitação não encontrada.');
+						return;
+					}
+				}
+				else
+				{
+					if($idFornecedor == null) //nao foi usado o lookup
+					{
+						$objFornecedor = $MIOLO->GetBusiness($module, 'fornecedor');
+						$dados = $objFornecedor->GetByDocumentoOuNome($fornecedor);
+						$idFornecedor = $dados[0];
+					}
+					$query = $empenho->ListByIdFornecedor($idFornecedor, "('1','2','B')");
+					$i = 0;
+					foreach($query->result as $r)
+					{
+						//proc licit
+						$query->result[$i][5] = $licitacao->numProcessoFormatado($query->result[$i][5]); 
+						$i++;
+					}
+				}
+			}
+		}
+
+		$item_aux = $item;
+		if( substr($item,0,2) == 'id' ) //$item veio do datagrid - usuario quer ver detalhes do empenho
+		{
+			$item = explode('-', $item);
+		}
+
+		//grid de empenhos
+		$columns = array(
+			new DataGridColumn('numero','Empenho','center',true, '13%',true, null),
+			new DataGridColumn('fornecedor','Fornecedor','left',false, '30%',true, null),
+			new DataGridColumn('dataEmpenho','Data Empenho','center',true, '12%',true, null),
+			new DataGridColumn('tipoEmpenho','Tipo','center',true, '8%',true, null),
+			new DataGridColumn('valor','Valor','center',true, '11%',true, null),
+			new DataGridColumn('numLic','Licitação','center',true, '13%',true, null),
+			new DataGridColumn('numProcesso','Processo','center',true, '13%',true, null),
+			new DataGridColumn('ug','UG','center',true, '13%',true, null),			
+		);
+
+		$itemPag = ( ($item[1]) and (is_array($item)) ) ? $item[1] : $item;
+		$href_datagrid = $MIOLO->GetActionURL($module, $action, $itemPag, Array('event'=>'btnEmpenhos_click'));
+
+		$datagrid = new DataGrid2($query, $columns, $href_datagrid, 10, 0, 'grid1');
+		$datagrid->SetTitle(null);
+		$datagrid->SetLinkType('linkbutton');
+		$datagrid->SetWidth('99%');
+		
+		$href = $MIOLO->GetActionURL($module, $action, 'id-'.'%0%', array('event'=>'btnEmpenhos_click') );
+		$datagrid->addActionIcon('Estornar','select.gif',$href);
+		$datagrid->SetRowMethod('frmEstornoEmpenho', 'MyRowMethod');
+
+		$fields = array(
+			$datagrid,
+			new MHiddenField('idFornecedor', $idFornecedor),
+			new MHiddenField('fornecedor', $fornecedor),
+			new MHiddenField('empenho', $numero),
+			new MHiddenField('licitacao', $numeroLicitacao),
+		);
+		//detalhes do empenho escolhido pelo usuario no datagrid
+		if(($item[1]) and (is_array($item)))
+		{
+			//grid de detalhes do empenho
+			$empenho = $MIOLO->GetBusiness($module, 'empenho', $item[1]);
+			$empenho->getEmpenhado();
+			$query2 = $empenho->ListDetalhesEmpenho();
+
+			$i = 0;
+			foreach($query2 as $r)
+			{
+				$query2[$i][3] = $empenho->numProcessoFormatado(); //proc pgto
+				if($query2[$i][10])
+				{
+					$query2[$i][10] = number_format(str_replace(',','.',$r[10]),2,',','.'); //vl emp
+				}
+				if($query2[$i][11])
+				{
+					$query2[$i][11] = number_format(str_replace(',','.',$r[11]),2,',','.'); //vl nf
+				}
+				$query2[$i][12] = number_format(str_replace(',','.',$r[12]),2,',','.'); //saldo
+				$i++;
+			}
+
+			$columns2 = array(
+				new GridColumn('idEmpenho','center',true, '0%',false),
+				new GridColumn('Empenho','center',true, '10%',true, null),
+				new GridColumn('Tipo','center',true, '5%',true, null),
+				new GridColumn('Proc Pgto','center',true, '10%',true, null),
+				new GridColumn('Nota Fiscal','center',true, '10%',true, null),
+				new GridColumn('Data Nota Fiscal','center',true, '10%',true, null),
+				new GridColumn('Data Liquidação','center',true, '10%',true, null),
+				new GridColumn('Ordem Bancária','center',false, '10%',true, null),
+				new GridColumn('Valor OB','center',true, '0%',false),
+				new GridColumn('Data OB','center',true, '10%',true, null),
+				new GridColumn('Vl Emp','center',true, '8%',true),
+				new GridColumn('Valor NF','center',true, '8%',true, null),
+				new GridColumn('Saldo','center',true, '9%',true, null),
+			);
+
+			$grid2 = new Grid($query2, $columns2, $href_datagrid, 0, 0, 'grid2');
+			$grid2->SetTitle('Dados do Empenho ' . $empenho->numero);
+			$grid2->SetLinkType('linkbutton');
+			$grid2->SetWidth('99%');
+			$grid2->AddActionSelect();
+			$grid2->SetRowMethod('frmEstornoEmpenho', 'MyRowMethod2');
+
+			$fields[] = new Spacer(1);
+			$fields[] = $grid2;
+
+			$this->SetButtonAttr('btnEstorno', 'visible', true);
+		}
+		$this->SetFields($fields);
+
+		$this->SetButtonAttr('btnVoltar', 'visible', true);
+		$this->SetButtonAttr('btnEmpenhos', 'visible', false);
+		$this->AddField(new HiddenField('item_aux',$item_aux));
+		$this->AddField(new MHiddenField('idE', $idEmpenho));
+	}
+
+	function btnEstorno_click()
+	{
+		global $MIOLO, $module, $item, $action;
+
+		$empenho = $MIOLO->GetBusiness($module, 'empenho');
+		$empenhado = $MIOLO->GetBusiness($module, 'empenhado');
+		$orcamento = $MIOLO->GetBusiness($module, 'orcamento');
+		$itemReq = $MIOLO->GetBusiness($module, 'itemreq');
+		$itemReqServ = $MIOLO->GetBusiness($module, 'itemservext');
+		$itemReqBib = $MIOLO->GetBusiness($module, 'itemreqbib');
+		$requisicao = $MIOLO->GetBusiness($module, 'requisicao');
+		$licitacao = $MIOLO->GetBusiness($module, 'licitacao');
+
+		$select =  $this->GetFormValue('selectgrid2');
+		$selected = array_shift($select);
+		$selected = explode('-', $selected);
+		$idEmpenho = $selected[0];
+
+		$cf = new MCurrencyFormatter();
+
+		$empenho->GetById($idEmpenho);
+		if( ($empenho->status != '1') and ($empenho->status != '2') and ($empenho->status != 'B') )
+		{
+			$MIOLO->Error('O status do empenho não permite este tipo de operação.', $MIOLO->GetActionURL($module, $action) );
+			return;
+		}
+		$empenho->getEmpenhado();
+		for($i = 0; $i < count($empenho->empenhado); $i++);
+		{
+		}
+
+		try
+		{
+			$valorTotalEmp = 0.0;
+			$arrayOrcamentos = array();//guarda operações relativas a orcamento interno: array[idUo][idRubrica][ano]['tipoOperacao'][i] = $valor
+			$arrayOrcs = array();//guarda operações relativas a orcamento: array[idOrcamento] = $valor
+			$empenho->beginTransaction();
+
+			//licitação
+			$licitacao->GetById($empenho->empenhado[0]->idLicitacao);
+			$licitacao->status = '4';//VENCEDORES DEFINIDOS
+			$licitacao->setTransaction($empenho->getTransaction());
+			$licitacao->save();
+
+			foreach($empenho->empenhado as $d)
+			{
+				$empenhado->GetById($d->idEmpenhado);
+				//itemreq
+				if(($licitacao->idTipoLicitacao == '1') or ($licitacao->idTipoLicitacao == '4'))//COMPRA
+				{
+					$empenhado->retrieveAssociation('itemreq');
+					$itensRequisicao = $empenhado->itemreq;
+					$haItens = false;//<-- mostra se existe registro em ad_empenhado para o mesmo itemReq
+					foreach($itensRequisicao as $i)
+					{
+						//itemreq
+						$itemReqEmp = $itemReq->GetEmpenhadoByItemReq($i->idRequisicao, $i->item);
+						foreach($itemReqEmp->result as $r)
+						{
+							if($r[0] != $empenhado->idEmpenhado)
+							{
+								$haItens = true;
+							}
+						}
+						$itemReq->GetById($i->idRequisicao, $i->idMaterial);
+						if($haItens)
+						{
+							if($itemReq->status == '5' OR $itemReq->status == '6' OR $itemReq->status == '7' OR $itemReq->status == '8' OR $itemReq->status == '9' OR $itemReq->status == 'A')
+							{
+								$itemReq->status = 'A';//LICITACAO PARCELADA
+							}
+						}
+						else
+						{
+							if($itemReq->status == '5' OR $itemReq->status == '6' OR $itemReq->status == '7' OR $itemReq->status == '8' OR $itemReq->status == '9' OR $itemReq->status == 'A')
+							{
+								$itemReq->status = '5';//LICITADO
+							}
+						}
+
+						//para empenhos com status B, é preciso desfazer a distribuição dos itens para as várias uos requisitantes
+						if($empenho->status == 'B')//distribuído
+						{
+							$empenhadoDist = $MIOLO->GetBusiness('adm','empenhadodist');
+							$empenhadoDist->GetById($empenhado->idEmpenhado,$i->idRequisicao);
+							if($empenhadoDist->quantidade !== NULL)
+							{
+								$totalPrevisao = $cf->toDecimal($empenhadoDist->quantidade) * $cf->toDecimal($itemReq->precoEstimado);
+								$totalReal = $cf->toDecimal($empenhadoDist->quantidade) * $cf->toDecimal($empenhadoDist->valorUnitario);
+
+								//cálculo do novo valor real médio
+								if($itemReq->quantEmpenhada - $empenhadoDist->quantidade > 0)
+								{
+									$valorRealMedio = (($cf->toDecimal($itemReq->quantEmpenhada) * $cf->toDecimal($itemReq->valorReal)) - ($totalReal)) / ($cf->toDecimal($itemReq->quantEmpenhada) - $cf->toDecimal($empenhadoDist->quantidade));
+									$itemReq->setValorReal($valorRealMedio);
+								}
+
+								//atualização da quantEmpenhada e da quantDevolvida
+								$itemReq->quantEmpenhada = $cf->toDecimal($itemReq->quantEmpenhada) - $cf->toDecimal($empenhadoDist->quantidade);
+								$itemReq->quantDevolvida = $cf->toDecimal($itemReq->quantDevolvida) - $cf->toDecimal($empenhadoDist->quantidade);
+
+								//atualiza orcamentos internos e insere lancamentos internos
+								////atualizações referentes a orçamento e a lançamento interno
+								$objRequisicao = $MIOLO->GetBusiness($module, 'requisicao', $i->idRequisicao);
+								$idUo = $objRequisicao->idUoRequisitante;
+								$ano = substr($objRequisicao->dataHoraAut,6,4);
+								if(!$ano)
+								{
+									$ano = substr($objRequisicao->dataHora,6,4);
+								}
+								$requisita = $MIOLO->getBusiness('adm','requisita');
+								$requisita->GetById($objRequisicao->idTipoReq, $objRequisicao->idUoRequisitante, $ano);
+								$executa = $MIOLO->getBusiness('adm','executa');
+								$executa->GetById($objRequisicao->idTipoReq, $objRequisicao->idUoExecutante, $ano);
+								$idRubrica = $requisita->idRubrica;
+							
+								// Adiciona a previsão de débito e remove o debito no orçamento da Uo requisitante
+								//atualiza array de orcamentos
+								$arrayOrcamentos[$idUo][$idRubrica][$ano]['removeDebito'][] = $totalReal;
+								$arrayOrcamentos[$idUo][$idRubrica][$ano]['addPrevisao'][] = $totalPrevisao;
+
+								$objRequisicao->Log(OP_UPD,"Requisicao ".$objRequisicao->idRequisicao.": estorno de debito de ".$totalReal." na UO ".$objRequisicao->idUoRequisitante);
+								$objRequisicao->Log(OP_UPD,"Requisicao ".$objRequisicao->idRequisicao.": previsao de ".$totalPrevisao." na UO ".$objRequisicao->idUoRequisitante);
+
+								// Lançamento interno da previsão de débito
+								$lancamentoInt = $MIOLO->getBusiness('adm','lancamentoint');
+								$lancamentoInt->tipoLancamento = '4'; //previsão de débito
+								$lancamentoInt->data = date("d/m/Y");                
+								$lancamentoInt->valor = $totalPrevisao;
+								$lancamentoInt->ano = date("Y");
+								$lancamentoInt->idUoRequisitante = $objRequisicao->idUoRequisitante;       
+								$lancamentoInt->idUoExecutante = $objRequisicao->idUoExecutante;
+								$lancamentoInt->idRubrica = $requisita->idRubrica;           
+								$lancamentoInt->idRequisicao = $objRequisicao->idRequisicao;
+								$lancamentoInt->idUsuario = $MIOLO->GetLogin()->idkey;
+								$lancamentoInt->obs = "Estorno de Empenho " . $empenho->idEmpenho;
+								$lancamentoInt->setTransaction($empenho->getTransaction());
+								$lancamentoInt->save();
+								$lancamentoInt->Log(OP_INS,"Lançamento Interno numero ".$lancamentoInt->idLancamentoInt." gerado com sucesso para a Requisicao ".$objRequisicao->idRequisicao.".");
+								
+								// Estorna o credito na Uo Executante
+								//atualiza array de orcamentos
+								$idUo = $objRequisicao->idUoExecutante;
+								$idRubrica = $executa->idRubrica;
+								$ano = substr($objRequisicao->dataHoraAut,6,4);
+								if(!$ano)
+								{
+									$ano = substr($objRequisicao->dataHora,6,4);
+								}
+								$arrayOrcamentos[$idUo][$idRubrica][$ano]['removeCreditoExecutante'][] = $totalReal;
+
+								$objRequisicao->Log(OP_UPD,"Requisicao ".$objRequisicao->idRequisicao.": estorno de credito de ".$totalReal." na UO ".$objRequisicao->idUoExecutante);
+
+								// Lançamento interno do crédito/débito
+								$lancamentoInt = $MIOLO->getBusiness('adm','lancamentoint');
+								$lancamentoInt->tipoLancamento = '6';//estorno crédito/débito
+								$lancamentoInt->data = date("d/m/Y");                
+								$lancamentoInt->valor = $totalReal;
+								$lancamentoInt->ano = date("Y");
+								$lancamentoInt->idUoRequisitante = $objRequisicao->idUoRequisitante;       
+								$lancamentoInt->idUoExecutante = $objRequisicao->idUoExecutante;
+								$lancamentoInt->idRubrica = $requisita->idRubrica;           
+								$lancamentoInt->idRequisicao = $objRequisicao->idRequisicao;
+								$lancamentoInt->idUsuario = $MIOLO->GetLogin()->idkey;
+								$lancamentoInt->obs = "Estorno de Empenho " . $empenho->idEmpenho;
+								$lancamentoInt->setTransaction($empenho->getTransaction());
+								$lancamentoInt->save();
+								$lancamentoInt->Log(OP_INS,"Lançamento Interno numero ".$lancamentoInt->idLancamentoInt." gerado com sucesso para a Requisicao ".$objRequisicao->idRequisicao.".");                    
+
+								//apaga ad_empenhadodist
+								$empenhadoDist->setTransaction($empenho->getTransaction());
+								$empenhadoDist->delete();
+							}
+						}
+
+						$itemReq->setTransaction($empenho->getTransaction());
+						$itemReq->save();
+						$itemReq->Log(OP_UPD, "Status Item Req: Estorno de Empenho idLicitacao $i->idLicitacao item $i->item idRequisicao $i->idRequisicao idMaterial $i->idMaterial status $itemReq->status");
+					}
+				}
+				elseif($licitacao->idTipoLicitacao == '2')//SERVIÇO
+				{
+					$empenhado->retrieveAssociation('itemServExt');
+					$itensRequisicao = $empenhado->itemServExt;
+					$haItens = false;//<-- mostra se existe registro em ad_empenhado para o mesmo itemReq
+					foreach($itensRequisicao as $i)
+					{
+						//itemreqservext
+						$itemReqEmp = $itemReqServ->GetEmpenhadoByItemReq($i->idRequisicao, $i->item);
+						foreach($itemReqEmp->result as $r)
+						{
+							if($r[0] != $empenhado->idEmpenhado)
+							{
+								$haItens = true;
+							}
+						}
+						$itemReqServ->GetById($i->idRequisicao);
+						if($haItens)
+						{
+							if($itemReqServ->status == '5' OR $itemReqServ->status == '6' OR $itemReqServ->status == '7' OR $itemReqServ->status == '8' OR $itemReqServ->status == '9' OR $itemReqServ->status == 'A')
+							{
+								$itemReqServ->status = 'A';//LICITACAO PARCELADA
+							}
+						}
+						else
+						{
+							if($itemReqServ->status == '5' OR $itemReqServ->status == '6' OR $itemReqServ->status == '7' OR $itemReqServ->status == '8' OR $itemReqServ->status == '9' OR $itemReqServ->status == 'A')
+							{
+								$itemReqServ->status = '5';//LICITADO
+							}
+						}
+
+						//para empenhos com status B, é preciso desfazer a distribuição dos itens para as várias uos requisitantes
+						if($empenho->status == 'B')//distribuído
+						{
+							$empenhadoDist = $MIOLO->GetBusiness('adm','empenhadodist');
+							$empenhadoDist->GetById($empenhado->idEmpenhado,$i->idRequisicao);
+							if($empenhadoDist->quantidade)
+							{
+								$totalPrevisao = $cf->toDecimal($empenhadoDist->quantidade) * $cf->toDecimal($itemReqServ->valorEst);
+								$totalReal = $cf->toDecimal($empenhadoDist->quantidade) * $cf->toDecimal($empenhadoDist->valorUnitario);
+
+								//cálculo do novo valor real médio
+								if($itemReqServ->quantEmpenhada - $empenhadoDist->quantidade > 0)
+								{
+									$valorRealMedio = (($cf->toDecimal($itemReqServ->quantEmpenhada) * $cf->toDecimal($itemReqServ->valorReal)) - ($totalReal)) / ($cf->toDecimal($itemReqServ->quantEmpenhada) - $cf->toDecimal($empenhadoDist->quantidade));
+									$itemReqServ->setValorReal($valorRealMedio);
+								}
+
+								//atualização da quantEmpenhada e da quantDevolvida
+								$itemReqServ->quantEmpenhada = $cf->toDecimal($itemReqServ->quantEmpenhada) - $cf->toDecimal($empenhadoDist->quantidade);
+								$itemReqServ->quantDevolvida = $cf->toDecimal($itemReqServ->quantDevolvida) - $cf->toDecimal($empenhadoDist->quantidade);
+
+								//atualiza orcamentos internos e insere lancamentos internos
+								////atualizações referentes a orçamento e a lançamento interno
+								$objRequisicao = $MIOLO->GetBusiness($module, 'requisicao', $i->idRequisicao);
+								$idUo = $objRequisicao->idUoRequisitante;
+								$ano = substr($objRequisicao->dataHoraAut,6,4);
+								if(!$ano)
+								{
+									$ano = substr($objRequisicao->dataHora,6,4);
+								}
+								$requisita = $MIOLO->getBusiness('adm','requisita');
+								$requisita->GetById($objRequisicao->idTipoReq, $objRequisicao->idUoRequisitante, $ano);
+								$executa = $MIOLO->getBusiness('adm','executa');
+								$executa->GetById($objRequisicao->idTipoReq, $objRequisicao->idUoExecutante, $ano);
+								$idRubrica = $requisita->idRubrica;
+							
+								// Adiciona a previsão de débito e remove o debito no orçamento da Uo requisitante
+								//atualiza array de orcamentos
+								$arrayOrcamentos[$idUo][$idRubrica][$ano]['removeDebito'][] = $totalReal;
+								$arrayOrcamentos[$idUo][$idRubrica][$ano]['addPrevisao'][] = $totalPrevisao;
+
+								$objRequisicao->Log(OP_UPD,"Requisicao ".$objRequisicao->idRequisicao.": estorno de debito de ".$totalReal." na UO ".$objRequisicao->idUoRequisitante);
+								$objRequisicao->Log(OP_UPD,"Requisicao ".$objRequisicao->idRequisicao.": previsao de ".$totalPrevisao." na UO ".$objRequisicao->idUoRequisitante);
+
+								// Lançamento interno da previsão de débito
+								$lancamentoInt = $MIOLO->getBusiness('adm','lancamentoint');
+								$lancamentoInt->tipoLancamento = '4'; //previsão de débito
+								$lancamentoInt->data = date("d/m/Y");                
+								$lancamentoInt->valor = $totalPrevisao;
+								$lancamentoInt->ano = date("Y");
+								$lancamentoInt->idUoRequisitante = $objRequisicao->idUoRequisitante;       
+								$lancamentoInt->idUoExecutante = $objRequisicao->idUoExecutante;
+								$lancamentoInt->idRubrica = $requisita->idRubrica;           
+								$lancamentoInt->idRequisicao = $objRequisicao->idRequisicao;
+								$lancamentoInt->idUsuario = $MIOLO->GetLogin()->idkey;
+								$lancamentoInt->obs = "Estorno de Empenho " . $empenho->idEmpenho;
+								$lancamentoInt->setTransaction($empenho->getTransaction());
+								$lancamentoInt->save();
+								$lancamentoInt->Log(OP_INS,"Lançamento Interno numero ".$lancamentoInt->idLancamentoInt." gerado com sucesso para a Requisicao ".$objRequisicao->idRequisicao.".");
+								
+								// Estorna o credito na Uo Executante
+								//atualiza array de orcamentos
+								$idUo = $objRequisicao->idUoExecutante;
+								$idRubrica = $executa->idRubrica;
+								$ano = substr($objRequisicao->dataHoraAut,6,4);
+								if(!$ano)
+								{
+									$ano = substr($objRequisicao->dataHora,6,4);
+								}
+								$arrayOrcamentos[$idUo][$idRubrica][$ano]['removeCreditoExecutante'][] = $totalReal;
+
+								$objRequisicao->Log(OP_UPD,"Requisicao ".$objRequisicao->idRequisicao.": estorno de credito de ".$totalReal." na UO ".$objRequisicao->idUoExecutante);
+
+								// Lançamento interno do crédito/débito
+								$lancamentoInt = $MIOLO->getBusiness('adm','lancamentoint');
+								$lancamentoInt->tipoLancamento = '6';//estorno crédito/débito
+								$lancamentoInt->data = date("d/m/Y");                
+								$lancamentoInt->valor = $totalReal;
+								$lancamentoInt->ano = date("Y");
+								$lancamentoInt->idUoRequisitante = $objRequisicao->idUoRequisitante;       
+								$lancamentoInt->idUoExecutante = $objRequisicao->idUoExecutante;
+								$lancamentoInt->idRubrica = $requisita->idRubrica;           
+								$lancamentoInt->idRequisicao = $objRequisicao->idRequisicao;
+								$lancamentoInt->idUsuario = $MIOLO->GetLogin()->idkey;
+								$lancamentoInt->obs = "Estorno de Empenho " . $empenho->idEmpenho;
+								$lancamentoInt->setTransaction($empenho->getTransaction());
+								$lancamentoInt->save();
+								$lancamentoInt->Log(OP_INS,"Lançamento Interno numero ".$lancamentoInt->idLancamentoInt." gerado com sucesso para a Requisicao ".$objRequisicao->idRequisicao.".");                    
+
+								//apaga ad_empenhadodist
+								$empenhadoDist->setTransaction($empenho->getTransaction());
+								$empenhadoDist->delete();
+							}
+						}
+
+						$itemReqServ->setTransaction($empenho->getTransaction());
+						$itemReqServ->save();
+						$itemReqServ->Log(OP_UPD, "Status Item Req: Estorno de Empenho idLicitacao $i->idLicitacao item $i->item idRequisicao $i->idRequisicao idServico $i->idServico status $itemReqServ->status");
+					}
+				}
+				elseif($licitacao->idTipoLicitacao == '3')//LIVRO
+				{
+					$empenhado->retrieveAssociation('itemreqbib');
+					$itensRequisicao = $empenhado->itemreqbib;
+					$haItens = false;//<-- mostra se existe registro em ad_empenhado para o mesmo itemReq
+					foreach($itensRequisicao as $i)
+					{
+						//itemreqbib
+						$itemReqEmp = $itemReqBib->GetEmpenhadoByItemReq($i->idRequisicao, $i->item);
+						foreach($itemReqEmp->result as $r)
+						{
+							if($r[0] != $empenhado->idEmpenhado)
+							{
+								$haItens = true;
+							}
+						}
+						$itemReqBib->GetById($i->idRequisicao);
+						if($haItens)
+						{
+							if($itemReqBib->status == '5' OR $itemReqBib->status == '6' OR $itemReqBib->status == '7' OR $itemReqBib->status == '8' OR $itemReqBib->status == '9' OR $itemReqBib->status == 'A')
+							{
+								$itemReqBib->status = 'A';//LICITACAO PARCELADA
+							}
+						}
+						else
+						{
+							if($itemReqBib->status == '5' OR $itemReqBib->status == '6' OR $itemReqBib->status == '7' OR $itemReqBib->status == '8' OR $itemReqBib->status == '9' OR $itemReqBib->status == 'A')
+							{
+								$itemReqBib->status = '5';//LICITADO
+							}
+						}
+
+						//para empenhos com status B, é preciso desfazer a distribuição dos itens para as várias uos requisitantes
+						if($empenho->status == 'B')//distribuído
+						{
+							$empenhadoDist = $MIOLO->GetBusiness('adm','empenhadodist');
+							$empenhadoDist->GetById($empenhado->idEmpenhado,$i->idRequisicao);
+							if($empenhadoDist->quantidade)
+							{
+								$totalPrevisao = $cf->toDecimal($empenhadoDist->quantidade) * $cf->toDecimal($itemReqBib->precoEstimado);
+								$totalReal = $cf->toDecimal($empenhadoDist->quantidade) * $cf->toDecimal($empenhadoDist->valorUnitario);
+
+								//cálculo do novo valor real médio
+								if($itemReqBib->quantEmpenhada - $empenhadoDist->quantidade > 0)
+								{
+									$valorRealMedio = (($cf->toDecimal($itemReqBib->quantEmpenhada) * $cf->toDecimal($itemReqBib->valorReal)) - ($totalReal)) / ($cf->toDecimal($itemReqBib->quantEmpenhada) - $cf->toDecimal($empenhadoDist->quantidade));
+									$itemReqBib->setValorReal($valorRealMedio);
+								}
+
+								//atualização da quantEmpenhada e da quantDevolvida
+								$itemReqBib->quantEmpenhada = $cf->toDecimal($itemReqBib->quantEmpenhada) - $cf->toDecimal($empenhadoDist->quantidade);
+								$itemReqBib->quantDevolvida = $cf->toDecimal($itemReqBib->quantDevolvida) - $cf->toDecimal($empenhadoDist->quantidade);
+
+								//atualiza orcamentos internos e insere lancamentos internos
+								////atualizações referentes a orçamento e a lançamento interno
+								$objRequisicao = $MIOLO->GetBusiness($module, 'requisicao', $i->idRequisicao);
+								$idUo = $objRequisicao->idUoRequisitante;
+								$ano = substr($objRequisicao->dataHoraAut,6,4);
+								if(!$ano)
+								{
+									$ano = substr($objRequisicao->dataHora,6,4);
+								}
+								$requisita = $MIOLO->getBusiness('adm','requisita');
+								$requisita->GetById($objRequisicao->idTipoReq, $objRequisicao->idUoRequisitante, $ano);
+								$executa = $MIOLO->getBusiness('adm','executa');
+								$executa->GetById($objRequisicao->idTipoReq, $objRequisicao->idUoExecutante, $ano);
+								$idRubrica = $requisita->idRubrica;
+							
+								// Adiciona a previsão de débito e remove o debito no orçamento da Uo requisitante
+								//atualiza array de orcamentos
+								$arrayOrcamentos[$idUo][$idRubrica][$ano]['removeDebito'][] = $totalReal;
+								$arrayOrcamentos[$idUo][$idRubrica][$ano]['addPrevisao'][] = $totalPrevisao;
+
+								$objRequisicao->Log(OP_UPD,"Requisicao ".$objRequisicao->idRequisicao.": estorno de debito de ".$totalReal." na UO ".$objRequisicao->idUoRequisitante);
+								$objRequisicao->Log(OP_UPD,"Requisicao ".$objRequisicao->idRequisicao.": previsao de ".$totalPrevisao." na UO ".$objRequisicao->idUoRequisitante);
+
+								// Lançamento interno da previsão de débito
+								$lancamentoInt = $MIOLO->getBusiness('adm','lancamentoint');
+								$lancamentoInt->tipoLancamento = '4'; //previsão de débito
+								$lancamentoInt->data = date("d/m/Y");                
+								$lancamentoInt->valor = $totalPrevisao;
+								$lancamentoInt->ano = date("Y");
+								$lancamentoInt->idUoRequisitante = $objRequisicao->idUoRequisitante;       
+								$lancamentoInt->idUoExecutante = $objRequisicao->idUoExecutante;
+								$lancamentoInt->idRubrica = $requisita->idRubrica;           
+								$lancamentoInt->idRequisicao = $objRequisicao->idRequisicao;
+								$lancamentoInt->idUsuario = $MIOLO->GetLogin()->idkey;
+								$lancamentoInt->obs = "Estorno de Empenho " . $empenho->idEmpenho;
+								$lancamentoInt->setTransaction($empenho->getTransaction());
+								$lancamentoInt->save();
+								$lancamentoInt->Log(OP_INS,"Lançamento Interno numero ".$lancamentoInt->idLancamentoInt." gerado com sucesso para a Requisicao ".$objRequisicao->idRequisicao.".");
+								
+								// Estorna o credito na Uo Executante
+								//atualiza array de orcamentos
+								$idUo = $objRequisicao->idUoExecutante;
+								$idRubrica = $executa->idRubrica;
+								$ano = substr($objRequisicao->dataHoraAut,6,4);
+								if(!$ano)
+								{
+									$ano = substr($objRequisicao->dataHora,6,4);
+								}
+								$arrayOrcamentos[$idUo][$idRubrica][$ano]['removeCreditoExecutante'][] = $totalReal;
+
+								$objRequisicao->Log(OP_UPD,"Requisicao ".$objRequisicao->idRequisicao.": estorno de credito de ".$totalReal." na UO ".$objRequisicao->idUoExecutante);
+
+								// Lançamento interno do crédito/débito
+								$lancamentoInt = $MIOLO->getBusiness('adm','lancamentoint');
+								$lancamentoInt->tipoLancamento = '6';//estorno crédito/débito
+								$lancamentoInt->data = date("d/m/Y");                
+								$lancamentoInt->valor = $totalReal;
+								$lancamentoInt->ano = date("Y");
+								$lancamentoInt->idUoRequisitante = $objRequisicao->idUoRequisitante;       
+								$lancamentoInt->idUoExecutante = $objRequisicao->idUoExecutante;
+								$lancamentoInt->idRubrica = $requisita->idRubrica;           
+								$lancamentoInt->idRequisicao = $objRequisicao->idRequisicao;
+								$lancamentoInt->idUsuario = $MIOLO->GetLogin()->idkey;
+								$lancamentoInt->obs = "Estorno de Empenho " . $empenho->idEmpenho;
+								$lancamentoInt->setTransaction($empenho->getTransaction());
+								$lancamentoInt->save();
+								$lancamentoInt->Log(OP_INS,"Lançamento Interno numero ".$lancamentoInt->idLancamentoInt." gerado com sucesso para a Requisicao ".$objRequisicao->idRequisicao.".");                    
+
+								//apaga ad_empenhadodist
+								$empenhadoDist->setTransaction($empenho->getTransaction());
+								$empenhadoDist->delete();
+							}
+						}
+
+						$itemReqBib->setTransaction($empenho->getTransaction());
+						$itemReqBib->save();
+						$itemReqBib->Log(OP_UPD, "Status Item Req: Estorno de Empenho idLicitacao $i->idLicitacao item $i->item idRequisicao $i->idRequisicao idMaterial $i->idMaterial status $itemReqBib->status");
+					}
+				}
+
+				//orcamento
+				$arrayOrcs[$empenhado->idOrcamento][] = $empenhado->valorEmp;
+
+				//empenhado
+				$empenhado->setTransaction($empenho->getTransaction());
+				$empenhado->delete();
+			}
+
+			//requisicao
+			if(($licitacao->idTipoLicitacao == '1') or ($licitacao->idTipoLicitacao == '4'))//COMPRA
+			{
+				$requisicoes = $empenhado->ListRequisicaoByIdEmpenho($empenhado->idEmpenho);
+			}
+			elseif($licitacao->idTipoLicitacao == '2')//COMPRA
+			{
+				$requisicoes = $empenhado->ListRequisicaoServicoByIdEmpenho($empenhado->idEmpenho);
+			}
+			elseif($licitacao->idTipoLicitacao == '3')//LIVRO
+			{
+				$requisicoes = $empenhado->ListRequisicaoBibliotecaByIdEmpenho($empenhado->idEmpenho);
+			}
+			$requisicoes = $requisicoes->result;
+			foreach($requisicoes as $req)
+			{
+				$haReq = false;//<-- mostra se existe registro em ad_empenhado para a mesma Requisicao
+				if(($licitacao->idTipoLicitacao == '1') or ($licitacao->idTipoLicitacao == '4'))//COMPRA
+				{
+					$reqEmp = $itemReq->GetEmpenhadoByItemReq($req[0], null);
+				}
+				elseif($licitacao->idTipoLicitacao == '2')//SERVIÇO
+				{
+					$reqEmp = $itemReqServ->GetEmpenhadoByItemReq($req[0], null);
+				}
+				if($licitacao->idTipoLicitacao == '3')//LIVRO
+				{
+					$reqEmp = $itemReqBib->GetEmpenhadoByItemReq($req[0], null);
+				}
+				foreach($reqEmp->result as $r)
+				{
+					if($r[1] != $idEmpenho)//há um item empenhado fora do empenho sendo estornado
+					{
+						$haReq = true;
+					}
+				}
+				$requisicao->GetById($req[0]);
+				if($haReq)
+				{
+					if($requisicao->status == '7' OR $requisicao->status == '8' OR $requisicao->status == '9' OR $requisicao->status == 'B' OR $requisicao->status == 'E' OR $requisicao->status == 'F' OR $requisicao->status == 'G')
+					{
+						$requisicao->status = '8';//EXECUTADA PARCIALMENTE
+					}
+				}
+				else
+				{
+					if($requisicao->status == '7' OR $requisicao->status == '8' OR $requisicao->status == '9' OR $requisicao->status == 'B' OR $requisicao->status == 'E' OR $requisicao->status == 'F' OR $requisicao->status == 'G')
+					{
+						$requisicao->status = '7';//LIBERADA PARA EXECUCAO
+					}
+				}
+				$requisicao->setTransaction($empenho->getTransaction());
+				$requisicao->save();
+			}
+
+			//updates nos orçamentos -> array[idOrcamento][i] = $valor
+			foreach($arrayOrcs as $idOrcamento=>$valores)
+			{
+				$orcamento = $MIOLO->GetBusiness('adm','orcamento',$idOrcamento);
+				foreach($valores as $valor)
+				{
+					$orcamento->pago = $cf->toDecimal($orcamento->pago) - $cf->toDecimal($valor);
+				}
+				$orcamento->setTransaction($empenho->getTransaction());
+				$orcamento->save();
+			}
+
+			//para empenhos ja distribuidos-> updates nos orçamentos internos -> array[idUo][idRubrica][ano]['tipoOperacao'][i] = $valor
+			if($empenho->status == 'B')
+			{
+				foreach($arrayOrcamentos as $uo=>$rubricas)
+				{
+					foreach($rubricas as $rubrica=>$anos)
+					{
+						foreach($anos as $ano=>$tipos)
+						{
+							$orcamento = $MIOLO->GetBusiness('adm','orcamentointerno');
+							$orcamento->GetById($uo,$rubrica,$ano);
+							foreach($tipos as $tipo=>$valores)
+							{
+								foreach($valores as $valor)
+								{
+									if($tipo == 'removeDebito')
+									{
+										$orcamento->debito = $cf->toDecimal($orcamento->debito) - $cf->toDecimal($valor);
+									}
+									elseif($tipo == 'addPrevisao')
+									{
+										$orcamento->previsaoDebito = $cf->toDecimal($orcamento->previsaoDebito) + $cf->toDecimal($valor);
+									}
+									elseif($tipo == 'removeCreditoExecutante')
+									{
+										$orcamento->creditoExecutante = $cf->toDecimal($orcamento->creditoExecutante) - $cf->toDecimal($valor);
+									}
+								}
+							}
+							$orcamento->setTransaction($empenho->getTransaction());
+							$orcamento->save();
+						}
+					}
+				}
+			}
+
+			//empenho
+			$numeroEmpenho = $empenho->numero;
+			$empenho->delete();
+			$empenho->endTransaction();
+
+			$empenho->Log(OP_DEL,"Estorno de Empenho: " . $idEmpenho);
+			$MIOLO->Information("Empenho $numeroEmpenho estornado com sucesso.",$MIOLO->GetActionURL($module, $action,''));
+		}
+		catch (Exception $e)
+		{
+			$this->addError($e->getMessage());
+		}
+	}
+
+	// Método a ser executado antes de renderizar cada linha
+	function MyRowMethod($i, $row, $actions, $columns)
+	{
+		global $MIOLO, $module, $action;
+
+		$empenho = $MIOLO->GetBusiness($module, 'empenho', $row[0]);
+		$valores = $empenho->GetValores();
+		$valor = number_format(str_replace(',','.',$valores[0]),2,',','.');
+		$valores[1] = number_format(str_replace(',','.',$valores[1]),2,',','.');
+		$valores[2] = number_format(str_replace(',','.',$valores[2]),2,',','.');
+		$columns['valor']->control[$i]->SetValue($valor);
+		$saldo = 'Saldo Original: '. $valores[1] . "                  Saldo Complemento: " . $valores[2];
+		$columns['valor']->control[$i]->SetJsHint($saldo);
+		$columns['numero']->control[$i]->SetJsHint($empenho->obs);
+	}
+	// Método a ser executado antes de renderizar cada linha
+	function MyRowMethod2($i, $row, $actions, $columns)
+	{
+		global $MIOLO, $module, $action;
+
+		//Vl Emp e Valor NF não existem  OU  Tipo Emp não é OR nem CO
+		if( (($row[10] == '') and ($row[11] == '')) or (($row[2] != 'OR') and ($row[2] != 'CO')) )
+		{
+			$columns[12]->control[$i]->SetValue(''); // saldo
+		}
+
+		if($row[4])//NF
+		{
+			$id = explode('-', $row[0]);
+			$nota = $MIOLO->GetBusiness($module, 'notafiscal');
+			$nota->GetByNumero($row[4], $id[0]); //notaFiscal, idEmpenho
+			$nota->desconto = number_format(str_replace(',','.',$nota->desconto),2,',','.');
+			$desconto = "Desconto: " . $nota->desconto;
+			$columns[4]->control[$i]->SetJsHint($desconto);
+		}
+
+		if($row[6])//Data Liq
+		{
+			$liquidacao = $MIOLO->GetBusiness($module, 'liquidacao', $nota->idLiquidacao);
+			$liquidacao->valorIRRF = number_format(str_replace(',','.',$liquidacao->valorIRRF),2,',','.');
+			$liquidacao->valorINSS = number_format(str_replace(',','.',$liquidacao->valorINSS),2,',','.');
+			$liquidacao->valorISS = number_format(str_replace(',','.',$liquidacao->valorISS),2,',','.');
+			$descontos = "IN/SRF: " . $liquidacao->valorIRRF . ". INSS: " . $liquidacao->valorINSS . ". ISS: " . $liquidacao->valorISS . ".";
+			$columns[6]->control[$i]->SetJsHint($descontos);
+		}
+
+		if($row[7])//OB
+		{
+			$ordemBancaria = $MIOLO->GetBusiness($module, 'ordembancaria');
+			$valores = $ordemBancaria->GetByIdLiquidacao($liquidacao->idLiquidacao);
+			$valores[0] = number_format(str_replace(',','.',$valores[0]),2,',','.');
+			$valores[1] = number_format(str_replace(',','.',$valores[1]),2,',','.');
+			$descontos = "DARF: " . $valores[0] . ". GPS: " . $valores[1] . ".";
+			$columns[7]->control[$i]->SetJsHint($descontos);
+		}
+	}
+}
+?>

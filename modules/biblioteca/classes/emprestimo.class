@@ -1,0 +1,1650 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?
+/**
+* Classe Emprestimo
+* <p>Classe utilizada para o controle dos empréstimos da biblioteca</p>
+* @author Equipe ADR Soluções
+* @package biblioteca
+* @subpackage emprestimo
+*select
+*/
+
+
+class BusinessBibliotecaEmprestimo extends Business
+{
+   var $idemprestimo;
+   var $datahoradoemprestimo;
+   var $datahoraprevisaodevolucao;
+   var $datahoradadevolucao;
+   var $quantidadederenovacoes;
+   var $idusuario;
+   var $idexemplar;
+   var $numerodotombo;
+   var $emprestimosopn;
+   var $objReserva;
+   var $objFeriado;
+   var $objDevolucao;
+   var $objMulta;
+   var $objEstado;
+   var $objExemplar;
+   var $objEstadoExemplar;
+   var $objOperacao; 
+
+	 function BusinessBibliotecaEmprestimo($data = null)
+	 {
+      		$this->Business('sigaept', $data);
+	 }
+
+	 
+	 function GetData()
+	 {
+		$data = new FormData();
+		$data->idusuario = $this->idusuario;
+		$data->descricao = $this->descricao;
+		return $data;
+	 }
+	 
+	 
+	 function SetData($data)
+	 {
+      		$this->idemprestimo = $data->idemprestimo;
+     		$this->datahoradoemprestimo = $data->datahoradoemprestimo;
+  		$this->datahoraprevisaodevolucao = $data->datahoraprevisaodevolucao;
+   	  	$this->datahoradadevolucao = $data->datahoradadevolucao;
+     	 	$this->quantidadederenovacoes = $data->quantidadederenovacoes;
+      		$this->idusuario = $data->idusuario;
+      		$this->idexemplar = $data->idexemplar;
+	 }
+	 
+	 function GetByCartao($cartao)
+	 {
+  		$sql = new sql('idusuario','bt_validacao','codigoacesso = ?');
+		$query = $this->Query($sql,$cartao);
+  		return $query;
+	 }
+	 
+
+	 function GetCartaoByID($idusuario)
+	 {
+  		$sql = new sql('codigoacesso','bt_validacao','idusuario = ?');
+		$query = $this->Query($sql,$idusuario);
+  		return $query;
+	 }
+
+
+	function GetIdemprestimoByTombo($tombo)
+	{
+		$sql = new sql('e.idemprestimo', 'bt_emprestimo e, bt_exemplar x', '(e.idexemplar = x.idexemplar) and (x.numerodotombo = ?) and (e.datahoradadevolucao is null)');
+		
+		$query = $this->Query($sql,$tombo);
+
+		return $query->result[0][0];
+	}
+
+
+	function SelectEmprestimoPendente()
+	{
+		global $MIOLO, $module;
+
+		/*busca idoperacao
+		$operacao = $MIOLO->GetBusiness($module,'operacao');
+		$emprestimo = $operacao->GetIdoperacaoByMnemonico('EMPRESTIMO')->idoperacao;
+		$emprhoras = $operacao->GetIdoperacaoByMnemonico('EMPRHORAS')->idoperacao;
+
+		$sql = new sql("e.idemprestimo, u.login, ex.numerodotombo, " . $this->_db->TimestampToChar('e.datahoradoemprestimo') . ' as datahoradoemprestimo , ' . $this->_db->TimestampToChar('e.datahoraprevisaodevolucao') . " as datahoraprevisaodevolucao, decode(e.emprhoras,1,'Sim','Não') as emprhoras, log.login as usuarioopemprestimo, log.nome", 'bt_exemplar ex, (select idusuario, login from cm_usuario union select idusuario, numrg||\'<BR><font color=red>Externa</font>\' as login from bt_usuarioexterno) u, bt_emprestimo e, (select l.identificador, u.login, p.nome from bt_logoperacao l, cm_usuario u, cm_pessoa p where (l.idoperacao = ? or l.idoperacao = ?) and l.idusuario = u.idusuario and u.idpessoa = p.idpessoa) log', "e.datahoradadevolucao is NULL and e.idexemplar = ex.idexemplar and e.idusuario = u.idusuario and trim(to_char(e.idemprestimo)) = trim(log.identificador(+))", 'e.idemprestimo DESC');*/
+
+		//Código substituído devido a utilização da estrutura decode, que não existe em PostgreSQL
+		//$sql = new sql("e.idemprestimo, u.login, ex.numerodotombo, " . $this->_db->TimestampToChar('e.datahoradoemprestimo') . ' as datahoradoemprestimo , ' . $this->_db->TimestampToChar('e.datahoraprevisaodevolucao') . " as datahoraprevisaodevolucao, decode(e.emprhoras,1,'Sim','Não') as emprhoras", 'bt_exemplar ex, (select idusuario, login from cm_usuario union select idusuario, numrg||\'<BR><font color=red>Externa</font>\' as login from bt_usuarioexterno) u, bt_emprestimo e', "e.datahoradadevolucao is NULL and e.idexemplar = ex.idexemplar and e.idusuario = u.idusuario", 'e.idemprestimo DESC');
+
+		$sql = new sql("e.idemprestimo, u.login, ex.numerodotombo, " . $this->_db->TimestampToChar('e.datahoradoemprestimo') . ' as datahoradoemprestimo , ' . $this->_db->TimestampToChar('e.datahoraprevisaodevolucao') . " as datahoraprevisaodevolucao, (CASE WHEN e.emprhoras = '1' THEN e.emprhoras = 'Sim' ELSE e.emprhoras = 'Não' END) as emprhoras", 'bt_exemplar ex, (select idusuario, login from cm_usuario union select idusuario, numrg||\'<BR><font color=red>Externa</font>\' as login from bt_usuarioexterno) u, bt_emprestimo e', "e.datahoradadevolucao is NULL and e.idexemplar = ex.idexemplar and e.idusuario = u.idusuario", 'e.idemprestimo DESC');
+
+//		$query = $this->Query($sql,array($emprestimo,$emprhoras));
+		$query = $this->Query($sql);
+
+		return $query;	
+	}
+	
+	//método para o envio de e-mails (frmEnviaEmail) para usuários com empréstimos pendentes de exemplares
+	function SelectUsuariosComExemplaresPendentes()
+	{	
+		global $MIOLO, $module;
+		$datar = date("d/m/y");
+		/*$sql = new sql ('distinct (p.nome), p.email', 'cm_usuario u, cm_pessoa p, bt_emprestimo emp', 'datahoraprevisaodevolucao < "$datar" and emp.datahoradadevolucao is null and emp.idusuario = u.idusuario and u.idpessoa = p.idpessoa and p.email is not null');*/
+		$sql = new sql ("distinct (p.nome), p.email", "cm_usuario u, cm_pessoa p, bt_emprestimo emp", "datahoraprevisaodevolucao < to_timestamp('".$datar."','dd/mm/yy') and emp.datahoradadevolucao is null and emp.idusuario = u.idusuario and u.idpessoa = p.idpessoa and p.email is not null");
+		$query = $this->Query($sql);
+		return $query;	
+	}
+	
+	//método para o envio de e-mails (frmEnviaEmail) para usuários com multas pendentes de exemplares
+	function SelectUsuariosComMultasPendentes()
+	{
+		global $MIOLO, $module;
+		$sql = new sql ("distinct (p.nome), p.email", "cm_pessoa p, cm_usuario u, bt_multa m, bt_emprestimo emp", "m.foipaga = '0' and p.email is not null and p.idpessoa = u.idpessoa and u.idusuario = emp.idusuario and emp.idemprestimo = m.idemprestimo");
+		$query = $this->Query($sql);
+		return $query;
+		
+	}
+	
+	function SelectEmprestimoPendenteUsuario($idusuario)
+	{
+		global $MIOLO,$module;
+
+		/*busca idoperacao
+		$operacao = $MIOLO->GetBusiness($module,'operacao');
+		$operacao = $MIOLO->GetBusiness(biblioteca,'operacao');
+		$emprestimo = $operacao->GetIdoperacaoByMnemonico('EMPRESTIMO')->idoperacao;
+		$emprhoras = $operacao->GetIdoperacaoByMnemonico('EMPRHORAS')->idoperacao;
+
+		$sql = new sql('e.idemprestimo, x.numerodotombo, ' . $this->_db->TimestampToChar('e.datahoradoemprestimo') . ' as datahoradoemprestimo, ' . $this->_db->TimestampToChar('e.datahoraprevisaodevolucao') . " as datahoraprevisaodevolucao, decode(e.emprhoras,1,'Sim','Não') as emprhoras, log.login as usuarioopemprestimo, log.nome", 'bt_emprestimo e, (select idusuario, login from cm_usuario union select idusuario, numrg||\'<BR><font color=red>Externa</font>\' as login from bt_usuarioexterno) u, bt_exemplar x, (select l.identificador, u.login, p.nome from bt_logoperacao l, cm_usuario u, cm_pessoa p where (l.idoperacao = ? or l.idoperacao = ?) and l.idusuario = u.idusuario and u.idpessoa = p.idpessoa) log', 'e.idusuario = ? and e.datahoradadevolucao is NULL and e.idexemplar = x.idexemplar and e.idusuario = u.idusuario and trim(to_char(e.idemprestimo)) = trim(log.identificador(+))', 'e.idemprestimo DESC');*/
+		//Código substituído devido a utilização da estrutura decode, que não existe em PostgreSQL
+		//$sql = new sql('e.idemprestimo, x.numerodotombo, ' . $this->_db->TimestampToChar('e.datahoradoemprestimo') . ' as datahoradoemprestimo, ' . $this->_db->TimestampToChar('e.datahoraprevisaodevolucao') . " as datahoraprevisaodevolucao, decode(e.emprhoras,1,'Sim','Não') as emprhoras", 'bt_emprestimo e, (select idusuario, login from cm_usuario union select idusuario, numrg||\'<BR><font color=red>Externa</font>\' as login from bt_usuarioexterno) u, bt_exemplar x', 'e.idusuario = ? and e.datahoradadevolucao is NULL and e.idexemplar = x.idexemplar and e.idusuario = u.idusuario', 'e.idemprestimo DESC');
+		$sql = new sql('e.idemprestimo, x.numerodotombo, ' . $this->_db->TimestampToChar('e.datahoradoemprestimo') . ' as datahoradoemprestimo, ' . $this->_db->TimestampToChar('e.datahoraprevisaodevolucao') . " as datahoraprevisaodevolucao, (CASE WHEN e.emprhoras = '1' THEN e.emprhoras = 'Sim' ELSE e.emprhoras = 'Não' END) as emprhoras", 'bt_emprestimo e, (select idusuario, login from cm_usuario union select idusuario, numrg||\'<BR><font color=red>Externa</font>\' as login from bt_usuarioexterno) u, bt_exemplar x', 'e.idusuario = ? and e.datahoradadevolucao is NULL and e.idexemplar = x.idexemplar and e.idusuario = u.idusuario', 'e.idemprestimo DESC');
+			
+//		$query = $this->Query($sql,array($emprestimo,$emprhoras,$idusuario));
+		$query = $this->Query($sql,array($idusuario));
+		
+		return $query;
+	}
+
+
+	function SelectEmprestimoPendenteExemplar($idexemplar)
+	{
+		global $MIOLO,$module;
+
+		/*busca idoperacao
+		$operacao = $MIOLO->GetBusiness($module,'operacao');
+		$emprestimo = $operacao->GetIdoperacaoByMnemonico('EMPRESTIMO')->idoperacao;
+		$emprhoras = $operacao->GetIdoperacaoByMnemonico('EMPRHORAS')->idoperacao;
+
+		$sql = new sql('e.idemprestimo, u.login, ' . $this->_db->TimestampToChar('e.datahoradoemprestimo') . ' as datahoradoemprestimo, ' . $this->_db->TimestampToChar('e.datahoraprevisaodevolucao') . " as datahoraprevisaodevolucao, decode(e.emprhoras,1,'Sim','Não') as emprhoras, log.login as usuarioopemprestimo, log.nome", 'bt_emprestimo e, (select idusuario, login from cm_usuario union select idusuario, numrg||\'<BR><font color=red>Externa</font>\' as login from bt_usuarioexterno) u, bt_exemplar x, (select l.identificador, u.login, p.nome from bt_logoperacao l, cm_usuario u, cm_pessoa p where (l.idoperacao = ? or l.idoperacao = ?) and l.idusuario = u.idusuario and u.idpessoa = p.idpessoa) log', 'x.idexemplar = ? AND e.datahoradadevolucao IS NULL AND e.idexemplar = x.idexemplar AND e.idusuario = u.idusuario AND trim(to_char(e.idemprestimo)) = trim(log.identificador(+))', 'idemprestimo desc');*/
+
+		//Código substituído devido a utilização da estrutura decode, que não existe em PostgreSQL
+		//$sql = new sql('e.idemprestimo, u.login, ' . $this->_db->TimestampToChar('e.datahoradoemprestimo') . ' as datahoradoemprestimo, ' . $this->_db->TimestampToChar('e.datahoraprevisaodevolucao') . " as datahoraprevisaodevolucao, decode(e.emprhoras,1,'Sim','Não') as emprhoras", 'bt_emprestimo e, (select idusuario, login from cm_usuario union select idusuario, numrg||\'<BR><font color=red>Externa</font>\' as login from bt_usuarioexterno) u, bt_exemplar x', 'x.idexemplar = ? AND e.datahoradadevolucao IS NULL AND e.idexemplar = x.idexemplar AND e.idusuario = u.idusuario');
+
+		$sql = new sql('e.idemprestimo, u.login, ' . $this->_db->TimestampToChar('e.datahoradoemprestimo') . ' as datahoradoemprestimo, ' . $this->_db->TimestampToChar('e.datahoraprevisaodevolucao') . " as datahoraprevisaodevolucao, (CASE WHEN e.emprhoras = '1' THEN e.emprhoras = 'Sim' ELSE e.emprhoras = 'Não' END) as emprhoras", 'bt_emprestimo e, (select idusuario, login from cm_usuario union select idusuario, numrg||\'<BR><font color=red>Externa</font>\' as login from bt_usuarioexterno) u, bt_exemplar x', 'x.idexemplar = ? AND e.datahoradadevolucao IS NULL AND e.idexemplar = x.idexemplar AND e.idusuario = u.idusuario');
+
+//		$query = $this->Query($sql, array($emprestimo,$emprhoras,$idexemplar));
+		$query = $this->Query($sql, array($idexemplar));
+		return $query;
+	}
+
+	
+	function SelectEmprestimoAtrasado($dataIni, $dataFim)
+	{
+		$dataIni .= ' 00:00:00';
+		$dataFim .= ' 23:59:59';
+
+		//Código substituído devido a utilização da estrutura decode, que não existe em PostgreSQL
+		//$sql = new sql('d.login, d.nome, d.telefone, ex.numerodotombo, ' . $this->_db->DateToChar('e.datahoradoemprestimo') . ' as datahoradoemprestimo , ' . $this->_db->DateToChar('e.datahoraprevisaodevolucao') . " as datahoraprevisaodevolucao, e.idemprestimo, decode(e.emprhoras,1,'Sim','Não') as emprhoras", 'bt_exemplar ex, bt_emprestimo e, (SELECT u.idusuario, u.login, p.nome, p.telefone FROM cm_usuario u, cm_pessoa p WHERE u.idpessoa = p.idpessoa UNION SELECT idusuario, numrg||\'<BR><font color=red>Externa</font>\' as login, nome, telefone from bt_usuarioexterno) d', 'e.idusuario = d.idusuario and e.idexemplar = ex.idexemplar and e.datahoradadevolucao is NULL and (e.datahoraprevisaodevolucao >= ' . substr($this->_db->CharToTimestamp($dataIni), 1) . ') and (e.datahoraprevisaodevolucao <= ' . substr($this->_db->CharToTimestamp($dataFim), 1) . ')', 'd.nome');
+		
+		$sql = new sql('d.login, d.nome, d.telefone, ex.numerodotombo, ' . $this->_db->DateToChar('e.datahoradoemprestimo') . ' as datahoradoemprestimo , ' . $this->_db->DateToChar('e.datahoraprevisaodevolucao') . " as datahoraprevisaodevolucao, e.idemprestimo, (CASE WHEN e.emprhoras = '1' THEN e.emprhoras = 'Sim' ELSE e.emprhoras = 'Não' END) as emprhoras", 'bt_exemplar ex, bt_emprestimo e, (SELECT u.idusuario, u.login, p.nome, p.telefone FROM cm_usuario u, cm_pessoa p WHERE u.idpessoa = p.idpessoa UNION SELECT idusuario, numrg||\'<BR><font color=red>Externa</font>\' as login, nome, telefone from bt_usuarioexterno) d', 'e.idusuario = d.idusuario and e.idexemplar = ex.idexemplar and e.datahoradadevolucao is NULL and (e.datahoraprevisaodevolucao >= ' . substr($this->_db->CharToTimestamp($dataIni), 1) . ') and (e.datahoraprevisaodevolucao <= ' . substr($this->_db->CharToTimestamp($dataFim), 1) . ')', 'd.nome');				
+		$query = $this->Query($sql);
+		return $query;
+	}
+
+	function SelectEmprestimoAtrasadoSemData()
+	{
+		
+		$sql = new sql('d.login, d.nome, d.telefone, ex.numerodotombo, ' . $this->_db->DateToChar('e.datahoradoemprestimo') . ' as datahoradoemprestimo , ' . $this->_db->DateToChar('e.datahoraprevisaodevolucao') . " as datahoraprevisaodevolucao, e.idemprestimo, (CASE WHEN e.emprhoras = '1' THEN e.emprhoras = 'Sim' ELSE e.emprhoras = 'Não' END) as emprhoras", 'bt_exemplar ex, bt_emprestimo e, (SELECT u.idusuario, u.login, p.nome, p.telefone FROM cm_usuario u, cm_pessoa p WHERE u.idpessoa = p.idpessoa UNION SELECT idusuario, numrg||\'<BR><font color=red>Externa</font>\' as login, nome, telefone from bt_usuarioexterno) d', 'e.idusuario = d.idusuario and e.idexemplar = ex.idexemplar and e.datahoradadevolucao is NULL and (e.datahoraprevisaodevolucao >= ' . substr($this->_db->CharToTimestamp($dataIni), 1) . ') and (e.datahoraprevisaodevolucao <= now())', 'd.nome');				
+		$query = $this->Query($sql);
+		return $query;
+	}
+	
+	function repEmprestimoAtrasado($dataIni, $dataFim)
+	{
+		$dataIni .= ' 00:00:00';
+		$dataFim .= ' 23:59:59';
+
+		$sql = new sql('d.login, d.nome, d.telefone, ex.numerodotombo, ' . $this->_db->DateToChar('e.datahoradoemprestimo') . ' as datahoradoemprestimo , ' . $this->_db->DateToChar('e.datahoraprevisaodevolucao') . " as datahoraprevisaodevolucao, e.idemprestimo, (CASE WHEN e.emprhoras = '1' THEN e.emprhoras = 'Sim' ELSE e.emprhoras = 'Não' END) as emprhoras", 'bt_exemplar ex, bt_emprestimo e, (SELECT u.idusuario, u.login, p.nome, p.telefone FROM cm_usuario u, cm_pessoa p WHERE u.idpessoa = p.idpessoa UNION SELECT idusuario, numrg||\' (Externa)\' as login, nome, telefone from bt_usuarioexterno) d', 'e.idusuario = d.idusuario and e.idexemplar = ex.idexemplar and e.datahoradadevolucao is NULL and datahoraprevisaodevolucao >= ' . substr($this->_db->CharToTimestamp($dataIni), 1) . ' and datahoraprevisaodevolucao <= ' . substr($this->_db->CharToTimestamp($dataFim), 1), 'd.nome');		
+		$query = $this->Query($sql);
+		return $query;
+	}
+
+
+	function SelectEmprestimoHistUsuario($idusuario)
+	{
+		global $MIOLO, $module;
+
+		/*busca idoperacao
+		$operacao = $MIOLO->GetBusiness($module,'operacao');
+		$emprestimo = $operacao->GetIdoperacaoByMnemonico('EMPRESTIMO')->idoperacao;
+		$emprhoras = $operacao->GetIdoperacaoByMnemonico('EMPRHORAS')->idoperacao;
+		$devolucao = $operacao->GetIdoperacaoByMnemonico('DEVOLUCAO')->idoperacao;
+
+		$sql = new sql('e.idemprestimo, x.numerodotombo, ' . $this->_db->TimestampToChar('e.datahoradoemprestimo') . ' as datahoradoemprestimo, ' . $this->_db->TimestampToChar('e.datahoraprevisaodevolucao') . ' as datahoraprevisaodevolucao, ' . $this->_db->TimestampToChar('e.datahoradadevolucao') . " as datahoradadevolucao, decode(e.emprhoras,1,'Sim','Não') as emprhoras, log1.login as usuarioopemprestimo, log2.login as usuarioopdevolucao, log1.nome as nomeopemprestimo, log2.nome as nomeopdevolucao", 'bt_emprestimo e, bt_exemplar x, (select idusuario, login from cm_usuario union select idusuario, numrg||\'<BR><font color=red>Externa</font>\' as login from bt_usuarioexterno) u, (SELECT l.identificador, u.login, p.nome FROM bt_logoperacao l, cm_usuario u, cm_pessoa p WHERE (l.idoperacao = ? OR l.idoperacao = ?) AND l.idusuario = u.idusuario AND u.idpessoa = p.idpessoa) log1, (SELECT l.identificador, u.login, p.nome FROM bt_logoperacao l, cm_usuario u, cm_pessoa p WHERE l.idoperacao = ? AND l.idusuario = u.idusuario AND u.idpessoa = p.idpessoa) log2', 'e.idexemplar = x.idexemplar AND u.idusuario = e.idusuario AND u.idusuario = ? AND trim(to_char(e.idemprestimo)) = trim(log1.identificador(+)) AND trim(to_char(e.idemprestimo)) = trim(log2.identificador(+))', 'idemprestimo desc');*/
+
+		$sql = new sql('e.idemprestimo, x.numerodotombo, ' . $this->_db->TimestampToChar('e.datahoradoemprestimo') . ' as datahoradoemprestimo, ' . $this->_db->TimestampToChar('e.datahoraprevisaodevolucao') . ' as datahoraprevisaodevolucao, ' . $this->_db->TimestampToChar('e.datahoradadevolucao') . " as datahoradadevolucao, (CASE WHEN e.emprhoras = '1' THEN e.emprhoras = 'Sim' ELSE e.emprhoras = 'Não' END) as emprhoras", 'bt_emprestimo e, bt_exemplar x, (select idusuario, login from cm_usuario union select idusuario, numrg||\'<BR><font color=red>Externa</font>\' as login from bt_usuarioexterno) u', 'e.idexemplar = x.idexemplar AND u.idusuario = e.idusuario AND u.idusuario = ?', 'idemprestimo desc');
+
+//		$query = $this->Query($sql, array($emprestimo,$emprhoras,$devolucao,$idusuario));
+		$query = $this->Query($sql, array($idusuario));
+
+		return $query;
+	}
+
+
+	function SelectEmprestimoHistExemplar($idexemplar)
+	{
+		global $MIOLO,$module;
+
+		/*busca idoperacao
+		$operacao = $MIOLO->GetBusiness($module,'operacao');
+		$emprestimo = $operacao->GetIdoperacaoByMnemonico('EMPRESTIMO')->idoperacao;
+		$emprhoras = $operacao->GetIdoperacaoByMnemonico('EMPRHORAS')->idoperacao;
+		$devolucao = $operacao->GetIdoperacaoByMnemonico('DEVOLUCAO')->idoperacao;
+		
+		$sql = new sql('distinct(e.idemprestimo), u.login, ' . $this->_db->TimestampToChar('e.datahoradoemprestimo') . ' as datahoradoemprestimo, e.datahoradoemprestimo as dataToOrder,' . $this->_db->TimestampToChar('e.datahoraprevisaodevolucao').' as datahoraprevisaodevolucao, ' . $this->_db->TimestampToChar('e.datahoradadevolucao') . " as datahoradadevolucao, decode(e.emprhoras,1,'Sim','Não') as emprhoras, log1.login as usuarioopemprestimo, log2.login as usuarioopdevolucao, log1.nome as nomeopemprestimo, log2.nome as nomeopdevolucao", 'bt_emprestimo e, (select idusuario, login from cm_usuario union select idusuario, numrg||\'<BR><font color=red>Externa</font>\' as login from bt_usuarioexterno) u, bt_exemplar x, (select l.identificador, u.login, p.nome from bt_logoperacao l, cm_usuario u, cm_pessoa p where (l.idoperacao = ? or l.idoperacao = ?) and l.idusuario = u.idusuario and u.idpessoa = p.idpessoa) log1, (select l.identificador, u.login, p.nome from bt_logoperacao l, cm_usuario u, cm_pessoa p where l.idoperacao = ? and l.idusuario = u.idusuario and u.idpessoa = p.idpessoa) log2', 'e.idexemplar = x.idexemplar AND e.idusuario = u.idusuario AND x.idexemplar = ? AND trim(to_char(e.idemprestimo)) = trim(log1.identificador(+)) AND trim(to_char(e.idemprestimo)) = trim(log2.identificador(+))', "dataToOrder desc");*/
+
+		$sql = new sql('distinct(e.idemprestimo) as idemprestimo, u.login, ' . $this->_db->TimestampToChar('e.datahoradoemprestimo') . ' as datahoradoemprestimo, e.datahoradoemprestimo as dataToOrder,' . $this->_db->TimestampToChar('e.datahoraprevisaodevolucao').' as datahoraprevisaodevolucao, ' . $this->_db->TimestampToChar('e.datahoradadevolucao') . " as datahoradadevolucao, (CASE WHEN e.emprhoras = '1' THEN e.emprhoras = 'Sim' ELSE e.emprhoras = 'Não' END) as emprhoras", 'bt_emprestimo e, (select idusuario, login from cm_usuario union select idusuario, numrg||\'<BR><font color=red>Externa</font>\' as login from bt_usuarioexterno) u, bt_exemplar x', 'e.idexemplar = x.idexemplar AND e.idusuario = u.idusuario AND x.idexemplar = ?', "dataToOrder desc");
+		
+//		$query = $this->Query($sql, array($emprestimo,$emprhoras,$devolucao,$idexemplar));
+		$query = $this->Query($sql, array($idexemplar));
+
+		return $query;
+	}
+
+
+   function GetById($id)
+   {
+
+		$this->idemprestimo = $id;
+		$this->retrieve();
+		return $this;
+   }
+
+
+	function ListEmprestimosRegularesPorUsuario($idusuario)
+	{
+		$datar = date("d/m/y");
+	//	$sql = new sql('x.numerodotombo, o.titulo, o.autor, '.$this->_db->TimestampToChar('e.datahoraprevisaodevolucao').' as datahoraprevisaodevolucao,e.idemprestimo','bt_emprestimo e, bt_exemplar x, bt_obra o',"(e.idusuario = $idusuario) AND (e.datahoraprevisaodevolucao >= '$datar') AND (e.datahoradadevolucao is null) AND (e.idexemplar = x.idexemplar) AND (x.idobra = o.idobra)");
+
+                // _> Inseri a tabela Autor para Pesquisar o Nome do Autor   25/04/2009
+                        $sql = new sql("x.numerodotombo, o.titulo, a.sobrenome || ',' || a.prenome as autor,".$this->_db->TimestampToChar('e.datahoraprevisaodevolucao').' as datahoraprevisaodevolucao,e.idemprestimo','bt_emprestimo e,bt_autor a, bt_exemplar x, bt_obra o',"(e.idusuario = $idusuario) AND (e.datahoraprevisaodevolucao >= '$datar') AND (e.datahoradadevolucao is null) AND (e.idexemplar = x.idexemplar) AND (o.idautor = a.idautor) AND (x.idobra = o.idobra)");
+		$query = $this->Query($sql);
+      
+		return $query;
+	}
+
+
+	function ListEmprestimosIrregularesPorUsuario($idusuario)
+	{
+		$datar = date("d/m/y");
+	//	$sql = new sql($this->_db->TimestampToChar('e.datahoraprevisaodevolucao').' as datahoraprevisaodevolucao, x.numerodotombo, o.titulo, o.autor', 'bt_emprestimo e, bt_exemplar x, bt_obra o',"(e.idusuario = $idusuario) and (e.idexemplar = x.idexemplar) and (x.idobra = o.idobra) and (e.datahoraprevisaodevolucao < '$datar') and (e.datahoradadevolucao is null)");
+
+                // _> Inseri a tabela Autor para Pesquisar o Nome do Autor   25/04/2009
+                        
+                        $sql = new sql($this->_db->TimestampToChar('e.datahoraprevisaodevolucao')." as datahoraprevisaodevolucao, x.numerodotombo, o.titulo,a.sobrenome || ',' || a.prenome as autor ", 'bt_emprestimo e, bt_exemplar x, bt_obra o,bt_autor a' ,"(e.idusuario = $idusuario) and (e.idexemplar = x.idexemplar) and (x.idobra = o.idobra) and (e.datahoraprevisaodevolucao < '$datar') and (o.idautor = a.idautor) and (e.datahoradadevolucao is null)");
+
+        
+		$query = $this->Query($sql);
+
+		return $query;
+	}
+
+	
+	function thisEmprestimoExists($idemprestimo)
+	{
+		$sql = new sql('idemprestimo','bt_emprestimo','idemprestimo = ?');
+		$query = $this->Query($sql,$idemprestimo);
+		if($query->result <> NULL)
+			return true;
+    		else
+			return false;
+	}
+  
+
+	function SelectIdUsuariobyId($idemprestimo)
+	{
+		$sql = new sql('idusuario','bt_emprestimo','idemprestimo = ?');
+		//var_dump($sql->select($idemprestimo));
+		$query = $this->Query($sql,$idemprestimo);
+		
+		return $query->result;
+	}
+  
+
+	function GetIdUsuario()
+	{
+    	return $this->idusuario;
+	}
+  
+
+	function GetExemplares($numerodotombo,$idusuario)
+	{
+
+		global $item;
+
+
+		if ($numerodotombo)
+		{
+
+            // $exemplarOK controla o numero de exemplares que o usuário pode pegar
+			$exemplarOK = 0;
+
+			// $exemplares é um array contendo as informações sobre cada item
+			$exemplares = array();
+			// Preparando os termos do DATAGRID
+			//$sql = new sql('x.numerodotombo,o.numerodaobra,o.titulo,o.autor,o.edicao,e.mnemonico as status','bt_estado e,bt_exemplar x, bt_obra o','(numerodotombo=\'0720000165078\') AND (o.idobra = x.idobra) AND (e.idestado=x.idestado)','numerodotombo');
+	//		$sql = new sql('x.numerodotombo,o.numerodaobra,o.titulo,o.autor,o.edicao,e.mnemonico as status','bt_estado e,bt_exemplar x, bt_obra o','(numerodotombo=\'' . $numerodotombo[0] . '\') AND (o.idobra = x.idobra) AND (e.idestado=x.idestado)','numerodotombo');
+
+// _> Inseri a tabela Autor para Pesquisar o Nome do Autor   25/04/2009
+                                        $sql = new sql("x.numerodotombo,o.numerodaobra,o.titulo,a.sobrenome || ',' || a.prenome as autor,o.edicao,e.mnemonico as status",'bt_estado e,bt_exemplar x,bt_autor a ,bt_obra o','(numerodotombo=\'' . $numerodotombo[0] . '\') AND (o.idobra = x.idobra) AND (o.idautor = a.idautor) and (e.idestado=x.idestado)','numerodotombo');
+
+			$queryDataGrid = $this->Query($sql);
+
+			array_pop($queryDataGrid->result);
+		
+			foreach ($numerodotombo as $n)
+			{ // Para cada exemplar, faz as consistências
+
+                //$n = $n[0];
+
+                //var_dump($n);
+
+                // item 4.1
+    			$EmprestimoImpedido = false;
+    			$Mensagem = "";
+
+    			// item 4.2
+    			$query = $this->GetDadosExemplar($n);
+                        
+    			$idobra = $query->result[0][0];
+    			$idestado = $query->result[0][1];
+    			$idregracirculacao = $query->result[0][2];
+				$numerodaobra = $query->result[0][3];
+
+    			if (!$idobra)
+    			{
+    				$EmprestimoImpedido = true;
+    				$Mensagem = "Exemplar não encontrado.";
+    			}
+    			else
+    			{
+
+    				// item 4.4
+    				$query = $this->GetIdEmprestimo();
+    				$idoperacao = $query->result[0][0];
+
+    				//item 4.5
+    				$query = $this->GetEstadoFuturo($idoperacao,$idestado);
+    				$idestadofuturo = $query->result[0][0];
+
+    				// item 4.6
+    				$query = $this->GetDescricaoRegraCirculacao($idregracirculacao);
+    				$descRegraCirculacao = $query->result[0][0];
+    				
+    				
+    				// item 4.8
+    				// tive que verificar o exemplar se esta emprestado
+    				// antes de ver o estado futuro pq nao existe uma situacao do tipo
+    				// "exemplar emprestado sofre uma acao de emprestimo"
+    				
+    				$query = $this->NumeroTomboToIDExemplar($n);
+                    $idExemplar = $query->result[0][0];
+    				
+					$query = $this->EstaEmprestado($idExemplar);
+                    $taEmprestado = $query->result[0][0];
+    				$quemEmprestado = $query->result[0][1];
+    				
+    				
+
+                    //var_dump($taEmprestado);
+                    
+                    
+
+                    if ( (!$idestadofuturo) AND (!$taEmprestado) )
+    				{
+    					$EmprestimoImpedido = true;
+    					$Mensagem = "<br>Estado do exemplar não permite empréstimo.";
+    				}
+    				else
+    				{
+
+    					// item 4.7
+    					$query = $this->GetGrupo($idusuario);
+    					$idgrupo = $query->result[0][0];
+
+    					$query = $this->GetRegraCirculacao($idregracirculacao,$idoperacao,$idgrupo);
+    					$temDireito = $query->result[0][0];
+
+    					if (!$temDireito)
+    					{
+    						$EmprestimoImpedido = true;
+    						$Mensagem = "Usuário sem direitos de empréstimo sobre $descRegraCirculacao";
+    					}
+    					else
+    					{
+
+    						
+
+    						if ($taEmprestado)
+    						{
+    							$EmprestimoImpedido = true;
+    							if ($quemEmprestado == $idusuario)
+    								$Mensagem = "Exemplar emprestado para o próprio usuário";
+    							else
+    								$Mensagem = "Este exemplar está emprestado!";
+    						}
+    						else
+    						{
+
+    							// item 4.9
+    							$query = $this->GetSituacao("ATENDIDA");
+    							$idSituacaoAtendida = $query->result[0][0];
+
+    							// item 4.10
+    							$query = $this->GetSituacao("CONFIRMADA");
+    							$idSituacaoConfirmada = $query->result[0][0];
+
+    							// item 4.11
+    							$query = $this->EstaReservado($idSituacaoAtendida,$n);
+    							$usuarioReserva = $query->result[0][1];
+
+    							//var_dump($usuarioReserva);
+    							
+    							if ($usuarioReserva)
+    							{
+
+    								if ($usuarioReserva == $idusuario)
+    								{
+    									$Mensagem = "Reserva será atendida";
+    								}
+    								else
+    								{
+    									$EmprestimoImpedido = true;
+    									$Mensagem = "Este exemplar está reservado para outro usuário.";
+    								}
+
+    							}
+    							else
+    							{
+
+    								// item 4.12
+    								$query = $this->GetLimiteEmprestimos($idgrupo,$idregracirculacao);
+///    								$qtdeMaximaExemplares = $query->result[0][0];
+									//6 empréstimos é o limite geral de exemplares para um usuário
+//									$qtdeMaximaExemplares = 6;
+    								$qtdeMaximaExemplaresRegra = $query->result[0][0];
+
+///    								if (!$qtdeMaximaExemplares)
+    								if (!$qtdeMaximaExemplaresRegra)
+    								{
+    									$EmprestimoImpedido = true;
+    									$Mensagem = "Falta política de circulação.";
+    								}
+    								else
+    								{
+
+    									//
+    									// Com a quantidade máxima de empréstimos, verifica a
+    									// quantidade de exemplares emprestados que o usuário possui,
+    									// mais a quantidade de exemplares que está preenchendo o datagrid.
+    									//
+
+    									// item 4.13
+    									$query = $this->GetQtdeEmprestimos($idusuario);
+    									$numeroEmprestimos = $query->result[0][0];
+    									$query = $this->GetQtdeEmprestimosRegra($idusuario,$idregracirculacao);
+    									$numeroEmprestimosRegra = $query->result[0][0];
+    									
+    									//var_dump($numeroEmprestimos);
+
+//    									if ( ($numeroEmprestimos+$exemplarOK) >= $qtdeMaximaExemplares)
+//    									{
+//    										$EmprestimoImpedido = true;
+//    										$Mensagem = "Limite de empréstimos esgotado.<BR>Quantidade possível: $qtdeMaximaExemplares";
+
+//    									}
+//    									else
+//    									{
+	    									if ( ($numeroEmprestimosRegra+$exemplarOK) >= $qtdeMaximaExemplaresRegra)
+											{
+    											$EmprestimoImpedido = true;
+    											$Mensagem = "Limite de empréstimos esgotado para este material.<BR>Quantidade possível: $qtdeMaximaExemplaresRegra";
+
+	    									}
+											else
+	    									{
+												$emprestimo = $this->TemEmprestimoDestaObra($idusuario,$numerodaobra,$n);
+												if($emprestimo->result != null)
+												{
+	    											$EmprestimoImpedido = true;
+													$Mensagem = "Você já possui empréstimo dessa obra.<BR>Código do empréstimo: ". $emprestimo->result[0][0];
+												}
+												else
+												{
+													//
+													// PRONTO !!!! SE CHEGOU AQUI TA BELEZA!
+													// Soma um exemplar
+													//
+
+													$exemplarOK++;
+													$Mensagem = "OK";
+												}//fim do $this->TemEmprestimoDestaObra
+
+											}// fim do $numeroEmprestimos >= $qtdeMaximaExemplaresRegra
+
+//    									} // fim do $numeroEmprestimos >= $qtdeMaximaExemplares
+
+    								} // fim do !qtdeMaximaExemplares => Nao existe política
+
+    							} // fim do $usuarioReserva (o exemplar ta reservado)
+
+    						} // fim do !taEmprestado
+
+    					} // fim do if !temDireito
+
+    				} // fim do if !idestadofuturo
+
+    			} // fim do !idobra - exemplar não encontrado
+
+    			
+    			// Temos duas opções. Se idobra nao foi encontrado, tenho que preencher apenas
+    			// com "Nao encontrado". Se foi encontrado faz um sql pegando os dados e inserindo
+    			// forçadamente na query.
+    			
+    			
+    			if ($EmprestimoImpedido)
+    				$Mensagem = "<font color=red>" . $Mensagem . "</font>";
+    			
+    			
+    			
+    			if ($idobra)
+    			{
+                                $sqlTemp = new sql("x.numerodotombo,o.numerodaobra,o.titulo,a.sobrenome || ',' || a.prenome as autor,o.edicao,e.mnemonico as status",'bt_estado e,bt_exemplar x, bt_obra o,bt_autor a','(x.numerodotombo=\''. $n .'\') AND (o.idobra = x.idobra) AND (e.idestado=x.idestado) AND (a.idautor = o.idautor)','numerodotombo');
+					$queryTemp = $this->Query($sqlTemp);
+
+					$queryTemp->result[0][5] = $Mensagem;
+					$queryTemp->result[0][6] = $EmprestimoImpedido;
+										
+					array_push($queryDataGrid->result,$queryTemp->result[0]);
+					
+
+    			}
+    			else
+    			{
+    				
+					// Precisa colcar forçadamente que nao existe este exemplar
+					
+					array_push($queryDataGrid->result,array($n,'','','','','<font color=red>Exemplar não encontrado</font>',true));
+    				
+    				
+    			}
+    			  			
+    			
+    			
+    		    			
+		} // fim do foreach
+                                                                 
+    	return $queryDataGrid;
+
+		}
+		else
+		{ // nao tem numerodotombo
+		  return false;
+		}
+	}
+
+	
+	function GetDadosExemplar($numerodotombo)
+	{
+		// nao mude esta ordem: idobra,idestado,idregracirculacao
+		// se quiser adicionar mais campos, coloque depois do idregracirculação
+		//
+		$sql = new sql('e.idobra,e.idestado,e.idregracirculacao,o.numerodaobra','bt_exemplar e, bt_obra o','(e.idobra = o.idobra) and (e.numerodotombo = ?)');
+		//var_dump($sql->select($idexemplar));
+		return $this->Query($sql,$numerodotombo); 
+	}
+
+		
+	function NumeroTomboToIDExemplar($NumeroTombo)
+	{
+		$sql = new sql('idexemplar','bt_exemplar','numerodotombo=?');
+		return $this->Query($sql,$NumeroTombo); 
+	}
+
+
+	function IDExemplarToNumeroTombo($idExemplar)
+	{
+		$sql = new sql('numerodotombo','bt_exemplar','idexemplar=?');
+		return $this->Query($sql,$idExemplar); 
+	}
+
+
+	function GetIdEmprestimo()
+	{
+		$sql = new sql('idoperacao','bt_operacao','mnemonico=\'EMPRESTIMO\'');
+		return $this->Query($sql);
+	}
+
+
+	function GetIdOperacao($string)
+	{
+		$sql = new sql('idoperacao','bt_operacao','mnemonico=?');
+		return $this->Query($sql,$string);
+	}
+
+
+	function GetEstadoFuturo($idoperacao,$idestado)
+	{
+		$sql = new sql('idestadofuturo','bt_transicao','idoperacao=? and idestadopresente=?');
+		//var_dump($sql->select(array($idoperacao,$idestado)));
+		return $this->Query($sql,array($idoperacao,$idestado));
+	}
+
+
+	function GetDescricaoRegraCirculacao($idregracirculacao)
+	{
+		$sql = new sql('descricao','bt_regracirculacao','idregracirculacao=?');
+		return $this->Query($sql,$idregracirculacao);
+	}
+
+
+	function GetGrupo($idusuario)
+	{
+		$sql = new sql('idgrupo','bt_vinculo','idusuario=?');
+		return $this->Query($sql,$idusuario);
+	}
+
+
+	function GetRegraCirculacao($idregracirculacao,$idoperacao,$idgrupo)
+	{
+		$sql = new sql('idregracirculacao','bt_direito','idregracirculacao=? and idoperacao=? and idgrupo=?');
+		return $this->Query($sql,array($idregracirculacao,$idoperacao,$idgrupo));
+	}
+
+
+  	function EstaEmprestado($Exemplar)
+	{
+		$sql = new sql('idexemplar,idusuario','bt_emprestimo ','datahoradadevolucao is null and idexemplar=?');
+		return $this->Query($sql,$Exemplar);
+	}
+
+
+   	function GetSituacao($string)
+	{
+		$sql = new sql('idsituacao','bt_situacao','mnemonico=?');
+		return $this->Query($sql,$string);
+
+	}
+
+
+	function EstaReservado($idSituacaoAtendida,$Exemplar)
+	{
+		$sql = new sql('idreserva,idusuario','bt_reserva',"idsituacao=? and idexemplar=? and foiconfirmada = '0'");
+		return $this->Query($sql,array($idSituacaoAtendida,$this->NumeroTomboToIDExemplar($Exemplar)->result[0][0]));
+	}
+
+
+	function GetLimiteEmprestimos($idgrupo,$idregracirculacao)
+	{
+		$sql = new sql('limitedeemprestimo','bt_politica','idgrupo=? and idregracirculacao=?');
+		return $this->Query($sql,array($idgrupo,$idregracirculacao));
+	}
+
+
+	function GetQtdeEmprestimos($idusuario)
+	{
+		$sql = new sql('count(idemprestimo)','bt_emprestimo','datahoradadevolucao is null and idusuario = ?');
+        //var_dump($sql->select($idusuario));
+        return $this->Query($sql,$idusuario);
+	}
+
+	
+	function GetQtdeEmprestimosRegra($idusuario,$idregracirculacao)
+	{
+		$sql = new sql('count(e.idemprestimo)','bt_emprestimo e,bt_exemplar x','e.idusuario = ? and e.datahoradadevolucao is null and e.idexemplar = x.idexemplar and x.idregracirculacao = ?');
+        return $this->Query($sql,array($idusuario,$idregracirculacao));
+	}
+	
+
+	function ValidateVinculo($idusuario)
+	{
+		
+		//$date = date("Y-m-d");
+		$sql = new sql('idgrupo','bt_vinculo','(idusuario = ?)'); //AND (idgrupo<=4)');
+	
+		//var_dump($sql->select($idusuario));		
+		$query = $this->Query($sql,$idusuario);		
+
+		return $query->result;
+	}
+	
+
+	function GetInfracao($idusuario)
+	{
+		global $item;
+		
+		$sql = new sql('b.descricao, a.notainfracao','bt_notainfracao a, bt_infracao b','(idusuario = ?) AND (a.idinfracao = b.idinfracao)');
+		
+		//var_dump($sql->select($idusuario));		
+		$query = $this->Query($sql,$idusuario);
+
+		return $query;
+	}
+	
+
+	function GetEmprestimosMulta($idusuario)
+	{
+		global $item;
+		
+		//$date = date("Y-m-d H:m:s");
+
+		$sql = new sql('idexemplar,idemprestimo','bt_emprestimo','(idusuario = ?) AND (datahoradadevolucao > datahoraprevisaodevolucao)');
+		
+		//var_dump($sql->select($idusuario));		
+		$query = $this->Query($sql,$idusuario);
+
+		return $query->result;
+	}
+	
+
+	function GetMulta($emprestimosopn)
+	{
+		global $item;
+		
+		$where = "(";
+		if ( $emprestimosopn )
+		{
+			foreach ( $emprestimosopn as $emp )
+				{
+					$where.= "idemprestimo = $emp[1] or ";
+				}
+				
+					$where.="idemprestimo=$emp[1])";		
+					$sql = new sql('sum(valor) as valormulta','bt_multa',$where.' AND (foipaga = 0)');
+					//var_dump($sql->select());
+					$query = $this->Query($sql);
+					return $query->result;
+		}		
+	}
+	
+
+	function ListEmprestimosRegulares($idusuario)
+	{
+	//	$sql = new sql($this->_db->TimestampToChar('e.datahoraprevisaodevolucao') . ' as datahoraprevisaodevolucao, x.numerodotombo, o.titulo, o.autor, e.idexemplar','','(e.idusuario = ?) AND (datahoraprevisaodevolucao >= now()) AND (datahoradadevolucao is null)');
+	//	$sql->SetLeftJoin('bt_emprestimo e', 'bt_exemplar x', 'e.idexemplar = x.idexemplar');
+	//	$sql->SetLeftJoin('bt_exemplar x', 'bt_obra o', 'x.idobra = o.idobra');
+		
+// PESQUISANDO COM JOIN NA TABELA AUTOR    25/04/20098
+                        $sql = new sql($this->_db->TimestampToChar('e.datahoraprevisaodevolucao') . ' as datahoraprevisaodevolucao, x.numerodotombo, o.titulo, o.idautor, e.idexemplar','','(e.idusuario = ?) AND (datahoraprevisaodevolucao >= now()) AND (datahoradadevolucao is null)');
+        $sql->SetLeftJoin('bt_emprestimo e', 'bt_exemplar x', 'e.idexemplar = x.idexemplar', 'o.idautor = a.idautor');
+              $sql->SetLeftJoin('bt_exemplar x', 'bt_obra o', 'bt_autor a','x.idobra = o.idobra');
+        
+
+        
+		$query = $this->Query($sql,$idusuario);
+		
+		//var_dump($query->result);
+
+		return $query;
+	}
+
+
+	function ListEmprestimosIrregulares($idusuario)
+	{
+		$data = substr($this->_db->CharToTimestamp(date('d/m/Y H:i:s')),1);
+
+		//$sql = new sql('e.datahoraprevisaodevolucao, x.numerodotombo, o.titulo, o.autor', 'bt_emprestimo e, bt_exemplar x, bt_obra o',"(e.idusuario = ?) and (e.idexemplar = x.idexemplar) and (x.idobra = o.idobra) and ((e.datahoraprevisaodevolucao < $data))");
+
+// PESQUISANDO COM JOIN NA TABELA AUTOR    25/04/2009
+                
+                                $sql = new sql("e.datahoraprevisaodevolucao, x.numerodotombo, o.titulo,a.sobrenome || ',' || a.prenome as autor,o.idautor", 'bt_emprestimo e, bt_exemplar x, bt_obra o,bt_autor a',"(e.idusuario = ?) and (e.idexemplar = x.idexemplar) and (x.idobra = o.idobra) and (a.idautor = o.idautor) and ((e.datahoraprevisaodevolucao < $data))");
+
+
+                
+		$query = $this->Query($sql,$idusuario);
+
+		return $query;
+	}
+	
+
+	function GetEmprestimosOpenandIrregular($idusuario)
+	{
+		global $item;
+		
+		$data = substr($this->_db->CharToTimestamp(date('d/m/Y H:i:s')),1);
+
+		//$sql = new sql('x.idexemplar, x.numerodotombo, o.numerodaobra, o.titulo, o.autor,'.$this->_db->TimestampToChar('y.DATAHORAPREVISAODEVOLUCAO').' as prevdev','bt_exemplar x,bt_emprestimo y,bt_obra o',"(idusuario = ?) AND (y.datahoradadevolucao is NULL) AND ((y.datahoraprevisaodevolucao < $data)) AND (x.idexemplar = y.idexemplar) AND (x.idobra = o.idobra)");
+
+                // PESQUISANDO COM JOIN NA TABELA AUTOR    25/04/2009
+                                $sql = new sql("x.idexemplar, x.numerodotombo, o.numerodaobra, o.titulo, o.idautor ,a.sobrenome || ',' || a.prenome as autor,".$this->_db->TimestampToChar('y.DATAHORAPREVISAODEVOLUCAO').' as prevdev','bt_exemplar x,bt_emprestimo y,bt_obra o ,bt_autor a ',"(idusuario = ?) AND (y.datahoradadevolucao is NULL) AND ((y.datahoraprevisaodevolucao < $data)) and (a.idautor = o.idautor) AND (x.idexemplar = y.idexemplar) AND (x.idobra = o.idobra)");
+
+                                
+		//var_dump($sql->select($idusuario));		
+		$query = $this->Query($sql,$idusuario);
+
+		return $query;
+	}
+	
+	
+	function getEmprestimosPorHoraAtrasados($idusuario)
+	{
+		global $item;
+		
+		$data = substr($this->_db->CharToTimestamp(date('d/m/Y H:i:s')),1);
+//		$sql = new sql('x.idexemplar, x.numerodotombo, o.numerodaobra, o.titulo, o.autor,'.$this->_db->TimestampToChar('y.DATAHORAPREVISAODEVOLUCAO').' as prevdev','bt_exemplar x,bt_emprestimo y,bt_obra o',"(idusuario = ?) AND (y.datahoradadevolucao is NULL) AND ((y.datahoraprevisaodevolucao < $data)) AND (x.idexemplar = y.idexemplar) AND (x.idobra = o.idobra) AND (y.emprhoras='1')");
+
+	// PESQUISANDO COM JOIN NA TABELA AUTOR    25/04/2009
+                $sql = new sql("x.idexemplar, x.numerodotombo, o.numerodaobra, o.titulo, o.idautor,a.sobrenome || ',' || a.prenome as autor,".$this->_db->TimestampToChar('y.DATAHORAPREVISAODEVOLUCAO').' as prevdev','bt_exemplar x,bt_emprestimo y,bt_obra o, bt_autor a',"(idusuario = ?) AND (y.datahoradadevolucao is NULL) AND ((y.datahoraprevisaodevolucao < $data)) AND (x.idexemplar = y.idexemplar) AND (x.idobra = o.idobra) AND (a.idautor = o.idautor) AND (y.emprhoras='1')");
+                        
+		//var_dump($sql->select($idusuario));		
+		$query = $this->Query($sql,$idusuario);
+
+		return $query;	
+	}
+	
+
+	function ConfirmarReserva($idReserva,$idSituacaoConfirmada)
+	{
+	    
+		// Item 4.11 OBS 1
+				
+		$k = new MKrono();
+        $dataHoje = $k->KDate('%d/%m/%Y   %H:%i:00');
+        //$dataHoje = ":TO_DATE('". $dataHoje . "','DD/MM/YYYY HH24:MI:SS')";
+	$dataHoje = ":TO_timestamp('". $dataHoje . "','DD/MM/YYYY HH24:MI:SS')";                
+
+		$sql = new sql('datahoradasituacao,idsituacao,foiconfirmada','bt_reserva','idreserva = ?');
+		$values = array($dataHoje,$idSituacaoConfirmada,1,$idReserva);
+		return $this->Execute($sql->Update($values));
+		
+	}
+
+
+	function LastNumeroEmprestimo()
+	{    
+	  return $this->_db->GetNewId('seq_bt_emprestimo');
+	}
+	
+	
+	function getTitulo($numerodotombo)
+	{
+		if ($numerodotombo)
+		{
+			$sql = new sql('o.titulo','bt_obra o, bt_exemplar e','(e.numerodotombo = ?) and (e.idobra = o.idobra)');
+			return $this->Query($sql,$numerodotombo);
+	    }	
+	}
+	
+	function getNotaCirculacao($numerodotombo)
+	{
+		if ($numerodotombo)
+		{
+			$sql = new sql ('e.notacirculacao', 'bt_exemplar e', 'numerodotombo = ?');
+			return $this->Query($sql,$numerodotombo);
+		}
+	}
+
+	function ConfirmarEmprestimo($Exemplar,$idusuario,$idoperador, $renovacoes=null)
+	{
+		global $MIOLO,$mkrono,$module;
+		$ok = false;
+		
+  		// item 4.14
+				
+        $idemprestimo = $this->LastNumeroEmprestimo();
+		$idexemplar = $this->NumeroTomboToIDExemplar($Exemplar)->result[0][0];
+
+		$idregracirculacao = $this->GetDadosExemplar($Exemplar)->result[0][2];
+		$idgrupo = $this->getGrupoUsuario($idusuario)->result[0][0];
+  		$qtsDias = $this->getDiasEmprestimo($idregracirculacao,$idgrupo)->result[0][0];
+  		$horaFinal = $this->getHoraFinal($idregracirculacao,$idgrupo)->result[0][0];
+		
+        // datas chulas
+        $k = new MKrono();
+        $dataHoje = $k->KDate('%d/%m/%Y %H:%i:00');
+            
+        //
+        // Verificando feriados 
+        //
+        $qtsDias = $this->CalculaDias($qtsDias);
+        
+        //var_dump($qtsDias);
+               
+        $dataPrevDevOrg = $k->Operation('+',$dataHoje,$qtsDias . '%D') . " " . $horaFinal;
+        
+              
+        //var_dump($qtsDias,$dataHoje,$dataPrevDev);
+
+        // formatando para o oracle
+        //$dataHoje = ":TO_DATE('". $dataHoje . "','DD/MM/YYYY HH24:MI:SS')";
+        $dataHoje = ":to_timestamp('".$dataHoje."','DD/MM/YYYY HH24:MI:SS')";
+//      $dataPrevDev = ":TO_DATE('". $this->InsereEspacoData($dataPrevDevOrg) . "','DD/MM/YYYY HH24:MI:SS')";
+	$dataPrevDev = ":to_timestamp('". $this->InsereEspacoData($dataPrevDevOrg) . "','DD/MM/YYYY HH24:MI:SS')";
+
+		//determina a quantidade de renovacoes
+		if($renovacoes != null)
+		{
+			$renovacoes++;
+		}
+		else
+		{
+			$renovacoes = 0;
+		}
+
+        $this->BeginTransaction();
+
+	        $sql = new sql('idemprestimo,emprhoras,idusuario,idexemplar,datahoradoemprestimo,datahoraprevisaodevolucao,quantidadederenovacoes','bt_emprestimo');
+			$values = array($idemprestimo,0,$idusuario,$idexemplar,$dataHoje,$dataPrevDev, $renovacoes);
+			$ok = $this->Execute($sql->Insert($values));
+
+			
+	        // Altera o idsituacao do exemplar!
+        	$sql = new sql('idestado','bt_exemplar','idexemplar=?');
+            $objEstado=$MIOLO->GetBusiness($module,'estado'); 
+       	    $idestado = $objEstado->GetIdByMnemonico("EMPRESTADO");
+            $ok = $this->Execute($sql->Update(array($idestado,$idexemplar)));
+            
+            			//
+				  		// LOG ;)
+				  		//
+				  		$log = $MIOLO->GetBusiness($module,'log'); 
+						$sqlog = $log->Gravar("EMPRESTIMO",$idemprestimo);	
+						$this->Execute($sqlog->Insert());		
+     		
+			$this->EndTransaction();
+            
+            return array($idemprestimo,$this->InsereEspacoData($dataPrevDevOrg));
+	}
+	
+
+	function ConfirmarEmprestimoRecintoUfjf($Exemplar,$idusuario,$idoperador)
+	{global $MIOLO,$mkrono,$module;
+		
+	 	$k = new MKrono();
+        $dataHoje = $k->KDate('%d/%m/%Y %H:%i:00');
+       // $dataPrevDev = ":TO_DATE('". $dataHoje . "','DD/MM/YYYY HH24:MI:SS')";
+        $dataPrevDev = ":TO_timestamp('". $dataHoje . "','DD/MM/YYYY HH24:MI:SS')";
+
+        $qtsDias = 0; // caso algum dia precise ter mais dias
+        $horaFinal = ' 22:30:00';
+        $dataPrevDev = $k->Operation('+',$dataHoje,$qtsDias . '%D') . $horaFinal;
+        
+        // formatando para o oracle
+        //$dataHojeOracle = ":TO_DATE('". $dataHoje . "','DD/MM/YYYY HH24:MI:SS')";
+	$dataHojeOracle= ":TO_timestamp('". $dataHoje . "','DD/MM/YYYY HH24:MI:SS')";
+//        $dataPrevDevOracle = ":TO_DATE('". $dataPrevDev . "','DD/MM/YYYY HH24:MI:SS')";
+        $dataPrevDevOracle = ":TO_timestamp('". $dataPrevDev . "','DD/MM/YYYY HH24:MI:SS')";
+        
+        $idemprestimorecinto = $this->LastNumeroEmprestimo();
+        $idexemplar = $this->NumeroTomboToIDExemplar($Exemplar)->result[0][0];
+        
+        $this->BeginTransaction();
+             
+        $sql = new sql('idemprestimo,emprhoras,idusuario,idexemplar,datahoradoemprestimo,datahoraprevisaodevolucao','bt_emprestimo');
+	 	$values = array($idemprestimorecinto,1,$idusuario,$idexemplar,$dataHojeOracle,$dataPrevDevOracle);       
+	 	
+	 	$ok = $this->Execute($sql->Insert($values));
+        
+	 	$objEstado=$MIOLO->GetBusiness($module,'estado'); 
+        $idestado = $objEstado->GetIdByMnemonico("EMPRESTADO");
+	 	
+        $sql = new sql('idestado','bt_exemplar','idexemplar=?');
+        $ok = $this->Execute($sql->Update(array($idestado,$idexemplar)));
+        
+       							  	
+	    				//
+				  		// LOG ;)
+				  		//
+				  		$log = $MIOLO->GetBusiness($module,'log'); 
+						$sqlog = $log->Gravar("EMPRHORAS",$idemprestimorecinto);	
+						$this->Execute($sqlog->Insert());		  	
+        
+		 $this->EndTransaction();
+					
+        return array($idemprestimorecinto,$this->InsereEspacoData($dataPrevDev));
+		
+	}
+	
+	
+	function ConfirmarEmprestimoRecintoComunidade($Exemplar,$data,$idoperador)
+	{
+		global $MIOLO,$mkrono,$module;
+		
+	 	$k = new MKrono();
+        $dataHoje = $k->KDate('%d/%m/%Y %H:%i:00');
+//        $dataPrevDev = ":TO_DATE('". $dataHoje . "','DD/MM/YYYY HH24:MI:SS')";
+        $dataPrevDev = ":TO_timestamp('". $dataHoje . "','DD/MM/YYYY HH24:MI:SS')";
+        
+        $qtsDias = 0; // caso algum dia precise ter mais dias
+        $horaFinal = ' 22:30:00';
+        $dataPrevDev = $k->Operation('+',$dataHoje,$qtsDias . '%D') . $horaFinal;
+        
+        // formatando para o oracle
+//        $dataHojeOracle = ":TO_DATE('". $dataHoje . "','DD/MM/YYYY HH24:MI:SS')";
+  //      $dataPrevDevOracle = ":TO_DATE('". $dataPrevDev . "','DD/MM/YYYY HH24:MI:SS')";
+
+        $dataHojeOracle = ":TO_timestamp('". $dataHoje . "','DD/MM/YYYY HH24:MI:SS')";
+        $dataPrevDevOracle = ":TO_timestamp('". $dataPrevDev . "','DD/MM/YYYY HH24:MI:SS')";
+        
+        $idemprestimorecinto = $this->LastNumeroEmprestimo();
+        $idexemplar = $this->NumeroTomboToIDExemplar($Exemplar)->result[0][0];
+        
+        $this->BeginTransaction();
+               
+        $sql = new sql('idemprestimo,idusuario,idexemplar,datahoradoemprestimo,datahoraprevisaodevolucao,emprhoras','bt_emprestimo');
+	 	$values = array($idemprestimorecinto,$data->idusuario,$idexemplar,$dataHojeOracle,$dataPrevDevOracle,1);       
+        
+	 	//var_dump($sql->insert($values));
+	 	
+	 	$ok = $this->Execute($sql->Insert($values));
+        
+        $objEstado=$MIOLO->GetBusiness($module,'estado'); 
+        $idestado = $objEstado->GetIdByMnemonico("EMPRESTADO");
+        
+        $sql = new sql('idestado','bt_exemplar','idexemplar=?');
+        $ok = $this->Execute($sql->Update(array($idestado,$idexemplar)));
+        
+          				//
+				  		// LOG ;)
+				  		//
+				  		$log = $MIOLO->GetBusiness($module,'log'); 
+						$sqlog = $log->Gravar("EMPRHORAS",$idemprestimorecinto);	
+						$this->Execute($sqlog->Insert());
+											
+        $this->EndTransaction();
+        
+        return array($idemprestimorecinto,$this->InsereEspacoData($dataPrevDev));
+	}
+	
+
+	function CalculaDias($dias)
+	{
+		global $MIOLO;
+		$objFeriado = $MIOLO->GetBusiness('common','feriado');
+
+		$DiaUtil = false;
+		$i = 0;
+
+		while (! $DiaUtil)
+		{
+			$DiaUtil = true;
+
+			$dia = date('d');
+			$mes = date('m');
+			$ano = date('Y');
+			$hora = date('H');
+			$min = date('i');
+			$seg = date('s');
+
+			$data = mktime($hora,$min,$seg,$mes,$dia+$dias+$i,$ano);
+			$DataLimite = date('D Y-m-d 23:30:00',$data);
+			$DiaSemana = substr($DataLimite,0,-20);
+
+			$fdia = date('d',$data);
+			$fmes = date('m',$data);
+			$fano = date('Y',$data);
+			$fhora = date('H',$data);
+			$fmin = date('i',$data);
+			$fseg = date('s',$data);
+
+			//Verifica se a reserva vai cair em um sabado, domingo ou feriado
+			if (($DiaSemana == 'Sat') or ($DiaSemana == 'Sáb') or ($DiaSemana == 'Sun') or ($DiaSemana == 'Dom') or ($objFeriado->feriado($fdia.'/'.$fmes.'/'.$fano)))
+			{
+				$DiaUtil = false;
+				$i++;
+			}
+		}
+		
+		//var_dump($i+$dias);
+		
+		return $i+$dias;
+	}	
+	
+
+    function getGrupoUsuario($idusuario)
+	{
+		$sql = new sql('idgrupo','bt_vinculo','idusuario = ?');
+		$query = $this->Query($sql,$idusuario);
+		return $query;
+    }
+    
+
+    function getDiasEmprestimo($regracirculacao,$idgrupo)
+	{
+        $sql = new sql('diasdeemprestimo','bt_politica','idregracirculacao = ? and idgrupo = ? ');
+		$query = $this->Query($sql,array($regracirculacao,$idgrupo));
+		return $query;
+    }
+    
+
+    function getHoraFinal($regracirculacao,$idgrupo)
+	{
+        $sql = new sql('horadevolucao','bt_politica','idregracirculacao = ? and idgrupo = ? ');
+		$query = $this->Query($sql,array($regracirculacao,$idgrupo));
+		return $query;
+    }
+    
+
+    /*function qtsDiasParaDevolucao($idemprestimo)
+    {
+	$datar = date("d/m/y");
+    	$sql = new sql('datahoraprevisaodevolucao-$datar','bt_emprestimo','idemprestimo=?');
+	//$sql = new sql('age(datahoraprevisaodevolucao,timestamp \''.$datar.'\')','bt_emprestimo','idemprestimo=?');
+		$query = $this->Query($sql,$idemprestimo);
+		return $query;
+    }*/
+    
+     function qtsDiasParaDevolucao($idemprestimo)
+    {
+	$datar = date('d/m/y');
+	$sql = new sql("to_number(extract (day from(datahoraprevisaodevolucao - to_timestamp('".$datar."','dd/mm/yy'))),'99999D9')",'bt_emprestimo','idemprestimo=?');
+		$query = $this->Query($sql,$idemprestimo);
+		return $query;
+    }
+	 
+     function GetIdExemplarFromIdEmprestimo($idemprestimo)
+     {
+     	$sql = new sql('idexemplar','bt_emprestimo','idemprestimo=?');
+		$query = $this->Query($sql,$idemprestimo);
+		return $query;
+     }
+
+
+	 function GetEmprUsuarioExemplar($idusuario,$idexemplar,$qtdrenovacoes)
+	 {
+		$qtdrenovacoes = $qtdrenovacoes + 1;
+		$sql = new sql('*','bt_emprestimo','datahoradadevolucao is null and idusuario=? and idexemplar=? and quantidadederenovacoes=?');
+		$query = $this->Query($sql,array($idusuario,$idexemplar,$qtdrenovacoes));
+		return $query;
+	 }
+    
+
+    function PodeRenovar($idemprestimo,$idusuario)
+    {
+		global $MIOLO, $module, $self, $theme, $action, $page;  
+    
+    	$PodeRenovar = false;
+    	$Mensagem = "";
+
+       
+    	$exemplar = $MIOLO->GetBusiness($module,'exemplar');
+		$emprestimo = $this->GetById($idemprestimo);
+		$idexemplar = $emprestimo->idexemplar;
+		$qtdrenovacoes = $emprestimo->quantidadederenovacoes;
+
+   
+                $jaExisteEmpr = $this->GetEmprUsuarioExemplar($idusuario,$idexemplar,$qtdrenovacoes)->result[0][0];
+   
+		//verifica se já existe empréstimo aberto do exemplar para esse usuário
+		if (!$jaExisteEmpr)
+		{			
+			$consulta = $exemplar->regraConsulta($idexemplar);
+    	  	//$numerodotombo = $exemplar->GetById($idexemplar)->numerodotombo;
+			//$idemprestimo = $this->qualIdEmprestimo($idexemplar)->result[0][0];
+    		
+			
+			//verifica se é livro de consulta
+			if (!$consulta)
+			{
+	    		//verifica se empréstimo foi feito no recinto, para evitar renovações
+	    		if (!$emprestimo->esteEmprestimoEhDoRecinto($idemprestimo))
+	    		{    
+
+	    			$qtsDias = (int)($this->qtsDiasParaDevolucao($idemprestimo)->result[0][0]);
+	    			//verifica se o emprestimo está dentro das 24Hs disponíveis.
+				if (($qtsDias >= 0) and ($qtsDias <= 1))
+		    		{
+					// verifica se há reservas !!
+			    		$reserva = $MIOLO->GetBusiness($module,'reservar');
+			    		$idreserva = $reserva->existeReserva($idexemplar)->result[0][0];
+						if (!$idreserva)
+						{
+							// verifica se existem emprestimos irregulares para este usuário
+							if (!$this->ListEmprestimosIrregularesPorUsuario($idusuario)->result[0][0])
+							{
+								// verifica se há multas !!
+					   			$objMulta = $MIOLO->GetBusiness($module,'multa');
+								$totalMultas = $objMulta->GetTotalMultasNaoPagas($idusuario);
+								if ($totalMultas == NULL)
+								{
+									//verifica se o número de empréstimos para regra de circulação está esgotado
+									$usuario = $MIOLO->GetBusiness($module, 'usuario');
+									$idgrupo = $usuario->GetGrupoByIdusuario($idusuario);
+									$idregracirculacao = $exemplar->GetById($idexemplar)->idregracirculacao;
+									$query = $this->GetLimiteEmprestimos($idgrupo,$idregracirculacao);
+									$qtdeMaximaExemplaresRegra = $query->result[0][0];
+									$query = $this->GetQtdeEmprestimosRegra($idusuario,$idregracirculacao);
+									$numeroEmprestimosRegra = $query->result[0][0];
+									if ( ($numeroEmprestimosRegra) <= $qtdeMaximaExemplaresRegra)
+									{
+										$PodeRenovar = true;
+									}
+									else
+									{
+										$PodeRenovar = false;
+										$Mensagem = "Limite de empréstimos esgotado para este material.<BR>Quantidade possível: $qtdeMaximaExemplaresRegra";
+									}
+								}
+								else 
+								{
+									$PodeRenovar = false;
+							
+									$totalMultas = str_replace(',','.',$totalMultas);
+									$totalMultas = number_format($totalMultas,2,',','.');
+									$Mensagem = "Este exemplar está impossibilitado de ser renovado pois você possui multas pendentes. Total: R$ " . $totalMultas;	
+								}			
+							}
+							else 
+							{
+								$PodeRenovar = false;
+		    					$Mensagem = "Este exemplar está impossibilitado de ser renovado pois você possui empréstimos pendentes.";	
+							}
+						}
+						else 
+						{
+							$PodeRenovar = false;
+							$Mensagem = "Este exemplar está impossibilitado de ser renovado pois está reservado para outro usuário.";	
+						}   		
+		    		}
+		    		else
+					{
+    					$PodeRenovar = false;
+    					$Mensagem = "A Renovação on line deve ser feita com 24 horas de antecedência ao prazo de devolução";	
+					}
+				}
+		   		else
+		   		{
+		   			$PodeRenovar = false;
+		   			$Mensagem = "Empréstimo feito no recinto. Não é possível a renovação deste exemplar.";
+		   		}
+    		}
+    		else
+    		{
+				$PodeRenovar = false;
+	   			$Mensagem = "Exemplar de consulta. Não é possível a renovação deste exemplar.";	
+			}
+		}
+		else
+		{
+			$PodeRenovar = false;
+			$Mensagem = "Empréstimo já foi renovado anteriormente. Você deve ter clicado mais de uma vez no link Renovar. Confira por favor.";	
+		}
+  	    	    	
+		return array($PodeRenovar,$Mensagem);
+	
+	}
+    
+
+    function qualIdEmprestimo($idexemplar)
+    {
+    	$sql = new sql('idemprestimo','bt_emprestimo','idexemplar=? and datahoradadevolucao is null');
+		return $this->Query($sql,$idexemplar);
+    }
+    
+
+    function FechaEmprestimo($idusuario)
+	{
+		global $item;
+
+
+		return $ok;
+	}
+	
+
+	function RenovaEmprestimo($idemprestimo,$usuario)
+	{
+		global $MIOLO,$module,$item,$self, $theme, $action, $page;
+
+//		$this->BeginTransaction();
+		
+		
+		// Faz a Devolução. Teoricamente esta devolução não irá gerar multas 
+		// ou outras coisas, pois foi testada no PodeRenovar
+		$Exemplar = $this->GetIdExemplarFromIdEmprestimo($idemprestimo)->result[0][0];
+		$data->idemprestimo = $idemprestimo;
+		$data->hidexemplar = $Exemplar;
+
+		$objDevolucao = $MIOLO->GetBusiness($module,'devolucao');	
+		$objDevolucao->Devolucao($data);
+		
+		
+		// Faz o Emprestimo de novo
+		//
+		$NumeroTombo = $this->IDExemplarToNumeroTombo($Exemplar)->result[0][0];
+
+		//busca quantidade de renovacoes do emprestimo
+		$renovacoes = $this->GetById($idemprestimo)->quantidadederenovacoes;
+
+		$renovacao = $this->ConfirmarEmprestimo($NumeroTombo,$usuario,0,$renovacoes);
+		
+		
+						//
+				  		// LOG ;)
+				  		//
+//				  		$log = $MIOLO->GetBusiness($module,'log'); 
+//						$sqlog = $log->Gravar("EMPRESTIMO",$renovacao[0]);	
+//						$this->Execute($sqlog->Insert());
+
+//	   $this->EndTransaction();
+		
+		
+		if ($renovacao)
+		{	
+			return $renovacao; // data prev devolucao
+		}
+	}
+
+
+	function InsereEspacoData($data)
+	{
+			// Pode existir um jeito melhor de fazer isso!
+			//
+			// 12/09/200523:30:00
+
+			/**
+			$data{18}=$data{17};
+			$data{17}=$data{16};
+			$data{16}=$data{15};
+			$data{15}=$data{14};
+			$data{14}=$data{13};
+			$data{13}=$data{12};
+			$data{12}=$data{11};
+			$data{11}=$data{10};
+			$data{10}=' ';
+			**/
+
+			return $data;		
+	}
+	
+
+	function TemEmprestimoDestaObra($isUser,$numerodaobra,$numerodotombo)
+	{
+		global $MIOLO,$module;
+
+		$this->objExemplar = $MIOLO->GetBusiness($module,'exemplar');
+		$volume = strtoupper($this->objExemplar->GetVolumeExemplar($numerodotombo));
+		$exemplares = $this->objExemplar->ListExemplar($numerodaobra);
+		foreach($exemplares->result as $exemplar)
+		{
+			if($volume == null)
+			{
+				$sql = new sql('e.idemprestimo','bt_emprestimo e, bt_exemplar x','e.idusuario = ? and e.idexemplar = ? and (x.volume is null) and e.datahoradadevolucao is null and e.idexemplar = x.idexemplar');
+				$emprestimo = $this->Query($sql,array($isUser,$exemplar[0]));
+			}
+			else
+			{
+				$sql = new sql('e.idemprestimo','bt_emprestimo e, bt_exemplar x','e.idusuario = ? and e.idexemplar = ? and upper(x.volume) = ? and e.datahoradadevolucao is null and e.idexemplar = x.idexemplar');
+				$emprestimo = $this->Query($sql,array($isUser,$exemplar[0],$volume));
+			}
+			if($emprestimo->result != null)
+			{
+				return $emprestimo;
+			}
+		}
+	}
+
+	
+	function esteEmprestimoEhDoRecinto($idemprestimo)
+	{
+		$sql = new sql('emprhoras','bt_emprestimo','idemprestimo=?');
+		$emphoras = $this->Query($sql,$idemprestimo);
+		
+		if ($emphoras->result[0][0] == '1')
+		{
+			return true;	
+		}
+		else
+		{
+			return false;
+		}
+	}
+
+
+	function GetEmprestimoById($idemprestimo) 
+	//retorna dados dos emprestimos de usuario em cm_usuario ou em bt_usuarioexteno
+	{
+		$sql = new sql('e.idemprestimo, u.login, u.idusuario, x.numerodotombo, ' . $this->_db->TimestampToChar('datahoradoemprestimo') . ' as datahoradoemprestimo, ' . $this->_db->TimestampToChar('datahoraprevisaodevolucao') . ' as datahoraprevisaodevolucao, ' .  $this->_db->TimestampToChar('datahoradadevolucao') . 'as datahoradadevolucao', '(SELECT idusuario, login FROM cm_usuario UNION SELECT idusuario, numrg as login FROM bt_usuarioexterno) u, bt_exemplar x, bt_emprestimo e', '(e.idemprestimo = ?) and (e.idusuario = u.idusuario) and (e.idexemplar = x.idexemplar)');
+		$query = $this->Query($sql,$idemprestimo);
+		return $query->GetRowObject();
+	}
+
+
+	function saveEmprestimo($data)
+	{
+		global $MIOLO, $module;
+
+		$sql = new sql('datahoradadevolucao', 'bt_emprestimo', 'idemprestimo = ?');
+		$emprestimo_gravado = $this->Query($sql,$data->idemprestimo);
+
+		if( ($emprestimo_gravado->result[0][0] != null) and ($data->datahoradadevolucao == null) )
+		{
+			$this->objExemplar = $MIOLO->GetBusiness($module,'exemplar');
+			$this->objEstadoExemplar = $MIOLO->GetBusiness($module,'estado');
+
+			$estado = $this->objExemplar->GetEstadoByExemplar($data->numerodotombo);
+			$mnemonico = $this->objEstadoExemplar->GetMnemonicoById($estado);
+			if($mnemonico != 'DISPONIVEL')
+			{
+				return 'Não é possível apagar a data de devolução. Exemplar não está disponível. Estado atual: ' . $mnemonico;
+			}
+		}
+
+		$this->BeginTransaction();
+		//altera bt_emprestimo
+		if ($data->datahoradadevolucao == NULL)
+		{
+			$sql = new sql('datahoradoemprestimo, datahoraprevisaodevolucao', 'bt_emprestimo', 'idemprestimo = ?');
+			$values = array($this->_db->CharToTimestamp($data->datahoradoemprestimo), $this->_db->CharToTimestamp($data->datahoraprevisaodevolucao), $data->idemprestimo);
+		}
+
+		else
+		{
+			$sql = new sql('datahoradoemprestimo, datahoraprevisaodevolucao, datahoradadevolucao', 'bt_emprestimo', 'idemprestimo = ?');
+			$values = array($this->_db->CharToTimestamp($data->datahoradoemprestimo), $this->_db->CharToTimestamp($data->datahoraprevisaodevolucao), $this->_db->CharToTimestamp($data->datahoradadevolucao), $data->idemprestimo);
+		}
+		/*$sql = new sql('datahoradoemprestimo, datahoraprevisaodevolucao, datahoradadevolucao', 'bt_emprestimo', 'idemprestimo = ?');
+		$values = array($this->_db->CharToTimestamp($data->datahoradoemprestimo), $this->_db->CharToTimestamp($data->datahoraprevisaodevolucao), $this->_db->CharToTimestamp($data->datahoradadevolucao), $data->idemprestimo);*/
+		$query = $this->Execute($sql->Update($values));
+
+		//verifica se é necessário alterar estado do exemplar para EMPRESTADO e apagar o log de devolução
+		if( ($emprestimo_gravado->result[0][0] != null) and ($data->datahoradadevolucao == null) )
+		{
+			$emprestado = $this->objEstadoExemplar->GetIdByMnemonico('EMPRESTADO');
+			$this->objExemplar->AlteraEstado($data->numerodotombo, $emprestado);
+
+			$this->objOperacao = $MIOLO->GetBusiness($module,'operacao');
+			$devolucao = $this->objOperacao->GetIdoperacaoByMnemonico('DEVOLUCAO');
+			$sql = new sql('', 'bt_logoperacao', 'identificador = ? and idoperacao = ?');
+			$args = array($data->idemprestimo, $devolucao->idoperacao);
+			$this->Execute($sql->Delete($args));
+		}
+
+		// log
+  		$log = $MIOLO->GetBusiness($module,'log'); 
+		$sqlog = $log->Gravar("EDTEMPR",$data->idemprestimo);	
+		$this->Execute($sqlog->Insert());		
+
+		$this->EndTransaction();
+
+		return true;
+	}
+
+
+	function RelatorioEmprestimosPorPeriodo($dataIni, $dataFim)
+	{
+		
+		$sql = new sql('u.descricao as Unidade, count(e.idemprestimo) as Emprestimos', 'bt_unidade u, bt_emprestimo e, bt_exemplar x', '(e.datahoradoemprestimo >= '.substr($this->_db->CharToTimestamp($dataIni),1).') and (e.datahoradoemprestimo <= '.substr($this->_db->CharToTimestamp($dataFim),1).') and e.idexemplar = x.idexemplar and x.idunidade = u.idunidade','u.descricao', 'u.descricao');		
+		$query = $this->Query($sql);
+		return $query; 
+	}
+	
+	
+	function alteraPrevisaoDevolucao($data)
+	{
+		global $MIOLO, $module;
+
+		$dataini = $data->dataini;
+		$datafim = $data->datafim;
+		$datanova = $data->datanova;
+		$idunidade = $data->selunidade;
+		$hora = $data->selacervo == "circula" ? " 22:30:00" : " 10:00:00";
+		
+		/*
+		* preparação das datas
+		*/
+		$k = new MKrono();
+
+		$datainiOriginal = $dataini;
+		$datafimOriginal = $datafim;
+
+
+		$dataini = $k->Operation('-',$dataini,1 . '%D');
+		$datafim = $k->Operation('+',$datafim,1 . '%D');
+
+		/*
+		*  Este primeiro select está dentro do "in" do update
+		*/
+		if ($idunidade == "todas")
+		{
+			$sqlComUnidades = "";
+		}
+		else
+		{
+			$whereUnidade = " and x.idunidade = $idunidade";
+			$sqlExemplares = new sql('e.idemprestimo','bt_emprestimo e,bt_exemplar x','e.idexemplar=x.idexemplar and e.datahoradadevolucao is null' . $whereUnidade);
+			$sqlComUnidades = "and idemprestimo in (" . $sqlExemplares->select() . ")";
+		}
+		
+	
+		/*
+		* Este é o SQL do update
+		*/
+		$sql = new sql('datahoraprevisaodevolucao','bt_emprestimo',"datahoradadevolucao is null and (datahoraprevisaodevolucao > ? and datahoraprevisaodevolucao < ?) and to_char(datahoraprevisaodevolucao, 'DD/MM/YYYY HH24:MI:SS') LIKE '%$hora%' " .  $sqlComUnidades);
+		
+		$values = array($this->_db->CharToTimestamp($datanova . $hora), $this->_db->CharToTimestamp($dataini), $this->_db->CharToTimestamp($datafim) );
+
+		$commands = array();
+		$commands[] = $sql->Update($values);
+		//LOG
+		if($idunidade == 'todas')
+		{
+			$mnemonico = 'Todas';
+		}
+		else
+		{
+			$objUnidade = $MIOLO->GetBusiness($module, 'unidade');
+			$objUnidade = $objUnidade->GetByCodigo($idunidade);
+			$mnemonico = $objUnidade->mnemonico;
+		}
+		$log = $MIOLO->GetBusiness($module,'log');
+		$sqlog = $log->Gravar("ALTPREVDEVOL", $datainiOriginal . ' a '. $datafimOriginal . "/" . $data->selacervo . '/' . $mnemonico);
+		$commands[] = $sqlog->Insert();
+		$this->Execute($commands);
+
+		$ok = ( ! $this->checkError() );
+		return $ok;
+
+	}
+	
+
+	function getPrevisaoDevolucaoEntreDuasDatas($data)
+	{
+		global $MIOLO, $module;
+
+		$dataini = $data->dataini;
+		$datafim = $data->datafim;
+		$idunidade = $data->selunidade;
+		$hora = $data->selacervo == "circula" ? " 22:30:00" : " 10:00:00";
+		
+		// preparação das datas
+		$k = new MKrono();
+//		$dataini = $k->Operation('-',$dataini,1 . '%D');
+		$datafim = $k->Operation('+',$datafim,1 . '%D');
+
+		//Este primeiro select está dentro do "in" do principal
+		if ($idunidade == "todas")
+		{
+			$whereUnidade = "";
+		}
+		else
+		{
+			$whereUnidade = " and x.idunidade = $idunidade";
+		}
+		$sqlExemplares = new sql('e.idemprestimo','bt_emprestimo e,bt_exemplar x','e.idexemplar=x.idexemplar and e.datahoradadevolucao is null' . $whereUnidade);
+
+		//Este é o SQL principal
+		$sql = new sql('datahoraprevisaodevolucao','bt_emprestimo',"datahoradadevolucao is null and (datahoraprevisaodevolucao > ? and datahoraprevisaodevolucao < ?) and to_char(datahoraprevisaodevolucao, 'DD/MM/YYYY HH24:MI:SS') LIKE '%$hora%' and idemprestimo in (" . $sqlExemplares->select() . ")");
+		
+		$values = array($this->_db->CharToTimestamp($dataini), $this->_db->CharToTimestamp($datafim) );
+
+		$query = $this->Query($sql,$values);
+		return $query->result;
+	}
+
+
+	function obtemEmprestimosPendentesEntreDuasDatas($dataInicio,$dataFim=null)
+	{ 
+		global $MIOLO;
+		
+		$where = "datahoradadevolucao is null and datahoraprevisaodevolucao > ? ";
+		$values = array($this->_db->CharToTimestamp($dataInicio));
+		if($dataFim)
+		{
+			$where .= "and datahoraprevisaodevolucao < ?";
+			$values[] = $this->_db->CharToTimestamp($dataFim);
+		}
+
+		$sql = new sql('distinct ' . $this->_db->TimestampToChar('datahoraprevisaodevolucao') . ' as data, datahoraprevisaodevolucao', 'bt_emprestimo', $where, 'datahoraprevisaodevolucao');
+		$query = $this->Query($sql, $values);
+		
+		return $query->result;		
+	}
+
+
+	function alteraPrevDevol()
+	{
+		//$sql = new sql('datahoraprevisaodevolucao', 'bt_emprestimo', "idemprestimo in (select e.idemprestimo from bt_emprestimo e,bt_exemplar x,bt_regracirculacao r where e.datahoradadevolucao is null and e.emprhoras=0 and (e.datahoraprevisaodevolucao >= to_date('26/11/2007 00:00:00', 'dd/mm/yyyy hh24:mi:ss') and e.datahoraprevisaodevolucao <= to_date('10/03/2008 23:59:59', 'dd/mm/yyyy hh24:mi:ss')) and e.idexemplar=x.idexemplar and x.idregracirculacao=r.idregracirculacao and upper(r.descricao) not like '%CONSULTA%')");
+		$sql = new sql('datahoraprevisaodevolucao', 'bt_emprestimo', "idemprestimo in (select e.idemprestimo from bt_emprestimo e,bt_exemplar x,bt_regracirculacao r where e.datahoradadevolucao is null and e.emprhoras=0 and (e.datahoraprevisaodevolucao >= to_timestamp('26/11/2007 00:00:00', 'dd/mm/yyyy hh24:mi:ss') and e.datahoraprevisaodevolucao <= to_timestamp('10/03/2008 23:59:59', 'dd/mm/yyyy hh24:mi:ss')) and e.idexemplar=x.idexemplar and x.idregracirculacao=r.idregracirculacao and upper(r.descricao) not like '%CONSULTA%')");
+		$values = array($this->_db->CharToTimestamp('10/03/2008 22:30:00', 'dd/mm/yyyy hh24:mi:ss'));
+
+		$this->Execute($sql->Update($values));
+	}
+	
+	/* Retorna o número de dias de penalidade do usuário com o cartao de acesso 
+	 * fornecido
+	 */
+	function verificaPenalidade( $cartaoAcesso )
+	{
+		$sql = new sql( 'datapermissaoemprestimo','bt_validacao', 'codigoacesso = ?' );
+		$query = $this->Query( $sql, $cartaoAcesso );
+
+		$dataPermissao = strtotime( $query->result[ 0 ][ 0 ] ); // Data a partir da qual é permitido realizar empréstimo
+		$dataCorrente = strtotime( date( "Y-m-d" ) ); // Data atual
+		
+		return ( $dataPermissao/60/60/24 ) - ( $dataCorrente/60/60/24 );
+	}
+	
+	/* Retorna o número de dias de penalidade do usuário externo com o id 
+	 * fornecido
+	 */
+	function verificaPenalidadeUE( $idusuario )
+	{
+		$sql = new sql( 'datapermissaoemprestimo','bt_usuarioexterno', 'idusuario = ?' );
+		$query = $this->Query( $sql, $idusuario );
+
+		$dataPermissao = strtotime( $query->result[ 0 ][ 0 ] ); // Data a partir da qual é permitido realizar empréstimo
+		$dataCorrente = strtotime( date( "Y-m-d" ) ); // Data atual
+		
+		return ( $dataPermissao/60/60/24 ) - ( $dataCorrente/60/60/24 );
+	}
+}
+?>

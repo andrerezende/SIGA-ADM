@@ -1,0 +1,395 @@
+<?php
+class repExecucaoFinanceira extends PDFReport
+{
+	var $img;
+	var $timestamp;
+    var $level = array();
+	var $total;
+	var $subtotalUO;
+	var $subtotalRubrica;
+	var $UO;
+	var $dataInicial;
+	var $dataFinal;
+	var $objOrcamentoInterno;
+	var $objUO;
+	var $objTipoReq;
+	var $objRequisicao;
+
+	function __construct()
+	{
+        global $MIOLO, $module, $page, $context, $self, $action, $perms;
+
+        parent::__construct(NULL, NULL, 55);
+        $ui = $MIOLO->GetUI();
+		$this->img = $ui->GetImageSrc('logo_siga.png',$module); 
+        //        $this->SetPDF(new ezPDFReport('2'));
+        $this->timestamp = date('d/m/Y G:i');
+        //        $this->SetTrigger('AfterNewPage','repMultiLevel2','AfterNewPage', $this);
+        $this->pdf->ezStartPageNumbers(520, 800, 12, 'rigth', 'Página: {PAGENUM}');
+        $this->pdf->ezSetMargins(100, 30, 30, 30);
+        $this->GeneratePageHeader();
+        $this->GeneratePageFooter();
+		$this->SetOption('fontSize',9);
+
+		$this->UO = Form::GetFormValue('selUO');
+		$this->dataInicial = Form::GetFormValue('calDataInicial');
+		$this->dataFinal = Form::GetFormValue('calDataFinal');
+		$ano = substr($this->dataFinal,6,4);
+		$this->objOrcamentoInterno = $MIOLO->GetBusiness($module,'orcamentointerno');
+		$this->objUO = $MIOLO->GetBusiness($module,'uo');
+		$this->objTipoReq = $MIOLO->GetBusiness($module,'tiporeq');
+		$this->objRequisicao = $MIOLO->GetBusiness($module,'requisicao');
+		$cf = new MCurrencyFormatter();
+
+		//montagem da Árvore de UOs, Rubricas e Tipos de Requisicao
+		$uos = $this->objUO->listNomesUos();
+		$numUos = $uos->GetRowCount();
+		$tree = array();
+		$uos->moveFirst();
+		for ($i = 0; $i < $numUos; $i++)
+		{
+			$rowUo = $uos->getRowValues();
+			$rubricas = $this->objOrcamentoInterno->GetRubricasByUo($rowUo[0],$ano);
+			$numRubricas = $rubricas->GetRowCount();
+			$rubricas->moveFirst();
+			$tree[$rowUo[1]] = array();
+			for ($j = 0; $j < $numRubricas; $j++)
+			{
+				$rub = $rubricas->getRowValues();
+				$tipos = $this->objTipoReq->GetTiposByUoRubrica($rowUo[0], $rub[1], $this->dataInicial, $this->dataFinal);
+				$numTipos = count($tipos);
+//				if($rowUo[0]==118)
+//				{
+//					var_dump($rub[1]);
+//					var_dump($numTipos);
+//				}
+				for ($k = 0; $k < $numTipos; $k++)
+				{
+					$tree[$rowUo[1]][$rub[1]][] = $tipos[$k][0];
+				}
+				$rubricas->moveNext();
+			}
+			$uos->moveNext();
+		}
+
+//var_dump($tree);
+		// simula multiplos niveis de quebra
+		foreach ($tree as $nome=>$rubricas) // level 1
+           {
+			$idUo = $this->objUO->GetByNome($nome);
+			if ( ($this->UO == $idUo) or ($this->UO == '0') )
+			{
+				$nomeOK = false;
+                $soma11 = 0;
+                $soma12 = 0;
+                foreach ($rubricas as $rubrica=>$tipos) // level 2
+                {
+					$rubricaOK = false;
+					$soma21 = 0;
+                    $soma22 = 0;
+                    foreach ($tipos as $tipo) // level 3
+                    {
+						$tipoOK = false;
+
+						// tipos de requisições que aparecem no relatório
+						if (($tipo == 'HOTEL') or ($tipo == 'PASSAGEM') or ($tipo == 'RESTAURANTE') or ($tipo == 'VEICULO') or ($tipo == 'DIARIA') or ($tipo == 'COMPRA') or ($tipo == 'ALMOXARIFADO') or ($tipo == 'SERVIÇOS EXTERNOS'))
+						{
+							// dados relativos às requisições do tipo e da rubrica corrente
+							$query = $this->objRequisicao->repExecucaoFinanceira($idUo, $rubrica, $this->dataInicial, $this->dataFinal, $tipo);
+
+							$r = count($query); // numero de linhas da rubrica corrente
+							if($r > 0)
+							{
+								$tipoOK = true;
+								$rubricaOK = true;
+								$nomeOK = true;
+							}
+
+			                $soma31 = 0;
+				            $soma32 = 0;
+
+	                        for ($l = 0; $l < $r; $l++) // data
+		                    {
+								//verificações relativas ao status da requisicao
+								if( ($query[$l][7] == '4') or ($query[$l][7] == '7') )
+								{
+									//zera valor real
+									($query[$l][6] = 0);
+								}
+								if( (($query[$l][7] == '8') and ($tipo != 'COMPRA')) or ($query[$l][7] == '9') or ($query[$l][7] == 'C') or ($query[$l][7] == 'D') or ($query[$l][7] == 'E') or ($query[$l][7] == 'G') )
+								{
+									//zera valor estimado
+									($query[$l][5] = 0);
+								}
+								//OBS: para COMPRA status 8 não tem valores zerados, pois é executada parcialmente
+
+								//quantAutorizada pode ser maior que quantPedida para COMPRA
+								if($query[$l][5] < 0)
+								{
+									//zera valor estimado
+									($query[$l][5] = 0);
+								}
+
+								//para COMPRAS E SERVIÇOS EXTERNOS busca o numero da licitacao
+								if(($tipo == 'COMPRA') or ($tipo == 'SERVIÇOS EXTERNOS'))
+								{
+									$query[$l][2] = $this->objRequisicao->GetNumeroLicitacao($query[$l][0], $tipo);
+								}
+
+								//Somatorio do Valor Real
+								$soma32 += $cf->toDecimal($query[$l][6]);
+								//Somatorio do Valor Estimado
+								$soma31 += $cf->toDecimal($query[$l][5]);
+
+								$previsaoDebito = number_format(str_replace(',','.',$query[$l][5]),2,',','.');
+								$valorReal = number_format(str_replace(',','.',$query[$l][6]),2,',','.');
+								
+								$data[] = array
+								(					                		
+									$nome,
+									$rubrica,
+									$tipo,
+									$query[$l][0],	//requisição
+									$query[$l][1],	//datareq
+									$query[$l][2],	//beneficiario
+									$query[$l][3],	//empresa
+									$query[$l][4],	//nota fiscal
+									$previsaoDebito,//previsao
+									$valorReal		//valor real
+								);
+			                }
+
+							if ($tipoOK)
+							{
+								$summary3[] = array(array(
+									"<b>Subtotal:</b>",
+									"<b>R$ " . number_format(str_replace(',','.',$soma31),2,',','.') . "</b>",
+									"<b>R$ " . number_format(str_replace(',','.',$soma32),2,',','.') . "</b>"
+								));
+							}
+							$soma21 += $soma31;
+							$soma22 += $soma32;
+						}
+					}
+					if ($rubricaOK)
+					{
+						$inicio = substr($this->dataInicial, 6, 4);
+						$fim = substr($this->dataFinal, 6, 4);
+						$orcamento = $this->objOrcamentoInterno->getSaldoRubricaIntervalo($idUo, $rubrica, $inicio, $fim);
+						$dotacao = $cf->toDecimal($orcamento[0]);
+						$saldo = $cf->toDecimal($dotacao) - $cf->toDecimal($soma21) - $cf->toDecimal($soma22);
+	                    $summary2[] = array(array(
+							"<b>Subtotal da Rubrica:</b>", 
+							"<b>Dotação: R$ " . number_format(str_replace(',','.',$dotacao),2,',','.') . "  </b>",	
+							"<b>Previsão: R$ " . number_format(str_replace(',','.',$soma21),2,',','.') . "</b>", 
+							"<b>Valor Real: R$ " . number_format(str_replace(',','.',$soma22),2,',','.') . "</b>",
+							"<b>Saldo: R$ " . number_format(str_replace(',','.',$saldo),2,',','.') . "</b>"
+						));
+					}
+                    $soma11 += $cf->toDecimal($soma21);
+                    $soma12 += $cf->toDecimal($soma22);
+                }
+				
+				if ($nomeOK)
+				{
+					$inicio = substr($this->dataInicial, 6, 4);
+					$fim = substr($this->dataFinal, 6, 4);
+					$orcamento = $this->objOrcamentoInterno->getSaldoUOIntervalo($idUo, $inicio, $fim);
+					$dotacao = $cf->toDecimal($orcamento[0]);
+					$saldo = $cf->toDecimal($dotacao) - $cf->toDecimal($soma11) - $cf->toDecimal($soma12);
+					$summary1[] = array(array(
+						"<b>TOTAL UO</b>", 
+						"<b>Dotação: R$ " . number_format(str_replace(',','.',$dotacao),2,',','.') . "  </b>",
+						"<b>Previsão: R$ " . number_format(str_replace(',','.',$soma11),2,',','.') . "</b>", 
+						"<b>Valor Real: R$ " . number_format(str_replace(',','.',$soma12),2,',','.') . "</b>",
+						"<b>Saldo: R$ " . number_format(str_replace(',','.',$saldo),2,',','.') . "</b>"
+					));
+				}
+			}
+		}
+
+		// define as colunas
+		$columns = array
+			(
+			new PDFReportColumn('level4', '<b><i>Requisição</i></b>', 'center', false, 10, true),
+			new PDFReportColumn('det1', '<b><i>Data</i></b>', 'center', false, 11, true),
+			new PDFReportColumn('det2', '<b><i>Beneficiário</i></b>', 'left', false, 34, true),
+			new PDFReportColumn('det3', '<b><i>Empresa</i></b>', 'center', false, 15, true),
+			new PDFReportColumn('det4', '<b><i>Fatura</i></b>', 'center', false, 10, true),
+			new PDFReportColumn('det5', '<b><i>Previsão</i></b>', 'right', false, 10, true),
+			new PDFReportColumn('det6', '<b><i>Vl Real</i></b>', 'right', false, 10, true),
+			);
+
+		$sum3 = array
+			(
+			new PDFReportColumn('texto', 'texto', 'right', false, 80, true),			
+			new PDFReportColumn('valor1', 'valor1', 'right', false, 10, true),
+			new PDFReportColumn('valor2', 'valor2', 'right', false, 10, true),
+			);
+
+		$sum2 = array
+			(
+			new PDFReportColumn('texto0', 'texto0', 'right', false, 20, true),
+			new PDFReportColumn('texto1', 'texto1', 'right', false, 20, true),
+			new PDFReportColumn('texto2', 'texto2', 'right', false, 20, true),
+			new PDFReportColumn('texto3', 'texto3', 'right', false, 20, true),
+			new PDFReportColumn('texto4', 'texto4', 'right', false, 20, true),
+			);
+
+		$sum1 = array
+			(
+			new PDFReportColumn('texto0', 'texto0', 'right', false, 20, true),
+			new PDFReportColumn('texto1', 'texto1', 'right', false, 20, true),
+			new PDFReportColumn('texto2', 'texto2', 'right', false, 20, true),
+			new PDFReportColumn('texto3', 'texto3', 'right', false, 20, true),
+			new PDFReportColumn('texto4', 'texto4', 'right', false, 20, true),
+			);
+
+		// Largura do report, em %
+		$this->SetWidth(100);
+
+		// cria a arvore
+		$t = new TreeArray($data, '0,1,2', '3,4,5,6,7,8,9');
+
+		// registra as colunas de detalhes e summary
+		$this->SetColumns($columns);
+		$colDetail = $this->columns;
+		$this->SetColumns($sum3);
+		$colSum3 = $this->columns;
+		$this->SetColumns($sum2);
+		$colSum2 = $this->columns;
+		$this->SetColumns($sum1);
+		$colSum1 = $this->columns;
+
+		// gera o report
+		$i = 0;
+		$w = 0;
+		$j = 0;
+		$primeiraPagina = true;
+		foreach ($t->tree as $this->level[1] => $node1)
+		{
+			if (!$primeiraPagina)
+				$this->pdf->ezNewPage();
+			else
+				$primeiraPagina = false;
+
+			foreach ($node1 as $this->level[2] => $node2)
+			{
+				$this->SetOption('showHeadings', 1);
+				$this->GenerateGroupHeader(2, $this->level);
+
+				foreach ($node2 as $this->level[3] => $node3)
+				{
+					$this->SetOption('showHeadings', 1);
+					$this->SetOption('showLines', 0);
+					$this->columns = $colDetail;
+					$this->GenerateGroupHeader(3, $this->level);
+					$this->GenerateData($node3);
+					$this->SetOption('showHeadings', 0);
+					$this->SetOption('showLines', 1);
+					$this->columns = $colSum3;
+					$this->GenerateData($summary3[$j++]);
+				}
+
+				$this->SetOption('showHeadings', 0);
+				$this->SetOption('showLines', 1);
+				$this->columns = $colSum2;
+				$this->GenerateData($summary2[$i++]);
+			}
+			$this->SetOption('showHeadings', 0);
+			$this->SetOption('showLines', 1);
+			$this->columns = $colSum1;
+			$this->GenerateData($summary1[$w++]);
+		}
+	}
+
+	function GenerateGroupHeader($level, $array)
+	{
+		$this->pdf->SetStrokeColor(0, 0, 0);
+		$x0 = $this->pdf->left;
+
+		if ($level == 1)
+		{
+		}
+		elseif ($level == 2)
+		{
+			$this->pdf->ezSetDy(-45, 'makeSpace');
+			$y = $this->pdf->y;
+			$this->pdf->addText($x0, $y + 19, 12, 'UO: ' . $array[1]);
+			$this->pdf->line($x0, $y + 15, 300, $y + 15);
+			$this->pdf->addText($x0, $y + 2, 12, '    Rubrica: ' . $array[2]);
+			$this->pdf->line($x0+15, $y, 315, $y);
+		}
+		elseif ($level == 3)
+		{
+			$this->pdf->ezSetDy(-50, 'makeSpace');
+			$y = $this->pdf->y;
+			$this->pdf->addText($x0, $y + 34, 12, '         Tipo de Requisição: ' . $array[3]);
+			$this->pdf->line($x0+30, $y + 31, 330, $y + 31);
+			$this->pdf->ezSetY($y + 30);
+		}
+	}
+
+	function GeneratePageHeader()
+	{
+		$this->dataInicial = Form::GetFormValue('calDataInicial');
+		$this->dataFinal = Form::GetFormValue('calDataFinal');
+		$x0 = $this->pdf->left;
+		$x1 = $this->pdf->right;
+		$h = $this->pdf->getFontHeight(12);
+		$header = $this->pdf->openObject();
+		$this->pdf->saveState();
+
+
+		$x00=$this->pdf->left;
+		$hh = $this->pdf->getFontHeight(12);
+		$this->pdf->addText($x00, 800, 12, $this->manager->getConf('instituicao.sigla')." - ".$this->manager->getConf('instituicao.nome'));
+		$this->pdf->addText($x00, 800 - $hh, 12, $this->manager->getConf('theme.system'));
+
+/*
+		$this->pdf->addPngFromFile($this->img, $x0, 780, 50, 25);
+		$this->pdf->addText($x0 + 60, 800, 12, 'UFJF - Universidade Federal de Juiz de Fora');
+		$this->pdf->addText($x0 + 60, 800 - $h, 12, 'CGCO - Centro de Gestão do Conhecimento Organizacional');
+		$this->pdf->addText($x0 + 60, 800 - $h - $h, 12, 'SIGA - Sistema Integrado de Gestão Acadêmica');
+*/
+
+		$this->pdf->SetStrokeColor(0, 0, 0);
+		$y = 800 - $h - $h - 5;
+		$this->pdf->line($x0, $y, $x1, $y);
+		$this->pdf->addText($x0, $y - 13, 14, "Relatório de Execução Financeira - Período: de $this->dataInicial a $this->dataFinal");
+		$this->pdf->line($x0, $y - 15, $x1, $y - 15);
+		$this->pdf->restoreState();
+		$this->pdf->closeObject();
+		$this->pdf->addObject($header, 'all');
+	}
+
+	function GeneratePageFooter()
+	{
+		$x0 = $this->pdf->left;
+		$x1 = $this->pdf->right;
+		$footer = $this->pdf->openObject();
+		$this->pdf->saveState();
+		$this->pdf->SetStrokeColor(0, 0, 0);
+		$this->pdf->line($x0, 28, $x1, 28);
+		$this->pdf->addText($x0, 19, 9, $this->timestamp . ' - CGCO/DSI');
+		$this->pdf->restoreState();
+		$this->pdf->closeObject();
+		$this->pdf->addObject($footer, 'all');
+	}
+
+	function GenerateData($data)
+	{
+		$this->pdf->ezSetDy(-5);
+		$this->SetData($data);
+		$this->rawdata = $this->GenerateTableData();
+		$this->GenerateBody($this->rawdata);
+	}
+
+	function Generate()
+	{
+		$this->SetOutput();
+		$this->Execute();
+	}
+
+}
+?>

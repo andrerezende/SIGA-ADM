@@ -1,0 +1,338 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmFuncionarioCapacitacaoExterna extends MForm
+{
+
+	var $capacitacao;
+
+
+	function __construct($objCapacitacao)
+	{
+		global $MIOLO, $module, $page, $context, $self;
+		$this->capacitacao = $objCapacitacao;
+		parent::__construct("Capacitação Externa");
+		$this->SetClose($MIOLO->GetActionURL('rh','main:funcionario',$this->capacitacao->idFuncionario,array('form'=>'capacitacoesexternas')));
+		$this->EventHandler();
+	}
+
+
+	function CreateFields()
+	{
+		global $MIOLO, $module, $self, $action, $context;
+
+		$linkNew = new MLink('novoCurso','&nbsp;&nbsp;','','Incluir Novo Curso (externo)');
+		$linkNew->setAction('rh','capacitacao:cursosexterno:new');
+
+		if ($this->capacitacao->isPersistent())
+		{
+			if ( strtoupper($this->capacitacao->compativelcargo) == strtoupper('S') )
+			{
+				$cargo = true;
+				$cargoDesc = "SIM";
+			}
+			else 
+			{
+				$cargo = false;
+				$cargoDesc = "NÃO";
+			}
+
+			if ( strtoupper($this->capacitacao->compativelambiente) == strtoupper('S') )
+			{
+				$ambiente = true;
+				$ambienteDesc = "SIM";
+			}
+			else 
+			{
+				$ambiente = false;
+				$ambienteDesc = "NÃO";
+			}
+		}
+
+		$options = array(
+			$direta = new MOption('direta','S','SIM',$cargo), 
+			$indireta = new MOption('indireta','N','NÃO',!$cargo)
+		);
+
+		$options2 = array(
+			new MOption('direta2','S','SIM',$ambiente),
+			new MOption('indireta2','N','NÃO',!$ambiente)
+		);
+
+		$linkNew = new MLink('novoCurso','&nbsp;&nbsp;','','Incluir Novo Curso ou Evento Externo');
+		$linkNew->setAction('rh','capacitacao:cursosexternos:new');
+
+		$dataCapacitacao = date("d/m/Y");
+
+		$fields = array(
+			new MSpacer('15px'),
+			new MLabel('<b>ATENÇÃO:</b> Os cursos de <u>educação formal</u> devem ser lançados através dos formulários de "<b>Escolaridade</b>" e "<b>Pós-Graduação</b>".','red'), 
+			new MSeparator(),
+			new MSpacer('15px'),
+			$linkNew,
+			new MSpacer('15px'),
+			new MLookupFieldValue('lkpCursoExterno','','Curso Externo',75),
+			new MHiddenField('idcurso','','Curso Externo'),
+			new MSpacer('15px'),
+			new MCalendarField('dataCapacitacao',$dataCapacitacao,'Data Capacitação',15),
+			new MSpacer('15px'),
+			$r = new MRadioButtonGroup('relacao', '&nbsp;Curso compatível com o <u><b>CARGO</b></u>?&nbsp;&nbsp;', $options, '', '', 'vertical', 'css'), 
+			$r2 = new MRadioButtonGroup('relacao2','&nbsp;Curso compatível com o <u><b>AMBIENTE ORGANIZACIONAL</b></u>?&nbsp;&nbsp;', $options2, '', '','vertical', 'css'),
+		);
+		$this->SetFields($fields);
+
+		$this->SetFieldAttr('lkpCursoExterno','module','rh');
+        $this->SetFieldAttr('lkpCursoExterno','item','cursoexterno');
+        $this->SetFieldAttr('lkpCursoExterno','event','filler');
+        $this->SetFieldAttr('lkpCursoExterno','related','idcurso,lkpCursoExterno');
+        $this->SetFieldAttr('lkpCursoExterno','filter','lkpCursoExterno');
+
+		$funcionario = $MIOLO->getBusiness('rh','funcionario');
+		$objFuncionario = $funcionario->getById($this->capacitacao->idFuncionario);
+		$vinculo = $objFuncionario->getVinculoAtivo();
+	if (!$vinculo)
+	{	
+		$idVinculo = $funcionario->GetVinculoByIdFuncionario($this->capacitacao->idFuncionario);
+		$url = $MIOLO->GetActionURL('rh','main:vinculo',$idVinculo);
+		$MIOLO->information("Situação funcional não permite tal operação. Entre em contato com o administrador do sistema",$url);
+	}
+	else
+	{
+	    	$vinculo->getProvimentos();
+		$objProvimento = $vinculo->getProvimentoAtual();
+	}
+
+		$podeAlterar = false;
+		$podeExcluir = false;
+		if ($this->capacitacao->isPersistent())
+		{
+			$this->setFieldValue('idcurso',$this->capacitacao->idcurso);
+			$this->setFieldValue('dataCapacitacao',$this->capacitacao->dataCapacitacao);
+			$curso = $this->manager->GetBusiness('rh','capacitacaocurso',$this->capacitacao->idcurso);
+			$this->setFieldValue('lkpCursoExterno',strtoupper($curso->nome));
+
+			if ( ! is_null($this->capacitacao->dataProgressao) )
+			{
+				$this->SetFieldAttr('lkpCursoExterno','readonly',true);
+				$this->SetFieldAttr('dataCapacitacao','readonly',true);
+				$this->SetFieldAttr('relacao','readonly',true);
+				$this->SetFieldAttr('novoCurso','visible',false);
+				$r->visible = false;
+				$r2->visible = false;
+				$fields2 = array(
+					new MLabel('Instituição: <b>'.$curso->instituicao->nome.'</b>','black'),
+					new MSpacer('15px'),
+					new MLabel('Compatível com cargo: <b>'.$cargoDesc.'</b>','black'),
+					new MSpacer('15px'),
+					new MLabel('Compatível com ambiente: <b>'.$ambienteDesc.'</b>','black'),
+					new MSpacer('15px'),
+					new MSeparator(),
+					new MLabel('Uma <u>Progressão por Capacitação</u> já foi "lançada" utilizando este curso. OS DADOS NÃO PODEM MAIS SER ALTERADOS!','blue','bold'),
+					new MSpacer('15px'),
+				);
+				$this->AddFields($fields2);
+				$podeAlterar = false;
+				$podeExcluir = false;
+			}
+			else
+			{
+				$podeAlterar = true;
+				$podeExcluir = true;
+			}
+		}
+		else
+		{
+			$podeAlterar = true;
+			$podeExcluir = false;
+		}
+
+		$buttons = array(
+			new FormButton('btnPost','Enviar'),
+			new FormButton('btnExcluir','Excluir'), 
+		);
+		$this->SetButtons($buttons);
+
+		$this->SetFieldAttr('btnPost','visible',$podeAlterar);
+		$this->SetFieldAttr('btnExcluir','visible',($podeAlterar and $podeExcluir));
+
+		  /*
+		  $this->SetFieldAttr('edtDataInicioCapacitacao','readonly',true);
+		  $this->SetFieldAttr('edtCargaHoraria','readonly', true);
+		  $objFuncionario = $MIOLO->getBusiness('rh','funcionario',$this->capacitacao->idFuncionario);
+		  $vinculoAtual = $objFuncionario->getVinculoAtivo();
+
+		  $nf = new MHiddenField('idFuncAjax', $this->capacitacao->idFuncionario);
+		  $r[] = $nf;
+		  //if(count($ar)>1){
+		  $l = new MLink('novoModulo','',$win->getLink(null, true, false),'Incluir Novo Módulo Desse Curso');
+		  $win->setStatusBar(new MLink('updJanela','ATUALIZAR FORMULÁRIO E FECHAR ESSA JANELA',"javascript:ajaxAtualizaPagina.call();miolo.getWindow('winWindow').close();"));
+		  $r[] = $l;
+		  $this->addField($r);
+		  // $win->onClose("");
+
+		  if ($vinculoAtual->isTA())
+		  {
+			$idd = $this->capacitacao->idcurso;
+			$db = $MIOLO->getDataBase('rh');
+			$sql = new sql('h.dataprogressao', 'rh_histcapacitacao h');
+			$sql->where = "h.idcurso = $idd";
+			$query = $db->getQuery($sql);
+			$result = $query->result;
+
+			$dataProgressao = false;
+
+			for ($r = 0; $r < count($result); $r++)
+			{
+			  $valor = $result[$r];
+			  if ($valor[0] != null)
+			  {
+				$dataProgressao = true;
+
+			  }
+			}
+
+			if ($dataProgressao)
+			{
+			  $this->SetFieldAttr('text2', 'visible', true);
+			} else
+			{
+			  $this->SetFieldAttr('text1', 'visible', true);
+			}
+		  }
+		}
+		*/
+	}
+
+
+	function btnExcluir_click()
+	{
+		global $MIOLO, $module, $self, $action;
+
+		$action_sim = $MIOLO->GetActionURL($module,$self,$this->capacitacao->idFuncionario,array('form'=>'capacitacoesexternas','conf'=>'sim','id'=>$this->capacitacao->idHistCapacitacao,'event'=>'btnExcluir:click'));
+		$action_nao = $MIOLO->GetActionURL($module,$self,$this->capacitacao->idFuncionario,array('form'=>'capacitacoesexternas','conf'=>'nao','id'=>$this->capacitacao->idHistCapacitacao));
+		$conf = $this->GetFormValue('conf');
+
+		if ($conf == 'sim')
+		{
+		  try
+		  {
+				$this->capacitacao->beginTransaction();
+				$this->capacitacao->delete();
+				$this->capacitacao->log(OP_DEL,'Exclusão de capacitação externa - Funcionário: '.$this->capacitacao->idFuncionario.'IdCapacitacao: '.$this->capacitacao->idHistCapacitacao);
+				$this->capacitacao->endTransaction();
+				$MIOLO->Information('Capacitação externa excluída com sucesso!', $MIOLO->GetActionURL('rh','main:funcionario', $this->capacitacao->idFuncionario,array('form'=>'capacitacoesexternas')));
+		  }
+		  catch (exception $e)
+		  {
+			$this->manager->error("Informe o seguinte erro à equipe do CGCO: " . $e->getMessage());
+		  }
+		} 
+		else
+		{
+		  $MIOLO->Question("Tem certeza que deseja excluir a capacitação externa " . $this->capacitacao->descricao . " ?", $action_sim, $action_nao);
+		}
+	}
+
+
+	function btnPost_click()
+	{
+		$this->capacitacao->idcurso				= $this->GetFieldValue('idcurso');
+		$this->capacitacao->idmodulo			= '99999';
+		$this->capacitacao->dataCapacitacao		= $this->GetFieldValue('dataCapacitacao');
+		$this->capacitacao->compativelcargo		= $this->GetFieldValue('relacao');
+		$this->capacitacao->compativelambiente	= $this->GetFieldValue('relacao2');
+
+		$cursoRepetido = $this->capacitacao->cursoRepetido();
+
+		if ( ($cursoRepetido) and (!$this->capacitacao->isPersistent()) )
+		{
+		    $this->addError('Este curso já foi "lançado" para este servidor. Confira no quadro acima.');		    
+		}
+
+		if (!$this->hasErrors())
+		{
+			try
+			{
+				$this->capacitacao->save();
+				$this->capacitacao->log(OP_INS,'Inclusão de nova capacitação para servidor');
+				$go = $this->manager->GetActionURL('rh','main:funcionario',$this->capacitacao->idFuncionario,array('form'=>'capacitacoesexternas'));
+				$this->manager->Information('Dados da capacitação gravados com sucesso.',$go);
+			}
+			catch (exception $e)
+			{
+				$this->manager->error($e->getMessage());
+			}
+		}
+/*
+    global $MIOLO, $module, $self, $action;
+
+    $ids = explode("*", $this->getFieldValue('idsModulos'));
+    $this->capacitacao->beginTransaction();
+
+    $operacao = OP_INS;
+    $descricao = 'Inclusão de capacitação - IdModulo: ';
+
+    if (count($ids) > 1)
+    {
+      $check = false;
+      for ($i = 0; $i < count($ids); $i++)
+      {
+        if ($ids[$i] != '')
+        {
+          $this->capacitacao->SetData($this->GetData($ids[$i]));
+
+          try
+          {
+            $this->capacitacao->save();
+            $this->capacitacao->log($operacao, $descricao . $ids[$i]);
+            $this->capacitacao->setpersistent(false);
+            $check = true;
+          }
+          catch (exception $e)
+          {
+            $this->manager->error($e->getMessage());
+            break;
+          }
+        }
+      }
+    } else
+    {
+      $this->capacitacao->SetData($this->GetData($this->getFieldValue('idsModulos')));
+      try
+      {
+        $this->capacitacao->save();
+        $this->capacitacao->log($operacao, $descricao . $this->getFieldValue('idsModulos'));
+        $check = true;
+      }
+      catch (exception $e)
+      {
+        $this->manager->error($e->getMessage());
+      }
+    }
+    $this->capacitacao->endTransaction();
+
+    if ($check)
+    {
+      $go = $MIOLO->GetActionURL('rh', 'main:funcionario', $this->capacitacao->idFuncionario, array('form' => 'capacitacoes'));
+      $MIOLO->Information('Dados de Capacitação atualizados com sucesso.', $go);
+    }
+*/
+  }
+}
+?>

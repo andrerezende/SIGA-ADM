@@ -1,0 +1,70 @@
+<?php
+class frmPedidoIndeferir extends MForm {
+
+	/**
+	 * Business utilizado
+	 * @var BusinessAdmPedidoCompra
+	 */
+	public $pedido;
+
+	public function __construct($objPedido) {
+		global $MIOLO, $module;
+		$this->pedido = $objPedido;
+		parent::__construct('Incluir Solicitação de Compra');
+		$this->defaultButton = false;
+		$this->page->addJsCode(file_get_contents(dirname(__FILE__) . '/js/frmPedidoNew.js'));
+		$this->EventHandler();
+	}
+
+	public function CreateFields() {
+		global $MIOLO, $page, $module, $context, $action, $history;
+		parent::CreateFields();
+
+		// Campos
+		$fields = array(
+			new MMultiLineField('motivo', '', 'Motivo', 60, 2, 60),
+		);
+		$this->SetFields($fields);
+
+		// Validadores
+		$validators = array(
+			new MRequiredValidator('motivo'),
+		);
+		$this->setValidators($validators);
+
+		// Botão
+		$buttons = array(
+			new FormButton('btnNew', 'Indeferir'),
+		);
+		$this->SetButtons($buttons);
+		$this->page->onLoad("MIOLO_GetElementById('motivo').focus();");
+	}
+
+	public function btnNew_click() {
+		global $MIOLO, $module, $action;
+
+		$data = $this->getData();
+
+		$objMotivos = $this->manager->GetBusiness('adm', 'motivospedidoscompras');
+		$objMotivos->motivo = $data->motivo;
+		$objMotivos->idpedidocompra = $this->pedido->idPedidoCompra;
+		$this->pedido->situacao = 'INDEFERIDO';
+		try {
+			try {
+				$objMotivos->beginTransaction();
+				$objMotivos->save();
+				$objMotivos->endTransaction();
+			} catch (Exception $e) {
+				$this->manager->Error($e->getMessage());
+			}
+			$msg = 'Solicitação de compra ' . $this->objPedido->idPedidoCompra . ' indeferida.';
+			$this->pedido->beginTransaction();
+			$this->pedido->Log(OP_INS, $msg);
+			$this->pedido->save();
+			$this->pedido->endTransaction();
+			$this->manager->Information($msg, $this->manager->GetActionURL('adm', 'main:pedidocompra'));
+		} catch (Exception $e) {
+			$this->manager->Error($e->getMessage());
+		}
+	}
+}

@@ -1,0 +1,222 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+
+//frm_EditarExcluir
+class frmOcupacaoFuncao extends MCompoundForm
+{
+    protected $objocupacaofuncao, $erro,
+              $ocupacaotitular, $ocupacaosubstituto, $k;
+
+
+    function __construct($item)
+    {
+        global $MIOLO, $module;
+
+        $this->objocupacaofuncao = $MIOLO->GetBusiness($module,'ocupacaofuncao',$item);
+        $this->objocupacaofuncao->retrieveAssociation('vinculo');
+
+        if ($this->objocupacaofuncao->vinculo)
+        {
+            $this->objocupacaofuncao->vinculo->retrieveAssociation('funcionario');
+            $this->objocupacaofuncao->vinculo->funcionario->retrieveAssociation('pessoa');
+        }
+        else
+        {
+            $this->erro = TRUE;
+        }
+
+        $this->k = new Mkrono();
+        parent::__construct('');
+    } // __construct
+
+
+    function CreateFields()
+    {
+        global $MIOLO, $module, $context,$history,$perms;
+
+        if ($this->erro)
+        {
+            $this->addError('Erro: vínculo não possui ocupação');
+            return;
+        }
+
+        if ($this->objocupacaofuncao->substituicao == 'S')
+        {
+            //recupera a ocupação aberta do titular;
+              $this->ocupacaotitular = $this->objocupacaofuncao->getTitularSubstituto //define qual a ocupação do titular
+                                       ( $this->objocupacaofuncao->idfuncao, //função
+                                         TRUE,                               //ocupação ABERTA/qualquer
+                                         TRUE );                             //ocupante TITULAR/substituto
+        }
+        else
+        {
+            //recupera a ocupação aberta do substituto
+              $this->ocupacaosubstituto = $this->objocupacaofuncao->getTitularSubstituto //define qual a ocupação do titular
+                                          ( $this->objocupacaofuncao->idfuncao, //função
+                                            TRUE,                               //ocupação ABERTA/qualquer
+                                            false );                            //ocupante titular/SUBSTITUTO
+        }
+
+        $this->setTitle($this->objocupacaofuncao->vinculo->funcionario->pessoa->nome);
+        $this->SetClose($MIOLO->GetActionURL($module,'main:vinculo',$this->objocupacaofuncao->idvinculo,array('form'=>'funcao')));
+
+        $hoje = date('d/m/Y');
+
+        $ui = $this->manager->GetUI();
+        $form = MForm::GetFormValue('form');
+
+        $atual = MForm::GetFormValue('atual');
+        $login = $MIOLO->getLogin();
+
+		if ( $perms->isMemberOf($login,'RH_CADASTRO') )
+        {
+            switch ($form)
+            {
+                case 'finalizar':
+                    //só oferece finalizar se sem data fim ou data fim no futuro (ocupação em aberto)
+                    if ( (! $this->objocupacaofuncao->datafim) or ($this->k->compareDate($this->objocupacaofuncao->datafim,'>=',$hoje)) ) 
+                    {
+                        if ($this->objocupacaofuncao->idocupacaofuncao == $atual)
+                        {
+                            $this->_form[0] = $ui->GetForm($module,'frmOcupacaoFuncaoFinalizar',$this->objocupacaofuncao,'funcao');
+                        }
+                    }
+                    break;
+
+                case 'alterar':
+                    if ($this->objocupacaofuncao->idocupacaofuncao == $atual)
+                    {
+                        if ( (! $this->ocupacaotitular) and  (! $this->ocupacaosubstituto) )
+                        {
+                            $this->_form[0] = $ui->GetForm($module,'frmOcupacaoFuncaoAlterar'  , $this->objocupacaofuncao, 'funcao');
+                        }
+                    }
+                    break;
+
+                case 'excluir':                                               //Administrador
+                    if ($this->objocupacaofuncao->idocupacaofuncao == $atual)
+                    {
+                        if (! $this->ocupacaosubstituto)
+                        {
+                            $this->_form[0] = $ui->GetForm( $module,
+                                                            'frmOcupacaoFuncaoExcluir',
+                                                            array($this->objocupacaofuncao,
+                                                                  $this->objocupacaofuncao->vinculo->funcionario->pessoa->nome,
+                                                                  $atual),
+                                                            'funcao' );
+                        }
+                    }
+                    break;
+            }  // switch
+        /*}
+		if ( $perms->isMemberOf($login,'RH_CADASTRO') )
+        {*/
+            IF ($this->objocupacaofuncao->idocupacaofuncao == $atual)
+            {
+                // panel        
+                $action = $context->action;
+
+                $this->_panel[0] = $panel = new MActionPanel('pnlCompound','Opções','',false,'','large');
+                $this->_panel[0]->SetIconType('small');
+
+                $hoje = date('d/m/Y');
+                //só oferece finalizar se sem data fim ou data fim no futuro (ocupação em aberto)
+                if ( (! $this->objocupacaofuncao->datafim) or ($this->k->compareDate($this->objocupacaofuncao->datafim,'>=',$hoje)) ) 
+                {
+                    //transacao: não precisa aqui, pois já está em ocupacaofuncao.inc
+                    $panel->AddUserAction('rh_ocupacaofuncao',A_EXECUTE,'Finalizar'      ,$ui->GetImage($module,'jornada_mini.png'      )
+                                         ,$module,$action, $this->objocupacaofuncao->idocupacaofuncao, array("form"=>"finalizar",'atual'=>$atual));
+                }
+                if (! $this->ocupacaosubstituto)
+                {
+                    $panel->AddUserAction('rh_ocupacaofuncao',A_EXECUTE,'Excluir'     ,$ui->GetImage($module,'exclusao_mini.png'    )
+                                         ,$module,$action, $this->objocupacaofuncao->idocupacaofuncao, array("form"=>"excluir",'atual'=>$atual));
+                }
+                if ( (! $this->ocupacaotitular) and  (! $this->ocupacaosubstituto) )
+                {
+                    $panel->AddUserAction('rh_ocupacaofuncao',A_EXECUTE,'Alterar'      ,$ui->GetImage($module,'editar_mini.png'      )
+                                         ,$module,$action, $this->objocupacaofuncao->idocupacaofuncao, array("form"=>"alterar",'atual'=>$atual));
+                }
+            } // IF
+        }
+        //if ($form <> 'dados') //em caso de edição não faz exibição dos dados
+        {
+            $this->Detalhes();
+        }
+    } // CreateFields
+
+
+    function Detalhes()
+    {
+        if ($this->ocupacaotitular)
+        {
+            $substituicao = new MLabel("(substituição)",'red',TRUE);
+        }
+        $this->objocupacaofuncao->retrieveAssociation('funcao');
+        $this->objocupacaofuncao->funcao->retrieveAssociation('nivelfuncao');
+        $this->_info[]   = array( new MLabel('Função:'                                                          ),
+                                  new MLabel($this->objocupacaofuncao->funcao->nivelfuncao->sigla . '-' .
+                                             $this->objocupacaofuncao->funcao->nivelfuncao->nivel,'blue'        ),
+                                  new MLabel($this->objocupacaofuncao->funcao->descricao                        ) );
+        $this->_info[]   = new MSpacer(1);
+        $this->_info[]   = array( new MLabel("Início&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:"                ),
+                                  new MLabel($this->objocupacaofuncao->datainicio                ,'blue'        ),
+                                  $substituicao                                                                   );
+        $this->_info[]   = array( new MLabel('Término&nbsp;&nbsp;&nbsp;:'                                       ),
+                                  new MLabel($this->objocupacaofuncao->datafim                   ,'blue'        ) );
+        $this->_info[]   = new MSeparator();
+
+        $this->objocupacaofuncao->retrieveAssociation('publicacaoinicio');
+        $this->_info[]   = array( new MLabel("Publicação Início&nbsp;&nbsp;&nbsp;&nbsp;:"                       ),
+                                  new MLabel($this->objocupacaofuncao->publicacaoinicio->diplomaLegal->descricao.' '.
+                                             $this->objocupacaofuncao->publicacaoinicio->numero.' de '.
+                                             $this->objocupacaofuncao->publicacaoinicio->data.' - '.
+                                             $this->objocupacaofuncao->publicacaoinicio->autoridade,'blue'      ) );
+
+        if ($this->objocupacaofuncao->idpublicacaofim)
+        {
+            $this->objocupacaofuncao->retrieveAssociation('publicacaofim');
+            $this->_info[] = array( new MLabel("Publicação Término:"                                          ),
+                                    new MLabel($this->objocupacaofuncao->publicacaofim->diplomaLegal->descricao.' '.
+                                               $this->objocupacaofuncao->publicacaofim->numero.' de '.
+                                               $this->objocupacaofuncao->publicacaofim->data.' - '.
+                                               $this->objocupacaofuncao->publicacaofim->autoridade,'blue'     ) );
+        }
+        $this->_info[]   = new MSeparator();
+        if ($this->ocupacaotitular)
+        {
+            $this->_info[]   = array( new MLabel("Esta ocupação é uma substituição:",'red',TRUE),
+                                      new MTextLabel('v',$this->ocupacaotitular[0],'Titular','blue'),
+                                      new MTextLabel('d',$this->ocupacaotitular[1],'Término','blue') );
+        }
+        else
+        {
+            if ($this->ocupacaosubstituto)
+            {
+                $this->_info[]   = array( new MLabel("Esta ocupação tem uma substituição:",'red',TRUE),
+                                          new MTextLabel('v',$this->ocupacaosubstituto[0],'Substituto','blue'),
+                                          new MTextLabel('d',$this->ocupacaosubstituto[1],'Término'   ,'blue') );
+            }
+        }
+    } // Detalhes
+
+
+}
+?>

@@ -1,0 +1,232 @@
+<?php
+class repResumoEmpenho extends PDFReport
+{
+	var $img;
+	var $timestamp;
+	var $objRequisicao;
+	var $objPassagem;
+
+	function __construct()
+	{
+		global $MIOLO, $module, $page, $context, $self, $action, $perms;
+
+		$iduoreq = Form::GetFormValue('idUo');
+		$dataInicio = Form::GetFormValue('dataInicio');
+		$dataFim = Form::GetFormValue('dataFim');		
+				
+		//var_dump($iduoreq,$dataInicio,$dataFim);
+		
+		parent::__construct(NULL, NULL, 55);
+	    
+		$ui = $MIOLO->GetUI();
+        $this->img = $ui->GetImageSrc('logo_siga.png',$module);
+
+		$this->SetOption('showLines',0);
+		$this->timestamp = date('d/m/Y G:i');
+
+		
+		$this->pdf->ezStartPageNumbers(580, 800, 10, 'rigth', 'Página: {PAGENUM}/{TOTALPAGENUM}');
+		$this->pdf->ezSetMargins(50, 30, 30, 30);
+		$this->SetOption('fontSize',8);
+
+		$objUO = $MIOLO->GetBusiness('adm','uo');
+		$objEmpenho = $MIOLO->GetBusiness($module,'empenho');			
+		$objTipoReq = $MIOLO->GetBusiness($module,'tiporeq');		
+		$descReq = $objTipoReq->GetById($tipoReq)->descricao;
+			
+		$query = $objEmpenho->ListResumoEmpenhoEntrada($dataInicio, $dataFim);
+		$query2= $objEmpenho->ListResumoEmpenhoSaida($dataInicio, $dataFim);
+				
+		
+		/*if ($iduoreq == '%')
+		{
+			$UO->nome = 'TODAS';
+		}
+		else 
+		{		
+			$UO = $objUO->GetById($iduoreq);				
+		}
+		*/
+				
+		if($query <> null)
+		{			
+			
+			$total = 0;
+			
+
+			foreach($query as $row)
+			{
+				
+			
+			//	var_dump($objEmpenho->numProcessoFormatado($row[0]));
+				
+				$total += floatval(str_replace(',','.',$row[1]));
+				
+				$row[1] = 'R$ ' . number_format(str_replace(',','.',$row[1]),2,',','.');
+												
+				$data[] = $row;
+			
+			}
+			
+			
+			if ($query2 <> null)
+			{
+				foreach($query2 as $row)
+				{
+					
+				
+				//	var_dump($objEmpenho->numProcessoFormatado($row[0]));
+					
+					$total2 += floatval(str_replace(',','.',$row[1]));
+					
+					$row[1] = 'R$ ' . number_format(str_replace(',','.',$row[1]),2,',','.');
+													
+					array_push($data[0], $row[0]);
+					array_push($data[0], $row[1]);
+				
+				}
+			}
+				
+			//var_dump($query);	
+			
+			$total = 'R$ ' . number_format(str_replace(',','.',$total),2,',','.');
+			$total2 = 'R$ ' . number_format(str_replace(',','.',$total2),2,',','.');
+			
+			//var_dump($data);
+			
+			$summary1[] = array(array("<b>TOTAL DE ENTRADAS</b>", "<b>$total</b>","<b>TOTAL DE SAÍDAS</b>", "<b>$total2</b>"));
+
+			$columns = array(
+				new PDFReportColumn('numempenho','<b><i>N. EMPENHO</b></i>','left',true,20,true,null,true),
+				new PDFReportColumn('valor','<b><i>VALOR</b></i>','right',true,20,true,null,true),				
+				new PDFReportColumn('destino','<b><i>DESTINO</b></i>','left',true,30,true,null,true),
+				new PDFReportColumn('valor2','<b><i>VALOR</b></i>','right',true,20,true,null,true),								
+				
+			);
+			
+			// define as colunas da linha de grupo (level1)
+	        $sum1 = array(	                
+	            new MPDFReportColumn('texto', 'texto', 'right', false, 20, true), 
+	            new MPDFReportColumn('valor', 'valor', 'right', false, 20, true),
+	            new MPDFReportColumn('texto1', 'texto1', 'right', false, 30, true),              
+	            new MPDFReportColumn('valor1', 'valor1', 'right', false, 20, true), 
+	               
+	            );
+
+	//		$this->SetColumns($columns);
+
+		// gera o report
+
+		
+		
+		// Largura do report, em %
+	    $this->SetWidth(100);
+	    $this->SetColumns($columns);
+	    $colDetail = $this->columns;
+	    $this->SetColumns($sum1);
+	    $colSum1 = $this->columns;
+	             
+	    // gera o report
+	   
+	    $this->columns = $colDetail; 
+	    
+	    $this->GeneratePageHeader($dataInicio, $dataFim);
+	    
+	    $x0 = $this->pdf->left;
+		$h = $this->pdf->getFontHeight(12);
+		$this->pdf->addTextWrap(50,800-7.5*$h,600,11,'<b>ENTRADAS</b>', 'left');
+		$this->pdf->addTextWrap(270,800-7.5*$h,600,11,'<b>SAÍDAS</b>', 'left');		
+		$this->GenerateData($data);
+		
+		
+	    
+	    
+	    
+	    $this->SetOption('showHeadings', 0);
+	    $this->SetOption('showLines', 0);
+	    $this->columns = $colSum1;
+	    $this->GenerateData($summary1[0]);    
+	    
+	    
+	    $this->GeneratePageFooter();
+		
+		
+		
+		}
+		else 
+		{
+			
+
+		// gera o report
+		$this->GeneratePageHeader($dataInicio, $dataFim);
+		$this->GenerateDatanull();
+		$this->GeneratePageFooter();
+		}
+
+	}
+
+	function GeneratePageHeader($dataInicio, $dataFim)
+	{
+		global $MIOLO;
+			
+		$x0 = $this->pdf->left;
+		$h = $this->pdf->getFontHeight(12);
+
+		$x00=$this->pdf->left;
+		$hh = $this->pdf->getFontHeight(12);
+		$this->pdf->addText($x00, 800, 12, $this->manager->getConf('instituicao.sigla')." - ".$this->manager->getConf('instituicao.nome'));
+		$this->pdf->addText($x00, 800 - $hh, 12, $this->manager->getConf('theme.system'))
+
+
+/*
+		$this->pdf->addPngFromFile($this->img, 10, 730 + $x0, 100, 54);
+		$this->pdf->addText(110,800,12,'UFJF - Universidade Federal de Juiz de Fora');
+		$this->pdf->addText(110,800-$h,12,'CGCO - Centro de Gestão do Conhecimento Organizacional');
+		$this->pdf->addText(110,800-$h-$h,12,'SIGA - Sistema Integrado de Gestão Acadêmica');		
+
+*/		
+		$this->pdf->addText(110,800-$h-$h-$h,12,'Pré-Reitoria de Logística');
+
+		$this->pdf->addTextWrap(10,800-5*$h,600,11,'Relatório de Resumos de Empenho','left');
+		$this->pdf->addTextWrap(10,800-6*$h,600,11,'Período de '.$dataInicio.' a '.$dataFim, 'left');
+
+		$this->pdf->ezSetY(800-$h-$h-$h-$h-$h-$h-$h);
+	}
+
+	function GeneratePageFooter()
+	{
+		$x0 = $this->pdf->left;
+        $x1 = $this->pdf->right;
+        $footer = $this->pdf->openObject();
+        $this->pdf->saveState();
+        $this->pdf->SetStrokeColor(0, 0, 0);
+        $this->pdf->line($x0, 28, $x1, 28);
+        $this->pdf->addText($x0, 19, 9, $this->timestamp . ' - CGCO/DSI');
+        $this->pdf->restoreState();
+        $this->pdf->closeObject();
+        $this->pdf->addObject($footer, 'all');    		
+
+	}
+
+	function GenerateData($data)
+	{
+		$this->pdf->ezSetDy(-12);
+		$this->SetData($data);
+		$this->rawdata = $this->GenerateTableData();
+		$this->GenerateBody($this->rawdata);
+	}
+	function GenerateDataNULL()
+	{
+		$this->pdf->ezSetDy(-12);
+		$h = $this->pdf->getFontHeight(12);		
+		$this->pdf->addTextWrap(0,800-12*$h,600,11,' NÃO FORAM ENCONTRADOS DADOS RELATIVOS À CONSULTA SOLICITADA ', 'center');
+		
+	}
+
+	function Generate()
+	{
+		$this->SetOutput();
+		$this->Execute();
+	}
+}
+?>

@@ -1,0 +1,111 @@
+<?
+class frmConsultaSolicitacao extends Form
+{
+	var $objLicitacao;
+	var $objSolicitacao;
+
+	function __construct()
+    {
+		global $MIOLO;
+        $this->Form('Consulta de Solicitação para Itens da Licitação');
+		$this->SetClose($this->manager->GetActionURL('adm','main:financeiro:consultasolicitacao'));
+        $this->EventHandler();
+		$this->defaultButton = false;
+    }
+
+    function CreateFields()
+    {
+		global $MIOLO, $module;
+
+		$this->objLicitacao = $MIOLO->GetBusiness($module, 'licitacao');
+
+		$fields = array(
+			array(
+				new MLookupTextField('licitacao', '', 'Número da Licitação', 20),
+				new MTextField('solicitacao', '', 'Solicitação', 15),
+				new MHiddenField('status',"1,2"),//SOLICITAÇÃO PEDIDA OU ATENDIDA
+			),
+		);
+       	$this->SetFields($fields);
+		$this->SetFieldAttr('licitacao','module',$module);
+		$this->SetFieldAttr('licitacao','item','licitacaocomsolicitacao');
+		$this->SetFieldAttr('licitacao','event','filler');
+		$this->SetFieldAttr('licitacao','related', '"",licitacao,"","","","","","",solicitacao');
+		$this->SetFieldAttr('licitacao','filter', 'licitacao,status');
+
+		$button = array(
+			new FormButton('btnEnviar','Enviar'),
+		);
+       	$this->SetButtons($button);
+
+	}
+
+	function btnEnviar_click()
+    {
+		global $MIOLO, $module, $item;
+
+		$cf = new MCurrencyFormatter();
+		$this->page->SetAction($MIOLO->GetActionURL($module, $action));
+		$licitacao = $this->GetFormValue('licitacao');
+		$solicitacao = $this->GetFormValue('solicitacao');
+
+		$this->objLicitacao = $MIOLO->GetBusiness($module,'licitacao');
+		$idLicitacao = $this->objLicitacao->GetIdBynumero($licitacao);
+		if($idLicitacao == null)
+		{
+			$MIOLO->Error('Licitação não encontrada', $MIOLO->GetActionURL($module, $action) );
+		}
+		$this->objLicitacao = $MIOLO->GetBusiness($module,'licitacao',$idLicitacao);
+		$itensDaLicitacao = $this->objLicitacao->getItens();
+
+        $this->SetTitle('Consulta de Solicitação '. $solicitacao . ' para Itens da Licitação ' . $this->objLicitacao->numero);
+
+        $columns = array(
+           	new MGridColumn('Nº','center', true,'5%'),
+           	new MGridColumn('Descrição','left', false,'30%'),
+           	new MGridColumn('Saldo','center', true,'6%'),
+           	new MGridColumn('Unidade','center', true,'5%'),
+           	new MGridColumn('R$ Unit','center', true,'7%'),
+           	new MGridColumn('Pedido','center', true,'6%'),
+           	new MGridColumn('R$ Pedido','center', true,'10%'),
+           	new MGridColumn('Empresa','left', false,'15%'),
+           	new MGridColumn('R$ Total','center', true,'8%'),
+           	new MGridColumn('Rubrica','center', false,'8%'),
+           	new MGridColumn('Status','center', false,'8%'),
+        );
+
+		$data0 = $this->objLicitacao->GetDadosItensParaEmpenho($idLicitacao, $itensDaLicitacao);
+
+		//inclui quantidade e valor das solicitações e exclui itens que não foram solicitados pelo HU
+		$data = array();
+		$this->objSolicitacao = $MIOLO->GetBusiness($module, 'solicitacao');
+		foreach($data0 as $d)
+		{
+			$solicit = $this->objSolicitacao->GetQuantidadeValorByItemSolicitacao($idLicitacao, $solicitacao, $d[0]);
+			if($solicit)
+			{
+				$valorSolicitacao = $solicit[0] * $cf->toDecimal($solicit[1]);
+				$valorSolicitacao = number_format(str_replace(',','.',$valorSolicitacao),2,',','.');
+				$valorUnitario = number_format(str_replace(',','.',$solicit[1]),2,',','.');
+				$status = $this->objSolicitacao->GetStatusByItemSolicitacao($solicitacao, $d[0]);
+				$data[] = array($d[0], $d[1], $d[2], $d[3], $valorUnitario, $solicit[0], $valorSolicitacao, $d[5], $d[6], $d[7], $status);
+			}
+		}
+
+		$grid = new MGrid($data, $columns, $href_datagrid, 0);
+
+		$fields = array(
+            $grid,
+			new MHiddenField('idLic', $idLicitacao),
+        );
+        $this->SetFields($fields);
+
+		$this->SetButtonAttr('btnEnviar','visible',false);
+		if( count($data) > 0 )
+		{
+			$this->AddButton(new MButton('btnVoltar','Voltar', $MIOLO->GetActionURL($module, $action)));
+		}
+
+	}
+}
+?>

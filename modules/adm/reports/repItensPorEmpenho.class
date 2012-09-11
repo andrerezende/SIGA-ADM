@@ -1,0 +1,165 @@
+<?php
+class repItensPorEmpenho extends PDFReport
+{
+	var $img;
+	var $timestamp;
+	var $empenho;
+	var $objItemPatrimonio;
+
+	function __construct()
+	{
+        global $MIOLO, $module, $page, $context, $self, $action, $perms;
+
+        parent::__construct(NULL, NULL, 55);
+        $ui = $MIOLO->GetUI();
+		$this->img = $ui->GetImageSrc('logo_siga.png',$module); 
+        //        $this->SetPDF(new ezPDFReport('2'));
+        $this->timestamp = date('d/m/Y G:i');
+        //        $this->SetTrigger('AfterNewPage','repMultiLevel2','AfterNewPage', $this);
+        $this->pdf->ezStartPageNumbers(520, 800, 12, 'rigth', 'Página: {PAGENUM}');
+        $this->pdf->ezSetMargins(100, 30, 30, 30);
+        $this->GeneratePageHeader();
+        $this->GeneratePageFooter();
+		$this->SetOption('fontSize',7);
+
+		$this->empenho = Form::GetFormValue('empenho');
+		$this->objItemPatrimonio = $MIOLO->GetBusiness($module,'itempatrimonio');
+
+		//montagem do array de dados
+		//$data0 = [0-ip.subelemento, 1-c.idclassificador, 2-s.sigla, 3-ip.descricao, 4-ip.dataaquisicao, 5-ip.notafiscal, 6-ip.valor, 7-ip.iditempatrimonio, 8-ip.idempenhado, 9-ip.idmaterial]
+		$query = $this->objItemPatrimonio->GetItensPorEmpenho($this->empenho);
+		$data0 = $query->result;
+		$total = count($data0);
+		$data = array();
+		$soma11 = 0;
+		$soma12 = 0.0;
+		$k = -1;
+		for($i = 0; $i < $total; $i++)
+		{
+			if( ($data0[$i][8] != $data0[$i-1][8]) or ($data0[$i][3] != $data0[$i-1][3]) or ($data0[$i][2] != $data0[$i-1][2]) )
+			//(idEmpenhado dif) ou (descricao dif) ou (sigla dif)
+			{
+				$k++;
+				//$data = [0-ip.subelemento, 1-c.idclassificador, 2-s.sigla, 3-INICIAL, 4-FINAL, 5-ip.descricao, 6-ip.dataaquisicao, 7-ip.notafiscal, 8-QUANTIDADE, 9-VALOR, 10-ip.iditempatrimonio, 11-ip.idempenhado, 12-ip.idmaterial]
+				$data[$k] = array($data0[$i][0], $data0[$i][1], $data0[$i][2], $data0[$i][7], $data0[$i][7], $data0[$i][3], $data0[$i][4], $data0[$i][5], 1, floatval(str_replace(',','.',$data0[$i][6])), $data0[$i][7], $data0[$i][8], $data0[$i][9]);
+			}
+			else
+			{
+				$data[$k] = array($data[$k][0], $data[$k][1], $data[$k][2], $data[$k][3], $data0[$i][7], $data[$k][5], $data[$k][6], $data[$k][7], $data[$k][8]+1, $data[$k][9]+floatval(str_replace(',','.',$data0[$i][6])), $data[$k][10], $data[$k][11], $data[$k][12]);
+			}
+		}
+		for($d = 0; $d < count($data); $d++)
+		{
+			$soma11 += $data[$d][8];//quantidade
+			$soma12 += floatval(str_replace(',','.',$data[$d][9]));//valor
+			$data[$d][9] = number_format(str_replace(',','.',$data[$d][9]),2,',','.');
+		}
+		$summary1 = array(array(
+			"<b>Total Geral:</b>",
+			"<b>$soma11</b>",
+			"<b>" . number_format(str_replace(',','.',$soma12),2,',','.') . "</b>"
+		));
+
+		// define as colunas
+		$columns = array(
+			new PDFReportColumn('det0', '<b><i>SE</i></b>', 'center', false, 4, true),
+			new PDFReportColumn('det1', '<b><i>Class</i></b>', 'center', false, 6, true),
+			new PDFReportColumn('det2', '<b><i>Setor</i></b>', 'center', false, 10, true),
+			new PDFReportColumn('det3', '<b><i>Inicial</i></b>', 'center', false, 7, true),
+			new PDFReportColumn('det4', '<b><i>Final</i></b>', 'center', false, 7, true),
+			new PDFReportColumn('det5', '<b><i>Descrição</i></b>', 'center', false, 36, true),
+			new PDFReportColumn('det6', '<b><i>Data</i></b>', 'center', false, 9, true),
+			new PDFReportColumn('det7', '<b><i>NF</i></b>', 'center', false, 7, true),
+			new PDFReportColumn('det8', '<b><i>Qte</i></b>', 'center', false, 5, true),
+			new PDFReportColumn('det9', '<b><i>Valor</i></b>', 'right', false, 9, true),
+		);
+
+		$sum1 = array(
+			new PDFReportColumn('texto0', 'texto0', 'right', false, 86, true),
+			new PDFReportColumn('texto1', 'texto1', 'center', false, 5, true),
+			new PDFReportColumn('texto2', 'texto2', 'right', false, 9, true),
+		);
+
+		// Largura do report, em %
+		$this->SetWidth(100);
+
+		// registra as colunas de detalhes e summary
+		$this->SetColumns($columns);
+		$colDetail = $this->columns;
+		$this->SetColumns($sum1);
+		$colSum1 = $this->columns;
+
+		// gera o report
+		$this->SetOption('showHeadings', 1);
+		$this->SetOption('showLines', 0);
+		$this->columns = $colDetail;
+		$this->GenerateData($data);
+		$this->SetOption('showHeadings', 0);
+		$this->SetOption('showLines', 1);
+
+		$this->columns = $colSum1;
+		$this->GenerateData($summary1);
+	}
+
+	function GeneratePageHeader()
+	{
+		$this->empenho = Form::GetFormValue('empenho');
+		$x0 = $this->pdf->left-5;
+		$x1 = $this->pdf->right-5;
+		$h = $this->pdf->getFontHeight(12);
+		$header = $this->pdf->openObject();
+	$this->pdf->saveState();
+
+		$x00=$this->pdf->left;
+		$hh = $this->pdf->getFontHeight(12);
+		$this->pdf->addText($x00, 800, 12, $this->manager->getConf('instituicao.sigla')." - ".$this->manager->getConf('instituicao.nome'));
+		$this->pdf->addText($x00, 800 - $hh, 12, $this->manager->getConf('theme.system'));
+
+
+/*
+		$this->pdf->addPngFromFile($this->img, $x0, 780, 50, 25);
+		$this->pdf->addText($x0 + 60, 800, 12, 'UFJF - Universidade Federal de Juiz de Fora');
+		$this->pdf->addText($x0 + 60, 800 - $h, 12, 'Patrimônio da Universidade Federal de Juiz de Fora');
+		$this->pdf->addText($x0 + 60, 800 - $h - $h, 12, 'SIGA - Sistema Integrado de Gestão Acadêmica');
+*/
+		$this->pdf->SetStrokeColor(0, 0, 0);
+		$y = 800 - $h - $h - 5;
+		$this->pdf->line($x0, $y, $x1, $y);
+		$this->pdf->addText($x0, $y - 13, 12, "Relatório de Itens Patrimoniais por Empenho: $this->empenho");
+		$this->pdf->line($x0, $y - 15, $x1, $y - 15);
+		$this->pdf->restoreState();
+		$this->pdf->closeObject();
+		$this->pdf->addObject($header, 'all');
+		$this->pdf->ezSetDy(+15);
+	}
+
+	function GeneratePageFooter()
+	{
+		$x0 = $this->pdf->left;
+		$x1 = $this->pdf->right;
+		$footer = $this->pdf->openObject();
+		$this->pdf->saveState();
+		$this->pdf->SetStrokeColor(0, 0, 0);
+		$this->pdf->line($x0, 28, $x1, 28);
+		$this->pdf->addText($x0, 19, 9, $this->timestamp . ' - CGCO/DSI');
+		$this->pdf->restoreState();
+		$this->pdf->closeObject();
+		$this->pdf->addObject($footer, 'all');
+	}
+
+	function GenerateData($data)
+	{
+		$this->pdf->ezSetDy(-5);
+		$this->SetData($data);
+		$this->rawdata = $this->GenerateTableData();
+		$this->GenerateBody($this->rawdata);
+	}
+
+	function Generate()
+	{
+		$this->SetOutput();
+		$this->Execute();
+	}
+
+}
+?>

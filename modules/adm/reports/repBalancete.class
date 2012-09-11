@@ -1,0 +1,203 @@
+<?php
+class repBalancete extends PDFReport
+{
+	var $img;
+	var $timestamp;
+    var $level = array();
+	var $dataInicial;
+	var $dataFinal;
+	var $objItemPatrimonio;
+	var $objSubelemento;
+
+	function __construct()
+	{
+        global $MIOLO, $module, $page, $context, $self, $action, $perms;
+
+        parent::__construct(NULL, NULL, 55);
+        $ui = $MIOLO->GetUI();
+		$this->img = $ui->GetImageSrc('logo_siga.png',$module); 
+        //        $this->SetPDF(new ezPDFReport('2'));
+        $this->timestamp = date('d/m/Y G:i');
+        //        $this->SetTrigger('AfterNewPage','repMultiLevel2','AfterNewPage', $this);
+        $this->pdf->ezStartPageNumbers(520, 800, 12, 'rigth', 'Página: {PAGENUM}');
+        $this->pdf->ezSetMargins(100, 30, 30, 30);
+        $this->GeneratePageHeader();
+        $this->GeneratePageFooter();
+		$this->SetOption('fontSize',8);
+
+		$this->dataInicial = Form::GetFormValue('dataInicial');
+		$this->dataFinal = Form::GetFormValue('dataFinal');
+		$this->objItemPatrimonio = $MIOLO->GetBusiness($module,'itempatrimonio');
+		$this->objSubelemento = $MIOLO->GetBusiness($module,'subelemento');
+
+		//montagem da árvore de idelementos.idsubelementos
+		$rubricas = $this->objItemPatrimonio->GetSubelementos();
+
+		$numRubricas = $rubricas->GetRowCount();
+		$data = array();
+		$soma11 = 0;
+		$soma12 = 0;
+		$soma13 = 0;
+		$soma14 = 0;
+		$soma15 = 0;
+		$soma16 = 0;
+		$rubricas->moveFirst();
+		for ($j = 0; $j < $numRubricas; $j++)
+		{
+			//busca e agrupa dados para cada rubrica(elemento,subelemento)
+			$rowRubrica = $rubricas->getRowValues();
+
+			$this->objSubelemento->GetById('449052', $rowRubrica[0]);
+			$saldo = $this->objItemPatrimonio->GetSaldoPorPeriodoRubrica($rowRubrica[0], $this->dataInicial, $this->dataFinal);
+			$itens = $this->objItemPatrimonio->GetTotalItensPorPeriodoRubrica($rowRubrica[0], $this->dataInicial, $this->dataFinal);
+			$aquisicoes = $this->objItemPatrimonio->GetValorAquisicoesPorPeriodoRubrica($this->dataInicial, $this->dataFinal, $rowRubrica[0]);
+			$baixas = $this->objItemPatrimonio->GetValorBaixasPorPeriodoRubrica($this->dataInicial, $this->dataFinal, $rowRubrica[0]);
+			$extraOrcamentaria = $this->objItemPatrimonio->GetValorExtraOrcaPorPeriodoRubrica($this->dataInicial, $this->dataFinal, $rowRubrica[0]);
+			$saldoAnterior = $this->objItemPatrimonio->GetValorSaldoAnterior($this->dataInicial, $rowRubrica[0]);
+			
+			//adiciona itens sem data de aquisição
+			$semData = $this->objItemPatrimonio->GetValorSemDataPorRubrica($rowRubrica[0]);
+			$itens += $semData[0];
+
+            //$saldoAnterior = floatval(str_replace(',','.',$saldo)) + floatval(str_replace(',','.',$baixas)) - (floatval(str_replace(',','.',$aquisicoes)) + floatval(str_replace(',','.',$semData[1])));          
+	        $saldo = floatval( (str_replace(',','.',$extraOrcamentaria) + floatval(str_replace(',','.',$saldoAnterior))  + str_replace(',','.',$aquisicoes)) - ( floatval(str_replace(',','.',$baixas)) + floatval(str_replace(',','.',$semData[1])) ) );
+            // $saldo = floatval(str_replace(',','.',$saldo)) + floatval(str_replace(',','.',$semData[1]));
+	        //calculo de extra orçamentaria
+    
+            $data[] = array(
+				'449052.'.$rowRubrica[0], 
+                $this->objSubelemento->descricao,
+				$itens, 
+				number_format(str_replace(',','.',$saldoAnterior),2,',','.'), 
+				number_format(str_replace(',','.',$aquisicoes),2,',','.'),
+                number_format(str_replace(',','.',$extraOrcamentaria),2,',','.'),
+				number_format(str_replace(',','.',$baixas),2,',','.'), 
+                number_format(str_replace(',','.',$saldo),2,',','.')                           
+			);
+
+			$soma11 += $itens; //itens
+			$soma12 += floatval(str_replace(',','.',$saldoAnterior)); //saldo anterior
+			$soma13 += floatval(str_replace(',','.',$aquisicoes)); //aquisicoes
+			$soma14 += floatval(str_replace(',','.',$baixas)); //baixas
+			$soma15 += floatval(str_replace(',','.',$saldo)); //saldo atual
+            $soma16 += floatval(str_replace(',','.',$extraOrcamentaria)); //extra orçamentario
+
+			$rubricas->moveNext();
+		}
+		$summary1 = array(array(
+			"<b>Total Geral:</b>",
+			"<b>$soma11</b>",
+			"<b>" . number_format(str_replace(',','.',$soma12),2,',','.') . "</b>",
+			"<b>" . number_format(str_replace(',','.',$soma13),2,',','.') . "</b>",
+            "<b>" . number_format(str_replace(',','.',$soma16),2,',','.') . "</b>",
+			"<b>" . number_format(str_replace(',','.',$soma14),2,',','.') . "</b>",
+			"<b>" . number_format(str_replace(',','.',$soma15),2,',','.') . "</b>",
+
+         
+		));
+
+		// define as colunas
+		$columns = array(
+			new PDFReportColumn('det0', '<b><i>Rubrica</i></b>', 'right', false, 9, true),
+			new PDFReportColumn('det1', '<b><i>Descrição</i></b>', 'left', false, 40, true),
+			new PDFReportColumn('det2', '<b><i>Itens</i></b>', 'right', false, 6, true),
+			new PDFReportColumn('det3', '<b><i>Anterior</i></b>', 'right', false, 10, true),
+			new PDFReportColumn('det4', '<b><i>Aquisições</i></b>', 'right', false, 10, true),
+		    new PDFReportColumn('det7', '<b><i>Extra Orçamentaria</i></b>', 'center', true, 13, true),
+            new PDFReportColumn('det5', '<b><i>Baixas</i></b>', 'right', false, 10, true),
+            new PDFReportColumn('det6', '<b><i>Saldo Atual</i></b>', 'right', true, 12, true),
+ 
+		);
+
+		$sum1 = array(
+			new PDFReportColumn('texto0', 'texto0', 'right', false, 50, true),
+			new PDFReportColumn('texto1', 'texto1', 'right', false, 6, true),
+			new PDFReportColumn('texto2', 'texto2', 'right', false, 11, true),
+			new PDFReportColumn('texto3', 'texto3', 'right', false, 10, true),
+	        new PDFReportColumn('texto4', 'texto4', 'right', false, 10, true),
+			new PDFReportColumn('texto5', 'texto5', 'right', false, 10, true),
+            new PDFReportColumn('texto6', 'texto6', 'right', false, 12, true),
+		);
+
+		// Largura do report, em %
+		$this->SetWidth(100);
+
+		// registra as colunas de detalhes e summary
+		$this->SetColumns($columns);
+		$colDetail = $this->columns;
+		$this->SetColumns($sum1);
+		$colSum1 = $this->columns;
+
+		// gera o report
+		$this->SetOption('showHeadings', 1);
+		$this->SetOption('showLines', 0);
+		$this->columns = $colDetail;
+		$this->GenerateData($data);
+		$this->SetOption('showHeadings', 0);
+		$this->SetOption('showLines', 1);
+
+		$this->columns = $colSum1;
+		$this->GenerateData($summary1);
+	}
+
+	function GeneratePageHeader()
+	{
+		$this->dataInicial = Form::GetFormValue('dataInicial');
+		$this->dataFinal = Form::GetFormValue('dataFinal');
+		$x0 = $this->pdf->left-5;
+		$x1 = $this->pdf->right-5;
+		$h = $this->pdf->getFontHeight(12);
+		$header = $this->pdf->openObject();
+		$this->pdf->saveState();
+
+		$x0=$this->pdf->left;	
+		$this->pdf->addText($x0, 800, 12, $this->manager->getConf('instituicao.sigla')." - ".$this->manager->getConf('instituicao.nome'));
+		$this->pdf->addText($x0, 800 - $h, 12, $this->manager->getConf('theme.system'));
+
+		
+/* $this->pdf->addPngFromFile($this->img, $x0, 780, 50, 25);
+		$this->pdf->addText($x0 + 60, 800, 12, 'IFET do Triangulo - Campus Uberlandia');
+		$this->pdf->addText($x0 + 60, 800 - $h, 12, 'Patrimonio do Campus Uberlandia');
+		$this->pdf->addText($x0 + 60, 800 - $h - $h, 12, 'SIGA - Sistema Integrado de Gestao Academica');
+*/
+		$this->pdf->SetStrokeColor(0, 0, 0);
+		$y = 800 - $h - $h - 5;
+		$this->pdf->line($x0, $y, $x1, $y);
+		$this->pdf->addText($x0, $y - 13, 12, "Balancete - Periodo: de $this->dataInicial a $this->dataFinal");
+		$this->pdf->line($x0, $y - 15, $x1, $y - 15);
+		$this->pdf->restoreState();
+		$this->pdf->closeObject();
+		$this->pdf->addObject($header, 'all');
+		$this->pdf->ezSetDy(+15);
+	}
+
+	function GeneratePageFooter()
+	{
+		$x0 = $this->pdf->left;
+		$x1 = $this->pdf->right;
+		$footer = $this->pdf->openObject();
+		$this->pdf->saveState();
+		$this->pdf->SetStrokeColor(0, 0, 0);
+		$this->pdf->line($x0, 28, $x1, 28);
+		$this->pdf->addText($x0, 19, 9, $this->timestamp . ' - SGTI');
+		$this->pdf->restoreState();
+		$this->pdf->closeObject();
+		$this->pdf->addObject($footer, 'all');
+	}
+
+	function GenerateData($data)
+	{
+		$this->pdf->ezSetDy(-5);
+		$this->SetData($data);
+		$this->rawdata = $this->GenerateTableData();
+		$this->GenerateBody($this->rawdata);
+	}
+
+	function Generate()
+	{
+		$this->SetOutput();
+		$this->Execute();
+	}
+
+}
+?>

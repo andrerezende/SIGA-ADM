@@ -1,0 +1,327 @@
+<?
+class BusinessAdmItemReqBib extends Business
+{
+
+    public $titulo;
+    public $autor;
+    public $edicao;
+    public $localPublicacao;
+    public $editora;
+    public $dataPublicacao;
+   /* public $idCurso;
+    public $idGenero;
+    public $idUnidade; */
+	public $subtitulo;
+	public $descFisica;
+	
+	public $idRequisicao;
+	public $idMaterial;
+	public $status;
+	public $idLicitacao;
+	public $item;
+	public $quantPedida;
+	public $quantEntregue;
+	public $quantEmpenhada;
+	public $precoEstimado;
+  	public $valorReal;
+
+    public $descricao;
+    public $material;
+    public $estoque;
+    public $movimento;
+    public $requisicao;
+    public $mapa;
+	
+   // public $curso;
+	public $empenhado;
+	
+	function __construct($data = null)
+	{
+		parent::__construct('sigaept', $data);
+	}
+    
+ 	function GetById($idRequisicao)
+	{
+		$this->idRequisicao = $idRequisicao;
+		$this->retrieve();
+		return $this;
+	}
+
+    function getIdMaterialByItemLicitacao($idLicitacao,$item)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('idMaterial');
+        $criteria->addCriteria('idLicitacao','=',"$idLicitacao");
+        $criteria->addCriteria('item','=',"$item");
+        $query = $criteria->retrieveAsQuery();
+		return $query->result[0][0];
+    }
+
+	function getTotalByIdLicitacao($idLicitacao)
+    {
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('sum(quantPedida * precoEstimado)');
+		$criteria->addCriteria('idLicitacao','=',$idLicitacao);
+		return $criteria->retrieveAsQuery();
+    }
+
+    function getByIdLicitacaoItem($idLicitacao,$item)
+    {
+        $criteria = $this->getCriteria();
+    	$criteria->addColumnAttribute('codMaterial');
+        $criteria->addColumnAttribute('descricao');
+    	$criteria->addColumnAttribute('titulo');
+        $criteria->addColumnAttribute('quantPedida');
+        $criteria->addColumnAttribute('material.unidade','unidade');
+        $criteria->addColumnAttribute('status');
+        $criteria->addColumnAttribute('precoEstimado');
+        $criteria->addCriteria('idLicitacao','=',$idLicitacao);
+        $criteria->addCriteria('item','=',$item);
+        return $criteria->retrieveAsQuery();
+    }
+
+    function getByLicitacaoEMaterial($idLicitacao,$idMaterial,$idRequisi)
+    {
+        $criteria = $this->getCriteria();
+    	$criteria->addColumnAttribute('codMaterial');
+        $criteria->addColumnAttribute('descricao');
+    	$criteria->addColumnAttribute('titulo');
+        $criteria->addColumnAttribute('quantPedida');
+        $criteria->addColumnAttribute('material.unidade','unidade');
+        $criteria->addColumnAttribute('status');
+        $criteria->addColumnAttribute('precoEstimado');
+		$criteria->addColumnAttribute('idRequisicao');
+		$criteria->addColumnAttribute('item');				//adicionado ao retorno da pesquisa
+        $criteria->addCriteria('idLicitacao','=',$idLicitacao);
+        $criteria->addCriteria('idMaterial','=',$idMaterial);
+		$criteria->addCriteria('idRequisicao','=',$idRequisi);//adicionado nova condição da pesquisa
+		
+        return $criteria->retrieveAsQuery();
+    }
+	function setStatus($status)
+    {
+        $this->status = $status;
+    }
+
+    function setLicitacao($id)
+    {
+        $this->idLicitacao = $id;
+    }
+
+    function setItem($item)
+    {
+        $this->item = $item;
+    }
+
+	function setPrecoEstimado($precoEstimado)
+    {
+        $this->precoEstimado = $precoEstimado;
+    }
+
+   function setStatusByLicitacao($idLicitacao,$item,$status)
+   {
+        $sql = new sql("status","ad_itemreqbib");
+        $sql->SetWhere("idlicitacao = ?");
+
+        if ($item == 'all') // se forem todos os itens
+        {
+            $args = array($status,$idLicitacao);
+        }
+        else
+        {
+            $sql->SetWhereAnd("item = ?"); // senao especifica um item a ser alterado
+            $args = array($status,$idLicitacao,$item);
+        }
+
+        $query = $this->Execute($sql->Update($args));
+        return $query->result;
+    }
+
+    function removeDaLicitacao($idLicitacao,$idRequisicao,$param)
+    {
+        $sql = new sql("status,item","ad_itemreqbib");
+        $sql->SetWhere("idlicitacao = ?");
+        $sql->SetWhereAnd("idrequisicao = ?"); 
+
+        $args = array("0",NULL,$idLicitacao,$param);
+        $query = $this->Execute($sql->Update($args));
+        return $query->result;
+    }
+
+    function listItens($idRequisicao = 0,$status = 0,$idinstituicao = 0)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('requisicao.idRequisicao');
+    	$criteria->addColumnAttribute('requisicao.uoRequisitante.sigla');
+    	$criteria->addColumnAttribute('material.codmaterial');
+    	$criteria->addColumnAttribute('titulo');
+    	$criteria->addColumnAttribute('idRequisicao');
+    	$criteria->addColumnAttribute('quantPedida');
+    	$criteria->addColumnAttribute('precoEstimado');
+    	$criteria->addColumnAttribute('idMaterial');
+        
+        $criteria->addCriteria("requisicao.suplementar","<>","'S'");
+		if ($idinstituicao !=0)
+			{
+			$criteria->addCriteria("ad_uo.idsetor", "=" ,"cm_setor.idsetor");
+			$criteria->addCriteria("setor.idinstituicao", "=", "$idinstituicao");
+			}
+			
+        $cc1 = new CriteriaCondition();
+            $cc1->addCriteria($criteria->getCriteria("requisicao.status","=","'4'"));
+            $cc1->addOrCriteria($criteria->getCriteria("requisicao.status","=","'7'"));
+        $criteria->addCriteria($cc1);
+
+        if ($status > 0)
+        {
+    		$criteria->addCriteria("status","=",$status);
+        }
+        else
+        {
+            $cc = new CriteriaCondition();
+            $cc->addCriteria($criteria->getCriteria("status","=","'0'"));
+            $cc->addOrCriteria($criteria->getCriteria("status","IS","NULL"));
+            $criteria->addCriteria($cc);
+        }
+        
+        if ($idRequisicao!=0)
+        {
+        	$criteria->addCriteria("requisicao.idRequisicao","=","$idRequisicao");
+        }       
+        
+        return $criteria->retrieveAsQuery();
+    }
+
+    function ListItensByLicitacaoFornecedor($idLicitacao,$idFornecedor)
+    {
+           $sql = new sql("i.titulo as material, ml.quantidade, m.descricao, i.item, ml.preco, ml.marcamodelo, ml.status, sum(quantpedida)","ad_requisicao r, ad_itemreqbib i, ad_material m, ad_mapalicitacao ml, cm_tabelageral tg, ad_itemlicitacao il","r.idrequisicao = i.idrequisicao and m.idmaterial = i.idmaterial and i.idlicitacao = ml.idlicitacao and ml.item = i.item and i.idlicitacao = il.idlicitacao and il.item = i.item and il.excecao = tg.item1 and tg.tabela = 'AD_STATUSITEMREQ'");
+           $sql->SetWhereAnd("(i.status = '1' OR i.status = '2' OR i.status = '3' OR i.status = '4')"); //Itens não cancelados
+       //    $sql->SetWhereAnd("r.datahorareq > '31/12/2007'"); //Somente para requisicoes feitas depois de 31/12/2007
+           $sql->SetWhereAnd("i.idlicitacao = ?");
+           $sql->SetWhereAnd("ml.idfornecedor = ?");
+           $sql->SetGroupBy("i.titulo, ml.quantidade, m.descricao, i.item, ml.preco, ml.marcamodelo, ml.status");
+           $sql->SetOrderBy("i.item");
+
+           $args = array($idLicitacao,$idFornecedor);
+           $query = $this->Query($sql,$args);
+           //var_dump($sql->Select($args));
+           return $query;
+   }
+
+    function setIdMaterial($idMaterial)
+    {
+        $this->idMaterial = $idMaterial;
+    }
+
+ 	/* -----------------------------------------------------------------
+
+    Método GetNewItemLicitacao($idlicitacao)
+
+    Retorna o próximo numero de item de licitacao para ad_itemreqbib
+
+    Utilizado por: forms/licitacoes/frmLicitacaoNew.class
+
+    -------------------------------------------------------------------*/
+    function GetNewItemLicitacao($id)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('max(item)');
+        $criteria->addCriteria("idLicitacao","=","$id");
+        $query = $criteria->retrieveAsQuery();
+
+        return $query->result[0][0]+1;
+    }
+   
+    function getRequisicao()
+    {
+        if (!$this->requisicao) $this->retrieveAssociation('requisicao');
+        return $this->requisicao;
+    }
+
+	function GetEmpenhadoByItemReq($requisicao, $itemreq=null)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('empenhado.idEmpenhado');
+		$criteria->addColumnAttribute('empenhado.idEmpenho');
+		$criteria->addCriteria('idRequisicao','=',$requisicao);
+		if($itemreq)
+		{
+			$criteria->addCriteria('item','=',$itemreq);
+		}
+		return $criteria->retrieveAsQuery();
+	}
+	///alterações
+	
+	 function setItemByLicitacaoItem($idLicitacao,$itemAntigo,$itemNovo)
+   {
+        $sql = new sql("item","ad_itemreqbib");
+        $sql->SetWhere("idlicitacao = ?");
+        $sql->SetWhereAnd("item = ?");
+
+        $args = array($itemNovo,$idLicitacao,$itemAntigo);
+
+        $query = $this->Execute($sql->Update($args));
+        return $query->result;
+    } 
+	
+	
+	function getByLicitacaoEItem($idLicitacao,$numitem)
+    {
+        $criteria = $this->getCriteria();
+    	$criteria->addColumnAttribute('idMaterial');
+		$criteria->addColumnAttribute('descricao');
+    	$criteria->addColumnAttribute('material.descricao','material');
+        $criteria->addColumnAttribute('quantPedida');
+        $criteria->addColumnAttribute('material.unidade','unidade');
+        $criteria->addColumnAttribute('status');
+        $criteria->addColumnAttribute('precoEstimado');
+		$criteria->addColumnAttribute('idRequisicao');
+		$criteria->addCriteria('idLicitacao','=',$idLicitacao);
+        $criteria->addCriteria('item','=',$numitem);
+		//var_dump($numitem);
+		
+		return $criteria->retrieveAsQuery();
+    }
+	//Função copiada de itemreq.class
+	  function setValorReal($valorReal)
+    {
+        $cf = new MCurrencyFormatter();
+        $this->valorReal = $cf->toDecimal($valorReal);
+    }
+	
+	function getStatusByItem($idLicitacao, $item)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('status');
+		$criteria->addCriteria('idLicitacao','=', "$idLicitacao");
+		$criteria->addCriteria('item','=', "$item");
+		$query = $criteria->retrieveAsQuery();
+		return $query->result[0][0];
+	}	
+
+function setMotivoRejeita($idRequisicao,$item,$motivo="")
+    {
+        global $MIOLO;
+		
+    	/**
+		 * ObtÃ©m o ID do item anulado
+		 */
+		
+		
+				
+        $sql = new sql();
+            $sql->SetColumns('
+                    motivorejeicao
+            ');
+            $sql->SetTables('
+                    ad_itemreqbib
+            ');
+            $sql->SetWhere("idrequisicao = '$idRequisicao' and item = '$item'");
+            $values = array(
+                    $motivo,
+                    );
+            $this->Execute($sql->Update($values));
+    }
+		
+}
+?>

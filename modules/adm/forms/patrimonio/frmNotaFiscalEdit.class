@@ -1,0 +1,298 @@
+<?php
+class frmNotaFiscalEdit extends MForm
+{
+
+
+   public $iditem;
+   private $objNotaFiscal;
+   private $itemPatrimonio;
+   private $objItemPatrimonio;
+   private $descricaoItem;
+   private $empenho;
+   private $quantidadeItensNota;
+   private $valorUnidade;
+   private $instituicao;
+   private $dataAquisicao;
+   private $numPro;
+   private $marcaModelo;
+   private $idVidaUtil;
+   private $descricaoCC;
+   private $dataGarantia;
+   private $classificador;
+   private $objFornecedor;
+
+    function __construct()
+    {
+        global $MIOLO,$module,$action,$item;
+
+	$idNotaFiscal=$_GET['item'];
+	$this->iditem=$idNotaFiscal;
+	$this->objNotaFiscal=$MIOLO->GetBusiness($module, 'notafiscal', $idNotaFiscal);
+        $this->instituicao = $MIOLO->GetBusiness('common','instituicao', $this->objNotaFiscal->idinstituicao);;
+
+
+	$this->itemPatrimonio = $MIOLO->GetBusiness($module, 'itempatrimonio');
+	$this->descricaoItem=$this->itemPatrimonio->getDescricaoByIDNotaFiscal($idNotaFiscal);
+
+
+	$idobjItemPatrimonio=$this->itemPatrimonio->getValorByIDNotaFiscal($idNotaFiscal)->result[0][0];
+	$this->objItemPatrimonio=$this->itemPatrimonio->getByID($idobjItemPatrimonio);
+
+	$this->empenho= $this->objItemPatrimonio->getEmpenhoByIdNota($idNotaFiscal);
+
+	$this->quantidadeItensNota = $this->itemPatrimonio->ContaItemPatrimonioNotaFiscal($idNotaFiscal)->result[0][0];
+
+	$this->valorUnidade=$this->itemPatrimonio->getValorByIDNotaFiscal($idNotaFiscal);
+        
+        //24-07-2012 Tiago Macedo
+        $objPatMinId = $MIOLO->GetBusiness($module, 'itempatrimonio', $this->itemPatrimonio->getMinIDItem($idNotaFiscal));                        
+        $this->dataAquisicao = $objPatMinId->dataAquisicao;
+        $this->numPro = $objPatMinId->numPro;
+        $this->marcaModelo = $objPatMinId->marcaModelo;
+        $classificador = $MIOLO->GetBusiness($module,'classificador');     
+        $classificador->GetById($objPatMinId->idClassificador);
+        $this->classificador = $classificador->descricao;
+        $this->idVidaUtil = $objPatMinId->idvidautil;
+        $ccontabil = $MIOLO->GetBusiness('adm', 'vidautil');
+        $this->descricaoCC = $ccontabil->getDescricao($objPatMinId->idvidautil);
+        $this->dataGarantia = $this->objNotaFiscal->dataGarantia; 
+        if ($this->dataGarantia) $this->dataGarantia=date('d/m/Y', strtotime($this->dataGarantia));
+        $this->objFornecedor = $MIOLO->GetBusiness('adm', 'fornecedor');
+	$this->objFornecedor = $this->objFornecedor->GetById($this->objNotaFiscal->idFornecedor);
+
+	parent::__construct('Dados a Atualizar');
+        $this->SetClose(null);
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+        global $MIOLO,$module;
+
+	$this->objNotaFiscal->valor=  str_replace('.', ',', $this->objNotaFiscal->valor);
+	$this->objNotaFiscal->desconto=  str_replace('.', ',', $this->objNotaFiscal->desconto);
+	$this->valorUnidade[0][1]=str_replace('.', ',', $this->valorUnidade[0][1]);                       
+        $fields = array(
+			//new MTextField('item', '', 'Nota Fiscal', 20),
+			new MHiddenField('idnota', '', '', ''),
+			new MTextField('tfNotaFiscal', $this->objNotaFiscal->notaFiscal, 'Nota Fiscal*', 20,'máx. 16 caracteres'),
+                        new MTextField('numPro',$this->numPro,'Processo',20,'Ex: Processo: 23059.000707/2009-92, coloca-se 000707/2009-92'),
+			new LookupTextField('lkpFornecedor', $this->objFornecedor->nome, 'Fornecedor', 40, null, null, null, 'adm', 'fornecedor'),
+			new HiddenField('idFornecedor', $this->objFornecedor->idFornecedor, 'idFornecedor'),
+			new MCalendarField('cfDataNotaFiscal', $this->objNotaFiscal->dataNotaFiscal, 'Data da Nota Fiscal*', 10),
+			new MTextField('tfValor', $this->objNotaFiscal->valor, 'Valor*', 20),
+			new MCalendarField('cfDataAteste', $this->objNotaFiscal->dataAteste, 'Data do Ateste*', 10),
+			new MLookupTextField('instituicao', $this->instituicao->instituicao, 'Instituição', 30, NULL, NULL, NULL, 'common', 'instituicao3'),
+			new MMultiLineField('tfObs', $this->objNotaFiscal->obs, 'Observação', 60,2,60,'máx. 200 caracteres'),
+			new MTextField('tfDesconto', $this->objNotaFiscal->desconto, 'Desconto', 20),
+			new MSpacer(2),
+			new MSeparator('Itens da nota fiscal'),
+			new MSpacer(1),
+			new MTextField('tfDescricao', $this->descricaoItem, 'Descrição do Item*', 70,'máx. 1000 caracteres'),
+			new MSpacer(1),                        
+                        new MTextField('tfNumeroEmpenho', $this->empenho , 'Nº Empenho', 12,'máx. 12 caracteres'),
+			new MSpacer(1),
+                        new MCalendarField('dataAquisicao', $this->dataAquisicao,'Data de Aquisição',20),
+                        new MSpacer(1),
+                        new MCalendarField('cfDataGarantia', $this->dataGarantia,'Data da Garantia',20),
+                        new MSpacer(1),
+                        new MTextField('marcaModelo',$this->marcaModelo,'Marca/Modelo',60,'Máx. 50 caracteres'),
+			new MSpacer(1),
+                        new MLookupTextField('idClassificador',$this->classificador,'Classificador',50),
+			new MSpacer(1),
+                        new MLookupTextField('contacontabil', $this->descricaoCC, 'Conta contábil', 50, NULL, NULL, NULL, 'adm', 'contacontabil'),
+                        new MHiddenField('idvidautil', $this->idVidaUtil),
+                        new MSpacer(1),
+			new MTextlabel('tfQuantidade', $this->quantidadeItensNota, 'Quantidade', 10),
+			new MSpacer(1),
+			new MTextlabel('tfValorUni', $this->valorUnidade[0][1], 'Valor Unidade', 20),
+		);
+
+        $this->SetFields($fields);
+        $this->SetFieldAttr('instituicao', 'related', 'idinstituicao,instituicao,sigla');
+        $this->SetFieldAttr('contacontabil', 'related', 'idvidautil,contacontabil');
+        $this->SetFieldAttr('idClassificador','module',$module);
+        $this->SetFieldAttr('idClassificador','item','classificador');
+        $this->SetFieldAttr('idClassificador','related','idClassificador');
+
+        if (!$this->manager->perms->isMemberOf($this->manager->login, 'ADM_PATRIMONIO_ADMIN')) $this->SetFieldAttr('instituicao', 'readonly', true);
+
+		$this->page->addJsCode(file_get_contents(dirname(__FILE__) . '/../../ui/js/mask.js'));
+		$this->page->addJsCode(file_get_contents(dirname(__FILE__) . '/../../ui/js/maskMoney.js'));
+		//$this->SetFieldAttr('tfNumeroEmpenho', 'readonly', true);
+		$this->tfValor->addAttribute('onKeyUp', 'amf2005_BecameCurrency(this,15)');
+		$this->tfValor->addAttribute('onBlur', 'amf2005_BecameCurrency(this,15)');
+		$this->tfDesconto->addAttribute('onKeyUp', 'amf2005_BecameCurrency(this,15)');
+		$this->tfDesconto->addAttribute('onBlur', 'amf2005_BecameCurrency(this,15)');
+		$this->tfNotaFiscal->addAttribute('maxlength',16);
+		$this->cfDataNotaFiscal->addAttribute('onBlur', 'makeMask(this, \'##/##/####\');');
+		$this->cfDataNotaFiscal->addAttribute('onKeyUp', 'makeMask(this, \'##/##/####\');');
+		$this->cfDataAteste->addAttribute('onBlur', 'makeMask(this, \'##/##/####\');');
+		$this->cfDataAteste->addAttribute('onKeyUp', 'makeMask(this, \'##/##/####\');');
+                $this->cfDataGarantia->addAttribute('onBlur', 'makeMask(this, \'##/##/####\');');
+		$this->cfDataGarantia->addAttribute('onKeyUp', 'makeMask(this, \'##/##/####\');');
+		$this->tfObs->addAttribute('maxlength',200);
+		$this->tfDescricao->addAttribute('maxlength',1000);
+		$this->tfNumeroEmpenho->addAttribute('maxlength',12);
+		$this->SetFieldAttr('lkpFornecedor', 'related', 'idFornecedor,lkpFornecedor');
+        // 18/10/2010 - Vitor Pacheco
+
+
+        //dependencia só é editável se estiver vazio
+//        if($this->objPatrimonio->idDependencia)
+//        {
+//            $this->SetFieldAttr('dependencia','visible',false);
+//        }
+        $go = $this->manager->getActionURL('adm','notafiscal:',$this->iditem);
+
+		$buttons = array(
+            new MButton('btnSalvar', 'Salvar'),
+	   new MButton('btnCancelarEdicao','Cancelar Edição', $go),
+
+
+        );
+
+        $this->SetButtons($buttons);
+
+       // $this->SetData();
+    }
+function btnSalvar_click(){
+	GLOBAL $MIOLO, $module;
+	if ($this->GetFormValue('tfCnpj')) {
+                    $cnpj = str_replace('.', '', $this->GetFormValue('tfCnpj'));
+                    $cnpj = str_replace('-', '', $cnpj);
+                    $cnpj = str_replace('/', '', $cnpj);
+			if (!is_numeric($cnpj)) {
+				$this->addError("Insira apenas números no campo CNPJ");
+			}
+
+			//$data = $this->GetData();
+			//$this->GetFormValue('aaa');
+			$tfNotaFiscal=$this->GetFormValue('tfNotaFiscal');
+			$cfDataNotaFiscal=$this->GetFormValue('cfDataNotaFiscal');
+			$tfValor=$this->GetFormValue('tfValor');
+			$cfDataAteste=$this->GetFormValue('cfDataAteste');
+			$tfDescricao=$this->GetFormValue('tfDescricao');
+			$idFornecedor=$this->GetFormValue('idFornecedor');
+
+                        
+
+			if (($tfNotaFiscal == '') or ($tfNotaFiscal == NULL))
+				 $this->addError("Nota Fiscal não informada!");
+			if (($cfDataNotaFiscal == '') or ($cfDataNotaFiscal == NULL))
+				 $this->addError("Data da Nota Fiscal não informada!");
+			if (($tfValor == '') or ($tfValor == NULL))
+				 $this->addError("Valor não  informado!");
+			if (($cfDataAteste == '') or ($cfDataAteste == NULL))
+				 $this->addError("Data do Ateste não informada!");
+			if (($tfDescricao == '') or ($tfDescricao == NULL))
+				 $this->addError("Descrição não informada!");
+
+		}
+		if ($this->errors != '') {
+			$this->GenerateErrors();
+		} else {
+			$this->objNotaFiscal->notaFiscal = $this->GetFormValue('tfNotaFiscal');
+			//$this->objNotaFiscal->cnpj = $this->GetFormValue('tfCnpj');
+			$data = $this->GetData();
+
+			$this->objNotaFiscal->idFornecedor = $data->idFornecedor;
+			$this->objNotaFiscal->Fornecedor = $this->GetFormValue('lkpFornecedor');
+			$this->objNotaFiscal->dataNotaFiscal = $this->GetFormValue('cfDataNotaFiscal');
+			$this->objNotaFiscal->valor = @ereg_replace(",", ".", $this->GetFormValue('tfValor'));
+			$this->objNotaFiscal->dataAteste = $this->GetFormValue('cfDataAteste');
+			//23/05/2012 - Tiago Macedo
+                        $instituicao = $this->GetFormValue('instituicao');
+                        $this->objNotaFiscal->idinstituicao = $this->instituicao->getIDInst($instituicao)->result[0][0];
+                        $this->objNotaFiscal->obs = $this->GetFormValue('tfObs');
+			$this->objNotaFiscal->desconto = @ereg_replace(",", ".", $this->GetFormValue('tfDesconto'));
+                        $this->objNotaFiscal->dataGarantia = $this->GetFormValue('cfDataGarantia');
+
+			//echo $this->objNotaFiscal->situacao;
+
+//			Alteraçao dos valores dos itempatrimonio
+			$valorUnit = ((double)$this->GetFormValue('tfValor')) / $this->quantidadeItensNota;
+
+			//24-04-2012 Tiago Macedo
+			$valorUnit = explode(".", $valorUnit);
+			$valorUnit = $valorUnit[0].".".substr($valorUnit[1],  0, 2);
+			
+                        //Variável utilizada para contar quantos itens ficarão com os centavos que sobraram da divisão.
+                        $restoContador =  ((double)$this->GetFormValue('tfValor')) - ($valorUnit*$this->quantidadeItensNota);
+			$restoContador = (int)(number_format($restoContador*100, 2));			
+                        
+                        //Ordena o vetor.
+                        sort($this->valorUnidade);
+                        
+			$replicacaoOK = false;
+			$array_id=$this->itemPatrimonio->getValorByIDNotaFiscal($this->iditem);
+                        
+                        //salva os patrimonios que ficarão com os centavos que sobraram.
+			for ($i=0; $i < $restoContador; $i++) {
+				$idItemPatrimonio = $array_id[$i][0];
+				$objItemPatrimonio = $this->itemPatrimonio->GetById($idItemPatrimonio);
+				$objItemPatrimonio->notaFiscal = trim(strtoupper($this->GetFormValue('tfNotaFiscal')));
+				$objItemPatrimonio->valor = $valorUnit + 0.01;
+				$objItemPatrimonio->descricao = trim(strtoupper($this->GetFormValue('tfDescricao')));
+				$objItemPatrimonio->numeroEmpenho = $this->GetFormValue('tfNumeroEmpenho');
+                                //24-07-2012 Tiago Macedo
+                                $objItemPatrimonio->dataAquisicao = $this->GetFormValue('dataAquisicao');                                
+                                $objItemPatrimonio->marcaModelo = $this->GetFormValue('marcaModelo');
+                                $objItemPatrimonio->numPro = $this->GetFormValue('numPro');
+                                $objItemPatrimonio->idvidautil = $this->GetFormValue('idvidautil');                                
+                                
+				try {
+					$objItemPatrimonio->update();
+//					$this->AddInfo("Atualização feita com sucesso.");
+					$replicacaoOK = true;
+					$flag2 = true;
+				} catch (Exception $e) {
+					$this->AddInfo("ad_itempatrimonio: Falha ao atualizar o registro $idItemPatrimonio");
+				}
+			}
+                        
+                        //salva o resto dos itens.
+			for ($i=$i; $i < $this->quantidadeItensNota; $i++) {
+				$idItemPatrimonio = $this->valorUnidade[$i][0];
+				$objItemPatrimonio = $this->itemPatrimonio->GetById($idItemPatrimonio);
+				$objItemPatrimonio->notaFiscal = trim(strtoupper($this->GetFormValue('tfNotaFiscal')));
+				$objItemPatrimonio->valor = $valorUnit;
+				$objItemPatrimonio->descricao = trim(strtoupper($this->GetFormValue('tfDescricao')));
+				$objItemPatrimonio->numeroEmpenho = $this->GetFormValue('tfNumeroEmpenho');
+                                
+                                //24-07-2012 Tiago Macedo
+                                $objItemPatrimonio->dataAquisicao = $this->GetFormValue('dataAquisicao');
+                                $objItemPatrimonio->marcaModelo = $this->GetFormValue('marcaModelo');
+                                $objItemPatrimonio->numPro = $this->GetFormValue('numPro');
+                                $objItemPatrimonio->idvidautil = $this->GetFormValue('idvidautil');
+                                
+				try {
+					$objItemPatrimonio->update();
+//					$this->AddInfo("Atualização feita com sucesso.");
+					$replicacaoOK = true;
+					$flag2 = true;
+				} catch (Exception $e) {
+					$this->AddInfo("ad_itempatrimonio: Falha ao atualizar o registro $idItemPatrimonio");
+				}
+			}
+//			update na nota fiscal
+			try {
+				$this->objNotaFiscal->update();
+
+				$this->AddInfo("Atualização feita com sucesso.");
+			} catch (Exception $e) {
+				$this->AddInfo("ad_notafiscal: Falha ao atualizar o registro.");
+			}
+
+//			Atualiza os labels na tela se obtiver sucesso na acao
+			if ($replicacaoOK) {
+				if ($restoContador == 0) $this->SetFieldValue('tfValorUni', $valorUnit);
+				else $this->SetFieldValue('tfValorUni', $valorUnit + 0.01);
+			}
+		}
+}
+
+
+
+}
+?>

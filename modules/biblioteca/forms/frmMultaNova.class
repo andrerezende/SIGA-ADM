@@ -1,0 +1,129 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?
+class frmMultaNova extends Form
+{
+	protected $objMulta;
+	protected $objEmprestimo;
+
+	function frmMultaNova()
+	{
+		global $MIOLO, $module, $item;
+
+		$this->Form("Nova Multa");
+		$this->EventHandler();
+		$this->defaultButton = false;
+		// Botão 'fechar', direcionando para o handler biblioteca/main/circulacao/multa
+		$this->SetClose($this->manager->GetActionURL($module, 'main:circulacao:multa'));
+	}
+
+	function CreateFields()
+    {
+		global $MIOLO, $action, $module, $item, $page;
+
+		if (! $this->page->IsPostBack()){
+			$fields = Array (
+				new HiddenField('idusuario',''),
+				new TextField('idemprestimo','','Cod. do Empréstimo',20),
+				new TextField('datahora','','Data Hora',20),
+				//new CurrencyField('valor','','Valor da Multa'),
+				new TextField('valor','','Valor da Multa'),
+				new MultiLineField('observacao','','Observação','',3,50),
+			);
+			$this->SetFields($fields);
+			$this->SetFieldValue('datahora', date('d/m/Y H:i:s'));
+
+			$buttons = Array(
+				new FormButton('btnSalvar', 'Salvar'),
+					new MButton('btnVoltar', 'Voltar','return'),
+			);
+			$this->SetButtons($buttons);
+		}
+
+		//Definindo o foco
+		if (!($this->GetFieldValue('idemprestimo')))
+		{
+			$this->page->onLoad("MIOLO_GetElementById('idemprestimo').focus();");
+		}
+    }
+
+    
+    
+	function btnSalvar_click()
+	{
+		global $MIOLO;
+		$this->objEmprestimo = $MIOLO->GetBusiness('biblioteca','emprestimo');
+		if(!$this->objEmprestimo->thisEmprestimoExists($this->GetFormValue('idemprestimo')))
+		{
+			$this->SetFieldAttr('idemprestimo','hint','ESTE EMPRÉSTIMO NÃO EXISTE');
+		}
+		else
+		{
+			$this->objMulta = $MIOLO->GetBusiness('biblioteca','multa');
+			$this->objMulta->setData($this->getData());
+			try
+			{
+				//$this->objMulta->save();
+				$this->objMulta->saveNovaMulta();
+				$log = $MIOLO->GetBusiness('biblioteca','log');
+				$log->SetData($this->getDataLog('INCMULTA'));
+				$log->save();
+
+				$go = $this->manager->GetActionURL('biblioteca','main:circulacao:multanova');
+				$MIOLO->Information("Multa Adicionada", $go );
+			}
+			catch (Exception $e)
+			{
+				$this->addError($e->getMessage());
+                //$this->addError('idemprestimo','hint','MULTA JÁ EXISTE PARA ESTE EMPRÉSTIMO');
+			}
+		}
+	}
+
+	function getData()
+	{
+		$data = new FormData();
+		$data->datahora = $this->GetFormValue('datahora');
+		$data->valor = str_replace("R$","",$this->GetFormValue('valor'));
+		$data->valor = str_replace(",",".",$this->GetFormValue('valor'));
+		$data->observacao = $this->GetFormValue('observacao');
+		if(($this->GetFormValue('foipaga') == '2') or ($this->GetFormValue('foipaga') == null))
+			$data->foipaga = 0;
+		else
+			$data->foipaga = $this->GetFormValue('foipaga');
+		$data->datahorapagamento = $this->GetFormValue('datahorapagamento');
+		$data->idemprestimo = $this->GetFormValue('idemprestimo');
+		return $data;
+	}
+
+	function getDataLog($mne)
+	{
+		global $MIOLO;
+		$data = new FormData();
+		$data->data = date('d/m/Y H:i:s');
+		$data->idusuario = $MIOLO->GetLogin()->idkey;
+		$operacao = $MIOLO->GetBusiness('biblioteca','operacao');
+		$operacao = $operacao->GetIdoperacaoByMnemonico($mne);
+		$data->idoperacao = $operacao->idoperacao;
+		$data->identificador = $this->objMulta->idmulta;
+		return $data;
+	}
+}
+?>

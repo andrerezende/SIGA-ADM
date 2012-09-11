@@ -1,0 +1,216 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+class BusinessBibliotecaAutor extends Business
+{
+	var $idautor;
+	var $sobrenome;
+	var $prenome;
+        var $cutter;
+
+	function BusinessBibliotecaAutor($data = null)
+	{
+       $this->Business('sigaept', $data);
+	}
+
+	function GetData()
+	{
+		$data = new FormData();
+		$data->idautor = $this->idautor;
+		$data->sobrenome = $this->sobrenome;
+		$data->prenome = $this->prenome;
+      $data->cutter  = $this->cutter;
+		return $data;
+	}
+
+
+	function SetData($data)
+	{
+		$this->idautor = $data->idautor;
+		$this->sobrenome = $data->sobrenome;
+		$this->prenome = $data->prenome;
+		$this->cutter  = $data->cutter;
+	}
+
+	function GetByCodigo($idautor)
+	{
+
+		$sql = new sql('idautor,sobrenome,prenome,cutter','bt_autor','idautor = ?');
+	
+		$query = $this->Query($sql,$idautor);
+
+		if ( !$query->eof() )
+			$this->SetData($query->GetRowObject());
+
+	   return $this;
+	}
+
+
+   function GetAutorSecundarioByObra($idobra)
+	{
+
+		$sql = new sql('m.idobra,m.conteudo,m.ocorrencia','bt_material m,bt_etiqueta e',"e.idetiqueta=m.idetiqueta and e.tag='700' and m.subcampo='a' and m.idobra = ?");
+
+		$query = $this->Query($sql,$idobra);
+	   return $query;
+	}
+
+    function GetAutorSecundarioByObra2($idobra)
+    {
+
+        $sql = new sql('m.idmaterial,m.conteudo,m.ocorrencia','bt_material m,bt_etiqueta e',"e.idetiqueta=m.idetiqueta and e.tag='700' and m.subcampo='a' and m.idobra = ?");
+
+        $query = $this->Query($sql,$idobra);
+        return $query;
+    }
+        //autor de artigo(periodicos)
+        function GetAutorSecundarioByArtigo($idartigo)
+        {
+
+                $sql = new sql('m.idmaterial,m.conteudo,m.ocorrencia','bt_materialartigo m,bt_etiqueta e',"e.idetiqueta=m.idetiqueta and e.tag='700' and m.subcampo='a' and m.idartigo= ?");
+
+                $query = $this->Query($sql,$idartigo);
+                return $query;
+        }
+
+	function LastNumeroAutor()
+	{    
+	  $sql = new sql("nextval('seq_bt_autor')");
+      $query = $this->Query($sql);
+	  return $query->result[0][0];
+	}
+
+
+
+	function Update($data)
+	{
+                global $MIOLO,$module;
+
+
+		
+        // UPDATE  Tabela  bt_material   06/06/2009
+
+        $criteria = $data->idautor;
+                        
+        $sqlm = new sql('conteudo','bt_material ', "idobra in (select m.idobra from bt_obra o, bt_autor a ,bt_material m ,bt_etiqueta e where a.idautor=o.idautor and o.idobra=m.idobra and m.idetiqueta = e.idetiqueta and m.idetiqueta = 53 and  m.subcampo='a' and m.linha=1 and m.ocorrencia=1 and  e.tag='100' and o.idautor = '$criteria')  and  idetiqueta = 53 and subcampo='a' and linha=1 and ocorrencia=1" );
+
+
+          $Conteudo = ($data->sobrenome  . "," . $data->prenome);
+          $commands[] = $sqlm->Update(array($Conteudo));
+
+                
+        //   var_dump($Conteudo);
+         $this->execute($commands);
+
+
+        // UPDATE  tabela Autor
+      
+             $sql = new sql('sobrenome,prenome,cutter','bt_autor','idautor = ?');
+             $values = array($data->sobrenome,$data->prenome,$data->cutter,$data->idautor);
+             $ok = $this->Execute($sql->Update($values));
+             return $ok;
+
+
+	}
+
+	
+	function Insert($data)
+	{
+		
+		$sql = new sql('idautor,sobrenome,prenome,cutter','bt_autor');
+		$data->idautor = $this->LastNumeroAutor();
+		
+		$values = array($data->idautor,$data->sobrenome,$data->prenome,$data->cutter);
+		
+		$ok = $this->Execute($sql->Insert($values));
+		if($ok){$ok = $data->idautor;}
+
+	   return $ok;
+
+	}
+
+	
+	function Delete($data)
+	{
+                global $MIOLO,$module;
+        try
+                {
+		$sql = new sql('','bt_autor','idautor = ?');
+
+		$ok = $this->Execute($sql->Delete($data->idautor));
+
+	       return $ok;
+                }
+                catch (Exception $e)
+                {
+                        $MIOLO->Error("Autor não poderá ser excluido. Existem Obras cadastradas com esse autor!",$MIOLO->GetActionURL($module, $action,null ));
+                }
+
+	}
+
+	function ListAutor()
+	{
+		$sql = new sql('idautor,prenome,sobrenome,cutter','bt_autor','','idautor');
+        $query = $this->Query($sql);
+        return $query;
+	}
+	
+	function GetidautorByprenome($mne)
+	{
+        $criteria =  $this->getCriteria();
+        $criteria->addCriteria('prenome','=', "'$mne'");
+        $cursor = $criteria->retrieveAsCursor();
+        return $cursor->getObject();
+  }
+  
+  function Getidautor()
+  {
+     return $this->idautor;
+  }
+
+	function GetIdAutorImportacao($prenome,$nome)
+	{
+		$sql = new sql('idautor,prenome,sobrenome,cutter','bt_autor','prenome=? and sobrenome=?','idautor');
+		$query = $this->Query($sql,array($prenome,$nome));
+		var_dump ($query->result[0][0]);
+		return $query->result[0][0];
+	}
+
+	function InsertImportacao($prenome,$nome)
+	{
+		
+		$sql = new sql('idautor,sobrenome,prenome,cutter','bt_autor');
+		$idautor = $this->LastNumeroAutor();
+		
+		$values = array($idautor,$nome,$prenome,NULL);
+		
+		$ok = $this->Execute($sql->Insert($values));
+		if($ok) return $idautor; 
+		else return NULL;
+	}
+
+}
+?>

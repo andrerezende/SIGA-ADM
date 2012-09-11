@@ -1,0 +1,124 @@
+<?
+class frmLogin extends MForm
+{
+    var $auth;
+
+    function __construct()
+    {   
+        parent::__construct('Login');               
+        $this->SetIcon($this->manager->GetUI()->GetImage('admin','login.gif'));
+        if ($this->page->IsPostBack())
+        {
+           $this->EventHandler();
+        }
+    }
+
+    function CreateFields()
+    {
+        global $MIOLO, $action, $module;
+
+        $this->auth = $this->manager->auth;
+        $return_to = $this->getFormValue('return_to',MIOLO::_Request('return_to'));
+
+        if(!$return_to)
+        {
+            $return_to = $MIOLO->history->Top();
+        }
+
+        $fields = Array(
+           new MTextField('uid',$this->auth->login->iduser,'Login',20),
+           new MPasswordField('pwd','','Password',20),
+           new MTextLabel('username',$this->auth->login->user,'Nome',40),
+           new MLink('mail','Email para contato', 'mailto:'.$this->manager->GetConf('theme.email'),$this->manager->GetConf('theme.email')),
+           new MHiddenField('tries', ''),
+           new MHiddenField('return_to', $return_to)
+        );
+        $this->SetFields($fields);
+        $this->AddButton(new MButton('btnLogin', 'Login'));
+        $this->AddButton(new MButton('btnLogout', 'Logout'));
+        $help = $MIOLO->GetActionURL('admin','loginhelp');
+        $this->AddButton(new MButtonWindow('btnHelp', 'Ajuda', $help));
+
+        $this->SetButtonAttr('btnLogin' ,'visible'  , !$this->isAuthenticated());
+        $this->SetButtonAttr('btnLogout'    ,'visible'  ,  $this->isAuthenticated());
+        $this->SetFieldAttr('uid'           ,'readonly' ,  $this->isAuthenticated());
+        $this->SetFieldAttr('pwd'           ,'visible'  , !$this->isAuthenticated());
+        $this->SetFieldAttr('username'  ,'visible'  ,$this->isAuthenticated());
+    }
+
+    function btnLogin_click()
+    {   global $MIOLO;
+
+        $this->GetData();
+        $MIOLO->LogMessage('[LOGIN] Validating login information');
+        
+        // Max login tryes
+        $max_tries = 3;
+        
+        // autenticar usuário e obter dados do login
+        $uid = $this->GetFormValue('uid');
+        $pwd = $this->GetFormValue('pwd');
+
+        if ( !$this->LoginPermitted($uid) )
+        {
+           $err = 'Acesso não permitido.';
+        }
+        else
+        {
+           if ( $this->auth->Authenticate($uid, $pwd) )
+           {
+               $return_to = $this->GetFormValue('return_to');
+               // ToDo: voltar para onde estava...
+               if ( $return_to )
+               {
+                  $url = $return_to;
+               }
+               else
+               {
+                  $url = $MIOLO->GetActionURL('admin','login');
+               }
+               $this->page->Redirect($url);
+            }
+            else
+            {      
+               $tries = $this->GetFormValue('tries');
+               if ( $tries >= $max_tries )
+               {
+                  $MIOLO->Error('Erro na identificação do usuário!');
+               }
+               else
+               {
+                  $err = 'Erro na identificação do usuário!' . ' - Restam ' . ( $max_tries - $tries) . 
+                         ' ' . 'tentativa(s).';
+                  $tries++;
+                  $this->SetFormValue('tries',$tries);
+                  $pwd = null;
+                  if ( $err )
+                  {
+                      $this->AddError($err);
+                  }
+               }
+            }
+        }
+    }
+
+    function btnLogout_click()
+    {
+        global $MIOLO;
+        $this->page->Redirect($MIOLO->GetActionURL('admin','logout'));
+    }
+
+    function LoginPermitted($uid)
+    {  global $MIOLO;
+
+       $ok = true;
+       return $ok;
+    }
+
+    function isAuthenticated()
+    {
+        return $this->auth->isLogged();
+    }
+
+}
+?>

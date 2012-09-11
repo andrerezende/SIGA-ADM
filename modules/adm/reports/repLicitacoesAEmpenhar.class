@@ -1,0 +1,261 @@
+<?php
+class repLicitacoesAEmpenhar extends PDFReport
+{
+	var $img;
+	var $timestamp;
+
+	function __construct()
+	{
+		global $MIOLO, $module, $page, $context, $self, $action, $perms;
+
+		parent::__construct(NULL, NULL, 55);
+		$ui = $MIOLO->GetUI();
+		$this->img = $ui->GetImageSrc('logo_siga.png',$module); 
+		$this->timestamp = date('d/m/Y G:i');
+		$this->pdf->ezStartPageNumbers(520, 800, 12, 'rigth', 'Página: {PAGENUM}');
+		$this->pdf->ezSetMargins(100, 30, 30, 30);
+		$this->GeneratePageHeader();
+		$this->GeneratePageFooter();
+		$this->SetOption('fontSize',8);
+
+		$cf = new MCurrencyFormatter();
+		$uo = Form::GetFormValue('selUO');
+		$inicio = Form::GetFormValue('calDataInicial');
+		$final = Form::GetFormValue('calDataFinal');
+		$inicio = substr($inicio,6,4).'/'.substr($inicio,3,2).'/'.substr($inicio,0,2);
+		$final = substr($final,6,4).'/'.substr($final,3,2).'/'.substr($final,0,2);
+
+		$licitacao = $MIOLO->GetBusiness('adm','licitacao');
+		$result = $licitacao->listByUoPeriodo($uo, $inicio, $final, "'1','2','3','4'");
+
+		if($result)
+		{
+			$somaLicitacao = 0;
+			$somaEmpenhado = 0;
+			$somaSaldo = 0;
+			for($i = 0; $i < count($result); $i++)
+			{
+				$uo = $result[$i][4];
+				$sigla = $result[$i][7];
+				if(!$uo)
+				{
+					$uo = $result[$i][5];
+					$sigla = $result[$i][8];
+				}
+				if(!$uo)
+				{
+					$uo = $result[$i][6];
+					$sigla = $result[$i][9];
+				}
+				if(($result[$i][3] == 'VENCEDORES DEFINIDOS') or ($result[$i][3] == 'EMPENHADA'))
+				{
+					$licitacao->GetById($result[$i][0]);
+					$valores[0] = $licitacao->getValorLicitadoByUo($uo);
+					$valores[1] = $licitacao->getValorRealByUo($uo);
+					$valores[2] = $cf->toDecimal($valores[0]) - $cf->toDecimal($valores[1]);
+				}
+				else
+				{
+					$licitacao->GetById($result[$i][0]);
+					$valores[0] = $licitacao->getValorEstimadoByUo($uo);
+					$valores[1] = 0;
+					$valores[2] = $valores[0];
+				}
+				if($result[$i][2] == '1')
+				{
+					$result[$i][2] = 'CONSUMO';
+				}
+				elseif($result[$i][2] == '2')
+				{
+					$result[$i][2] = 'SERVIÇO';
+				}
+				elseif($result[$i][2] == '3')
+				{
+					$result[$i][2] = 'LIVRO';
+				}
+				elseif($result[$i][2] == '4')
+				{
+					$result[$i][2] = 'PERMANENTE';
+				}
+				$somaLicitacao += $valores[0];
+				$somaEmpenhado += $valores[1];
+				$somaSaldo += $valores[2];
+				$result[$i][4] = $sigla;
+				$result[$i][5] = number_format(str_replace(',','.',$valores[0]),2,',','.');
+				$result[$i][6] = number_format(str_replace(',','.',$valores[1]),2,',','.');
+				$result[$i][7] = number_format(str_replace(',','.',$valores[2]),2,',','.');
+			}
+
+			foreach ($result as $key => $row) {
+				$siglaUo[$key] = $row[4];
+				$numLicitacao[$key] = $row[1];
+			}
+			array_multisort($siglaUo, SORT_ASC, $numLicitacao, SORT_ASC, $result);
+
+			$summary1 = array(array(
+				"<b>TOTAL GERAL:</b>",
+				"<b>" . number_format(str_replace(',','.',$somaLicitacao),2,',','.') . "</b>",
+				"<b>" . number_format(str_replace(',','.',$somaEmpenhado),2,',','.') . "</b>",
+				"<b>" . number_format(str_replace(',','.',$somaSaldo),2,',','.') . "</b>"
+			));
+		}
+
+		$result2 = array();
+		for($i = 0; $i < count($result); $i++)
+		{
+			if($result[$i][5] != '0,00' and $result[$i][7] != '0,00')
+			{
+				$result2[] = $result[$i];
+			}
+		}
+		$result = $result2;
+
+		// define as colunas
+		$columns = array(
+			new PDFReportColumn('det0', '<b>IdLicitacao</b>', 'center', false, 0, false),
+			new PDFReportColumn('det1', '<b>Licitação</b>', 'center', false, 15, true),
+			new PDFReportColumn('det2', '<b>Tipo</b>', 'center', false, 13, true),
+			new PDFReportColumn('det3', '<b>Status</b>', 'center', false, 30, true),
+			new PDFReportColumn('det4', '<b>UO Req</b>', 'left', false, 0, false),
+			new PDFReportColumn('det5', '<b>R$ Licitação</b>', 'right', false, 14, true),
+			new PDFReportColumn('det6', '<b>R$ Empenhado</b>', 'right', false, 14, true),
+			new PDFReportColumn('det7', '<b>R$ Saldo</b>', 'right', false, 14, true),
+		);
+
+		$sum1 = array(
+			new PDFReportColumn('texto0', 'texto0', 'right', false, 58, true),
+			new PDFReportColumn('texto1', 'texto1', 'right', false, 14, true),
+			new PDFReportColumn('texto2', 'texto2', 'right', false, 14, true),
+			new PDFReportColumn('texto3', 'texto3', 'right', false, 14, true),
+		);
+
+		// Largura do report, em %
+		$this->SetWidth(100);
+
+		// cria a arvore
+		$t = new TreeArray($result, '4', '0,1,2,3,4,5,6,7');
+
+		// registra as colunas de detalhes e summary
+		$this->SetColumns($columns);
+		$colDetail = $this->columns;
+		$this->SetColumns($sum1);
+		$colSum1 = $this->columns;
+
+		// gera o report
+		$i = 0;
+		foreach ($t->tree as $uoReq => $node1)
+		{
+			$totalLicitado = 0;
+			$totalEmpenhado = 0;
+			$totalSaldo = 0;
+			foreach($node1 as $r)
+			{
+				$totalLicitado = $cf->toDecimal($totalLicitado) + $cf->toDecimal($r[5]);
+				$totalEmpenhado = $cf->toDecimal($totalEmpenhado) + $cf->toDecimal($r[6]);
+				$totalSaldo = $cf->toDecimal($totalSaldo) + $cf->toDecimal($r[7]);
+			}
+			$summary2 = array(array(
+				"<b>SUBTOTAL DA UO:</b>",
+				"<b>" . number_format(str_replace(',','.',$totalLicitado),2,',','.') . "</b>",
+				"<b>" . number_format(str_replace(',','.',$totalEmpenhado),2,',','.') . "</b>",
+				"<b>" . number_format(str_replace(',','.',$totalSaldo),2,',','.') . "</b>"
+			));
+
+			$this->SetOption('showHeadings', 1);
+			$this->SetOption('showLines', 0);
+			$this->columns = $colDetail;
+			$this->GenerateGroupHeader($uoReq);
+			$this->GenerateData($node1);
+			$this->SetOption('showHeadings', 0);
+			$this->SetOption('showLines', 1);
+			$this->columns = $colSum1;
+			$this->GenerateData($summary2);
+			$i++;
+			if($i < count($t->tree))
+			{
+				$this->pdf->ezNewPage();
+			}
+		}
+	}
+
+	function GenerateGroupHeader($uo)
+	{
+		$this->pdf->SetStrokeColor(0, 0, 0);
+		$x0 = $this->pdf->left;
+
+		$this->pdf->ezSetDy(-43, 'makeSpace');
+		$y = $this->pdf->y;
+		$this->pdf->addText($x0, $y + 34, 12, 'UO Requisitante: ' . $uo);
+		$this->pdf->line($x0, $y + 31, 300, $y + 31);
+		$this->pdf->ezSetY($y + 30);
+	}
+
+	function GeneratePageHeader()
+	{
+		global $MIOLO;
+
+		$dataInicial = Form::GetFormValue('calDataInicial');
+		$dataFinal = Form::GetFormValue('calDataFinal');
+		$uo = Form::GetFormValue('selUO');
+		$objUo = $MIOLO->GetBusiness('adm','uo',$uo);
+		$sigla = $objUo->sigla;
+
+		$x0 = $this->pdf->left;
+		$x1 = $this->pdf->right;
+		$h = $this->pdf->getFontHeight(12);
+		$header = $this->pdf->openObject();
+		$this->pdf->saveState();
+
+		$x00=$this->pdf->left;
+		$hh = $this->pdf->getFontHeight(12);
+		$this->pdf->addText($x00, 800, 12, $this->manager->getConf('instituicao.sigla')." - ".$this->manager->getConf('instituicao.nome'));
+		$this->pdf->addText($x00, 800 - $hh, 12, $this->manager->getConf('theme.system'));		
+
+
+/*		$this->pdf->addPngFromFile($this->img, $x0, 780, 50, 25);
+		$this->pdf->addText($x0 + 60, 800, 12, 'UFJF - Universidade Federal de Juiz de Fora');
+		$this->pdf->addText($x0 + 60, 800 - $h, 12, 'CGCO - Centro de Gestão do Conhecimento Organizacional');
+		$this->pdf->addText($x0 + 60, 800 - $h - $h, 12, 'SIGA - Sistema Integrado de Gestão Acadêmica');
+*/
+
+
+		$this->pdf->SetStrokeColor(0, 0, 0);
+		$y = 800 - $h - $h - 5;
+		$this->pdf->line($x0, $y, $x1, $y);
+		$this->pdf->addText($x0, $y - 13, 14, "Licitações a Empenhar de $dataInicial a $dataFinal");
+		$this->pdf->line($x0, $y - 15, $x1, $y - 15);
+		$this->pdf->restoreState();
+		$this->pdf->closeObject();
+		$this->pdf->addObject($header, 'all');
+	}
+
+	function GeneratePageFooter()
+	{
+		$x0 = $this->pdf->left;
+		$x1 = $this->pdf->right;
+		$footer = $this->pdf->openObject();
+		$this->pdf->saveState();
+		$this->pdf->SetStrokeColor(0, 0, 0);
+		$this->pdf->line($x0, 28, $x1, 28);
+		$this->pdf->addText($x0, 19, 9, $this->timestamp . ' - CGCO/DSI');
+		$this->pdf->restoreState();
+		$this->pdf->closeObject();
+		$this->pdf->addObject($footer, 'all');
+	}
+
+	function GenerateData($data)
+	{
+//		$this->pdf->ezSetDy(-5);
+		$this->SetData($data);
+		$this->rawdata = $this->GenerateTableData();
+		$this->GenerateBody($this->rawdata);
+	}
+
+	function Generate()
+	{
+		$this->SetOutput();
+		$this->Execute();
+	}
+
+}
+?>

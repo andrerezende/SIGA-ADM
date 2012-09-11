@@ -1,0 +1,120 @@
+<?php
+class repConRazao extends PDFReport
+{
+	var $img;
+	var $timestamp;
+	var $ano;
+	var $objOrcamento;
+
+	function __construct()
+	{
+        global $MIOLO, $module, $page, $context, $self, $action, $perms;
+
+        parent::__construct(NULL, NULL, 55);
+        $ui = $MIOLO->GetUI();
+		$this->img = $ui->GetImageSrc('logo_siga.png',$module); 
+        //        $this->SetPDF(new ezPDFReport('2'));
+        $this->timestamp = date('d/m/Y G:i');
+        //        $this->SetTrigger('AfterNewPage','repMultiLevel2','AfterNewPage', $this);
+        $this->pdf->ezStartPageNumbers(520, 800, 12, 'rigth', 'Página: {PAGENUM}');
+        $this->pdf->ezSetMargins(100, 30, 30, 30);
+        $this->GeneratePageHeader();
+        $this->GeneratePageFooter();
+		$this->SetOption('fontSize',9);
+
+		$this->ano = Form::GetFormValue('ano');
+		$this->objOrcamento = $MIOLO->GetBusiness($module,'orcamento');
+
+		$query = $this->objOrcamento->ListByAno($this->ano);
+		$data = $query->result;
+		$somaSaldo = 0.0;
+		$cf = new MCurrencyFormatter();
+		for($d = 0; $d < count($data); $d++)
+		{
+			$somaSaldo += $cf->toDecimal($data[$d][6]);
+			$data[$d][4] = number_format(str_replace(',','.',$data[$d][4]),2,',','.');//disponivel
+			$data[$d][5] = number_format(str_replace(',','.',$data[$d][5]),2,',','.');//empenhado
+			$data[$d][6] = number_format(str_replace(',','.',$data[$d][6]),2,',','.');//saldo
+		}
+		//inclui soma no final
+		$somaSaldo = number_format(str_replace(',','.',$somaSaldo),2,',','.');
+		$data[] = array('','','','','','TOTAL', $somaSaldo);
+
+		// define as colunas
+		$columns = array(
+			new PDFReportColumn('det0', '<b><i>PTR</i></b>', 'center', false, 15, true),
+			new PDFReportColumn('det1', '<b><i>Fonte</i></b>', 'center', false, 15, true),
+			new PDFReportColumn('det2', '<b><i>Rubrica</i></b>', 'center', false, 15, true),
+			new PDFReportColumn('det3', '<b><i>Esfera</i></b>', 'center', false, 10, true),
+			new PDFReportColumn('det4', '<b><i>Cred. Disp.</i></b>', 'right', false, 15, true),
+			new PDFReportColumn('det5', '<b><i>Empenhado</i></b>', 'right', false, 15, true),
+			new PDFReportColumn('det6', '<b><i>Saldo</i></b>', 'right', false, 15, true),
+		);
+
+		// Largura do report, em %
+		$this->SetWidth(100);
+
+		// registra as colunas de detalhes e summary
+		$this->SetColumns($columns);
+
+		// gera o report
+		$this->SetOption('showHeadings', 1);
+		$this->SetOption('showLines', 0);
+		$this->GenerateData($data);
+	}
+
+	function GeneratePageHeader()
+	{
+		$this->ano = Form::GetFormValue('ano');
+		$x0 = $this->pdf->left-5;
+		$x1 = $this->pdf->right-5;
+		$h = $this->pdf->getFontHeight(12);
+		$header = $this->pdf->openObject();
+		$this->pdf->saveState();
+		//$this->pdf->addPngFromFile($this->img, $x0, 780, 50, 25);
+		$x00=$this->pdf->left;	
+		$this->pdf->addText($x00, 800, 12, $this->manager->getConf('instituicao.sigla')." - ".$this->manager->getConf('instituicao.nome'));
+		$this->pdf->addText($x00, 800 - $h, 12, $this->manager->getConf('theme.system'));
+		//$this->pdf->addText($x0, 800 - $h, 12, 'CGCO - Centro de Gestão do Conhecimento Organizacional');
+		//$this->pdf->addText($x0, 800 - $h - $h, 12, 'SIGA - Sistema Integrado de Gestão Acadêmica');
+		$this->pdf->SetStrokeColor(0, 0, 0);
+		$y = 800 - $h - $h - 5;
+		$this->pdf->line($x0, $y, $x1, $y);
+		$this->pdf->addText($x0, $y - 13, 12, "Relatório ConRazão: $this->ano");
+		$this->pdf->line($x0, $y - 15, $x1, $y - 15);
+		$this->pdf->restoreState();
+		$this->pdf->closeObject();
+		$this->pdf->addObject($header, 'all');
+		$this->pdf->ezSetDy(+15);
+	}
+
+	function GeneratePageFooter()
+	{
+		$x0 = $this->pdf->left;
+		$x1 = $this->pdf->right;
+		$footer = $this->pdf->openObject();
+		$this->pdf->saveState();
+		$this->pdf->SetStrokeColor(0, 0, 0);
+		$this->pdf->line($x0, 28, $x1, 28);
+		$this->pdf->addText($x0, 19, 9, $this->timestamp);
+		$this->pdf->restoreState();
+		$this->pdf->closeObject();
+		$this->pdf->addObject($footer, 'all');
+	}
+
+	function GenerateData($data)
+	{
+		$this->pdf->ezSetDy(-5);
+		$this->SetData($data);
+		$this->rawdata = $this->GenerateTableData();
+		$this->GenerateBody($this->rawdata);
+	}
+
+	function Generate()
+	{
+		$this->SetOutput();
+		$this->Execute();
+	}
+
+}
+?>

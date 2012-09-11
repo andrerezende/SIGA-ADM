@@ -1,0 +1,188 @@
+<?php
+class repTermo extends PDFReport
+{
+	var $img;
+	var $timestamp;
+	var $empenho;
+	var $iditempatrimonio;
+	var $objItemPatrimonio;
+
+	function __construct()
+	{
+        global $MIOLO, $module, $page, $context, $self, $action, $perms;
+
+        parent::__construct(NULL, NULL, 55);
+        $ui = $MIOLO->GetUI();
+		$this->img = $ui->GetImageSrc('logo_siga.png',$module);
+        $this->timestamp = date('d/m/Y G:i');
+        $this->pdf->ezStartPageNumbers(520, 800, 12, 'rigth', 'Página: {PAGENUM}');
+        $this->pdf->ezSetMargins(100, 30, 30, 30);
+        $this->GeneratePageHeader();
+        $this->GeneratePageFooter();
+		$this->SetOption('fontSize',7);
+
+
+		$this->empenho = Form::GetFormValue('empenho');
+		$this->iditempatrimonio = Form::GetFormValue('iditempatrimonio');
+
+		if($this->empenho != null && $this->empenho !="")
+		{
+		   $this->objItemPatrimonio = $MIOLO->GetBusiness($module,'itempatrimonio');
+		   $data = $this->objItemPatrimonio->RepTermo($this->empenho);
+		}
+		elseif($this->iditempatrimonio != null && $this->iditempatrimonio != "")
+		{
+			$this->objItemPatrimonio = $MIOLO->GetBusiness($module,'itempatrimonio');
+			$data = $this->objItemPatrimonio->RepTermo2($this->iditempatrimonio);
+		}
+		else
+		{
+			exit("Conteudo da pesquisa inválido:");
+		}
+
+		/* CONFIGURANDO PARA GERAR RELATORIO */
+
+
+		//montagem do array de dados
+		//$data = $this->objItemPatrimonio->RepTermo($this->empenho);
+
+
+
+		for($d = 0; $d < count($data); $d++)
+		{
+			//busca o valor unitario (do item inicial, todos são o mesmo) e formata unitario e total
+			$this->objItemPatrimonio->GetById($data[$d][0]);
+			$data[$d][5] = number_format(str_replace(',','.',$this->objItemPatrimonio->valor),2,',','.');
+			$data[$d][6] = number_format(str_replace(',','.',$data[$d][6]),2,',','.');
+		}
+
+		// define as colunas
+		$columns = array(
+			new PDFReportColumn('det0', '<b><i>Inicial</i></b>', 'center', false, 7, true),
+			new PDFReportColumn('det1', '<b><i>Final</i></b>', 'center', false, 7, true),
+			new PDFReportColumn('det2', '<b><i>Descrição</i></b>', 'center', false, 49, true),
+			new PDFReportColumn('det3', '<b><i>Empenho</i></b>', 'center', false, 14, true),
+			new PDFReportColumn('det4', '<b><i>Qte</i></b>', 'center', false, 5, true),
+			new PDFReportColumn('det5', '<b><i>Unitário</i></b>', 'right', false, 9, true),
+			new PDFReportColumn('det6', '<b><i>Val Total</i></b>', 'right', false, 9, true),
+		);
+
+		// Largura do report, em %
+		$this->SetWidth(100);
+
+		// registra as colunas de detalhes
+		$this->SetColumns($columns);
+		$colDetail = $this->columns;
+
+		// gera o report
+		$this->SetOption('showHeadings', 1);
+		$this->SetOption('showLines', 1);
+		$this->columns = $colDetail;
+		$itemPatrimonio = $MIOLO->GetBusiness($module, 'itempatrimonio');
+		$movimentoPat = $MIOLO->GetBusiness($module, 'movimentopat');
+		$i = 0;
+		foreach($data as $d)
+		{
+			if(($i == 0) or ($data[$i][0] != $data[$i-1][0]))
+			{
+				if($i > 0)//nova pagina, exceto para a primeira vez
+				{
+					$this->pdf->ezNewPage();
+				}
+				$data0 = array($d);
+				$termo = $movimentoPat->GetNumeroTermoMaisRecente($d[0]);
+				$itemPatrimonio->GetById($d[0]);
+				$itemPatrimonio->retrieveAssociation('setor');
+				$itemPatrimonio->retrieveAssociation('dependencia');
+				if($itemPatrimonio->dependencia->dependencia)
+				{
+					$dependencia = " na dependência " . $itemPatrimonio->dependencia->dependencia;
+				}
+				else
+				{
+					$dependencia = '';
+				}
+
+				$this->pdf->ezText('',10);
+				$this->pdf->ezText('Termo de Responsabilidade Nº ' . $termo,11,array('justification'=>'center'));
+				$this->pdf->ezText('',10);
+				$this->pdf->ezText("Declaro receber, em perfeitas condições de funcionamento e conservação, sob minha guarda e responsabilidade, os bens patrimoniais pertencentes a ESCOLA AGROTÉCNICA FEDERAL DE UBERLÂNDIA abaixo relacionados,  observando rigorosa consistência entre estes e os registros da Divisão de Patrimônio,  comprometendo-me ainda  a  zelar para que permaneçam no/na " . $itemPatrimonio->setor->nome . $dependencia,10, array('justification'=>'full'));
+				$this->pdf->ezText('',10);
+				$this->pdf->ezText('',10);
+
+				$this->GenerateData($data0);
+				$this->pdf->ezSetDy(-60);
+				$this->pdf->addTextWrap($x0+50, 540, 200, 8, 'Ciente,', 'left');
+				$this->pdf->addTextWrap($x0+350, 540, 200, 8, 'Uberlândia, ____/____/____', 'left');
+				$this->pdf->addTextWrap($x0+50, 515, 200, 8,  '________________________________________________', 'left');
+				$this->pdf->addTextWrap($x0+350, 515, 200, 8, '________________________________________________', 'left');
+				$this->pdf->addTextWrap($x0+50, 505, 200, 8, 'Divisão de Patrimônio', 'center');
+				$this->pdf->addTextWrap($x0+350, 490, 200, 8, '________________________________________________', 'left');
+				$this->pdf->addTextWrap($x0+350, 480, 200, 8, 'p/ OUTRAS DEPENDÊNCIAS', 'left');
+			}
+			$i++;
+		}
+	}
+
+	function GeneratePageHeader()
+	{
+		$x0 = $this->pdf->left-5;
+		$x1 = $this->pdf->right-5;
+		$h = $this->pdf->getFontHeight(12);
+		$header = $this->pdf->openObject();
+		$this->pdf->saveState();
+
+
+		$x00=$this->pdf->left;
+		$hh = $this->pdf->getFontHeight(12);
+		$this->pdf->addText($x00, 800, 12, $this->manager->getConf('instituicao.sigla')." - ".$this->manager->getConf('instituicao.nome'));
+		$this->pdf->addText($x00, 800 - $hh, 12, $this->manager->getConf('theme.system'));
+
+/*
+		$this->pdf->addPngFromFile($this->img, $x0, 780, 50, 25);
+                $this->pdf->addText($x0 + 60, 800, 12, 'EAFUDI - Escola Agrotécnica Federal de Uberlândia');
+		$this->pdf->addText($x0 + 60, 800 - $h, 12, 'Patrimônio da Escola Agrotécnica Federal de Uberlândia');
+		$this->pdf->addText($x0 + 60, 800 - $h - $h, 12, 'SIGA - Sistema Integrado de Gestão Acadêmica');
+*/
+
+		$this->pdf->SetStrokeColor(0, 0, 0);
+		$y = 800 - $h - $h - 5;
+		$this->pdf->line($x0, $y, $x1, $y);
+		$this->pdf->addText($x0, $y - 13, 12, "Termo de Responsabilidade");
+		$this->pdf->line($x0, $y - 15, $x1, $y - 15);
+		$this->pdf->restoreState();
+		$this->pdf->closeObject();
+		$this->pdf->addObject($header, 'all');
+		$this->pdf->ezSetDy(+15);
+	}
+
+	function GeneratePageFooter()
+	{
+		$x0 = $this->pdf->left;
+		$x1 = $this->pdf->right;
+		$footer = $this->pdf->openObject();
+		$this->pdf->saveState();
+		$this->pdf->SetStrokeColor(0, 0, 0);
+		$this->pdf->line($x0, 28, $x1, 28);
+		$this->pdf->addText($x0, 19, 9, $this->timestamp . ' - CGCO/DSI');
+		$this->pdf->restoreState();
+		$this->pdf->closeObject();
+		$this->pdf->addObject($footer, 'all');
+	}
+
+	function GenerateData($data)
+	{
+		$this->pdf->ezSetDy(-5);
+		$this->SetData($data);
+		$this->rawdata = $this->GenerateTableData();
+		$this->GenerateBody($this->rawdata);
+	}
+
+	function Generate()
+	{
+		$this->SetOutput();
+		$this->Execute();
+	}
+
+}
+?>

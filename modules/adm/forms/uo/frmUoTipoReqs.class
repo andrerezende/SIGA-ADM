@@ -1,0 +1,87 @@
+<?
+class frmUoTipoReqs extends Form
+{
+
+	protected $objUo;
+	
+    function __construct($objUo)
+    {
+		$this->objUo = $objUo;
+        $this->Form('Incluir');
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+		$fields = array(
+			new Selection('idTipoReq','','Tipo da Requisição'),
+			new HiddenField('idRubrica'),
+			new MLookupTextField('lkpRubrica','','Rubrica',20)
+        );
+		
+        $this->SetFields($fields);
+		
+		$tipoReq = $this->manager->GetBusiness('adm','tiporeq');
+		$query = $tipoReq->listAll();
+	   	$this->SetFieldAttr('idTipoReq','options',$query->result);
+	   	$this->SetFieldAttr('lkpRubrica','visible',false);
+		
+		$buttons = array(
+			new FormButton('btnEnviar', 'Enviar'),
+        	new FormButton('btnSalvar', 'Incluir'),
+            );
+		$this->SetButtons($buttons);
+		
+		$this->SetButtonAttr('btnSalvar','visible',false);
+		
+		$this->SetFieldAttr('lkpRubrica','module','adm');
+	    $this->SetFieldAttr('lkpRubrica','item','exerubrica');
+	    $this->SetFieldAttr('lkpRubrica','event','filler');
+	    $this->SetFieldAttr('lkpRubrica','related','idRubrica,lkpRubrica');
+
+		$validators = array(
+			new RequiredValidator('sigla'),
+			new RequiredValidator('nome'),
+			new RequiredValidator('tipo'),
+			new RequiredValidator('documentoRef'),
+			new RequiredValidator('lkpUsuario'),
+		);
+		$this->SetValidators($validators);
+
+    }
+	
+	public function btnEnviar_click()
+	{
+		$SESSAO = $this->manager->getSession();
+		$SESSAO->set('tiporeq',$this->GetFormValue('idTipoReq'));
+		$this->setFieldAttr('idTipoReq','readonly',true);
+		$this->setFieldAttr('lkpRubrica','visible',true);
+		$this->setButtonAttr('btnEnviar','visible',false);
+		$this->setButtonAttr('btnSalvar','visible',true);
+	}
+	public function btnSalvar_click()
+	{
+		$idRubrica = $this->GetFormValue('idRubrica');
+		$idTipoReq = $this->GetFormValue('idTipoReq');
+		$tipoReq = $this->manager->GetBusiness('adm','tiporeq');
+		$objExecuta= $this->manager->GetBusiness('adm','executa');
+		$objReqRubrica= $this->manager->GetBusiness('adm','reqrubrica');
+		$objExecuta->idTipoReq = $idTipoReq;
+		$objExecuta->idUo = $this->objUo->idUo;
+		$objExecuta->idRubrica = $idRubrica;
+		$objExecuta->ano = date(Y);
+		$tipoReq->GetById($idTipoReq);
+		$this->objUo->AddTipoReq($tipoReq);
+		try
+		{
+			$objExecuta->save();
+			$this->objUo->Log(OP_INS,"Novo tipo de requisição relacionado à UO");
+		}
+		catch (Exception $e)
+		{
+			$this->addError($e->getMessage());
+		}
+
+	}
+ }
+?>

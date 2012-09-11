@@ -1,0 +1,293 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *  
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+
+
+class frmImportacao extends MForm 
+{
+    var $objObra;
+    var $objEtiqueta;
+    var $objEditora;
+    var $objAutor;
+    var $objAssunto;
+    var $assuntos;
+
+    protected $erro, $info, $mime_content_type, $hashmd5;
+
+    function __construct()
+    {
+        global $MIOLO,$module;
+        parent::__construct('Importação Marc para Livro');
+        $this->SetClose($this->manager->GetActionURL('biblioteca', 'main:importacao'));
+        $this->EventHandler();
+        $this->page->AddScript("/tinymce/jscripts/tiny_mce/tiny_mce.js");
+        $script = "tinyMCE.init({
+                     mode : \"textareas\",
+                     theme : \"simple\",
+                 });"; 
+         
+        $this->page->AddJsCode($script);
+         
+    }    
+
+    function CreateFields()
+    {
+        global $MIOLO,$module;
+
+        $this->objObra = $MIOLO->GetBusiness($module,'obra');
+        $this->objEtiqueta = $MIOLO->GetBusiness($module,'etiqueta');
+        $this->objEditora = $MIOLO->GetBusiness($module,'editora');
+        $this->objAutor = $MIOLO->GetBusiness($module,'autor');
+        $this->objAssunto = $MIOLO->GetBusiness($module,'assunto');
+
+        $ui = $this->manager->getUI();        
+          
+          
+        $fields = array
+        (
+            new MultiLineField('txtObraMarc','','Livro', 25, 20,50,null,null),
+            //new MTextField('txtObraMarc','','Livro', 250, 200,250,null,null),
+        );
+        $this->SetFields($fields);
+
+        $buttons = array
+        (
+            new MButton('btnEnviar','Enviar'),
+        );
+        $this->SetButtons($buttons);       
+        
+    } 
+
+    function btnEnviar_click()
+    {  
+       $dados = $this->GetData();
+       //Obtem Livros a serem importados. Inicialmente, não estou considerando a importação de mais de um livro.
+       for($indLivros = 0; $indLivros< count($dados->livros);$indLivros++ ){
+          $livro = $dados->livros[$indLivros];
+          $this->assuntos = array();
+          try{
+          //Dúvida: Será que existe a necessidade de checagem da existência da Obra.
+          //O mero fato de se estar tentando fazer uma importação, torna possível pressupor que a obra ainda não existe? 
+             $idobra = $this->objObra->criaObraImportacao();
+             $etiquetas = array();
+             $arrayLivro =  array("titulo"=>NULL,
+                                  "subtitulo"=>NULL,
+                                  "autor"=>NULL,
+                                  "edicao"=>NULL,
+                                  "localdepublicacao"=>NULL,
+                                  "ideditora"=>NULL,
+                                  "datadepublicacao"=>NULL,
+                                  "genero"=>NULL,
+                                  "descfisica"=>NULL);
+
+             for($i=0;$i< count($livro);$i+=3){
+                $tag = $livro[$i];
+                $indicadores = $livro[$i+1];
+                $indicadores = str_replace(' ','',$indicadores); 
+                $indicador1 = ($indicadores[0]==' ')?NULL:$indicadores[0];
+                $indicador2 = ($indicadores[1]==' ')?NULL:$indicadores[1];
+                $conteudoOriginal = $livro[$i+2]; 
+                $idetiqueta = $this->objEtiqueta->GetIdByTag($tag);
+                $idetiqueta = $idetiqueta->result[0][0];
+             
+                array_push($etiquetas,$tag);
+                $ocorrencia = 0;
+                for ( $j=0; $j<count($etiquetas) ; $j++)
+                {
+                   if ($etiquetas[$j]==$tag) $ocorrencia++;
+                }
+             
+                $index = 0;
+                
+                $tamanhoConteudo = strlen($conteudoOriginal);
+                $valor = '';
+                $campoVariaveis = false;
+                 
+                while($index< $tamanhoConteudo){
+                   if($conteudoOriginal[$index]=='$'){
+                      $campoVariaveis = true;
+                      $subcampo = $conteudoOriginal[$index+1];
+                      $index += 2;
+                      $valor = '';
+                      while($conteudoOriginal[$index+1] != '$'){
+                         $valor .= $conteudoOriginal[$index];
+                         $index++;
+                         if($index == $tamanhoConteudo -1){
+                            $valor .= $conteudoOriginal[$index];
+                            break;
+                         }
+                      }
+                      $this->ImportaCampos($idobra,$idetiqueta,$tag,$indicador1,$indicador2,$subcampo,$valor,$ocorrencia,$arrayLivro);  
+                   }
+                   $index++;
+                }
+                if(!$campoVariaveis){
+                    $this->ImportaCampos($idobra,$idetiqueta,$tag,$indicador1,$indicador2,$subcampo,$conteudoOriginal,$ocorrencia,$arrayLivro); 
+                }        
+             }
+             $numerodaobra = $this->objObra->getNumeroByIdobra($idobra)->result[0][0];
+             $mensagem = 'Obra '.$titulo.' criada com sucesso com o número '.$numerodaobra;
+             $this->info[] = $mensagem; 
+          }catch(Exception $e){
+             $this->erro[] = "Ocorreu um erro na importação dos dados. Verifique se os subcampos foram cadastrados.";
+          }
+       }
+       $this->ExibeErroSucesso();
+       $this->SetFieldValue('txtObraMarc','');
+    } // btnEnviar_click
+
+    function ImportaCampos($idobra,$idetiqueta,$tag,$indicador1,$indicador2,$subcampo,$valor,$ocorrencia,&$objReferencia){
+        if($tag>'009'){ 
+	       switch ($tag){
+			    case '245':  if ($subcampo=='a') $objReferencia['titulo'] = $valor;
+				         if ($subcampo=='b') $objReferencia['subtitulo'] = $valor;
+			 	             break;
+                            case '100':  if ($subcampo=='a')
+				         {
+				            if ((substr_count($valor,',')==0)) 
+				            { 
+				               $auxvalor = explode(",",$valor,2);
+				               $prenome = $auxvalor[0];
+				               $nome = $auxvalor[1];
+				               $consulta = $this->objAutor->GetIdAutorImportacao($prenome,$nome);
+	                                    }else
+					    {
+					        $auxvalor = explode(", ",$valor,2);
+					        $prenome = $auxvalor[1];
+					        $nome = $auxvalor[0];
+					        $consulta = $this->objAutor->GetIdAutorImportacao($prenome,$nome);
+					    }
+					    if ($consulta==NULL)
+					    {
+					        $objReferencia['autor'] = $this->objAutor->InsertImportacao($prenome,$nome); 
+					    }else $objReferencia['autor']=$consulta;
+					 }
+				         break;
+			    case '250':  if ($subcampo=='a') $objReferencia['edicao'] = $valor;
+				              break;
+			    case '260':  if ($subcampo=='a') $objReferencia['localdepublicacao'] = $valor;
+				         if ($subcampo=='b')
+				         { 
+					      $objReferencia['ideditora'] = $this->objEditora->getIdByDesc($valor);
+					      if ($objReferencia['ideditora']==NULL)
+					      {
+					           $objReferencia['ideditora'] = $this->objEditora->InsertImportacao($valor);
+					      }  
+				         }
+				         if ($subcampo=='c') $objReferencia['datadepublicacao'] = $valor;
+				         break;
+			    case '902':  if ($subcampo=='a') $objReferencia['genero'] = $valor;
+				              break;
+			    case '300':  if ($subcampo=='a') $objReferencia['descfisica'] = $valor;
+				              break;
+		    }
+                    if (($tag>='600')and($tag<'699'))
+		    {
+			  array_push($this->assuntos,array($subcampo,$valor));
+		    }
+
+                    $this->objObra->saveMaterialImportacao($idobra,$idetiqueta,$subcampo,$valor,$ocorrencia);
+		    
+
+                    if ($assuntos<>NULL)
+		    {
+			    $controle = $this->objAssunto->importacaoAssunto($assuntos,$tag);
+			    if ($controle==FALSE)
+			    {
+				    $idetiqueta = $this->objEtiqueta->GetIdByTag($tag)->result[0][0];
+				    $ocorrenciaAssunto = $this->objAssunto->GetLastNumAssunto($idetiqueta)+1;
+				    for ($x=0 ; $x<count($assuntos) ; $x++)
+				    {
+				        $idassunto = $this->objAssunto->InsertImportacao($idetiqueta, $assuntos[$x][0],$assuntos[$x][1],1,$ocorrenciaAssunto, NULL);
+		                    }           
+				    if ($indicadorAssunto1<>NULL) $this->objAssunto->saveIndicador($idetiqueta, NULL,$indicador1,1,$ocorrenciaAssunto, NULL ,1);
+				    if ($indicadorAssunto2<>NULL) $this->objAssunto->saveIndicador($idetiqueta, NULL,$indicador2,1,$ocorrenciaAssunto, NULL ,2);
+				    $this->objAssunto->saveAssuntoObra($idassunto,$idobra,$ocorrencia,$idetiqueta);
+			    }
+			    else
+			    {
+				    $idetiqueta = $this->objEtiqueta->GetIdByTag($tag)->result[0][0];
+				    $idassunto = $this->objAssunto->getIdAssuntoAtualizado($idetiqueta, $controle);
+				    $this->objAssunto->saveAssuntoObra($idassunto,$idobra,$ocorrencia,$idetiqueta);
+			    }
+		    }
+
+                    if ($indicador1!=NULL)     $this->objObra->saveIndicadorImportacao($idobra,$idetiqueta,$ocorrencia,1,$indicador1);
+		    if ($indicador2!=NULL)     $this->objObra->saveIndicadorImportacao($idobra,$idetiqueta,$ocorrencia,2,$indicador2);
+	    }else{
+                $this->objObra->saveCamposFixosImportacao($idobra,$idetiqueta,$valor);
+	    }
+            $this->objObra->atualizaObraImportacao ($idobra,$objReferencia["titulo"],$objReferencia["subtitulo"],$objReferencia["autor"],
+                                                    $objReferencia["edicao"],$objReferencia["localdepublicacao"],$objReferencia["ideditora"],
+                                                    $objReferencia["datadepublicacao"],$objReferencia["genero"],$objReferencia["descfisica"]); 
+    }
+
+    function GetData()
+    {
+        $data = new FormData();
+        $data->livros = $this->getLivrosFromTabela($this->GetFormValue('txtObraMarc'));
+        return $data;
+    }
+    
+    function getLivrosFromTabela($tabela){
+        $conjLivros = array();
+        $auxLivros = explode("</table>",$tabela);
+        for($i=0;$i<(count($auxLivros)-1);$i++){
+            $alivro = $auxLivros[$i];
+            $alivro = str_replace('</td>',"$$",$alivro);
+            $alivro = str_replace(array('&nbsp;',"\t"),' ',$alivro);           
+            $alivro = strip_tags($alivro);
+            $livro = explode("$$",$alivro);
+            $first = substr(trim($livro[0]),-3);
+            $livro[0] = $first;
+            for($j=1; $j < count($livro);$j++){
+                $aux = trim($livro[$j]);
+                $livro[$j] = $aux;
+            }
+            array_pop($livro);
+            array_push($conjLivros, $livro); 
+        }  
+        return $conjLivros;     
+    }
+
+    function ExibeErroSucesso(){
+        if ( count($this->erro) > 0 )
+        {
+            foreach ( $this->erro as $e )
+            {
+                $this->addError($e);
+            }
+        }
+        if ( count($this->info) > 0 )
+        {
+            foreach ( $this->info as $i )
+            {
+                $this->addInfo($i);
+            }
+        }
+    }
+}
+?>

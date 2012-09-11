@@ -1,0 +1,347 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+$MIOLO->Uses('ui/controls/lkppublicacao.class','rh');
+/*
+Tareas: 1) em ^A->ajustaDataFimOcupacao e em ^F: colocada datafim no Titular colocar também no Substituto
+*/
+
+        //$validators[] = new MRequiredValidator('idpublicacaofim','Publicação');
+
+class frmFuncaoAlterar extends MFormAjax
+{
+    /**
+     * Objeto Funcao
+     * @access protected
+     * @var BusinessRhFuncao
+     */
+	protected $objfuncao; 
+	
+	/**
+     * Objeto Krono
+     * @access protected
+     * @var MKrono
+     */
+	protected $k;
+
+    function __construct($objfuncao)
+    {
+        $this->objfuncao = $objfuncao;
+        parent::__construct('Alteração de Função');
+        $this->registerMethod('onSelectCargo');
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+        global $module;
+
+		$tipoCargo = $this->manager->GetBusiness('rh','cargoconfianca');
+        $tipoCargo = $tipoCargo->ListAll();
+        
+        $url = $this->manager->getActionURL('rh','modules:forms:funcao:frmFuncaoAlterar.js'); 
+        $this->page->addScriptURL($url);
+        
+        //bloco para Nível --------------------------------------------------------------------------------------------------------
+            $objnivelfuncao = $this->manager->GetBusiness($module,'nivelfuncao');
+               $nivelfuncao = $objnivelfuncao->ListAll();
+
+            $fields[] = new MSelection    ('idnivel',$this->objfuncao->idnivel,'Nível',$nivelfuncao->result);
+
+        //bloco para Setor --------------------------------------------------------------------------------------------------------
+            //para recuperar descrição do setor, após refazimento de tela por lookup não de setor
+            $idsetor = MForm::GetFormValue('idsetor');
+            if (! $idsetor)
+            {
+                //ou para recuperar descrição na abertura do formulário, com o setor gravado
+                $idsetor = $this->objfuncao->idsetor;
+            }
+            $obj = $this->manager->GetBusiness('common','setor');
+            $obj->getById($idsetor);
+            $nomesetor  = $obj->nome;   //visualização acessória
+            $siglasetor = $obj->sigla;  //visualização acessória
+
+            $lkpsetor = new MLookupFieldValue('siglasetor',$siglasetor,'Sigla do Setor', 15);
+              $lkpsetor->module  = 'common';
+              $lkpsetor->item    = 'SetorAtivo';      //método em lookup.class
+              $lkpsetor->event   = 'btnSetor_click';  //filler: enche os campos em 'related'; método: chama o método local
+
+            $fields[] = $lkpsetor;
+              $fields[] = new MHiddenField('idsetor',$idsetor);
+              //$fields[] = new MTextField('idsetor',$idsetor,'setori');
+              $fields[] = array( new MLabel($nbsp) , new MTextLabel('nomesetor' ,$nomesetor,'','blue') );
+		//bloco para atributos de tipo de cargo de confiança ----------------------------------------------------------------------------------------------------
+		$fields[] = new MSpacer(1);
+          $fields[] = new MSelection('idcargoconfianca',$this->objfuncao->idcargoconfianca,'Tipo', $tipoCargo->result);
+        if ($this->objfuncao->idcargoconfianca == 5)
+		{
+			$curso = $this->manager->GetBusiness('ensino','curso');
+	        $curso = $curso->ListCursosGraduacao();
+	        
+	        $fields[] = new MSelection('divCurso',$this->objfuncao->idcurso,'Curso', $curso->result);
+		}
+		else
+		{
+			$fields[] = new MDiv('divCurso','');
+		}        
+
+        //bloco para Descrição ----------------------------------------------------------------------------------------------------
+            $fields[] = new MSpacer(1);
+            $fields[] = new MTextField('descricao',$this->objfuncao->descricao,'Descrição','100');
+            $fields[] = new MSpacer(1);
+            //$fields[] = new MLabel('a colocação de mandato levará a um possível ajuste nas datas de término das ocupações','red');
+            $fields[] = new MLabel('a colocação de mandato levará a um possível ajuste na data de término da ocupação atual','red');
+            $fields[] = new MTextField('mandato',$this->objfuncao->mandato,'Mandato (em anos)','1');
+            $fields[] = new MSpacer(1);
+            $fields[] = new MSeparator();
+
+        //bloco para Início da Função ---------------------------------------------------------------------------------------------
+            $fields[] = new MCalendarField('datainicio',$this->objfuncao->datainicio,'Início' ,'10');
+
+            //para recuperar descrição da publicação, ??????? após refazimento de tela por lookup não de publicação
+            $idpublicacaoinicio = MForm::GetFormValue('idpublicacaoinicio');
+            if (! $idpublicacaoinicio)
+            {
+                //ou para recuperar descrição na abertura do formulário, com a publicação gravada
+                $idpublicacaoinicio = $this->objfuncao->idpublicacaoinicio;
+            }
+            lkppublicacao($fields,'idpublicacaoinicio','Publicação início',$idpublicacaoinicio);
+        //bloco Término da Função --------------------------------------------------------------------------------------
+            $datafim = $this->objfuncao->datafim;
+
+            if ($datafim)
+            {
+                $fields[] = new MSpacer(1);
+                $fields[] = new MSeparator();
+
+                $datafim = new MCalendarField('datafim',$datafim,'Término','10');
+                $datafim->setColor('red');
+                $datafim->addStyle('fontWeight','bold');
+                $fields[] = $datafim;
+
+                //para recuperar descrição da publicação, ??????? após refazimento de tela por lookup não de publicação
+                $idpublicacaofim = MForm::GetFormValue('idpublicacaofim');
+                if (! $idpublicacaofim)
+                {
+                    //ou para recuperar descrição na abertura do formulário, com a publicação gravada
+                    $idpublicacaofim = $this->objfuncao->idpublicacaofim;
+                }
+                lkppublicacao($fields,'idpublicacaofim','Publicação término',$idpublicacaofim);
+            } // se Data de Término preenchida
+
+        //--------------------------------------------------------------------------------------------------------------
+        $this->SetFields($fields);
+
+        $this->idcargoconfianca->addAttribute('onchange','ajaxCurso.call()'); // set onchange
+		$this->mandato->addMask('#');
+        $validators[] = new MRequiredValidator('idnivel','',3);
+        $validators[] = new MRequiredValidator('siglasetor');
+        $validators[] = new MRequiredValidator('descricao');
+        $validators[] = new MRequiredValidator('datainicio');
+        $this->SetValidators($validators);
+
+        $buttons = array( new MButton('btnSalvar', 'Salvar Alteração') );
+        $this->SetButtons($buttons);
+    } // CreateFields
+
+
+    function btnSetor_click($sender,$key='')
+    {
+        $item = $key ? $key : $item; 
+        $obj = $this->manager->GetBusiness('common','setor');
+        $obj->getById($item);
+        $this->SetFieldAttr('siglasetor'        ,'value',$obj->sigla);   //campo editável, de procura
+        $this->SetFieldAttr('nomesetor'         ,'value',$obj->nome );   //visualização acessória
+        $this->SetFieldAttr('idsetor'           ,'value',$item);         //campo invisível, só para gravar
+    } // btnSetor_click
+
+
+    function Verifica($data)
+    {
+        global $module;
+
+        $dataidpublicacaoinicio = $this->GetFieldValue('dataidpublicacaoinicio'); //campo não editável, que não é recuperado em GetData()
+        $errosinicio = $this->objfuncao->VerificaInicio($data,
+                                                        $dataidpublicacaoinicio,
+                                                        $this->objfuncao->idfuncao); //idfuncao: verifica, mas sem fazer o teste para a própria função sendo alterada
+
+        if ($data->datafim)
+        {
+            $errosfim = $this->objfuncao->VerificaTermino($data->datainicio        ,   //gravada anteriormente e alterada
+                                                          $data->datafim           ,   //gravada anteriormente e alterada
+                                                          $data->idpublicacaoinicio,   //gravada anteriormente e alterada
+                                                          $data->idpublicacaofim   );  //gravada anteriormente e alterada
+            $erros = array_merge( (array)$errosinicio , (array)$errosfim );
+        }
+        else
+        {
+            $erros = $errosinicio;
+            /*if ($data->numerofim)  //se havia publicação de término então havia data de término
+            {
+                $erros[] = 'Faltou data de término';
+            }*/
+        }
+
+        $objocupacaofuncao = $this->manager->getBusiness($module,'ocupacaofuncao');
+        $primeiroocupante = $objocupacaofuncao->PrimeiroOcupante($this->objfuncao->idfuncao);
+
+        if ( $primeiroocupante and ($this->k->compareDate($data->datainicio, '>', $primeiroocupante[1])) )
+        {
+            $erros[] = 'Data de início não pode ser após o início do primeiro ocupante';
+        }
+        
+        if($data->idcargoconfianca == 5)
+        {
+        	if (($this->GetFormValue(divCurso) == '') || is_null($this->GetFormValue(divCurso)) )
+        	{
+        		$erros[] = 'Em caso de Coordenação de Curso deve-se escolher o curso.';
+        	}
+        }
+
+        if ( count($erros) > 0 )
+        {
+            foreach ( $erros as $e )
+            {
+                $this->addError($e);
+            }
+            return false;
+        }
+
+        return TRUE;
+    } // Verifica
+
+
+    function btnSalvar_click()
+    {
+        global $module;
+        $this->k = new Mkrono();
+
+        $data = $this->GetData();    //recupera somente os editáveis
+        if ($data->mandato == 0)
+        {
+            $data->mandato = NULL;   //para manter o conteúdo em branco em vez de 0 nas visualizações
+        }
+
+        if (! $this->Verifica($data))
+        {
+            RETURN;
+        }
+        
+        if($data->idcargoconfianca == 5)
+        {
+        	$data->idcurso = $this->GetFormValue(divCurso);
+        }
+        else
+        {
+        	$data->idcurso = NULL;
+        }
+        
+        $this->objfuncao->SetData($data);
+
+        $this->objfuncao->BeginTransaction();
+        TRY
+        {
+            if ($data->mandato > 0) //se encheu mandato então verifica e ajusta ocupação
+            {
+                $this->ajustaDataFimOcupacao($data);
+            }
+            $this->objfuncao->save();
+            $msg = ' Função alterada: '  . $this->objfuncao->descricao . $mandato
+                 . ', Setor: '           . $data->siglasetor 
+                 . ', data de término: ' . $data->datafim;
+            $this->objfuncao->Log(OP_UPD,'idfuncao: ' . $this->objfuncao->idfuncao . $msg);
+            $this->objfuncao->EndTransaction();
+            $go = $this->manager->GetActionURL($module,'main:funcao',$this->objfuncao->idfuncao);
+            $this->manager->Information($msg,$go);
+        }
+        CATCH (Exception $e)
+        {
+            $this->AddError($e->GetMessage());
+        }
+    } // btnSalvar_click
+
+
+    function ajustaDataFimOcupacao($data)
+    {
+/*
+Tareas: 1) em ^A->ajustaDataFimOcupacao e em ^F: colocada datafim no Titular colocar também no Substituto
+*/
+        global $module;
+
+        $objocupacaofuncao = $this->manager->getBusiness($module,'ocupacaofuncao');
+        //$ocupanteemaberto = $objocupacaofuncao->listOcupantesemAberto($this->objfuncao->idfuncao)->result;
+        $ocupanteemaberto = $objocupacaofuncao->getTitularSubstituto($this->objfuncao->idfuncao,  //função
+                                                            TRUE,                  //ocupação ABERTA/qualquer
+                                                            TRUE);                 //ocupante TITULAR/substituto
+
+        if ($ocupanteemaberto)
+        {
+            //$q = 0;
+            //foreach ($ocupanteemaberto as $reg)
+            //{
+                $objocupacaofuncao->getById($ocupanteemaberto[2]);//($reg[0]);
+                $objocupacaofuncao->setTransaction($this->objfuncao->getTransaction());
+                $fimmaximo = $this->k->operation('+',$objocupacaofuncao->datainicio,$data->mandato.'%Y');
+                $fimmaximo = $this->k->operation('-',$fimmaximo       ,'1%D');
+                //se não há data de término ou se há e ela está além do novo prazo (ínicio da ocupação mais o mandato)
+                if ( (! $objocupacaofuncao->datafim) or ($this->k->compareDate($objocupacaofuncao->datafim, '>', $fimmaximo)) )
+                {
+                    $show[] = new MLabel('Ocupação com a data de término redefinida, vínculo: ' . $objocupacaofuncao->idvinculo);
+                    $objocupacaofuncao->datafim = $fimmaximo;
+                    //$q ++;
+                    //$return = ' Quantidade de ocupações redefinidas pelo mandato: ' . $q;
+                    $objocupacaofuncao->save();
+                }
+            //} // foreach
+            $container = new MVContainer( 'container', $show );
+            $this->manager->getTheme()->insertContent( $container );
+        }
+        return;// $return;
+    } // ajustaDataFimOcupacao
+    
+    function onSelectCargo($args)
+    {
+        $cargoConfianca = $args;
+        
+        if ($cargoConfianca == 5)
+        {
+                
+			$curso = $this->manager->GetBusiness('ensino','curso');
+	        $curso = $curso->ListCursosGraduacao();
+	        
+	        $divCurso = new MSelection('divCurso','','Curso', $curso->result);
+	        // response_type = TEXT : set the ajax area of theme 
+	        $divCurso->formMode = MControl::FORM_MODE_SHOW_ABOVE;
+	        
+	        $this->manager->getTheme()->setAjaxContent($divCurso);
+   		}
+		else
+		{
+			$divCurso = new MDiv('divCurso','');
+	        // response_type = TEXT : set the ajax area of theme 
+	        $divCurso->formMode = MControl::FORM_MODE_SHOW_ABOVE;
+	        
+	        $this->manager->getTheme()->setAjaxContent($divCurso);
+		}		        
+		
+    }
+
+
+}
+?>

@@ -1,0 +1,350 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class repContagemTempo extends MPDFReport
+{
+    var $img;
+    var $timestamp;
+	protected $ezStartPageNumbersX, $ezStartPageNumbersY;
+
+    function __construct($vinculo)
+    {
+        global $MIOLO, $module, $page, $context, $self, $action, $perms;
+        parent::__construct(NULL, NULL, 55);
+        $ui = $MIOLO->GetUI();
+        $this->img = $ui->GetImageSrc('logo_siga.png',$module);
+        $this->timestamp = date('d/m/Y G:i');
+        $this->pdf->ezStartPageNumbers(520, 800, 12, 'rigth', 'Página: {PAGENUM}');
+        $this->pdf->ezSetMargins(100, 30, 30, 30);
+        $this->GeneratePageHeader();
+        $this->GeneratePageFooter();
+            
+        $k = new MKrono();
+       	$vinculo->retrieveAssociation('funcionario');
+		$vinculo->retrieveAssociation('averbacoes');
+		
+        $averbacao = $MIOLO->GetBusiness('rh','averbacao');
+
+		$diasAverbados = $vinculo->calcularTotalDiasAverbadosFinalidade('1 ');
+        $vinculo->funcionario->retrieveAssociation('pessoa');	
+        
+        $provimento = $MIOLO->GetBusiness('rh','provimento');
+        $provimento->getPrimeiroProvimento($vinculo->idVinculo);
+        $dataInicio = $provimento->dataInicio;
+		$provimento->getUltimoProvimento($vinculo->idVinculo);		
+
+        if (!$provimento->dataFim)
+        {
+            $dataFim = date('d/m/Y');
+        }
+        else
+        {
+            $dataFim = $provimento->dataFim;
+        }
+		$provimento->retrieveAssociation('cargo');
+		$provimento->retrieveAssociation('setor');
+        	
+		//$diasExercicio = $vinculo->getTempoExercicio();
+
+        //$contagem = $MIOLO->GetBusiness('rh','contagem');
+		//$query = $contagem->GetById($vinculo->idVinculo);
+		
+		//RELATÓRIO
+		
+        $x0 = $this->pdf->left;
+        $y = $this->pdf->y - 20;       
+        
+        //----------------------------------------------------------------------------------------------------------------------
+        $this->pdf->addText($x0, $y-5, 11, '<b>1 - IDENTIFICAÇÃO</b>');
+        $y = $y-15;
+          $this->Rectangle($y, 9, 12,
+                           array(450                                             , 0                                  ),
+                           array('<b>Nome do Servidor:</b>'                       , '<b>Matricula:</b>'                       ),
+                           array($vinculo->funcionario->pessoa->nome, $vinculo->idVinculo            ) );                 
+          $this->Rectangle($y, 9, 12,
+                           array(266                                             , 0                                  ),
+                           array('<b>Cargo/Função:'                       , 'Unidade de Lotacao:</b>'                       ),
+                           array($provimento->cargo->descricao, $provimento->setor->nome            ) );
+        //----------------------------------------------------------------------------------------------------------------------
+		
+        //----------------------------------------------------------------------------------------------------------------------
+        $this->pdf->addText($x0, $y-5, 11, '<b>2 - TEMPO DE SERVIÇO NESTE ORGÃO</b>');
+        $y = $y-15;
+          $this->Rectangle($y, 9, 12,
+                           array(0                                  ),
+                           array('<b>Período:</b>'               ),
+                           array($dataInicio . ' - ' . $dataFim    ) );
+        //----------------------------------------------------------------------------------------------------------------------
+		
+		//----------------------------------------------------------------------------------------------------------------------
+        $this->pdf->addText($x0, $y-5, 11, '<b>3 - AVERBAÇÕES DE TEMPO DE SERVIÇO</b>');
+        $y = $y-15;
+          $this->Rectangle($y, 9, 12,
+                           array(0                                  ),
+                           array('<b>Período:</b>'               ),
+                           array($averbacao->getMinDataInicio($vinculo->idVinculo) . ' - ' . $averbacao->getMaxDataFim($vinculo->idVinculo)    ) );
+		  $this->Rectangle($y, 9, 12,
+                           array(0                                  ),
+                           array('<b>Total de Dias:</b>'               ),
+                           array($diasAverbados    ) );
+
+        //----------------------------------------------------------------------------------------------------------------------
+		
+		//----------------------------------------------------------------------------------------------------------------------
+		$this->pdf->addText($x0, $y-5, 11, '<b>4 - FREQUÊNCIA GERAL</b>');
+		
+
+        $anoinicial = $k->GetYear($dataInicio);
+	    $anofinal = $k->GetYear($dataFim);	    
+		$anosDiff = ($anofinal - $anoinicial)+1;
+	
+		for ($i=1; $anosDiff >= $i; $i++)
+		{
+			$anos[$i] = ($anoinicial+$i)-1;
+		}
+        
+		//MATRIZES DE OCORRENCIAS       
+		$oc202 = array('113');
+        $matriz202 = array( '03' => $oc202);
+        $oc83 = array('133');
+        $matriz83 = array( '03' => $oc83);
+        $ocTotal = array('113', '133');
+        $matrizTotal = array( '03' => $ocTotal);
+        $ocFaltas = array('43','44','47','142','143','146','995','996');
+        $matrizFaltas = array( '03' => $ocFaltas);
+        
+        $licafast = $MIOLO->GetBusiness('rh','licafast'); 
+        $anoAnterior = $dataInicio;
+        $anoSeguinte = $anoAnterior;
+
+        //TABELA DE FREQUÊNCIA
+		foreach ( $anos as $key=>$val )
+        {
+            $row[0] = $val;
+            $anoAnterior = $anoSeguinte;
+            $anoSeguinte = $k->operation('+',$anoAnterior,'1%Y');
+            
+            //FALTAS
+            $falta = $licafast->contagemLicAfast($vinculo->idVinculo, $anoAnterior, $anoSeguinte, $matrizFaltas);  
+            if (!$falta)
+            {
+                $falta = '-'; 
+            }
+            else
+            {
+                $faltas += $falta;
+            }
+            $row[1] = $falta;
+            
+            //LICENÇA 202
+            $licenca202 = $licafast->contagemLicAfast($vinculo->idVinculo, $anoAnterior, $anoSeguinte, $matriz202);                
+            if (!$licenca202)
+            {
+                $licenca202 = '-'; 
+            }
+            else
+            {
+                $licencas202 += $licenca202;
+            }
+            $row[2] = $licenca202;
+            
+            //LICENÇA 83
+            $licenca83 = $licafast->contagemLicAfast($vinculo->idVinculo, $anoAnterior, $anoSeguinte, $matriz83);
+            $row[3] = $licenca83;
+            if (!$licenca83)
+            {
+                $licenca83 = '-'; 
+            }
+            else
+            {
+                $licencas83 += $licenca83;
+            }
+            $row[3] = $licenca83;
+            
+            //ANOS
+            $ano = $k->GetYear($anoAnterior);
+            if ($ano % 4 == 0)
+            {
+                $dias = 366;
+            } 
+            else
+            {
+                $dias = 365;
+            }
+            $diasTotal = $dias - ($licenca202 + $licenca83 + $falta);
+            $tempoTotal += $dias;
+            $row[4] = $diasTotal;
+            $dataRel[] = $row;
+            unset($row);
+        }
+        
+        if ($faltas == 0)
+        {
+        	$faltas = '-';
+        }
+        
+        if ($licencas202 == null)
+        {
+        	$licencas202 = '-';
+        }
+        
+        if ($licencas83 == null)
+        {
+        	$licencas83 = '-';
+        }
+        
+        $totalLicencas = $licafast->contagemLicAfast($vinculo->idVinculo, $dataInicio, $dataFim, $matrizTotal);
+        $colTotal = array("<b>TOTAL</b>", "<b>$faltas</b>", "<b>$licencas202</b>", "<b>$licencas83</b>", "<b>$tempoTotal</b>");
+        $dataRel[] = $colTotal;
+        
+	    $cols[0] = 'ANO';
+		$cols[1] = 'FALTAS';
+		$cols[2] = 'LICENÇAS 202';
+		$cols[3] = 'LICENÇAS 83';
+		$cols[4] = 'TEMPO LÍQUIDO';
+		//$cols[5] = $totalLicencas;
+        //----------------------------------------------------------------------------------------------------------------------
+			
+		$y1 = ($y - $this->pdf->y)-20;
+		$x0 = $this->pdf->left;
+		$this->pdf->ezSetDy($y1, 'makeSpace');
+        $this->pdf->ezTable($dataRel,$cols,'',$options);
+        //$this->pdf->exText($summary1[0]);
+        $this->pdf->ezText("",15);
+        $this->GeneratePageFooter();
+        unset($cols);
+        unset($dataRel);
+    }
+    
+
+/*    function GeneratePageHeader()
+    {
+        $x0 = $this->pdf->left;
+        $x1 = $this->pdf->right;
+        $h = $this->pdf->getFontHeight(10);
+        $header = $this->pdf->openObject();
+        $this->pdf->saveState();
+        $this->pdf->addPngFromFile($this->img, 40, 520 + $x0, 54, 27);
+        $this->pdf->addText($x0+85, 560, 12, 'IF - Instituto Federal');
+        $this->pdf->addText($x0+85, 560 -$h -$h , 10, 'SIGA - Sistema Integrado de Gestão Acadêmica - Módulo Recursos Humanos');
+        $y = 550 - $h - $h - 5;
+        $this->pdf->SetColor(0.4,0.4,0.4);
+        $this->pdf->filledRectangle($x0, $y-20, $x1-30, 16 );
+        $this->pdf->SetColor(1,1,1);
+        $setor = $this->setor;
+        $this->pdf->addText($x0 + 5, $y - 16, 10, "Relatório de Contagem de Tempo de Serviço");
+        $this->pdf->restoreState();
+        $this->pdf->closeObject();
+        $this->pdf->addObject($header,'all');
+    }*/
+
+    function GeneratePageHeader()
+    {
+        $x0 = $this->pdf->left;
+        $x1 = $this->pdf->right;
+        $h = $this->pdf->getFontHeight(12);
+        $header = $this->pdf->openObject();
+        $this->pdf->saveState();
+        $this->pdf->addPngFromFile($this->img, $x0, 790, 54, 27);
+        //$this->pdf->addPngFromFile($this->img, 40, 520 + $x0, 54, 27);
+        $this->pdf->addText($x0 + 70, 800, 12, 'IF -  Instituto Federal');
+        $this->pdf->addText($x0 + 70, 800 - $h - $h, 12, 'SIGA - Sistema Integrado de Gestão Acadêmica');
+        $y = 800 - $h - $h - 5;
+        $this->pdf->SetColor(0.1,0.1,0.1);
+        $this->pdf->filledRectangle($x0, $y-20, $x1-30, 16 );
+        $this->pdf->SetColor(1,1,1);
+        $this->pdf->addText($x0 + 5, $y - 16, 14, "Contagem de Tempo de Serviço");
+        $this->pdf->restoreState();
+        $this->pdf->closeObject();
+        $this->pdf->addObject($header, 'all');
+    }
+    
+    function GeneratePageFooter()
+    {
+        $x0 = $this->pdf->left;
+        $x1 = $this->pdf->right;
+        $footer = $this->pdf->openObject();
+        $this->pdf->saveState();
+        $this->pdf->SetStrokeColor(0, 0, 0);
+        $this->pdf->line($x0, 28, $x1, 28);
+        $this->pdf->addText($x0, 19, 9, $this->timestamp);
+        $this->pdf->restoreState();
+        $this->pdf->closeObject();
+        $this->pdf->addObject($footer, 'all');
+    }
+    
+    function GenerateData($data)
+    {
+        $this->pdf->ezSetDy(-12);
+        $this->SetData($data);
+        $this->rawdata = $this->GenerateTableData();
+        $this->GenerateBody($this->rawdata);
+    }
+
+    function Generate()
+    {
+        $this->SetOutput();
+        $this->Execute();
+    }
+	
+    function Rectangle(&$y, $alturatitulo, $alturaretangulo, $m_larguras, $m_titulos=NULL, $m_conteudos=NULL)
+    {
+        $acumulo = $this->pdf->left;  //acúmulo da margem esquerda e das larguras
+        $esqant  = $this->pdf->left;  //posição onde imprimiu o retângulo anterior
+        $largant = 0;                 //largura do retângulo anterior
+
+        foreach ($m_larguras as $ind => $largatual)
+        {
+            $esqant  = $esqant + $largant;
+            $m_x0[]  = $esqant;            //posições onde imprimir os retângulos
+            $largant = $largatual;
+            $acumulo = $acumulo + $largatual;
+        }
+        if ($largatual == 0)
+        {
+            //se última largura definida como 0 significa que se quer defini-la com o que sobra até a margem direita
+            $m_larguras[$ind] = $this->pdf->right - $acumulo; //margem direita menos a margem esquerda e o que já se imprimiu
+        }
+
+        if ($m_titulos)
+        {
+            foreach ($m_titulos as $ind => $txt)
+            {
+                $this->pdf->addText($m_x0[$ind], $y, $alturatitulo, $txt);
+            }
+            $y = $y - $alturatitulo - ($alturatitulo/2) -1;
+        }
+
+        foreach ($m_larguras as $ind => $largatual)
+        {
+            $this->pdf->Rectangle($m_x0[$ind], $y, $largatual, $alturaretangulo);
+        }
+
+        if ($m_conteudos)
+        {
+            foreach ($m_conteudos as $ind => $txt)
+            {
+                $this->pdf->addText($m_x0[$ind] + 1, $y+($alturaretangulo/4), $alturatitulo, $txt);
+            }
+        }
+
+        $y = $y - $alturaretangulo;
+    } // Rectangle
+}
+?>

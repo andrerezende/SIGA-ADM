@@ -1,0 +1,208 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+//mudar dmy para dia
+//identificar planilha com titulo
+
+class frmAniversariantes extends MForm
+{
+    private $ui;
+    public $meses;
+    public $anos;
+    public $categorias;
+
+
+    function __construct()
+    {
+        parent::__construct('Relatório de Aniversariantes do Mês');
+        $this->SetClose($this->manager->GetActionURL('rh','main:relatorios'));
+        $this->EventHandler();
+    }
+
+
+    function CreateFields()
+    {        
+        $this->ui = $this->manager->getUI();
+        $situacaoFuncional = $this->manager->GetBusiness('rh','situacaofuncional');
+        $this->categorias = $situacaoFuncional->ListCategorias()->result;
+        //$grid = $this->ui->getGrid('rh','gridAniversariantes',NULL,'relatorios');
+
+        $dias = array('01'=>'01','02'=>'02','03'=>'03','04'=>'04','05'=>'05','06'=>'06','07'=>'07','08'=>'08','09'=>'09','10'=>'10',
+                      '11'=>'11','12'=>'12','13'=>'13','14'=>'14','15'=>'15','16'=>'16','17'=>'17','18'=>'18','19'=>'19','20'=>'20',
+                      '21'=>'21','22'=>'22','23'=>'23','24'=>'24','25'=>'25','26'=>'26','27'=>'27','28'=>'28','29'=>'29','30'=>'30',
+                      '31'=>'31');
+        $k = new MKrono();
+
+    	$optT = new MOption('t','T','Técnico-Administrativos',false);
+	    $optD = new MOption('d','D','Docentes'               ,false);
+	    $optA = new MOption('a','A','Ambos'                  ,TRUE);
+		$opttadoc = array($optT,$optD,$optA);
+
+    	$optN = new MOption('n','N','por Nome'        ,TRUE);
+	    $optS = new MOption('s','S','por Setor e Nome',false);
+		$optordem = array($optN,$optS);
+
+        $fields = array(
+            new MLabel('escolha um Mês ou escolha Mês e Dia','blue',TRUE),
+            array( new MSelection('selMes','','Mês',$k->months,TRUE) , new MSelection('seldmy','','Dia',$dias,false) ),//new MCalendarField('seldmy','','Data',12) ),
+            new MSpacer(1),
+            new MSelection('selCtg','','Categoria',$this->categorias,false),
+            new MSpacer(1),
+            new MRadioButtonGroup('tadoc',''     ,$opttadoc,false,'','vertical','css'),
+            new MSpacer(1),
+            new MRadioButtonGroup('ordem','Ordem',$optordem,false,'','vertical','css')
+        );
+        $this->SetFields($fields);
+        $buttons = array(
+            //new MButton('btnExibe','Exibir'),
+            new MButton('btnReport','Gerar Relatório', 'PDF'),
+            //new MButton('btnGerarCSV','Gerar Planilha'),
+        );
+        $this->SetButtons($buttons);
+    }
+
+
+    function Erro($selMes, $selCtg)
+    {
+        IF (empty($selMes))
+        {
+            $this->addError('Erro: faltou escolher o Mês');
+            return TRUE;
+        }
+        if (empty($selCtg))
+        {
+            $this->addError('Erro: faltou escolher a Categoria');
+            return TRUE;
+        }
+
+        return false;
+    } //Erro
+
+
+    function Titulos($selCtg,$seldmy)
+    {
+        $return[] = 'Vínculo';
+        if (! $seldmy)
+        {
+            $return[] = 'Nascimento';
+        }
+
+        $return[] = 'Nome';
+
+        if ($selCtg==2) //APOSENTADO
+        {
+            $return[] = 'Endereço';
+            $return[] = 'Municipio';
+            $return[] = 'Bairro';
+            $return[] = 'CEP';
+            $return[] = 'Telefone';
+        }
+        else
+        {
+            $return[] = 'Setor';
+            $return[] = 'Telefone';
+            $return[] = 'E-Mail';  //wm_usuario
+        }
+
+        return $return;
+    } // Titulos
+
+
+    function btnGerarCSV_click()
+    {
+        global $MIOLO;
+
+        $func = $MIOLO->GetBusiness('rh','funcionario');
+
+        $selMes = $this->GetFormValue('selMes');
+        $seldmy = $this->GetFormValue('seldmy');
+        $selCtg = $this->getFormValue('selCtg');  
+        $tadoc  = $this->getFormValue('tadoc');
+        $ordem  = $this->getFormValue('ordem');
+
+        if ($this->Erro($selMes, $selCtg))
+        {
+            RETURN; //aborta
+        }
+
+        $consulta = $func->listAniversariantes($selMes, $selCtg, $ordem, $seldmy, $tadoc);
+        $consulta->result = $func->ColocaTitulaeEMail($consulta->result,$this->Titulos($selCtg,$seldmy),$selCtg);
+
+        if ($selCtg == 2)
+        {
+            $filename = "aniversariante.apos_";
+        }
+        else
+        {
+            if ($selCtg == 1)
+            {
+                $filename = "aniversariante.ativ_";
+            }
+            else
+            {
+                $filename = "aniversariante.temp_";
+            }
+        }
+        if ($seldmy)
+        {
+            $filename .= $seldmy . '.' . $selMes;
+        }
+        else
+        {
+            $filename .= $selMes;
+        }
+        $consulta->getCSV($filename);
+    }
+
+
+    function btnReport_click()
+    {   
+        $selMes = $this->GetFormValue('selMes');
+        $seldmy = $this->GetFormValue('seldmy');
+        $selCtg = $this->GetFormValue('selCtg');
+        $tadoc  = $this->getFormValue('tadoc');
+        $ordem  = $this->getFormValue('ordem');
+
+        if ($this->Erro($selMes, $selCtg))
+        {
+            RETURN; //aborta
+        }
+
+        $ui = $this->manager->getUi();
+
+        if ($tadoc == 'T')
+        {
+    	    $tittadoc = ' Técnico-Administrativos ';
+        }
+        else
+        {
+            if ($tadoc == 'D')
+            {
+        	    $tittadoc = ' Docentes ';
+            }
+        }
+
+        $report = $ui->getReport( 'rh','repAniversariantes',
+                                  array($this->Titulos($selCtg,$seldmy) , $ordem, $tadoc, $tittadoc) ); //quarto parâmetro sub-diretório
+        $report->generate();
+    }
+
+
+}
+?>

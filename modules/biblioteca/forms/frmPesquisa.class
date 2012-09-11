@@ -1,0 +1,247 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?
+class frmPesquisa extends Form
+{
+	function GetCamposPesquisa()
+	{
+		global $MIOLO,$module;
+
+		// Caso deseje mudar alguma configuração dos campos buscáveis,
+		// acesse biblioteca/etc/pesquisa.xml
+
+		$file = $MIOLO->GetModulePath($module,'etc/pesquisa_bibliografica.xml');
+		$xmlTree = new XMLTree($file);
+		$camposPesquisa = $xmlTree->getXMLTreeAsArray();
+		return $camposPesquisa;
+	}
+
+    function GetCamposPesquisaPeriodico()
+    {
+        global $MIOLO,$module;
+
+        $file = $MIOLO->GetModulePath($module,'etc/pesquisaPeriodicoArtigo.xml');
+        $xmlTree = new XMLTree($file);
+        $camposPesquisa = $xmlTree->getXMLTreeAsArray();
+        return $camposPesquisa;
+    }
+
+	function MontaSelection($camposPesquisa)
+	{
+		// Prepara os termos para uma caixa de seleção (Consultar Por)
+		$sel = array();
+
+		foreach ($camposPesquisa as $c)
+		{
+			if ($c[3])  // se o campo é buscável
+			{
+				array_push($sel, array($c[0],$c[0]));
+			}
+		}
+		return $sel;
+	}
+
+
+	function MontaDataGrid($camposPesquisa,$query,$tipo=null,$data=null,$pesquisaUnidade=false)
+	{ 
+		// Monta o Data Grid de acordo com GetCamposPesquisa
+		global $MIOLO, $module, $self, $theme, $action, $page, $item, $perms;
+
+		if($data == null)
+		{
+			$data = $this->GetData();
+		}
+        //Em data vem o valor de genero.
+        /*
+        var_dump("Data!!!</br>");
+		var_dump($data);
+        var_dump("Data!!!</br>");
+        */
+        
+                
+		//ajuste no tamanho do campo classificação
+		$max = 33;
+		for($i = 0; $i < count($query->result); $i++)
+		{
+			if( (strlen($query->result[$i][7]) > $max) )
+			{
+				$query->result[$i][7] = substr($query->result[$i][7], 0, $max) . '<BR>' . substr($query->result[$i][7], $max);
+			}
+		}
+
+		$columns[] = new DataGridColumn('idobra','IdObra','left',false, '0%',false, null, false,true);
+
+		// Adiciona mais colunas de acordo com $camposPesquisa
+		foreach ($camposPesquisa as $campo)
+		{
+			if ($campo[4])
+			{
+				$columns[] = new DataGridColumn($campo[2],$campo[0],'left',false, $campo[8],true, null, false,true);
+			}
+		}
+		// incluindo a coluna "OBRA" e a coluna "UNIDADE"
+		if(!$pesquisaUnidade)
+		{
+			$columns[] = new DataGridColumn('unidade','Unidade','center',false, '1%',true, null, false,true);
+		}
+		$columns[] = new DataGridColumn('obra','Obra','left',false, '1%',true, null, false,true);
+
+		$pn_page = $this->getFormValue('pn_page');
+
+		if(($tipo == 'simples') OR ($tipo == 'detalhe'))
+		{
+//			$parametros1 = Array('event'=>'btnConsultar_click','termo'=>$data->termo,'busca'=>$data->busca,'tipo'=>$tipo);
+//			$parametros2 = Array('event'=>'btnDetalhesObra:click','termo'=>$data->termo,'busca'=>$data->busca,'tipo'=>$tipo,'page'=>$pn_page);
+
+			$parametros1 = Array('event'=>'btnConsultar_click','busca'=>$data->busca,'termo'=>$data->termo,'ConsultarPor_1'=>$data->ConsultarPor_1,'Unidade'=>$data->Unidade,'Genero'=>$data->Genero,'tipo'=>$tipo);
+			$parametros2 = Array('event'=>'btnDetalhesObra:click','busca'=>$data->busca,'termo'=>$data->termo,'ConsultarPor_1'=>$data->ConsultarPor_1,'Unidade'=>$data->Unidade,'Genero'=>$data->Genero,'tipo'=>$tipo,'page'=>$pn_page);
+		}
+/*
+		elseif($tipo == 'detalhe')
+		{
+			$parametros1 = Array('event'=>'btnConsultar_click','busca'=>$data->busca,'campo'=>$data->campo,'tipo'=>$tipo);
+			$parametros2 = Array('event'=>'btnDetalhesObra:click','busca'=>$data->busca,'campo'=>$data->campo,'tipo'=>$tipo,'page'=>$pn_page);
+		}
+*/
+		elseif($tipo == 'multi')
+		{
+			$parametros1 = Array('event'=>'btnConsultar_click','unidade'=>$data->Unidade,'genero'=>$data->Genero,'consultarpor1'=>$data->ConsultarPor_1,'consulta1'=>$data->Consulta_1,'operador'=>$data->Operador,'consultarpor2'=>$data->ConsultarPor_2,'consulta2'=>$data->Consulta_2,'tipo'=>$tipo);
+			$parametros2 = Array('event'=>'btnDetalhesObra:click','unidade'=>$data->Unidade,'genero'=>$data->Genero,'consultarpor1'=>$data->ConsultarPor_1,'consulta1'=>$data->Consulta_1,'operador'=>$data->Operador,'consultarpor2'=>$data->ConsultarPor_2,'consulta2'=>$data->Consulta_2,'tipo'=>$tipo,'page'=>$pn_page,'pesquisaUnidade'=>$pesquisaUnidade);
+		}
+		elseif($tipo == 'unid')
+		{
+			$parametros1 = Array('event'=>'btnConsultar_click','unidade'=>$data->Unidade,'tipo'=>$tipo);
+			$parametros2 = Array('event'=>'btnDetalhesObra:click','unidade'=>$data->Unidade,'tipo'=>$tipo,'tipo'=>$tipo,'page'=>$pn_page,'pesquisaUnidade'=>$pesquisaUnidade);
+		}
+		elseif($tipo == 'outros')
+		{
+			$parametros1 = Array('event'=>'btnConsultar_click','busca'=>$data->busca,'tiponum'=>$data->tiponum,'tipo'=>$tipo);
+			$parametros2 = Array('event'=>'btnDetalhesObra:click','busca'=>$data->busca,'tiponum'=>$data->tiponum,'tipo'=>$tipo,'page'=>$pn_page);
+		}
+		elseif($tipo == 'indice')
+		{
+			$parametros1 = Array('event'=>'PesquisaDetalhada','consultarpor'=>$data->ConsultarPor_1,'consulta'=>$data->consulta,'termo'=>$data->termo,'unidade'=>$data->Unidade,'tipo'=>$tipo,'page'=>$pn_page);
+			$parametros2 = Array('event'=>'btnDetalhesObra:click','busca'=>$data->busca,'termo'=>$data->termo,'ConsultarPor_1'=>$data->ConsultarPor_1,'Unidade'=>$data->Unidade,'Genero'=>$data->Genero,'tipo'=>$tipo,'page'=>$pn_page);
+//			$parametros2 = Array('event'=>'btnDetalhesObra:click','unidade'=>$data->Unidade,'genero'=>$data->Genero,'consultarpor1'=>$data->ConsultarPor_1,'consulta1'=>$data->Consulta_1,'operador'=>$data->Operador,'consultarpor2'=>$data->ConsultarPor_2,'consulta2'=>$data->Consulta_2,'tipo'=>$tipo,'page'=>$pn_page);
+			
+		}
+		else
+		{
+			$parametros1 = null;
+			$parametros2 = null;
+		}
+
+		$href_datagrid = $MIOLO->GetActionURL($module,$self,$data->busca, $parametros1);
+		$datagrid = new DataGrid2($query, $columns, $href_datagrid,20);
+
+        $objGenero = $MIOLO->GetBusiness($module,'genero');
+        $objGenero->GetByDescricao("PERIODICO");
+        
+        
+        if($data->Genero == $objGenero->idgenero){ // è pesquisa sobre periodicos
+            $datagrid->SetTitle('Resultado de Artigos Relacionados');
+        }else{
+            $datagrid->SetTitle('Resultado da Pesquisa');
+        }
+		$datagrid->SetLinkType('linkbutton');
+		$datagrid->SetWidth('99%');
+
+		if ($tipo == 'indice')
+		{
+			if ($data->ConsultarPor_1 == 'Título' OR $data->ConsultarPor_1 == 'Todos')
+			{
+				$objEtiqueta = $MIOLO->GetBusiness($module,'etiqueta');
+				$etiqueta = $objEtiqueta->GetByTag('245');
+				$idetiqueta = $etiqueta->idEtiqueta;
+			}
+			elseif ($data->ConsultarPor_1 == 'Autor')
+			{
+				$objEtiqueta = $MIOLO->GetBusiness($module,'etiqueta');
+				$etiqueta = $objEtiqueta->GetByTag('100');
+				$idetiqueta = $etiqueta->idEtiqueta;
+			}
+			elseif ($data->ConsultarPor_1 == 'Ano' OR $data->ConsultarPor_1 == 'Editora')
+			{
+				$objEtiqueta = $MIOLO->GetBusiness($module,'etiqueta');
+				$etiqueta = $objEtiqueta->GetByTag('260');
+				$idetiqueta = $etiqueta->idEtiqueta;
+			}
+			elseif ($data->ConsultarPor_1 == 'Série')
+			{
+				$objEtiqueta = $MIOLO->GetBusiness($module,'etiqueta');
+				$etiqueta = $objEtiqueta->GetByTag('490');
+				$idetiqueta = $etiqueta->idEtiqueta;
+			}
+			elseif ($data->ConsultarPor_1 == 'Entrada Secundária')
+			{
+				$objEtiqueta = $MIOLO->GetBusiness($module,'etiqueta');
+				$etiqueta = $objEtiqueta->GetByTag('700');
+				$idetiqueta = $etiqueta->idEtiqueta;
+			}
+			elseif ($data->ConsultarPor_1 == 'Assunto')
+			{
+				$objEtiqueta = $MIOLO->GetBusiness($module,'etiqueta');
+				$etiqueta = $objEtiqueta->GetByTag('650');
+				$idetiqueta = $etiqueta->idEtiqueta;
+			}
+			
+			$objObra = $MIOLO->GetBusiness($module,'obra');
+			
+			//$href_edit = $MIOLO->GetActionURL($module, 'main:catalogacao:catalogacao', '%1%', Array('event'=>'PesquisaCatalog','consultarpor'=>$data->ConsultarPor_1,'filtro'=>$data->busca,'consulta'=>$data->consulta,'termo'=>$data->termo,'unidade'=>$data->Unidade,'tipo'=>$data->tipo,'page'=>$data->page,'selEtiqueta'=>$idetiqueta,'txtOcorrencia'=>'1','tipo'=>'indice'));
+			$href_edit = $MIOLO->GetActionURL($module, 'main:catalogacao:catalogacao', '%1%', $this->idObra);
+			if($perms->CheckAccess('BIB_PRECATALOGACAO',A_ACCESS,false))
+			{
+				$datagrid->AddActionIcon('Editar', 'edit', $href_edit);
+			}
+			//$datagrid->AddActionText('alt','Alterar',$href_edit);			
+			$href_detalhes = $MIOLO->GetActionURL($module,'main:pesquisasimples','%1%', $parametros2);
+			$datagrid->AddActionText('alt','Detalhes',$href_detalhes);
+			
+		}
+		else
+		{
+			$href_edit = $MIOLO->GetActionURL($module,'main:pesquisasimples','%1%', $parametros2);
+			$datagrid->AddActionText('alt','Detalhes',$href_edit);
+			
+		}
+
+		$datagrid->setClose(null);
+        $datagrid->SetRowMethod('frmPesquisa','MyRowMethod');
+
+		$theme->ClearContent();
+		$theme->InsertContent($datagrid);
+	}
+
+
+	// Método a ser executado antes de renderizar cada linha
+	function MyRowMethod($i, $row, $actions, $columns)
+	{
+		global $MIOLO, $module;
+
+		//busca unidades de cada obra
+		$objObra = $MIOLO->GetBusiness($module,'obra');
+		$unidades = $objObra->GetUnidades($row[1]);
+		if($columns['unidade']->control[$i])
+		{
+			$columns['unidade']->control[$i]->SetValue($unidades);
+		}
+	}
+}
+?>

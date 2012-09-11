@@ -1,0 +1,549 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+$MIOLO->Uses('classes/aposentadoria.class','rh');
+
+
+class frmVinculoAposentadoria extends MForm//MCompoundForm
+{
+    protected $k;
+    protected $objVinculo;
+    protected $objGrupoOcorrencia;
+    protected $objOcorrencia;
+    protected $provimentoAtual; 
+
+    protected $yellow;
+
+    protected $objAposentadoria;
+
+    function __construct($objVinculo)
+    {
+        $this->k = new MKrono();
+
+        $this->objVinculo = $objVinculo;
+        $this->objVinculo->getProvimentos();
+        $this->provimentoAtual = $this->objVinculo->getProvimentoAtual();
+        $this->provimentoAtual->getCargo();
+        parent::__construct('Aposentadoria - ' . $this->provimentoAtual->cargo->descricao);
+        $this->eventHandler();
+    }
+
+
+    function CreateFields()
+    {
+global $MIOLO;
+        $this->objVinculo->retrieveAssociation('funcionario');
+
+        $perms = $this->manager->getPerms();
+        $perms->checkAccess('rh_aposentadoria',A_ACCESS,TRUE);
+        $r = $this->objVinculo->permiteAverbacao();
+
+        if ( $this->objVinculo->isAtivo()  and  $r)
+        {
+            /*TRANSFERIDA DE BAIXO*/
+            if ( $this->objVinculo->getLicAfastByPeriodo(date('d/m/Y'),date('d/m/Y')) )
+            { //talvez testar aqui também Cessao, etc
+                //$erro[] = "Procedimento possível apenas após encerramento de licença/afastamento do servidor.";
+
+		$url = $MIOLO->GetActionURL('rh','main:vinculo',$this->objVinculo->idVinculo);
+		$MIOLO->information("Procedimento possível apenas após encerramento de licença/afastamento do servidor.",$url);
+
+               // $this->manager->error("Procedimento possível apenas após encerramento de licença/afastamento do servidor.",$this->manager->getActionUrl('rh','main:vinculo',$this->objVinculo->idVinculo) );
+            }
+            else
+            {
+                $this->Quadros($fields);
+
+                $this->objGrupoOcorrencia = $this->manager->getBusiness('rh','grupoocorrencia');
+                $this->objOcorrencia      = $this->manager->getBusiness('rh','ocorrencia');
+                $query = $this->objGrupoOcorrencia->listGrupos(array(5,11,12,13,47));
+                $fields[] = new MSelection('idGrupoOcorrencia','','Grupo Ocorrência',$query->chunkResult(0,1));
+                $fields[] = new MSelection('idOcorrencia','','Ocorrência');
+                $fields[] = new MCalendarField('dataVacancia','','Data');
+                $fields[] = new MHiddenField('idPublicacaoVacancia');
+                $fields[] = new MLookupFieldValue('numero','','Publicação');
+                $this->setFields($fields);
+
+                $this->SetFieldAttr('numero','module','rh');
+                $this->SetFieldAttr('numero','item','publicacao');
+                $this->SetFieldAttr('numero','event','filler');
+                $this->SetFieldAttr('numero','related','idPublicacaoVacancia,null,numero');
+                $this->setFieldAttr('numero','visible',FALSE);
+                $this->setFieldAttr('idOcorrencia','visible',FALSE);
+                $this->setFieldAttr('dataVacancia','visible',FALSE);
+
+                $buttons = array( new FormButton('btnPasso1','Enviar'),
+                                  new FormButton('btnPasso2','Enviar'),
+                                  new FormButton('btnPost'  ,'Enviar')  );
+                $this->setButtons($buttons);
+                $this->setButtonAttr('btnPasso2','visible',FALSE);
+                $this->setButtonAttr('btnPost','visible',FALSE);
+
+                $validators = array( new DateDMYValidator('dataVacancia','','required') );
+                $this->SetValidators($validators);
+            }
+        }
+        else
+        {
+                $url = $MIOLO->GetActionURL('rh','main:vinculo',$this->objVinculo->idVinculo);
+		$MIOLO->information("Somente pode se aposentar pela Instituição o servidor com vínculo ativo e estatutário.",$url);
+            //$this->manager->error("Somente pode se aposentar pela Instituição o servidor com vínculo ativo e estatutário.",$this->manager->getActionUrl('rh','main:vinculo',$this->objVinculo->idVinculo) ); 
+        }
+    }
+
+
+    function btnPasso1_click()
+    {
+        $idGrupoOcorrencia = $this->getFormValue('idGrupoOcorrencia');
+
+        if ($idGrupoOcorrencia)
+        {
+            $this->objGrupoOcorrencia->getById($idGrupoOcorrencia);
+
+            $query = $this->objGrupoOcorrencia->listOcorrenciasByRegimeJuridico($this->provimentoAtual->regimeJuridico);
+        
+            $result = $query->chunkResult(0,1);
+
+            $this->setFieldAttr('idOcorrencia'     ,'options' ,$result);
+            $this->setFieldAttr('idOcorrencia'     ,'visible' ,TRUE);
+            $this->setFieldAttr('idGrupoOcorrencia','readonly',TRUE);
+
+            $this->setFieldAttr('btnPasso1','visible',FALSE);
+            $this->setFieldAttr('btnPasso2','visible',TRUE);
+        }
+    }
+
+    function btnPasso2_click()
+    {
+        $idGrupoOcorrencia = $this->getFormValue('idGrupoOcorrencia');
+        $idOcorrencia = $this->getFormValue('idOcorrencia');
+        $this->objGrupoOcorrencia->getById($idGrupoOcorrencia);
+        $this->objOcorrencia->getById($idOcorrencia);
+        $query = $this->objGrupoOcorrencia->listOcorrenciasByRegimeJuridico($this->provimentoAtual->regimeJuridico);
+        $result = $query->chunkResult(0,1);
+        
+        $this->setFieldAttr('idOcorrencia','options',$result);
+        $this->setFieldValue('idOcorrencia',$idOcorrencia);
+        $this->setFieldAttr('idOcorrencia','visible',TRUE);
+        $this->setFieldAttr('idOcorrencia','readonly',TRUE);
+        $this->setFieldAttr('idGrupoOcorrencia','readonly',TRUE);
+        $this->setFieldAttr('dataVacancia','visible',TRUE);
+        $this->setFieldAttr('numero','visible',TRUE);
+
+        $this->setFieldAttr('btnPasso1','visible',FALSE);
+        $this->setFieldAttr('btnPasso2','visible',FALSE);
+        $this->setFieldAttr('btnPost','visible',TRUE);
+    }
+
+    function btnPost_click()
+    {
+        $data = $this->getData();
+        //$k = new MKrono();
+        
+        $ocorrencias = array(130,173);
+        foreach ( $ocorrencias as $id )
+        {
+            $licenca = $this->objVinculo->getLastLicAfastByOcorrencia($id);
+            if ( $licenca )
+            {
+                $prazo = $licenca->getPrazo();
+                $intersticio = $this->objVinculo->calculaIntersticio($licenca);
+                if ( $prazo > $intersticio )
+                {
+                    $erro[] = "Servidor ainda não cumpriu o interstício da licença de capacitação $id.";
+                }
+
+            }
+        }
+        
+        /*TRANSFERIDA PARA ACIMA if ( $this->objVinculo->getLicAfastByPeriodo(date('d/m/Y'),date('d/m/Y')) )
+        {
+            $erro[] = "Procedimento possível apenas após encerramento de licença/afastamento do servidor.";
+        }*/
+        
+
+        $today = date('d/m/Y');
+        $ocorrenciasProibidas = array( "003", "004", "102", "205", "206", "210", "211",
+                                       "213", "214", "223", "224", "225", "226", "243", "253");
+        
+        if  ( $data->idGrupoOcorrencia == "05"  )
+        {
+            foreach ($ocorrenciasProibidas as $op)
+            if ( $data->idOcorrencia == $op )
+            {
+            $this->objVinculo->retrieveAssociation('funcionario');
+            $idade70 = $this->k->operation('+',$this->objVinculo->funcionario->pessoa->datanasc,'70%Y');
+            if (  $this->k->CompareDate($idade70,'>=', $today) )//se pessoa tem MENOS de 70 anos
+                {
+                    $erro[] = "Aposentadoria Compulsória não permitida para servidores com menos de 70 anos";
+                }
+            }
+        }
+        if  (( $data->idGrupoOcorrencia == "11"  ) && ( $data->idOcorrencia == "003"))
+        {
+            $this->objVinculo->retrieveAssociation('funcionario');
+            $idade70 = $this->k->operation('+',$this->objVinculo->funcionario->pessoa->datanasc,'70%Y');
+            if (  $this->k->CompareDate($idade70,'>=', $today) )//se pessoa tem MENOS de 70 anos
+                {
+                    $erro[] = "Aposentadoria compulsória não permitida para servidores com menos de 70 anos";
+                }
+        }
+                              
+        if ( $this->objVinculo->emFerias($today) )
+        {
+            $erro[] = "Servidor se encontra em férias.";        
+        }
+        if ( $this->objVinculo->emCessao($today) )
+        {
+            $erro[] = "Servidor se encontra cedido.";        
+        }
+
+        if ( $this->k->compareDate($data->dataVacancia,'<=',$this->provimentoAtual->dataInicio) )
+        {
+            $erro[] = "Data de início da aposentadoria não pode ser igual ou inferior ao início do último provimento. ".
+                      "Data de início do provimento: {$this->provimentoAtual->dataInicio}.";
+        }
+
+        if ( count($erro) > 0 )
+        {
+            foreach ( $erro as $e )
+            {
+                $this->addError($e);
+            }
+            $this->btnPasso2_click();
+        }
+        else
+        {
+            $dataFim = $this->k->operation('-',$data->dataVacancia,'1%D');
+
+            $this->objVinculo->setDadosAposentadoria($data);
+            try 
+            {
+                $this->objVinculo->Aposenta($dataFim);
+
+                //if ( $this->provimentoAtual->idGrupoCargo == 60 )
+                if ($this->objVinculo->isDocente())
+                {
+                    $docente = $this->manager->getBusiness('ensino','docente');
+                    $docente->getByIdVinc($this->objVinculo->idVinculo);
+                    if ( $docente->isPersistent() )
+                    {
+                        $docente->setInativo();
+                    }
+                }
+                
+                $go = $this->manager->getActionURL('rh','main:vinculo',$this->objVinculo->idVinculo);
+                      $this->manager->information('Aposentadoria realizada com sucesso!', $go );
+            }
+            catch ( Exception $e )
+            {
+                $this->manager->error($e->getMessage);
+            }
+        }
+    }
+
+    function Quadros(&$fields)
+    {
+        global $MIOLO;
+        $this->objAposentadoria = new Aposentadoria($this->objVinculo);
+
+        $fields[] = new MTextLabel('dataExercicio',$this->objVinculo->dataExercicio                ,'Ingresso'  ,'blue');
+        $fields[] = new MTextLabel('datanasc'     ,$this->objVinculo->funcionario->pessoa->datanasc,'Nascimento','blue');
+
+        $this->Quadro1($fields);
+
+        $return = $this->objAposentadoria->ff23();
+        $this->MostraQuadro23($return,$fields);
+        $this->Quadro2($fields);
+        $this->Quadro3($fields);
+
+        $this->Quadro4($fields);
+
+        $fields[] = new MSpacer(2);
+//digitar LPA e faltas
+//digitar LPA e faltas
+//digitar LPA e faltas
+        $fields[] = new MSeparator();
+    } // Quadros
+
+
+    function Quadro1(&$fields)
+    {
+        $fields[] = new MSpacer(1);
+        $l = new MLabel(' Fundamento legal artigo 2º, EC 41/2003','blue',TRUE);
+        $l->AddStyle('backgroundColor','#FFFFCC');
+        $fields[] = $l;
+
+        #$fields[] = $this->CalculoQuadro1();
+        $r1 = $this->objAposentadoria->ff1();
+        $fields[] = $this->MostraQuadro1($r1);
+
+        #$this->PrevisaoQuadro1($fields);
+        $return = $this->objAposentadoria->PrevisaoQuadro1();
+        $fields[] = array( new MLabel('Tempo a cumprir a partir de ' . $this->objAposentadoria->EC20seguinte    ),
+                           new MLabel($return['tempoacumpriraposEC201'] . ' dias','blue',TRUE) );
+        $fields[] = array( new MLabel('Previsão de aposentadoria a partir de'),
+                           new MLabel($return['previsaodeaposentadoria'],'red',TRUE ) );
+        if ($return['reducao'])
+        {
+              $fields[] = array( new MLabel('Redução de'),
+                                 new MLabel( $return['reducao'] . ' %','blue',TRUE ) );
+        }
+    } // Quadro1
+    function Quadro2(&$fields)
+    {
+        $fields[] = new MSpacer(2);
+        $l = new MLabel(' Fundamento legal artigo 6º, EC 41/2003','blue',TRUE);
+        $l->AddStyle('backgroundColor','#FFFFCC');
+        $fields[] = $l;
+
+        #$fields[] = $this->CalculoQuadro2();
+        $r2 = $this->objAposentadoria->ff2();
+        $fields[] = $this->MostraQuadro2($r2);
+
+        $this->PrevisaoQuadro2($fields);
+    } // Quadro2
+
+    function Quadro3(&$fields)
+    {
+        $fields[] = new MSpacer(2);
+        $l = new MLabel(' Artigo 3º, EC 47/2005','blue',TRUE);
+        $l->AddStyle('backgroundColor','#FFFFCC');
+        $fields[] = $l;
+
+        #$fields[] = $this->CalculoQuadro3();
+        $r3 = $this->objAposentadoria->ff3();
+ //       $fields[] = $this->MostraQuadro3($r3);
+
+        $this->PrevisaoQuadro3($fields);
+    } // Quadro3
+
+    function Quadro4(&$fields)
+    {
+        $fields[] = new MSpacer(2);
+        $l = new MLabel(' Abono-permanência: §19º do artigo 40 da Constituição Federal, com redação dada pela EC 41/2003','blue',TRUE);
+        $l->AddStyle('backgroundColor','#FFFFCC');
+        $fields[] = $l;
+
+        $this->PrevisaoQuadro4($fields);
+    } // Quadro4
+
+    function PrevisaoQuadro4(&$fields)
+    {
+        $nbsp4 = '&nbsp;&nbsp;&nbsp;&nbsp;';
+
+        $fields[] = array( new MLabel('Completa 10 anos de serviço público em' . str_repeat('&nbsp;',10)           ),
+                           new MLabel($this->objAposentadoria->previsaoSP10,'',TRUE                                             ),
+                           new MLabel("$nbsp4 Completa 5 anos no cargo em"     . str_repeat('&nbsp;', 9)           ),
+                           new MLabel($this->objAposentadoria->previsaoCA5 ,'',TRUE                                              ) );
+
+
+    } // PrevisaoQuadro4
+    function MostraQuadro2($return)
+    {
+        $t[] = array( 'Tempo de serviço necessário para aposentadoria: ' . $this->objAposentadoria->tempoparaaposentar2 . ' anos' ,
+               ($this->objAposentadoria->tempoparaaposentar2 * 365) . ' dias');
+
+        if ($return['faltaparatempoparaaposentar2'] < 0)
+        {
+            $t[] = array( 'sobram' , ($return['faltaparatempoparaaposentar2'] * -1) . ' dias' );
+        }
+        else
+        {
+            $t[] = array( 'faltam' ,  $return['faltaparatempoparaaposentar2']       . ' dias' );
+        }
+
+        $t = new MTableRaw( NULL, $t, NULL );        $t->SetCellAttribute($this->yellow,1  ,'bgcolor','yellow');
+        $t->SetCellAttribute($this->yellow+2,1,'bgcolor','yellow');        $this->rightTabela($t);        return $t;
+return $t;
+    } // MostraQuadro2
+
+    function PrevisaoQuadro3(&$fields)
+    {
+        $cor = $this->cor($this->objAposentadoria->previsaoTS3 , $this->objAposentadoria->previsaoID3,
+                          $this->objAposentadoria->previsaoSP25, $this->objAposentadoria->previsaoCA15);
+        $nbsp4 = '&nbsp;&nbsp;&nbsp;&nbsp;';
+
+        $fields[] = array( new MLabel('Cumprindo a soma de Tempo e Idade ('      .
+                                      $this->objAposentadoria->tempoparaaposentar1 . ' anos mais ' .
+                                      $this->objAposentadoria->idadeparaaposentar3 . ' anos):'     ));
+
+        $fields[] = array( new MLabel(str_repeat('&nbsp;',22)."(por tempo de contribuição em)&nbsp;"            ),
+                           new MLabel($this->objAposentadoria->previsaoTS3  ,$cor[0],TRUE  ),
+                           new MLabel(str_repeat('&nbsp;',28)."(por idade em)" . str_repeat('&nbsp;',12)                     ),
+                           new MLabel($this->objAposentadoria->previsaoID3  ,$cor[1],TRUE          ) );
+
+        $fields[] = array( new MLabel('Completa 25 anos de serviço público em' . str_repeat('&nbsp;', 10)),
+                           new MLabel($this->objAposentadoria->previsaoSP25,$cor[2],TRUE                  ),
+                           new MLabel("$nbsp4 Completa 15 anos no cargo em" . str_repeat('&nbsp;', 8)      ),
+                           new MLabel($this->objAposentadoria->previsaoCA15,$cor[3],TRUE                  ) );
+    } // P revisaoQuadro3
+
+
+function PrevisaoQuadro2(&$fields)
+    {
+        $cor = $this->cor($this->objAposentadoria->previsaoTS2 , $this->objAposentadoria->previsaoID2,
+                          $this->objAposentadoria->previsaoSP20, $this->objAposentadoria->previsaoCA10);
+        $nbsp4 = str_repeat('&nbsp;', 4);
+
+        $fields[] = array( new MLabel('Completa tempo de contribuição (' . $this->objAposentadoria->tempoparaaposentar2 . ' anos) em'),
+                           new MLabel($this->objAposentadoria->previsaoTS2,$cor[0],TRUE                                              ),
+                           new MLabel("$nbsp4 Completa idade mínima ("   . $this->objAposentadoria->idadeparaaposentar2 . ' anos) em'),
+                           new MLabel($this->objAposentadoria->previsaoID2,$cor[1],TRUE                                              ) );
+
+        $fields[] = array( new MLabel('Completa 20 anos de serviço público em' . str_repeat('&nbsp;',10)           ),
+                           new MLabel($this->objAposentadoria->previsaoSP20,$cor[2],TRUE                                             ),
+                           new MLabel("$nbsp4 Completa 10 anos no cargo em"    . str_repeat('&nbsp;', 9)           ),
+                           new MLabel($this->objAposentadoria->previsaoCA10,$cor[3],TRUE                                              ) );
+    } // P revisaoQuadro2
+
+        function MostraQuadro1($return)
+    {
+        if ($return['tempoUFJFec20aimprimir'])
+        {
+            $a = ' dias';
+        }
+        if ($return['abonotempoUFJF'])
+        {
+            $t[] = array('Tempo de serviço na Instituição, em 16/12/1998',
+                         $return['tempoUFJFec20aimprimir'] . $a   ,
+                         'abono: ' . $return['abonotempoUFJF']    ,
+                         'faltas: ' . $return['faltasEC20']       );
+        }
+        else
+        {
+            $t[] = array('Tempo de serviço na Instituição, em 16/12/1998',
+                         $return['tempoUFJFec20aimprimir'] . $a   ,
+                         'faltas: ' . $return['faltasEC20']       );
+        }
+        if ($return['averbadoaimprimir'])
+        {
+            $b = ' dias';
+        }
+        else
+        {            $return['averbadoaimprimir'] = '';        }
+
+        if ($return['abonoaverbado'])        {            $t[] = array('Tempo de serviço averbado'              ,                         $return['averbadoaimprimir'] . $b                  ,                         'abono: ' . $return['abonoaverbado']               );        }
+        else        {            $t[] = array('Tempo de serviço averbado'              ,                         $return['averbadoaimprimir'] . $b                  );        }
+        $this->yellow = 3;
+        if ($return['averbacaoinsalubridade'])        {            $this->yellow ++;            $t[] = array('Averbado insalubridade'             , $return['averbacaoinsalubridade'] . ' dias');        }
+
+        if ($this->objAposentadoria->licencaemDobro)
+        {
+            $c = ' dias';
+        }
+        $t[] = array( 'Licença-prêmio em dobro', $this->objAposentadoria->licencaemDobro . $c);
+
+        $t[] = array( 'Tempo contado' , $return['tempocontadoEC20'] . ' dias' );
+
+        $t[] = array( 'Tempo de serviço necessário para aposentadoria: ' . $this->objAposentadoria->tempoparaaposentar1 . ' anos' ,
+                        ($this->objAposentadoria->tempoparaaposentar1 * 365) . ' dias');
+        $t[] = array( 'diferença' , $return['faltaparatempoparaaposentar1'] . ' dias' );
+        $t[] = array( 'Pedágio (20%)' , $return['pedagio'] . ' dias' );
+
+        $t = new MTableRaw( NULL, $t, NULL );
+        $t->SetCellAttribute($this->yellow,1  ,'bgcolor','yellow');
+        $t->SetCellAttribute($this->yellow+2,1,'bgcolor','yellow');
+        $this->rightTabela($t);
+        return $t;
+    } // MostraQuadro1
+
+
+    function MostraQuadro23($return,&$fields)
+    {
+$t[] = array('Tempo de serviço na Instituição, em ' . date('d/m/Y'),
+             $return['tempoUFJFaimprimir'] . ' dias', 'faltas: ' . $return['faltasExercicio']);
+        if ($return['averbadoaimprimir']){$b = ' dias';        }        else        {            $return['averbadoaimprimir'] = '';        }
+
+
+$t[] = array('Tempo de serviço averbado' , $return['averbadoaimprimir'] . $b);
+        $this->yellow = 3;
+        if ($return['averbacaoinsalubridade']){$this->yellow ++;$t[] = array('Averbado insalubridade', $return['averbacaoinsalubridade'] . ' dias');}
+
+        if ($this->objAposentadoria->licencaemDobro)
+        {
+            $c = ' dias';
+        }
+$t[] = array( 'Licença-prêmio em dobro'  , $this->objAposentadoria->licencaemDobro . $c);
+
+//        $this->t empocontado = $return['tempoUFJFaimprimir'] + $return['averbadoaimprimir'] + $return['averbacaoinsalubridade'] + $this->objAposentadoria->licencaemDobro;
+
+//$t[] = array( 'Tempo contado' , $return['t empocontado'] . ' dias' );
+$t[] = array( 'Tempo contado' , $this->objAposentadoria->tempocontado . ' dias' );
+
+        $t = new MTableRaw( NULL, $t, NULL );
+
+        $t->SetCellAttribute($this->yellow,1  ,'bgcolor','yellow');
+        for ( $i = 0; $i < count($t->array); $i++ )
+        {
+            $t->SetCellAttribute($i,0,'bgcolor','#FFFFCC');
+            $t->SetCellAttribute($i,1,'bgcolor','#FFFFCC');
+            $t->SetCellAttribute($i,2,'bgcolor','#FFFFCC');
+        }
+
+        $this->rightTabela($t);
+        $fields[] = new MSeparator();
+        $fields[] = new MSpacer(1);
+        $fields[] = $t;
+    } // MostraQuadro23
+
+//para 1146445  pestana tem que ser HOJE
+// para 1147989   jose avelino nao funciona, tem que ser hoje
+// para excluidos  1147292  lacerda, 0040485  lauro, tem que ser o PRIMEIRO provimento da exclusao
+
+    function cor($a,$b,$c,$d)
+    {
+        if ( ($this->k->CompareDate($a, '>=', $b)) and
+             ($this->k->CompareDate($a, '>=', $c)) and
+             ($this->k->CompareDate($a, '>=', $d)) )
+        {
+            return array('red','black','black','black');
+        }
+        else
+        {
+            if ( ($this->k->CompareDate($b, '>=', $c)) and
+                 ($this->k->CompareDate($b, '>=', $d)) )
+            {
+                return array('black','red','black','black');
+            }
+            else
+            {
+                if ($this->k->CompareDate($c, '>=', $d))
+                {
+                    return array('black','black','red','black');
+                }
+                else
+                {
+                    return array('black','black','black','red');
+                }
+            }
+        }
+    } // cor
+
+    function rightTabela(&$t)
+    {
+        for ( $i = 0; $i < count($t->array); $i++ )
+        {
+            $t->SetCellAttribute($i,1,'align','right');
+        }
+    } // rightTabela
+
+
+}
+?>

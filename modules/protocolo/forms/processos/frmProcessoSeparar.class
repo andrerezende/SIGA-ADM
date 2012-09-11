@@ -1,0 +1,273 @@
+<?php
+// 24-10-2011 - Daniel Bonfim
+MIOLO::Import('extensions::class.phpmailer.php','PHPMailer');
+
+class frmProcessoSeparar extends MForm
+{
+	protected $processo;
+	protected $setor;
+	protected $setoracesso;
+	protected $processoPai;
+	protected $perms;
+
+	function __construct($objProcesso)
+	{
+		    //      construct
+		    global $MIOLO;
+		    $this->processo = $objProcesso;
+		    $this->setor = $MIOLO->getBusiness('protocolo','setor');
+		    $this->setoracesso = $MIOLO->getBusiness('protocolo','setoracesso');
+		    $this->processoPai = $MIOLO->getBusiness('protocolo','processo');
+		    $this->perms  = $MIOLO->getPerms();
+		    parent::__construct('Separar processo');
+		    $this->SetClose($MIOLO->GetActionURL('protocolo','main'));
+		    $this->eventHandler();
+	}
+
+
+	function CreateFields()
+	{
+		/* IFRO - Controle de segurança de acesso */
+		$setores = ($this->perms->checkAccess('PROT_ADMIN', A_ACCESS)) ? $this->setor->selAll() : $this->setoracesso->selSetoresAcesso($this->processo->getSetorUsuario());
+
+		if (
+			$this->processo->retencao->setorDestino
+			&& in_array($this->processo->retencao->setorDestino,$setores) 
+		  )
+		{
+		//      processo a separar
+			$andamento = $this->processo->getAndamento($this->processo->retencao->numAndamento);
+			$numFormatado = trim(substr($andamento->decisao,20,14));
+			$numFormatado = str_repeat('0',14-strlen($numFormatado)).$numFormatado;
+			$serie = substr($numFormatado,0,6);
+			$ano = substr($numFormatado,7,4);
+			$codigo = substr($numFormatado,12,2);
+			$num = $ano.$serie.$codigo;
+			$numProcessoFormatado = new MTextField('numProcessoFormatado',$numFormatado,'Processo:',14);
+			$numProcessoFormatado->setReadOnly(true);
+			$autor = new MTextField('autor','','Autor:',90);
+			$autor->addAttribute('maxlength','80');
+			$groupSeparar = new MBaseGroup('groupSeparar', 'Selecionar processo',array($numProcessoFormatado,$autor),'vertical','css');
+			$groupSeparar->addAttribute('style','padding:10px');
+		//      fields
+			$fields = array(
+				array(
+					new MHiddenField('numProcesso',$num),
+					$groupSeparar,
+				),
+			);
+			$this->SetFields($fields);
+		//      required fields
+			$validators = array(
+				new MRequiredValidator('autor'),
+			);
+			$this->setValidators($validators);
+		//      buttons
+			$buttons = array(
+				new MButton('btnSeparar', 'Separar'),
+			);
+			$this->SetButtons($buttons);
+		}else{
+			$msg = 'Este usuário não tem permissão para acessar este Processo/Protocolo';
+			$this->manager->Information($msg,$this->manager->GetActionURL('protocolo','main:processos',$this->processo->numProcesso));
+		}
+	}
+
+
+	public function btnSeparar_click()
+	{
+		/* IFRO - Controle de segurança de acesso */
+		$setores = ($this->perms->checkAccess('PROT_ADMIN', A_ACCESS)) ? $this->setor->selAll() : $this->setoracesso->selSetoresAcesso($this->processo->getSetorUsuario());
+		if (
+			$this->processo->retencao->setor
+			&& in_array($this->processo->retencao->setor,$setores) 
+		  )
+		{
+			//      data
+			$data = $this->getData();
+			//      get processo pai
+			$this->processoPai->getByNumero($data->numProcesso);
+			//      números de processo iguais
+			if ($this->processoPai->numProcesso == $this->processo->numProcesso)
+			{
+				$this->addError('O processo '.$this->processo->numProcessoFormatado().' não pode ser separado dele mesmo.');
+				return;
+			}
+			//      status do processo pai
+			switch ($this->processoPai->retencao->status)
+			{
+				case 'N':
+				case 'J':
+					//        set and save
+					try 
+					{
+						$this->processo->beginTransaction();
+						$this->processo->retencao->numAndamento++;
+						$andamento = $this->processo->getAndamento($this->processo->retencao->numAndamento);
+						$andamento->setor = $this->processo->retencao->setor;
+						$andamento->dataEntrada = date("YmdHi");
+						$andamento->setorDestino = $this->processo->retencao->setorDestino;
+						$andamento->dataSaida = $andamento->dataEntrada;
+						$andamento->decisao = 'SEPARADO DO PROCESSO '.$this->processoPai->numProcessoFormatado();
+						$andamento->dataDespacho = $andamento->dataSaida;
+						$andamento->autor = $data->autor;
+						$andamento->status = 'N';
+						$this->processo->addAndamento($andamento);
+						$this->processo->retencao->numAndamento++;
+						$andamento2 = $this->processo->getAndamento($this->processo->retencao->numAndamento);
+						$andamento2->setor = $andamento->setorDestino;
+						$andamento2->dataEntrada = $andamento->dataSaida;
+						$andamento2->status = 'N';
+						$this->processo->addAndamento($andamento2);
+						$this->processo->retencao->setData($andamento2);
+						$this->processo->retencao->setorDestino = null;
+						$this->processo->retencao->dataSaida = null;
+						$this->processo->retencao->dataDespacho = null;
+						unset($andamento,$andamento2);
+						$andamento = $this->processoPai->getAndamento($this->processoPai->retencao->numAndamento);
+						$this->processoPai->retencao->numAndamento++;
+						$andamento2 = $this->processoPai->getAndamento($this->processoPai->retencao->numAndamento);
+						$andamento2->setData($andamento);
+						$andamento->dataEntrada = date("YmdHi");
+						$andamento->setorDestino = $this->processoPai->retencao->setor;
+						$andamento->dataSaida = $andamento->dataEntrada;
+						$andamento->decisao = 'SEPAROU-SE DO PROCESSO '.$this->processo->numProcessoFormatado();
+						$andamento->dataDespacho = $andamento->dataSaida;
+						$andamento->autor = $data->autor;
+						$this->processoPai->addAndamento($andamento);
+						$this->processoPai->addAndamento($andamento2);
+						$this->processoPai->retencao->setData($andamento4);
+						unset($andamento,$andamento2);
+						$this->processoPai->setTransaction($this->processo->getTransaction());
+						$this->processoPai->save();
+						$this->processo->save();
+						$this->processo->endTransaction();
+						$msg = 'O processo '.$this->processo->numProcessoFormatado().' foi separado do processo '.$this->processoPai->numProcessoFormatado().' com sucesso.';
+						$this->processo->Log(OP_UPD,$msg);
+                                                // 24-10-2011 - Daniel Bonfim
+                                                $this->SendMailSeparar();                                                
+						$this->manager->Information($msg,$this->manager->GetActionURL('protocolo','main:processos',$this->processo->numProcesso));
+					}
+					catch(Exception $e) {$this->addError($e->getMessage());}
+				break;
+				case 'A':
+					$this->addError('O processo '.$this->processo->numProcessoFormatado().' não pode ser separado de um processo arquivado ('.$this->processoPai->numProcessoFormatado().').');
+					break;
+				default:
+					$this->addError('Houve um erro desconhecido e o processo '.$this->processo->numProcessoFormatado().' não pode ser separado. Procure o CGCO.');
+			}
+		}else{
+			$msg = 'Este usuário não tem permissão para acessar este Processo/Protocolo';
+			$this->manager->Information($msg,$this->manager->GetActionURL('protocolo','main:processos',$this->processo->numProcesso));
+		}
+	}
+        
+                    // 24-10-2011 - Daniel Bonfim
+        // envia um email informando a cada observador que o processo foi separado
+        private function SendMailSeparar() {
+            global $MIOLO;
+                        
+            $bussObservador = $MIOLO->getBusiness('common','observador');
+            $bussProcesso = $MIOLO->getBusiness('protocolo','processo');
+            
+            $numProcesso = $this->processo->numProcesso;
+            
+            // lista os observadores deste processo
+            $arrIds = $bussObservador->listIdUserObservadoresByProcesso($numProcesso);
+            if($arrIds) {
+                foreach($arrIds as $id) {
+                    $arrIdsUserObservadores[] = $id[0];
+                }
+            }
+             
+        // se houverem observadores
+        if($arrIdsUserObservadores) {
+            
+            // array com os ids dos observadores
+            foreach($arrIdsUserObservadores as $idUserObservador) {
+                
+                $bussUsuario = $MIOLO->getBusiness('common','usuario');
+                // no objPessoa já tem todas as informacoes de que preciso
+                $objUsuario = $bussUsuario->GetById($idUserObservador); 
+                                
+                $email = $objUsuario->pessoa->email;
+                
+                $mail = new PHPMailer();
+		$mail->IsSMTP(); // telling the class to use SMTP
+		$mail->Host = "smtp.ifbaiano.edu.br"; // SMTP server
+		$mail->From = 'sigaadm@ifbaiano.edu.br';
+		$mail->FromName = 'SIGA - Sistema Integrado de Gestão Acadêmica';
+		//$mail->Subject = "[SIGA] Monitoramento do processo ".$bussProcesso->numProcessoFormatado($this->processo->numProcesso);
+		$mail->Subject = "[SIGA] Processo ".$bussProcesso->numProcessoFormatado($this->processo->numProcesso).": separado do processo {$this->processoPai->numProcessoFormatado()}";
+		
+                $mail->WordWrap = 150;
+                
+                // 24-10-2011 - Daniel Bonfim
+                // informaçoes do processo para inserir no email
+                $tipo = $this->processo->tipo;
+                if($tipo == 'A')
+                    $tipo = "PROTOCOLADO";
+                else if($tipo == 'P')
+                    $tipo = "PROCESSO";
+                
+                $numFormatado = $this->processo->instituicao.".".$this->processo->numProcessoFormatado($this->processo->numProcesso);
+                $dataAbertura = $this->processo->dataFormatada($this->processo->dataAbertura);
+                $setor = $this->processo->setorOrigem;
+                
+                $status = $this->processo->retencao->status;
+                if($status == "N") {
+                    // 04-20-2011 - Daniel Bonfim
+                    if ($this->processo->retencao->setorDestino)
+                        $status = 'AGUARDANDO ENTRADA - '.$this->processo->retencao->setorDestino;
+                    else 
+                        $status = "NORMAL";
+                }
+                else if($status == "A")
+                    $status = "ARQUIVADO";
+                else if($status == "J")
+                    $status = "ANEXADO";
+                
+                $interessado = $this->processo->solicitante;
+                $titulo = $this->processo->titulo;
+                $assunto = $this->processo->assunto;
+                $arquivo = $this->processo->arquivo;
+                
+                // usuario
+                $auth = $this->manager->auth;
+                $usuario = $auth->login->id;
+                                
+		$body =
+<<< HERE
+O sistema SIGA-ADM informa que o processo {$bussProcesso->numProcessoFormatado($this->processo->numProcesso)} foi separado do processo {$this->processoPai->numProcessoFormatado()} com sucesso.
+
+Tipo: {$tipo}
+Número: {$numFormatado}
+Data Abertura: {$dataAbertura}
+Setor: {$setor}
+Status: {$status}
+Interessado: {$interessado}
+Titulo: {$titulo}
+Assunto: {$assunto}
+Caixa: {$arquivo}
+Usuário: {$usuario}
+
+Atenciosamente,
+SIGA - Sistema Integrado de Gestão Acadêmica
+sigaadm@ifbaiano.edu.br
+
+HERE;
+
+		$mail->Body = $body;
+                $mail->AddAddress($email);
+                
+                $mail->Send();
+            }
+                
+        } else {
+            unset($bussObservador); 
+            unset($bussProcesso);
+        }   
+    }
+        
+}
+?>

@@ -1,0 +1,279 @@
+<?php
+class repRequisicaoSitGeral extends PDFReport
+{
+	var $img;
+	var $timestamp;
+	var $objRequisicao;
+	var $objPassagem;
+
+	function __construct()
+	{
+		global $MIOLO, $module, $page, $context, $self, $action, $perms,$item;
+
+		$idReq = $item;
+				
+		parent::__construct(NULL, NULL, 55, NULL, 'landscape');
+	    
+		$ui = $MIOLO->GetUI();
+        $this->img = $ui->GetImageSrc('logo_siga.png',$module);
+
+		$this->SetOption('showLines',0);
+		$this->timestamp = date('d/m/Y G:i');
+
+		
+		$this->pdf->ezStartPageNumbers(800, 580, 10, 'rigth', 'Página: {PAGENUM}/{TOTALPAGENUM}');
+		$this->pdf->ezSetMargins(50, 30, 30, 30);
+		$this->SetOption('fontSize',8);
+
+		$objRequisicao = $MIOLO->GetBusiness($module,'requisicao');			
+		$objTipoReq = $MIOLO->GetBusiness($module,'tiporeq');		
+		
+		$datas = $objRequisicao->getDataRequisicao($idReq)->result;
+
+		$req = $objRequisicao->getSituacaoGeralRequisicao($idReq);
+
+		$arr = Array();
+		$i = 0;
+
+		if ((trim($req->result[0][2]) == "6") || (trim($req->result[0][2]) == "7"))
+		{
+			$objItemReq = $MIOLO->GetBusiness($module,'itemreq');
+		}
+		elseif (trim($req->result[0][2]) == "9")
+		{
+			$objItemReq = $MIOLO->GetBusiness($module,'itemservext');
+		}
+
+        $itens = $objItemReq->ListByRequisicao($idReq);
+
+         	if ($itens->result)
+			{
+			    $objTabelaGeral = $MIOLO->GetBusiness('common','tabelageral');
+
+				foreach ($itens->result as $item)
+				{
+                    //var_dump($item);
+                    if (trim($req->result[0][2]) == "9") //se serviço
+                    {
+
+                       $descricao = $item[0];
+                       $status = $item[1];
+                       $idLicitacao = $item[2];
+                       $itemEmpenho = $item[3]; //n. do item no empenho
+
+                       $objTabelaGeral->getByItem('AD_STATUSITEMREQ',$status);
+                       $complemento = $objItemReq->GetComplementoByRequisicao($idReq)->result[0][$i];
+
+                       if ($complemento!="")
+                       {
+                          $arr[$i][0] = "<b>".$itemEmpenho."  ".$complemento."</b>"; //mostra o complemento
+                       }
+                       else
+                       {
+                          $arr[$i][0] = "<b>".$itemEmpenho."  ".$descricao."</b>"; //mostra a descricao
+                       }
+                    }
+                    else
+                    {
+                        $idMaterial = $item[0];
+                        $descricao = $item[1];
+                        $status = $item[2];
+                        $idLicitacao = $item[3];
+                        $itemEmpenho = $item[4];
+
+                        $objTabelaGeral->getByItem('AD_STATUSITEMREQ',$status);
+                        $arr[$i][0] =  "<b>".$itemEmpenho." ".$descricao."</b>"; //material
+                    }
+                    /**
+					$item[1] = $item[2];
+					$item[2] = $item[3];
+					$item[3] = $item[4];
+					$item[4] = $item[5];
+                     **/
+                    $arr[$i][7] = $objTabelaGeral->item2; //status do item
+
+					if ($idLicitacao == null)
+					{
+						$arr[$i][1] = "";
+						$arr[$i][3] = "Não Licitado";
+						$arr[$i][4] = "";
+						$arr[$i][6] = "Não Empenhado";
+					}
+					else
+					{
+						$objLicitacao = $MIOLO->GetBusiness($module,'licitacao');
+						$lic = $objLicitacao->ListById($idLicitacao);
+						//var_dump($lic->result);
+                        $arr[$i][1] = $lic->result[0][4]; //numero
+    					$arr[$i][2] = substr($lic->result[0][2],0,10); //data abertura
+						$arr[$i][3] = $lic->result[0][3]; //status
+
+						// Agora, o empenho
+                        $objEmpenhado = $MIOLO->GetBusiness($module,'empenhado');
+                        $objEmpenhadoDist = $MIOLO->GetBusiness($module,'empenhadodist');
+			            $objEmpenho = $MIOLO->GetBusiness($module,'empenho');
+
+                        if (!$itemEmpenho) //se não existe item no empenho
+                        {
+                           $itemEmpenho = '0';
+                        }
+
+ 					    $idEmpenho = $objEmpenhado->GetIdEmpenhoByIdItemLicitacao($idLicitacao, $itemEmpenho);
+                        //var_dump($idEmpenho);
+ 					    $idEmpenho = $objEmpenhadoDist->GetIdEmpenhoByRequisicaoLicitacaoItem($idReq,$idLicitacao,$itemEmpenho);
+                        //var_dump($idEmpenho);
+
+                        //var_dump($item[1]);
+                        $empenho = $objEmpenho->getById($idEmpenho);
+                        //var_dump($empenho->numero);
+						if ($empenho->numero == null)
+						{
+							$arr[$i][4] = "";
+							$arr[$i][6] = "Não Empenhado";
+						}
+						else
+						{
+                            //var_dump($empenho->result);
+
+ 							$arr[$i][4] = $empenho->numero; //numero
+							$arr[$i][5] = $empenho->dataEmpenho; //data do empenho
+ 							$objTabelaGeral->getByItem('AD_EMPENHOSTATUS',$empenho->status);
+							$arr[$i][6] = $objTabelaGeral->item2;
+
+						}
+						$idEmpenho = NULL;
+ 					}
+
+					$i++;
+				}
+			}
+			else
+            {
+
+            	$arr[$i][0] = "Não existem itens";
+				
+			}
+			
+			
+			
+		
+				
+		if($req->result[0][0] <> null)
+		{
+			$columns = array(
+				new PDFReportColumn('Material','<b><i>Material / Serviço</b></i>','center',true,30,true,null,true),
+				new PDFReportColumn('Licitaçao','<b><i>Licitação</b></i>','center',true,12,true,null,true),
+				new PDFReportColumn('Data Licitacao','<b><i>Data Lic</b></i>','center',true,7,true,null,true),
+				new PDFReportColumn('Estado Licitacao','<b><i>Estado Licitação</b></i>','center',true,10,true,null,true),
+				new PDFReportColumn('Empenho','<b><i>Empenho</b></i>','center',true,12,true,null,true),
+				new PDFReportColumn('Data Empenho','<b><i>Data Emp</b></i>','center',true,7,true,null,true),
+				new PDFReportColumn('Estado Empenho','<b><i>Estado Emp</b></i>','center',true,10,true,null,true),
+				new PDFReportColumn('Status do Item','<b><i>Status do Item</b></i>','center',true,12,true,null,true),
+			);
+			
+		
+			// Largura do report, em %
+		    $this->SetWidth(100);
+		    $this->SetColumns($columns);
+		    $colDetail = $this->columns;
+		    $this->SetColumns($sum1);
+		    $colSum1 = $this->columns;
+		             
+		    // gera o report
+		   
+		    $this->columns = $colDetail; 
+		    
+		   // var_dump($arr);
+		    
+		    $this->GeneratePageHeader($idReq,$datas);
+			$this->GenerateData($arr);
+			$this->GeneratePageFooter();
+		
+		
+		
+		}
+		else 
+		{
+			// gera o report
+			$this->GeneratePageHeader($idReq);
+			$this->GenerateDataNULL();
+			$this->GeneratePageFooter();
+			
+		}
+
+	}
+
+	function GeneratePageHeader($idReq,$datas)
+	{
+		global $MIOLO;
+
+		$x0 = $this->pdf->left;
+		$h = $this->pdf->getFontHeight(12);
+
+		$x00=$this->pdf->left;
+		$hh = $this->pdf->getFontHeight(12);
+		$this->pdf->addText($x00, 800, 12, $this->manager->getConf('instituicao.sigla')." - ".$this->manager->getConf('instituicao.nome'));
+		$this->pdf->addText($x00, 800 - $hh, 12, $this->manager->getConf('theme.system'));
+
+/*
+		$this->pdf->addPngFromFile($this->img, 10, 730 + $x0, 100, 54);
+		$this->pdf->addText(40,555,12,'UFJF - Universidade Federal de Juiz de Fora');
+		$this->pdf->addText(40,555-$h,12,'CGCO - Centro de Gestão do Conhecimento Organizacional');
+		$this->pdf->addText(40,555-$h-$h,12,'SIGA - Sistema Integrado de Gestão Acadêmica');
+*/
+
+		
+		$this->pdf->addText(40,555-$h-$h-$h,12,'Pré-Reitoria de Logística');
+
+		$this->pdf->addTextWrap(40,555-5*$h,600,11,'Situação Geral Da Requisição','left');
+		$this->pdf->addTextWrap(40,555-6*$h,600,11,'Req N.: '.$idReq.'   '.'Data: '.substr($datas[0][0],0,10).'   '.'Data da Autorização: '.substr($datas[0][1],0,10), 'left');
+		
+        $options['textCol'] = array(0,0,0);
+        $options['shaded'] = 1;
+        $options['showLines'] = 0;
+        $options['fontSize'] = 10;
+        $options['width'] = 740;
+        $options['xPos'] = 'left';
+        $options['xOrientation'] = 'right';
+        $this->pdf->ezText('',80);
+	}
+
+	function GeneratePageFooter()
+	{
+		$x0 = $this->pdf->left;
+        $x1 = $this->pdf->right;
+        $footer = $this->pdf->openObject();
+        $this->pdf->saveState();
+        $this->pdf->SetStrokeColor(0, 0, 0);
+        $this->pdf->line($x0, 28, $x1, 28);
+        $this->pdf->addText($x0, 19, 9, $this->timestamp . ' - CGCO/DSI');
+        $this->pdf->restoreState();
+        $this->pdf->closeObject();
+        $this->pdf->addObject($footer, 'all');    		
+
+	}
+
+	function GenerateData($data)
+	{
+		$this->pdf->ezSetDy(-12);
+		$this->SetData($data);
+		$this->rawdata = $this->GenerateTableData();
+		$this->GenerateBody($this->rawdata);
+	}
+	function GenerateDataNULL()
+	{
+		$this->pdf->ezSetDy(-12);
+		$h = $this->pdf->getFontHeight(12);		
+		//$this->pdf->addText(0,800-12*$h,600,11,' NÃO FORAM ENCONTRADOS DADOS RELATIVOS À CONSULTA SOLICITADA ', 'center');
+		$this->pdf->addTextWrap(10,800-6*$h,600,11,'NAO TEm', 'center');
+		echo "PUTZ";
+		
+	}
+
+	function Generate()
+	{
+		$this->SetOutput();
+		$this->Execute();
+	}
+}
+?>

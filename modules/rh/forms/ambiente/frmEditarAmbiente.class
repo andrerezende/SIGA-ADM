@@ -1,0 +1,228 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+$MIOLO->Uses('ui/controls/lkppublicacao.class','rh');
+
+##            $this->addError('Não é possível editar: o último provimento não é de mudança de ambiente');
+    //restrição suspensa em 9/12/8
+
+
+
+/*
+Objetivo: realizar alteração de ambiente organizacional gravado anteriormente com erro.
+
+Algoritmo:
+    - recupera o último provimento
+    - se o último provimento for de mudança de ambiente permite editar:
+        - mostra o provimento atual do Técnico-Admistrativo
+        - oferece digitação do ambiente corrigido, carregando os dados anteriores como sugestão
+    - senão:
+        - mostra o provimento atual do Técnico-Admistrativo
+        - mostra mensagem de erro
+
+    - grava o novo provimento com a mudança
+*/
+
+class frmEditarAmbiente extends MForm
+{
+    protected $ULTIMOprovimento;
+
+
+    function __construct()
+    {
+        parent::__construct('Edição do atual Ambiente Organizacional');
+        $this->EventHandler();
+    } // __construct
+
+
+    function CreateFields()
+    {
+        global $module;
+
+        //PRIMEIRO QUADRO: mostra provimento atual
+
+        $C_dataInicioATUAL = new MHContainer('',
+                                 array( new MLabel('Data de início:'),
+                                        new MTextLabel('dataInicioATUAL'  ,'','') ) );
+        $C_publicacaoATUAL = new MHContainer('',
+                                 array( new MLabel('Publicação:'),
+                                        new MTextLabel('idPublicacaoATUAL','','') ) );
+        $C_setorATUAL      = new MHContainer('',
+                                 array( new MLabel('Setor:'),
+                                        new MTextLabel('idsetorATUAL'     ,'','') ) );
+        $C_ambienteATUAL   = new MHContainer('',
+                                 array( new MLabel('Ambiente:'),
+                                        new MTextLabel('idAmbienteATUAL'  ,'','') ) );
+
+        $bgATUAL = new MBaseGroup('bg1','Provimento Atual:',array($C_dataInicioATUAL,
+                                                                  $C_publicacaoATUAL,
+                                                                  $C_setorATUAL     ,
+                                                                  $C_ambienteATUAL  ),'vertical','css');
+        $bgATUAL->addStyle('backgroundColor','white');
+        $bgATUAL->addStyle('fontStyle','bold');
+
+        $fields[] = $bgATUAL;
+        $fields[] = new MHiddenField('idVinculo');
+
+        //SEGUNDO QUADRO: edição do Ambiente atual
+        if ($this->VerificaUltimoProvimento())
+        {
+            $fields[] = new MSpacer(2);
+
+            $nbsp = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
+            $bg2  = new MBaseGroup('bg2','',array(new MHContainer('',
+                                            array( new MLabel("$nbsp$nbsp$nbsp$nbsp$nbsp Edição do Ambiente atual:",'blue',TRUE)))));
+            $bg2->addStyle('backgroundColor','white');
+            $fields[] = $bg2;
+
+            $objambiente = $this->manager->GetBusiness($module,'ambiente');
+            $ambientes = $objambiente->ListAll()->result;
+
+            $fields[] = new MSelection('idAmbiente','','Ambiente correto',$ambientes);
+
+            lkppublicacao($fields,'idPublicacao','Publicação',$this->ULTIMOprovimento->idPublicacao);
+            $fields[] = new MSpacer(1);
+            $fields[] = new MMultiLineField ('obs','','Observação',25,5,40,'Máx. 500');
+
+            $buttons = array( new MButton('btnPost','Salvar edição do ambiente') );
+            $this->setButtons($buttons);
+
+            $this->SetFields($fields);
+            $this->SetDataUltimoProvimento();
+            $this->setData();
+            $validators = array( new MRequiredValidator('idAmbiente','Ambiente','required') );
+            $this->SetValidators($validators);
+        }
+        else
+        {
+            $this->SetFields($fields);
+            $this->SetDataUltimoProvimento();
+            $this->defaultButton = false;
+        }
+    } // CreateFields
+
+
+    function SetData()
+    {
+        $this->SetFieldValue('idVinculo' ,$this->ULTIMOprovimento->idVinculo);
+        //$this->SetFieldValue('idAmbiente',$this->ULTIMOprovimento->idAmbiente);
+        //para recuperar descrição do ambiente, após refazimento de tela por lookup não de ambiente
+          $idAmbiente = MForm::GetFormValue('idAmbiente');
+          if ($idAmbiente)
+          {
+              //ou para recuperar descrição na abertura do formulário, com o ambiente gravado
+              $this->SetFieldValue('idAmbiente',$idAmbiente);
+          }
+          else
+          {
+              //ou para recuperar descrição na abertura do formulário, com o setor gravado
+              $this->SetFieldValue('idAmbiente',$this->ULTIMOprovimento->idAmbiente);
+          }
+        $this->SetFieldValue('obs'       ,$this->ULTIMOprovimento->obs);
+    } // SetData
+
+
+    //verifica se o último provimento é de mudança de ambiente
+    function VerificaUltimoProvimento()
+    {
+        global $module;
+        $this->ULTIMOprovimento = $this->manager->GetBusiness($module,'provimento');
+        $this->ULTIMOprovimento->getUltimoProvimento( MForm::GetFormValue('item') );
+
+        /*if ( ($this->ULTIMOprovimento->idGrupoOcorrencia <> '6') or ($this->ULTIMOprovimento->idOcorrencia <> '998') )
+        {
+            $this->addError('Não é possível editar: o último provimento não é de mudança de ambiente');
+            return false;  //inibe edição
+        }*/
+        return TRUE;
+    } // VerificaUltimoProvimento
+
+
+    //mostra dados do provimento atual 
+    function SetDataUltimoProvimento()
+    {
+        global $module;
+        $this->SetFieldValue('dataInicioATUAL'  ,$this->ULTIMOprovimento->dataInicio);
+
+        $this->ULTIMOprovimento->retrieveAssociation('publicacao');
+        $this->SetFieldValue( 'idPublicacaoATUAL',$this->ULTIMOprovimento->publicacao->diplomaLegal->descricao.' '.
+                                                  $this->ULTIMOprovimento->publicacao->numero.' de '.
+                                                  $this->ULTIMOprovimento->publicacao->data.' - '.
+                                                  $this->ULTIMOprovimento->publicacao->autoridade );
+
+        $obj = $this->manager->getBusiness('common','setor');
+        $obj->getById($this->ULTIMOprovimento->idSetor);
+        $this->SetFieldValue('idsetorATUAL'   ,$obj->sigla);
+
+        $obj = $this->manager->getBusiness($module,'ambiente');
+        $obj->getById($this->ULTIMOprovimento->idAmbiente);
+        $this->SetFieldValue('idAmbienteATUAL',$obj->descricao);
+    } // SetDataUltimoProvimento
+
+
+    function btnPost_click()
+    {
+        $data = $this->GetData();
+
+        $k = new MKrono();
+
+        if ($data->idAmbiente == $this->ULTIMOprovimento->idAmbiente)
+        {
+            $this->addError('Não houve alteração do Ambiente');
+            RETURN; //aborta gravação
+        }
+
+        $this->Salvaprovimento($data);
+    } // btnPost_click
+
+
+    function Salvaprovimento($data)
+    {
+        global $module;
+
+        $this->ULTIMOprovimento->BeginTransaction();
+
+        TRY
+        {
+            $this->ULTIMOprovimento->idAmbiente   = $data->idAmbiente;
+            $this->ULTIMOprovimento->idPublicacao = $data->idPublicacao;
+            $this->ULTIMOprovimento->obs          = $data->obs;
+            $this->ULTIMOprovimento->save();
+            $this->ULTIMOprovimento->EndTransaction();
+
+            $go = $this->manager->getActionURL('rh','main:vinculo',$data->idVinculo);
+            $this->manager->information('Ediçao do ambiente realizada, provimento atualizado.', $go );
+            $gravou = TRUE;
+        }
+        CATCH (Exception $e)
+        {
+            $gravou = false;
+            $this->AddError($e->GetMessage());
+        }
+
+        if ($gravou)
+        {
+            $this->ULTIMOprovimento->log(OP_INS,'vinculo: '                  . $data->idVinculo .
+                                       ' Alterado ambiente organizacional: ' . $data->idAmbiente);
+        }
+    } // Salvaprovimento
+
+
+}
+?>

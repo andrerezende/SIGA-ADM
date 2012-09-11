@@ -1,0 +1,163 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class repLicencaAfastamentoGeralSetor extends MPDFReport
+{
+    var $img;
+    var $timestamp;
+    var $idSetor;
+    var $dataRef;
+    var $query;
+    var $servidores;
+    var $totalLicencasAfastamentos;
+    var $setor;
+
+    function __construct($data)
+    {
+        global $MIOLO, $module, $page, $context, $self, $action, $perms;
+        parent::__construct(NULL,NULL,55,NULL,'landscape','a4');
+        $ui = $MIOLO->GetUI();
+        $this->img = $ui->GetImageSrc('siga_adm.png','rh');
+        $this->timestamp = date('d/m/Y G:i');
+        $this->pdf->ezStartPageNumbers(800,540,10,'rigth','Página: {PAGENUM}/{TOTALPAGENUM}');
+        $this->pdf->ezSetMargins(100,30,20,20);
+
+        $this->idSetor = $data->idSetor;
+        $this->dataRef = $data->dataRef;
+
+        $this->setor = $MIOLO->GetBusiness('common','setor',$data->idSetor);
+
+        $licAfast = $MIOLO->GetBusiness('rh','licafast');
+        $this->query = $licAfast->listLicAfasts($this->idSetor,$this->dataRef);
+        if ( is_array ($this->query->result) )
+            if ( count($this->query->result) > 0 )
+                foreach ($this->query->result as $row)
+                {
+                    $dataRel[] = $row;
+                    $this->servidores[$row[0]] = $row[1];
+                }
+
+        $this->totalLicencasAfastamentos = count($this->query->result);
+        $this->totalServidores = count($this->servidores);
+
+        $this->GeneratePageHeader();
+        $this->GeneratePageFooter();
+        
+        if ( is_array($this->servidores) )
+        {
+            $columns = array(
+                new PDFReportColumn('idVinculo', 'Id Única', 'center', true, 7, true, null, true),
+                new PDFReportColumn('nome', 'Nome', 'left', true, 27, true, null, true),
+                new PDFReportColumn('regime', 'Regime', 'left', true, 0, false, null, true),
+                new PDFReportColumn('dataInicio', 'Data de Início', 'left', true, 8, true, null, true),
+                new PDFReportColumn('dataFim', 'Data Fim', 'left', true, 8, true, null, true),
+                new PDFReportColumn('tipoLicenca', 'Ocorrência', 'left', true, 0, false, null, true),
+                new PDFReportColumn('ocorrencia', 'Ocorrência', 'left', true, 0, false, null, true),
+                new PDFReportColumn('descricao', 'Ocorrência', 'left', true, 50, true, null, true),
+            );
+            $this->SetWidth(100);
+            $this->SetColumns($columns);
+            $colDetail = $this->columns;
+            $this->GenerateData($this->query->result);
+            $this->GenerateFooter();
+            $this->SetOption('showHeadings', 0);
+            $this->SetOption('showLines', 1);
+        }
+        else
+        {
+            $this->SetWidth(100);
+            $this->SetOption('showHeadings',0);
+            $this->SetOption('showLines',1);
+            $x0 = $this->pdf->left;          
+            $this->pdf->ezSetDy(-32,'makeSpace');
+            $y = $this->pdf->y;
+            $this->pdf->addText($x0 +50, $y - 50, 12, 'Não foram encontrados registros');
+        }
+    }
+
+    function GeneratePageHeader()
+    {
+        $x0 = $this->pdf->left;
+        $x1 = $this->pdf->right;
+        $h = $this->pdf->getFontHeight(10);
+        $header = $this->pdf->openObject();
+        $this->pdf->saveState();
+        $this->pdf->addPngFromFile($this->img, 40, 520 + $x0, 54, 27);
+        $this->pdf->addText($x0+85, 560, 12, 'IF - Instituto Federal');
+        $this->pdf->addText($x0+85, 560 -$h -$h , 10, 'SIGA - Sistema Integrado de Gestão Acadêmica - Módulo Recursos Humanos');
+        $y = 550 - $h - $h - 5;
+        $this->pdf->SetColor(0.4,0.4,0.4);
+        $this->pdf->filledRectangle($x0, $y-20, $x1-30, 16 );
+        $this->pdf->SetColor(1,1,1);
+        $setor = $this->setor;
+        $this->pdf->addText($x0 + 5, $y - 16, 10, "Licenças/Afastamentos - Geral - Por Setor - Setor: {$setor->nome}");
+        $this->pdf->restoreState();
+        $this->pdf->closeObject();
+        $this->pdf->addObject($header,'all');
+    }
+
+    function GeneratePageFooter()
+    {
+        $x0 = $this->pdf->left;
+        $x1 = $this->pdf->right;
+        $footer = $this->pdf->openObject();
+        $this->pdf->saveState();
+        $this->pdf->SetStrokeColor(0, 0, 0);
+        $this->pdf->line($x0, 28, $x1, 28);
+        $this->pdf->addText($x0, 19, 9, $this->timestamp);
+        $this->pdf->restoreState();
+        $this->pdf->closeObject();
+        $this->pdf->addObject($footer, 'all');
+    }
+
+    function GenerateFooter()
+    {
+        $this->pdf->ezText(" ", 9, array('justification' => 'left'));
+        $total = count($this->servidores);
+        if ( $total )
+        {
+            while ( ! $this->query->eof() )
+            {
+                $est[$this->query->fields('descricao')]++;
+                $this->query->moveNext();
+            }
+            if ( is_array($est) )
+                foreach ( $est as $key=>$val )
+                    $this->pdf->ezText("$key: $val", 9, array('justification' => 'left'));
+        }
+        $this->pdf->ezText(" ", 9, array('justification' => 'left'));
+        $this->pdf->ezText("Total de Servidores em Licença/Afastamento: $total", 9, array('justification' => 'left'));
+        $this->pdf->ezText(" ", 9, array('justification' => 'left'));
+    }
+    
+    function GenerateData($data)
+    {
+        $this->pdf->ezSetDy(-5);
+        $this->SetData($data);
+        $this->rawdata = $this->GenerateTableData();
+        $this->GenerateBody($this->rawdata);
+    }
+
+    function Generate()
+    {
+        $this->SetOutput();
+        $this->Execute();
+    }
+}
+?>

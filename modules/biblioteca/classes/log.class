@@ -1,0 +1,177 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+class BusinessBibliotecaLog extends Business
+{
+  var $idlogoperacao;
+  var $data;
+  var $idusuario;
+  var $idoperacao;
+  var $identificador;
+
+	function BusinessBibliotecaLog()
+	{
+		$this->Business('sigaept', $data);
+	}
+	
+
+	function GetData($mnemonico,$material)
+	{ global $auth;
+	
+		$login = $auth->GetLogin();
+
+		$data = new FormData();
+		$data->datahora = date('Y-m-d h:m:s');
+		$data->idusuario = $login->idkey;
+		$data->idoperacao = $this->GetOperacao($mnemonico);
+		$data->material = $material;
+
+		return $data;
+	}
+
+
+	function GetOperacao($mnemonico)
+	{ // obtem o id da operacao de acordo com o mnemonico
+
+		$sql = new sql("idoperacao","bt_operacao","mnemonico = ?");
+		$query = $this->Query($sql,$mnemonico);
+		
+		if ( !$query->eof() )
+			$result = $query->GetRowObject();
+
+		return $result->idoperacao;
+	}
+
+
+	function LastNumeroLog()
+	{    
+	  $sql = new sql('nextval(\'seq_bt_logcatalogacao\')');
+      $query = $this->Query($sql);
+	  return $query->result[0][0];
+	}
+
+	
+	function LastNumeroLogOperacao()
+	{    
+	 return $this->_db->GetNewId('seq_bt_logoperacao');
+	}
+
+
+	function Insert($mnemonico,$material)
+	{
+		$data = $this->GetData($mnemonico,$material);
+
+		if ($data)
+		{
+			$data->idlogcatalogacao = $this->LastNumeroLog();
+		
+			$sql = new sql('idlogcatalogacao,data,idusuario,idoperacao,material','bt_logcatalogacao');
+			$values = array($data->idlogcatalogacao,$data->datahora,$data->idusuario,$data->idoperacao,$data->material);
+		
+			$this->Execute($sql->Insert($values));
+	    }
+ 	}
+ 	
+
+ 	function SetData($data)
+ 	{
+		$this->idlogoperacao = $data->idlogoperacao;
+	    $this->data = $data->data;
+		$this->idusuario = $data->idusuario;
+	    $this->idoperacao = $data->idoperacao;
+		$this->identificador = $data->identificador;
+    }
+     
+         
+    function Gravar($mnemonico,$identificador)
+    {
+		global $MIOLO;
+
+     	$sql = new sql('idlogoperacao,data,idusuario,idoperacao,identificador','bt_logoperacao');
+     	
+     	$k = new MKrono();
+        $dataHoje = $k->KDate('%d/%m/%Y   %H:%i:00');
+        $dataHoje = ":TO_DATE('". $dataHoje . "','DD/MM/YYYY HH24:MI:SS')";      
+    	
+     	$values = array ( $this->LastNumeroLogOperacao(),
+     					  $dataHoje,
+     					  $MIOLO->GetLogin()->idkey,
+     					  $this->GetOperacao($mnemonico),
+     					  $identificador
+     					 );   	
+     					 
+     	//$this->Execute($sql->Insert($values));
+     	
+     	$sql->setparameters($values);
+     	
+     	return $sql;
+     }
+     
+
+	function GetIdusuarioByIdentificadorAndIdoperacao($argIdentificador, $argIdoperacao)
+	{
+		$criteria = $this->GetCriteria();
+	    $criteria->addColumnAttribute('idusuario');
+		$criteria->addCriteria('identificador','=',"'{$argIdentificador}'");
+	    $criteria->addCriteria('idoperacao','=',"{$argIdoperacao}");
+		return $criteria->retrieveAsQuery();
+	}
+
+
+	function GetOperadorEmprByOperacao($identificador)
+	{
+		global $MIOLO, $module;
+
+		//busca idoperacao
+		$operacao = $MIOLO->GetBusiness($module,'operacao');
+		$opempr = $operacao->GetIdoperacaoByMnemonico('EMPRESTIMO')->idoperacao;
+		$opemprhoras = $operacao->GetIdoperacaoByMnemonico('EMPRHORAS')->idoperacao;
+//		$opdevol = $operacao->GetIdoperacaoByMnemonico('DEVOLUCAO')->idoperacao;
+
+		$sql = new sql('u.login,p.nome','bt_logoperacao l,cm_usuario u,cm_pessoa p','l.identificador= ? and (l.idoperacao = ? or l.idoperacao = ?) and l.idusuario=u.idusuario and u.idpessoa=p.idpessoa');
+
+		$query = $this->Query($sql, array($identificador,$opempr,$opemprhoras));
+
+		return $query->result;
+	}
+
+
+	function GetOperadorDevolByOperacao($identificador)
+	{
+		global $MIOLO, $module;
+
+		//busca idoperacao
+		$operacao = $MIOLO->GetBusiness($module,'operacao');
+		$opdevol = $operacao->GetIdoperacaoByMnemonico('DEVOLUCAO')->idoperacao;
+
+		$sql = new sql('u.login,p.nome','bt_logoperacao l,cm_usuario u,cm_pessoa p','l.identificador= ? and l.idoperacao = ? and l.idusuario=u.idusuario and u.idpessoa=p.idpessoa');
+
+		$query = $this->Query($sql, array($identificador,$opdevol));
+
+		return $query->result;
+	}
+}
+?>

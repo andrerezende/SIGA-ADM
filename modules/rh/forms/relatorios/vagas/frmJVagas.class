@@ -1,0 +1,186 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmJVagas extends MForm
+{
+	var $options;
+    function __construct()
+    {
+        parent::__construct('Obter Relatório de Vagas');
+        $this->SetClose($this->manager->GetActionURL('rh','main:relatorio'));
+        $this->EventHandler();
+    }   
+
+    function CreateFields()
+    {
+        global $MIOLO, $self, $module, $page, $action, $theme;
+        $ui = $this->manager->getUI();
+
+        $todosCargos = $this->manager->getBusiness('rh','cargo');
+        $query = $todosCargos->listAllDistinct();
+        $cargos = $query->result;
+        //var_dump($query->result);
+        $this->options['0'] = 'TODOS';
+        foreach($cargos as $key => $val) $this->options[$key + 1] = $val['0'] ;
+        
+        //$opOcup['0'] = 'OCUPADAS E DESOCUPADAS';
+        //$opOcup['1'] = 'OCUPADAS';
+        //$opOcup['2'] = 'DESOCUPADAS'; 
+        
+        $fields = array(
+            new MSelection('idCargos','','Cargo', $this->options), 
+            //new MSelection('idOcupacao','','Ocupação', $opOcup),
+            new MHiddenField('descricaoCargo'),
+        );
+        $this->SetFields($fields);        
+        
+        $buttons = array(
+            new MButton('btnReport','Gerar Relatório','PDF'),
+            new MButton('btnGerarCSV','Gerar Planilha')
+        );
+        $this->SetButtons($buttons);
+    }    
+    
+    
+    function btnReport_click()
+    {
+    	//iReport
+    	$idCargo = $this->getFormValue('idCargos');
+    	$this->setFormValue('descricaoCargo', $this->options[$idCargo]);
+    	$descricaoCargo = $this->getFormValue('descricaoCargo');
+    	if ( is_null($idCargo) or ($idCargo == "") )
+            $erro[] = "Selecione o cargo";
+            
+        if ( count($erro) > 0 )
+            foreach ( $erro as $e )
+                $this->addError($e);
+    	else {
+    		
+    		$campos = "rh_vaga.numerovaga,rh_cargo.descricao,rh_vaga.datainicio,rh_vaga.datafim,rh_ocupacaovaga.idvinculo";
+    		
+    		$tabelas = "rh_ocupacaovaga,rh_vaga,rh_cargo";
+    		
+    		if($idCargo != 0)
+    		{
+    			$condicoes = "(((rh_vaga.numerovaga LIKE '$descricaoCargo') OR (rh_cargo.descricao LIKE '$descricaoCargo')) ) and (rh_ocupacaovaga.numerovaga=rh_vaga.numerovaga) and 
+(rh_vaga.idcargo=rh_cargo.idcargo) and (rh_vaga.idgrupocargo=rh_cargo.idgrupocargo)";
+    		}
+    		else
+    		{
+    			$condicoes = "(((rh_vaga.numerovaga LIKE '%') OR (rh_cargo.descricao LIKE '%')) ) and (rh_ocupacaovaga.numerovaga=rh_vaga.numerovaga) and 
+(rh_vaga.idcargo=rh_cargo.idcargo) and (rh_vaga.idgrupocargo=rh_cargo.idgrupocargo)";
+    		}
+    		    		
+    		$ordenacao = "rh_cargo.descricao ASC";
+    		
+    		$sql = "SELECT ". $campos ." FROM " . $tabelas . " WHERE " . $condicoes . " ORDER BY " . $ordenacao;
+    		
+    		$report = new MJasperReport('ufjf');
+
+        	$parameters['str_SUBREPORT_DIR'] = $this->manager->getConf('home.modules') . '/common/reports/';
+	        $parameters['str_SQL'] =  $sql;//var_dump($sql);exit;
+	        
+			$report->Execute('rh','RH_Vagas',$parameters);
+    	}
+    	
+    	/*
+    	//método não iReport
+    	
+    	$idCargo = $this->getFormValue('idCargos');
+    	//$ocup = $this->getFormValue('idOcupacao');
+    	$this->setFormValue('descricaoCargo', $this->options[$idCargo]);
+    	$descricaoCargo = $this->getFormValue('descricaoCargo');
+    	
+    	
+    	if ( is_null($idCargo) or ($idCargo == "") )
+            $erro[] = "Selecione o cargo";
+        //if ( is_null($ocup) or ($ocup == "") )
+            //$erro[] = "Selecione a ocupação";            
+            
+        if ( count($erro) > 0 )
+            foreach ( $erro as $e )
+                $this->addError($e);
+    	else {
+    		
+    		$data = $this->getData();
+    		$ui = $this->manager->getUi();
+    		$report = $ui->getReport('rh','repVagas',$data);
+    		$report->generate();
+    	}*/
+    
+ 	}
+ 	
+ 	function btnGerarCSV_click()
+	{
+		//global $MIOLO,$module;
+    	//$vagas = $MIOLO->GetBusiness($module,'ocupacaovaga');
+    	$vagas = $this->manager->GetBusiness('rh','ocupacaovaga');
+    	
+		$idCargo = $this->getFormValue('idCargos');
+    	//$ocup = $this->getFormValue('idOcupacao');
+    	$this->setFormValue('descricaoCargo', $this->options[$idCargo]);
+    	$descricaoCargo = $this->getFormValue('descricaoCargo');    	
+    	    	
+    	if ( is_null($idCargo) or ($idCargo == "") )
+            $erro[] = "Selecione o cargo";   
+        if ( count($erro) > 0 )
+            foreach ( $erro as $e )
+                $this->addError($e);
+    	else 
+    	{				
+			if ($idCargo == '0') //TODOS OS CARGOS
+			{             	
+            	$consulta = $vagas->ListByNumeroVagaOrDescricaoCargo(strtoupper("'%'")); 
+			}            	
+            else
+            {
+            	$consulta = $vagas->ListByNumeroVagaOrDescricaoCargo(strtoupper("'$descricaoCargo'"));            	
+            }
+                        
+            $totalvagas = count($consulta->result); 
+
+            if (is_array($consulta->result))
+            {
+            	$resultAux[] = array('Número da Vaga','Descrição do Cargo','Início','Término','Matrícula do Ocupante');
+    			foreach ($consulta->result as $result)		  
+	    		{
+	    			$resultAux[] = array($result[0],$result[1],$result[2],$result[3],$result[4]);		
+	    		}
+            }
+            else 
+            {
+            	$consulta->result[] = '';	
+            }
+            
+            if ($totalvagas == 0)
+            {
+            	$e = "NÃO HÁ VAGAS";
+            	$this->addError($e);
+            }
+            else 
+            {
+                $consulta->result = $resultAux;
+				$consulta->getCSV("Vagas. $descricaoCargo");
+            }
+        }
+	}
+ 	
+}
+ 
+?>

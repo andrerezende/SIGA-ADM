@@ -1,0 +1,110 @@
+<?
+
+class frmPatrimonioBaixaBloco extends MForm
+{
+    function __construct()
+    {
+        parent::__construct( 'Baixa em Bloco' );
+	$this->SetClose( null );    
+        $this->EventHandler();
+    }
+
+
+    function CreateFields()
+    {
+        global $MIOLO;
+	$ui = $MIOLO->GetUI();
+        $grid = $ui->GetGrid( 'adm', 'gridItensPatrimonioSelection' );
+        $grid->SetTitle(NULL);
+	$tabelaGeral = $MIOLO->GetBusiness( 'common', 'tabelageral' );
+	$options = $tabelaGeral->ListByTabela( 'AD_MOTIVOBAIXAPAT' );
+
+	$objSetor = $this->manager->GetBusiness( 'common', 'setor' );                
+	$optionSetores= $objSetor->listAll();
+
+	$fields = array
+	(
+		new MSeparator( 'Selecione um setor para filtrar a listagem: ' ),
+		new MSelection( 'setores', '', '', $optionSetores->result ),
+		new MButton( 'btnListar', 'Listar' ),
+		$grid,
+		new MSpacer( 1 ),
+		new MSelection( 'motivoBaixa', '', 'Motivo da Baixa', $options->result ),
+		new MCalendarField( 'dataMovimento', date('d/m/Y'),'Data', 20 ),
+		new MTextField( 'numeroProcesso', '', 'Nº do processo', 20 ),
+	);
+		
+        $this->SetFields( $fields );
+
+	$buttons = array
+	(
+        	   new MButton( 'btnBaixa', 'Dar Baixa' )
+        );
+	
+	$this->SetButtons( $buttons );
+    }
+
+    function btnListar_click()
+    {
+        global $self;
+	
+    }
+
+    function btnBaixa_click()
+    {
+    	global $page;
+	$itens = $page->Request( 'select' );   
+
+	if( $itens == NULL )
+	{
+        	$this->manager->Error( 'Você deve selecionar os itens antes de dar baixa!',
+	             $this->manager->GetActionURL('adm','main:baixabloco:find' ) );
+
+	}
+	else
+	{
+
+		foreach( $itens as $it )
+		{
+			$objPatrimonio = $this->manager->GetBusiness( 'adm','itempatrimonio' );
+			$objPatrimonio->GetById( $it );
+			$objPatrimonio->SetData( $this->GetData() );
+
+			$data = $this->GetData();
+			$movimentoPat = $this->manager->GetBusiness('adm','movimentopat');		
+			$movimentoPat->tipoMovimento = '3';
+			$movimentoPat->motivoBaixa = $data->motivoBaixa;
+			$movimentoPat->idItemPatrimonio = $objPatrimonio->idItemPatrimonio;
+			$movimentoPat->idSetorOrigem  =   $objPatrimonio->idSetor;
+			$movimentoPat->idSetorDestino =   $objPatrimonio->idSetor;
+			$movimentoPat->dataMovimento  =   $data->dataMovimento;
+			$movimentoPat->numeroProcesso =   $data->numeroProcesso;
+                        // 01-11-2011 - Daniel Bonfim
+                        $auth = $this->manager->auth;
+                        $idUsuario = $auth->login->idkey;
+                        $movimentoPat->idUsuario = $idUsuario;
+                        
+			$objPatrimonio->ativo   =   'N'; 
+												
+			try
+			{
+			     $movimentoPat->save();
+			     $objPatrimonio->save();
+			     $objPatrimonio->Log(OP_UPD,
+			     "Item excluído: " . $this->objPatrimonio->idItemPatrimonio);
+			}
+			catch ( Exception $e )
+			{
+	        	     $this->manager->Error(
+		     		"Informe o seguinte erro à equipe do CGCO: ".$e->getMessage(),
+			           $this->manager->GetActionURL('adm','main:baixabloco',
+				        $objPatrimonio->idItemPatrimonio));
+			}
+	
+		        $this->manager->Information('Item(ns) excluído(s) com sucesso!',
+		             $this->manager->GetActionURL('adm','main:baixabloco:find' ) );
+		}
+	}
+    }
+}
+?>

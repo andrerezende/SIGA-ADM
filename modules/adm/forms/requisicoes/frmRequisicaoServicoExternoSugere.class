@@ -1,0 +1,64 @@
+<?
+class frmRequisicaoServicoExternoSugere extends MForm
+{
+	protected $objRequisicao;
+    function __construct($objRequisicao)
+    {
+		$this->objRequisicao = $objRequisicao;
+        parent::__construct('Solicitar Novo Serviço');
+        $this->EventHandler();
+    }
+    function CreateFields()
+    {
+        $usuario = $this->manager->getBusiness('common','usuario');
+        $usuario->getById($this->manager->GetLogin()->idkey);
+        $fields = array(
+            new MHiddenField('form','sugere'),
+            new MMultiLineField('descricao','','Descricao',500,6,50,'Máximo 500'),
+            new MSeparator('Dados para contato'),
+            new MTextField('nome',$usuario->pessoa->nome,'Nome',52),
+            new MTextField('telefone','','Telefone',12),
+            new MTextField('email',$usuario->pessoa->email,'Email',52),
+        );
+        $this->SetFields($fields);
+        $this->nome->setReadOnly(true);
+        $validators = array(
+			new MRequiredValidator('descricao'),
+            new MPhoneValidator('telefone','','required'),
+            new MEmailValidator('email','','required'),
+		);
+		$this->SetValidators($validators);
+        $this->addButton(new MButton('btnSugere','Solicitar Servico'));
+        $this->addButton(new MButton('btnVoltar','Voltar','return'));
+    }
+    function btnSugere_click()
+    {
+        $data = $this->GetData();
+        $usuario = $this->manager->getBusiness('common','usuario');
+        $usuario->getById($this->manager->GetLogin()->idkey);
+        $servico = $this->manager->getBusiness('adm','novoservico');
+        try
+        {
+            $servico->beginTransaction();
+            $servico->setData($data);
+            $servico->setStatus(1);
+            $servico->dataPedido = date('d/m/Y');
+            $servico->setUsuario($this->manager->getLogin()->idkey);
+            $servico->save();
+            if ($data->email != $usuario->pessoa->email)
+            {
+                $usuario->pessoa->setTransaction($servico->getTransaction());
+                $usuario->pessoa->email = $data->email;
+                $usuario->pessoa->save();
+            }
+            $servico->endTransaction();
+            $servico->Log(OP_INS,'Servico incluído ['.$servico->idNovoServico.']');
+   		    $this->manager->information("Solicitação de novo servico enviada com sucesso.",$this->manager->getActionUrl('adm','main:requisicoes',$this->objRequisicao->idRequisicao,array("form"=>"item","idTipoReq"=>$this->objRequisicao->idTipoReq)) );
+        }
+        catch (Exception $e)
+        {
+            $this->AddError($e->GetMessage());
+        }
+     }
+}
+?>

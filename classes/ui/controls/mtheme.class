@@ -1,0 +1,288 @@
+<?php
+class MTheme extends MControl
+{
+    var $layout;
+    var $halted;
+    var $path;
+    var $module;
+
+    function __construct($id, $module = '')
+    {
+        parent::__construct($id);
+        $this->instances = array();
+        $this->halted = false;
+    }
+
+    function getId()
+    {
+        return ($this->id == '' ? 'miolo' : $this->id);
+    }
+
+    function setPage($page)
+    {
+        $this->page = $page;
+    }
+
+    function getLayout()
+    {
+        return $this->layout;
+    }
+
+    function setLayout($layout)
+    {
+        $this->layout = $layout;
+    }
+
+    function getPath()
+    {
+        return $this->path;
+    }
+
+    function setPath($path)
+    {
+        $this->path = $path;
+    }
+
+    function getModule()
+    {
+        return $this->module;
+    }
+
+    function setModule($module)
+    {
+        $this->module = $module;
+    }
+
+    function setHalted($value)
+    {
+        $this->halted = $value;
+    }
+
+    function getInstance($element)
+    {
+        $element = strtolower($element);
+
+        if (($instance = $this->getControlById($element)) == NULL)
+        {
+            $instance = new MThemeElement($element);
+            $this->addControl($instance);
+        }
+
+        return $instance;
+    }
+
+    function getElement($element, $key = 0)
+    {
+        return $this->getInstance($element)->get($key);
+    }
+
+    function getElementById($element, $id)
+    {
+        return $this->getInstance($element)->getElementById($id);
+    }
+
+    function setElement($element, $content, $id = '', $key = NULL)
+    {
+        $this->getInstance($element)->set($content, $id, $key);
+    }
+
+    function setElementId($element, $id)
+    {
+        $instance = $this->getInstance($element);
+        $instance->setId($id);
+        $this->setControlById($instance, $id);
+    }
+
+    function setElementClass($element, $cssClass)
+    {
+        $this->getInstance($element)->setClass($cssClass);
+    }
+
+    function clearElement($element, $ignoreHalted = false)
+    {
+        $halted = $ignoreHalted ? false : $this->halted;
+        $this->getInstance($element)->clear($halted);
+    }
+
+    function insertElement($element, $content, $key = NULL, $ignoreHalted = false)
+    {
+        $halted = $ignoreHalted ? false : $this->halted;
+        $this->getInstance($element)->insert($content, $key, $halted);
+    }
+
+    function appendElement($element, $content, $key = NULL, $ignoreHalted = false)
+    {
+        $halted = $ignoreHalted ? false : $this->halted;
+        $this->getInstance($element)->append($content, $key, $halted);
+    }
+
+    function countElement($element)
+    {
+        return $this->getInstance($element)->count();
+    }
+
+    function generateElement($element)
+    {
+        return $this->getInstance($element)->generate();
+    }
+
+    function generateElementInner($element)
+    {
+        return $this->getInstance($element)->generateInner();
+    }
+
+    // element: menus
+
+    function clearMenus()
+    {
+        $this->clearElement('menus');
+    }
+
+    function getMenu($name)
+    {
+        $menus = $this->getInstance('menus');
+
+        if (($menu = $menus->getElementById($name)) == NULL)
+        {
+            $menuClass = ($this->manager->getConf('options.mainmenu') == 2) ? 'MDHTMLMenu' : 'MMenu';
+            $menu = new $menuClass($name);
+            $menu->setTitle($name);
+            $menus->append($menu, $name);
+        }
+
+        return $menu;
+    }
+
+    function getMainMenu()
+    {
+        return $this->getMenu('miolo_main_menu');
+    }
+
+    function hasMenuOptions()
+    {
+        $menus = $this->getInstance('menus')->getControls();
+
+        if (count($menus))
+        {
+            foreach ($menus as $menu)
+            {
+                if ($menu->hasOptions())
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    // element: content
+
+    function isEmptyContent()
+    {
+        return ($this->getElement('content') == '');
+    }
+
+    function clearContent($ignoreHalted = false)
+    {
+        return $this->clearElement('content', $ignoreHalted);
+    }
+
+    function getContent()
+    {
+        return $this->getElement('content');
+    }
+
+    function setContent($content)
+    {
+        if ( $this->getContent() == NULL )
+        {
+            return $this->setElement('content', $content);
+        }
+        else
+        {
+            $this->clearContent();
+            $this->appendContent($content);
+        }
+    }
+
+    function insertContent(&$element, $ignoreHalted = false)
+    {
+        return $this->insertElement('content', $element, NULL, $ignoreHalted);
+    }
+
+    function appendContent(&$element, $ignoreHalted = false)
+    {
+        return $this->appendElement('content', $element, NULL, $ignoreHalted);
+    }
+
+    function breakContent($space = '20px')
+    {
+        return $this->getInstance('content')->space($space);
+    }
+
+    function setAjaxContent($content)
+    {
+        $this->setElement('ajax', $content);
+    }
+
+    /* get a CSS file content */
+    function getCSSFileContent($CSSFileName)
+    {
+        if ( MUtil::getBooleanValue( $this->manager->getConf('options.performance.uri_themes') ) == true )
+        {
+            $path = $this->manager->GetConf('home.html').'/themes/'.$this->name.'/';
+        }
+        else
+        {
+            $path = $this->manager->GetConf('home.themes').'/'.$this->name.'/';
+        }
+        if (file_exists($path . $CSSFileName))
+        {
+            $arquivo_css = $path . $CSSFileName;
+        }
+        $path = $this->manager->GetConf('home.modules').'/'.$this->manager->getContext()->module. $this->manager->GetConf('home.module.themes') . '/' . $this->name . '/'; 
+        if (file_exists($path . $CSSFileName))
+        {
+            $arquivo_css = $path . $CSSFileName;
+        }
+        $fp = fopen ($arquivo_css, "r") or die($CSSFileName . " Arquivo não encontrado");
+        $conteudo = fread($fp, filesize ($arquivo_css));
+        fclose($fp);
+        return $conteudo;
+    }
+
+    #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    # Internal function used to generate some useful informations for the
+    # MIOLO developer
+    #----------------------------------------------------------------------
+    function generateTraceStatus()
+    {
+        $status = $this->manager->GetTraceStatus();
+
+        if ($this->traceStatus)
+        {
+            if (is_object($status) || ($status && !is_array($status)))
+            {
+                $status = array($status);
+            }
+
+            if (is_array($this->traceStatus))
+            {
+                if ($status)
+                {
+                    $status = array_merge($status, $this->traceStatus);
+                }
+                else
+                {
+                    $status = $this->traceStatus;
+                }
+            }
+            else
+            {
+                $status[] = $this->traceStatus;
+            }
+        }
+    }
+}
+?>

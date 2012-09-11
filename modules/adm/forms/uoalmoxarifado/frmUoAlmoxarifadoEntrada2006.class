@@ -1,0 +1,175 @@
+<?php
+/**
+ * frmUoAlmoxarifadoEntrada2006
+ *
+ * @access public
+ */
+class frmUoAlmoxarifadoEntrada2006 extends Form {
+
+/**
+ * objEstoque
+ *
+ * @var BusinessAdmEstoque
+ */
+	protected $objEstoque;
+
+/**
+ * __construct
+ *
+ * @param BusinessAdmEstoque $objEstoque
+ */
+	function __construct($objEstoque) {
+		$this->objEstoque = $objEstoque;
+		$this->Form('Entrada de Material');
+		$this->page->addJsCode(file_get_contents(dirname(__FILE__) . '/../../ui/js/mask.js'));
+                $this->page->addJsCode(file_get_contents(dirname(__FILE__) . '/../../ui/js/maskMoney.js'));
+		$this->EventHandler();
+	}
+
+/**
+ * CreateFields
+ */
+	public function CreateFields() {
+		$this->objEstoque->retrieveAssociation('material');
+                
+		$this->objEstoque->estoque = 0;
+		$this->objEstoque->valorTotal = 0;
+
+		$fields = array(
+			new MHiddenField('idMaterial', $this->objEstoque->idMaterial, 'Idmaterial'),
+			new MHiddenField('lkpMaterial', $this->objEstoque->material->descricao, 'Material'),
+			new MTextField('estoque', $this->objEstoque->estoque, 'Quantidade Total', 10, 'Ex: 1000'),
+			new MTextField('valorTotal', $this->objEstoque->valorTotal, 'Valor Total', 10, 'Ex: 45,00'),
+			new MCalendarField('datamov', date('d/m/Y'), 'Data de Entrada', 8),
+			new MCalendarField('datanotafiscal', null, 'Data de Nota Fiscal', 8),
+			new MTextField('numeroEmpenho', '', 'Empenho', 15),
+			new MTextField('notaFiscal', '', 'Nota Fiscal', 20),
+			new LookupTextField('lkpFornecedor', '', 'Fornecedor', 40, null, null, null, 'adm', 'fornecedor'),
+			new HiddenField('idFornecedor', '', 'idFornecedor'),
+			new MSelection('extraOrcamentario', 'N', 'Extra Orçamentário', array('N' => 'Não', 'S' => 'Sim')),
+		);
+
+		$this->SetFields($fields);
+
+		$this->SetFieldAttr('lkpFornecedor', 'related', 'idFornecedor,lkpFornecedor');
+
+		$this->SetFieldAttr('lkpMaterial', 'module', 'adm');
+		$this->SetFieldAttr('lkpMaterial', 'item', 'material');
+		$this->SetFieldAttr('lkpMaterial', 'event', 'filler');
+		$this->SetFieldAttr('lkpMaterial', 'related', 'idMaterial,lkpMaterial');
+                
+                $this->estoque->addAttribute('maxlength',7);
+                $this->numeroEmpenho->addAttribute('maxlength',12);
+                $this->notaFiscal->addAttribute('maxlength',16);
+
+                $this->datamov->addAttribute('onKeyUp', 'makeMask(this, \'##/##/####\');');
+                $this->datamov->addAttribute('onBlur', 'makeMask(this, \'##/##/####\');');
+                $this->datanotafiscal->addAttribute('onKeyUp', 'makeMask(this, \'##/##/####\');');
+                $this->datanotafiscal->addAttribute('onBlur', 'makeMask(this, \'##/##/####\');');
+                
+                $this->valorTotal->addAttribute('onKeyUp', 'amf2005_BecameCurrency(this,15)');
+		$this->valorTotal->addAttribute('onBlur', 'amf2005_BecameCurrency(this,15)');
+                
+		$validators = array(
+			new MRequiredValidator('idMaterial'),
+			new MRequiredValidator('estoque'),
+			new MRequiredValidator('valorTotal'),
+		);
+		$this->SetValidators($validators);
+
+		$buttons = array(
+			new FormButton('btnPost', 'Enviar'),
+		);
+		$this->SetButtons($buttons);
+	}
+
+/**
+ * btnPost_click
+ *
+ * @global string $item
+ * @global MIOLO $MIOLO
+ * @global string $module
+ */
+	public function btnPost_click() {
+		global $item, $MIOLO, $module;
+                
+		$data = $this->getData();
+//                $objMovimento2 = $MIOLO->GetBusiness($module, 'movimento');  
+//                $objMovimento2->corrigeTudo($data->idMaterial, $item);
+//                exit;
+		$cf = new MCurrencyFormatter();                
+                
+                $objuo = $MIOLO->GetBusiness($module, 'uo', $item);  
+                $datamovFormat = substr($data->datamov, 6, 4).'/'. substr($data->datamov, 3, 2).'/'.substr($data->datamov, 0, 2);
+                
+                if (strtotime($objuo->dataBloqueio) >= strtotime($datamovFormat)){
+                        $dataFormatada = substr($objuo->dataBloqueio, 8, 2).'/'. substr($objuo->dataBloqueio, 5, 2).'/'.substr($objuo->dataBloqueio, 0, 4);
+                        $this->AddError('Entradas bloqueadas para datas anteriores à '.$dataFormatada.'.');
+                }else{                 
+                    $go = $this->manager->GetActionURL($module, 'main:uoalmoxarifado', $item, array('form' => 'entrada2006'));
+
+                    // Gera uma alteração no AD ESTOQUE
+                    $data->valorTotal = str_replace(array('.', ','), array('', '.'), $data->valorTotal);
+
+                    $this->objEstoque->getById($item, $data->idMaterial);
+                    $this->objEstoque->estoque = $data->estoque + $this->objEstoque->estoque;
+                    $this->objEstoque->valorTotal = $cf->toDecimal($data->valorTotal) + $cf->toDecimal($this->objEstoque->valorTotal);
+
+                    try {
+                            $dataHora = split('/', $data->datamov);
+                            $dataHora = mktime(null, null, null, $dataHora[1], $dataHora[0], $dataHora[2]);
+                            $this->objEstoque->save();
+                            // Adiciona o movimento na AD_MOVIMENTO
+                            $objMovimento = $MIOLO->GetBusiness($module, 'movimento');                        
+                            $objMovimento->tipoMovimento = "1";
+                            $objMovimento->idUoAlmoxarifado = Form::GetFormValue('item');;
+                            $objMovimento->dataMovimento = date('d/m/Y', $dataHora);
+                            $objMovimento->quantidade = $data->estoque;
+                            $objMovimento->valorTotal = $cf->toDecimal($data->valorTotal);
+                            $objMovimento->idMaterial = $data->idMaterial;                        
+                            $objMovimento->idFornecedor = $data->idFornecedor;
+                            $objMovimento->datanotafiscal = $data->datanotafiscal;
+
+
+                            $quantidade = 0;
+                            $precoMedio = 0;                     
+                            //Tiago Macedo 19-06-2012
+                            $valorUnitarioQuantidade = $objMovimento->getLastValorUnitarioQuantidadeTotal($data->idMaterial, $item);                      
+
+                            if($valorUnitarioQuantidade){
+                                $valor += ($cf->toDecimal($valorUnitarioQuantidade[0])*$cf->toDecimal($valorUnitarioQuantidade[1]));
+                                $valor += $data->valorTotal;
+                                $quantidade += $valorUnitarioQuantidade[1];
+                                $quantidade += $data->estoque;
+                            }else {
+                                $valor = $objMovimento->valorTotal;                                    
+                                $quantidade = $objMovimento->quantidade;  
+                            }
+
+
+                            $precoMedio = $valor/$quantidade;
+                            $precoMedio = explode(".", $precoMedio);
+                            $precoMedio = $precoMedio[0].".".substr($precoMedio[1],  0, 2);  
+
+                            $objMovimento->notafiscal = $data->notaFiscal;
+                            $objMovimento->empenho = $data->numeroEmpenho;
+                            $objMovimento->cnpj = $data->cnpj;
+                            $objMovimento->extraOrcamentario = $data->extraOrcamentario;
+                            $objMovimento->valorunitario = $precoMedio;                        
+                            $objMovimento->quantidadetotal = $quantidade;
+                            $objMovimento->datahora = date('Y-m-d H:i:s');
+                            $objMovimento->save();                           
+
+                            //Se a entrada for retroativa corrige a tabela de movimento
+                            if (date('d/m/Y') > $objMovimento->dataMovimento) {   
+                                $objMovimento2 = $MIOLO->GetBusiness($module, 'movimento');  
+                                $objMovimento2->corrigeTudo($objMovimento->idMaterial, $item);
+                            }    
+
+                            $this->manager->Information('Material atualizado com sucesso.', $go);
+                    } catch (Exception $e) {
+                            $this->AddError('Não foi possível realizar a operação. Motivo: ' . $e->getMessage());
+                    }
+                }
+	} 
+}

@@ -1,0 +1,82 @@
+<?php
+global $MIOLO;
+class gridUoAlmoxarifadoEntradaMaterialItens extends MGrid
+{
+    function __construct($objEmpenho)
+    {
+        global $MIOLO, $page, $action;
+        $objEmpenho->getEmpenhado();
+        $cf = new MCurrencyFormatter();
+        foreach ($objEmpenho->empenhado as $empenhado)
+        {
+            $empenhado->getAtributos();
+            if ($cf->toDecimal($empenhado->quantidadeSaldo))
+            {
+                $valorUnitario = round($cf->toDecimal($empenhado->valorEmp) / $cf->toDecimal($empenhado->quantidadeEmp),2); 
+                $dados[$empenhado->idEmpenhado][0] = $empenhado->idEmpenhado;
+                $dados[$empenhado->idEmpenhado][1] = $empenhado->item;
+                $dados[$empenhado->idEmpenhado][2] = $empenhado->itemreq[0]->material->descricao;
+                $dados[$empenhado->idEmpenhado][3] = $empenhado->itemreq[0]->material->unidade;
+                $dados[$empenhado->idEmpenhado][4] = $cf->toDecimal($empenhado->quantidadeSaldo);
+                $dados[$empenhado->idEmpenhado][5] = 0;
+                $dados[$empenhado->idEmpenhado][6] = $cf->toDecimal($empenhado->quantidadeEntregue);
+                $dados[$empenhado->idEmpenhado][7] = $cf->formatWithSymbol($valorUnitario);
+            }
+        }
+        $quantAutorizada = Form::getFormValue('quantAutorizada');
+        if (round($cf->toDecimal($objEmpenho->valorSaldo),2) == round($cf->toDecimal(Form::getFormValue('valor'))+$cf->toDecimal(Form::getFormValue('desconto')),2))
+        {
+            foreach ($objEmpenho->empenhado as $empenhado)
+            {
+                foreach ($dados as $idEmpenhado=>$dado)
+                {
+                    if ($idEmpenhado == $empenhado->idEmpenhado)
+                    {
+                        $dados[$idEmpenhado][5] = $cf->toDecimal($empenhado->quantidadeSaldo);
+                    }
+                }
+            }
+        }
+        if ($quantAutorizada)
+        {
+            foreach ($quantAutorizada as $key=>$quantidade)
+            {
+                foreach ($dados as $idEmpenhado=>$dado)
+                {
+                    if ($idEmpenhado == $key)
+                    {
+                        $dados[$idEmpenhado][5] = $cf->toDecimal($quantidade);
+                    }
+                }
+            }
+        }
+        $quantAutorizada = new MTextField('quantAutorizada[%0%]','','',5);
+        $columns = array(
+            new MGridColumn('idEmpenhado','left',false,'',false),
+            new MGridColumn('Item','center',false,'6%'),
+            new MGridColumn('Material','left',false,'50%'),
+            new MGridColumn('Unidade','center',false,'9%'),
+            new MGridColumn('Quantidade Empenhada','center',true,'12%'),
+            new MGridColumn('Quantidade Empenhada','center',true,'',false),
+            new MGridControl($quantAutorizada,'Quantidade Recebida','center',true,'12%'),
+            new MGridColumn('Valor Unitário','center',true,'12%'),
+        );
+        $this->SetFilter(false);
+        parent::__construct($dados,$columns,$action,1000000);
+        $this->setRowMethod('gridUoAlmoxarifadoEntradaMaterialItens','MyRowMethod');
+        $this->SetLinkType('hyperlink');
+    }
+    function GenerateHeader()
+    {
+        return null;
+    }
+    function GenarateFooter()
+    {
+        return null;
+    }
+    public function myRowMethod($i,$row,$actions,$columns)
+    {
+        $columns[6]->control[$i]->setValue($row[5]);
+    }
+}
+

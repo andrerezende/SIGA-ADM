@@ -1,0 +1,133 @@
+<?
+class frmTotalGastosReqUo extends Form
+{
+    protected $uo;
+    
+    function __construct()
+    {
+        global $MIOLO;
+        $this->uo = $MIOLO->getBusiness('adm','uo');
+        $this->Form('Relatório de Total de Gastos por Tipo de Requisição');
+        $this->EventHandler();
+    }
+
+	function CreateFields()
+	{
+        $uos = $this->uo->listUos();
+        $listaUos = array('%'=>array('%','TODAS'))+$uos->result;
+		$fields = Array(
+            new MSelection('selUos','','Uo',$listaUos),
+			new MCalendarField('dataInicio','','Data Inicial',10,'informe a data inicial do relatório.'),
+			new MCalendarField('dataFim','','Data Final',10,'informe a data final do relatório.'),
+		);
+		$this->SetFields($fields);
+		$buttons = Array
+		(
+			new FormButton('btnGerarRelatorio', 'Gerar Relatório','pdf')
+		);
+		$this->SetButtons($buttons);
+	}
+
+	function btnGerarRelatorio_click()
+	{
+        $data = $this->getData();
+        if ($dados->result)
+        {
+            $tabelaGeral = $this->manager->getBusiness('common','tabelageral');
+            $tipoReq = $this->manager->getBusiness('adm','tiporeq');
+            $ui = $this->manager->GetUI();
+            
+            $report = new MEzPDFReport('2','portrait');
+            $cols = array('TIPO DE REQUISIÇÃO','GASTO NO PERÍODO');
+            $options['textCol'] = array(0,0,0);
+            $options['shaded'] = 1;
+            $options['showLines'] = 0;
+            $options['fontSize'] = 11;
+            $options['maxWidth'] = 780;
+            $options['xPos'] = 'left';
+            $options['xOrientation'] = 'right';
+            
+		    $h = $report->pdf->getFontHeight(10);
+//          $report->pdf->ezImage($ui->GetImage('adm','logonet.png'),5,50,'none','left',0);
+		    $report->pdf->addText(110,810,10,'UNIVERSIDADE FEDERAL DE JUIZ DE FORA');
+		    $report->pdf->addText(110,810-$h,10,'COORDENADORIA DE SUPRIMENTOS - COSUP');
+		    $report->pdf->addText(110,810-(2*$h),10,'SISTEMA INTEGRADO DE GESTÃO ACADÊMICA - SIGA');
+		    $report->pdf->addText(110,810-(3*$h),10,'RELATÓRIO DE TOTAL DE GASTOS DE UOS POR TIPO DE REQUISIÇÃO'.' - '.date('d/m/Y'));
+		    $report->pdf->addText(110,810-(4*$h),10,"PERÍODO DE ".$data->dataInicio." ATÉ ".$data->dataFim);
+            $report->pdf->ezText('',20);
+            
+            foreach ($dados->result as $dado)
+            {
+                $this->uo->getById[$dado[0]];
+                $idUos[$dado[0]] = $dado[0];
+                $aux[$dado[0]][$dado[1]] += $this->uo->getGastoItemReq($dado[2]);
+            }
+            $cf = new MCurrencyFormatter();
+            foreach ($idUos as $idUo)
+            {
+                unset($dataRel);
+                $this->uo->getById($idUo);
+                $tipoUo = $tabelaGeral->getByItem('AD_TIPOUO',$this->uo->tipo)->item2;
+                $report->pdf->ezText('',40);
+                $report->pdf->ezText('UO...: '.$this->uo->nome,11);
+                $report->pdf->ezText('TIPO.: '.$tipoUo,11);
+                $report->pdf->ezText('',20);
+                foreach ($aux[$this->uo->idUo] as $idTipoReq=>$valor)
+                {
+                    $soma[$this->uo->idUo] += $valor;
+                    $valor = $cf->formatWithSymbol( $cf->toDecimal($valor));
+                    $tipoReq->getById($idTipoReq);
+                    $dataRel[] = array(
+                        $tipoReq->descricao,
+                        $valor
+                    );    
+                }
+                $valor = $cf->formatWithSymbol( $cf->toDecimal($soma[$this->uo->idUo]));
+                $dataRel[] = array(
+                    'TOTAL',
+                    $valor
+                );    
+                $report->pdf->ezTable($dataRel,$cols,'',$options);
+                $report->pdf->ezNewPage();
+                $h = $report->pdf->getFontHeight(10);
+                $report->pdf->addText(110,810,10,'UNIVERSIDADE FEDERAL DE JUIZ DE FORA');
+                $report->pdf->addText(110,810-$h,10,'COORDENADORIA DE SUPRIMENTOS - COSUP');
+                $report->pdf->addText(110,810-(2*$h),10,'SISTEMA INTEGRADO DE GESTÃO ACADÊMICA - SIGA');
+                $report->pdf->addText(110,810-(3*$h),10,'RELATÓRIO DE TOTAL DE GASTOS DE UOS POR TIPO DE REQUISIÇÃO'.' - '.date('d/m/Y'));
+                $report->pdf->addText(110,810-(4*$h),10,"PERÍODO DE ".$data->dataInicio." ATÉ ".$data->dataFim);
+                $report->pdf->ezText('',20);
+            }
+            unset($dataRel);
+            $cols = array('SIGLA DA UO','TIPO DE UO','TOTAL');
+            foreach ($soma as $idUo=>$valor)
+            {
+                $this->uo->getById($idUo);
+                $tipoUo = $tabelaGeral->getByItem('AD_TIPOUO',$this->uo->tipo)->item2;
+                $valorTotal += $valor;
+                $valor = $cf->formatWithSymbol( $cf->toDecimal($valor) );
+                $dataRel[] = array(
+                    $this->uo->sigla,
+                    $tipoUo,
+                    $valor
+                );    
+            }
+            $valorTotal = $cf->formatWithSymbol( $cf->toDecimal($valorTotal) );
+            $dataRel[] = array(
+                'TOTAL GERAL',
+                '',
+                $valorTotal
+            );    
+            $report->pdf->ezText('',40);
+            $report->pdf->ezText('RESUMO DE GASTOS',11);
+            $report->pdf->ezText('',20);
+            $report->pdf->ezTable($dataRel,$cols,'',$options);
+            $report->Execute();
+        }
+        else
+        {
+            $this->addError('Não há gastos para esta UO no período determinado.');
+        }
+
+	}	
+}
+?>

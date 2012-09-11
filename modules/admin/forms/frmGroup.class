@@ -1,0 +1,246 @@
+<?
+class frmGroup extends MForm
+{
+	var $home;
+    var $objGroup;
+    var $objTransaction;
+
+	function __construct()
+    {   global $MIOLO, $module, $action;
+
+        $this->home = $MIOLO->GetActionURL($module,$action);
+        $this->objGroup = $MIOLO->GetBusiness($module,'group');
+        $this->objTransaction = $MIOLO->GetBusiness($module,'transaction');
+		parent::__construct('Groups');
+        $this->SetWidth('65%');
+        $this->SetIcon($MIOLO->GetUI()->GetImage('admin','user1.png'));
+        $this->SetClose($MIOLO->GetActionURL('admin','main'));
+	    $this->EventHandler();
+	}
+
+    function CreateFields()
+	{  global $MIOLO, $action;
+
+       $query = $this->objTransaction->ListAll();
+       $transacoes = $query->chunkResult();
+       $perms = $MIOLO->getPerms()->perms;
+       $mt_field = array(
+           array('mttrans','Transactions','',$transacoes),
+           array('mtperms','Permissions','',$perms)
+       );
+       $fields = array(
+           new MHiddenField('key',''),
+           new MTextLabel('txtIdGroup','', 'Id'),
+		   new MLookupTextField('lkpGroup','','Group',20),
+           new MMultiTextField2('mtfTransactions',NULL,'Transactions',$mt_field,180,true,'horizontal')
+       );
+	   $this->SetFields($fields);
+
+       $this->SetFieldsVisible(false);
+
+	   $this->SetFieldAttr('lkpGroup','module','common');
+	   $this->SetFieldAttr('lkpGroup','item','group');
+	   $this->SetFieldAttr('lkpGroup','event', 'btnEdit:click');
+	   $this->SetFieldAttr('txtIdGroup','visible', false);
+
+       $buttons = array(
+           new MButton('btnEdit',   'Edit'),
+		   new MButton('btnNew',    'Insert'),
+           new MButton('btnDelete', 'Delete'),
+	       new MButton('btnList',   'List')
+       );
+	   $this->SetButtons($buttons);
+	}
+
+    function SetFieldsVisible($value)
+    {
+	   $this->SetFieldAttr('txtIdGroup','visible',$value);
+	   $this->SetFieldAttr('mtfTransactions','visible',$value);
+    }
+
+	function GetData()  // nome dos formfields != business fields
+	{
+        $data = new FormData();
+		$data->idGroup = $this->GetFieldValue('key');
+		$data->group = $this->GetFieldValue('lkpGroup');
+		$data->acesso = $this->mtfTransacoes->GetCodeValue();
+        return $data;
+	}
+
+	function SetData($data)
+	{
+		$this->SetFieldValue('key', $data->idGroup);
+		$this->SetFieldValue('txtIdGroup', $data->idGroup);
+		$this->SetFieldValue('lkpGroup', $data->group);
+        $this->mtfTransacoes->SetCodeValue($data->getAcesso());
+	}
+
+	function btnPost_click()
+	{
+		global $MIOLO;
+
+        $key = $this->GetFieldValue('key');  // inclusão ou edição?
+        $objGroup = $this->objGroup;     // apenas um shortcut
+        if ($key != '')
+        {
+            $objGroup->GetById($key); // se for edição, obtem os dados atuais do objeto
+        }
+        // seta os atributos do objeto com os valores dos campos do formulario
+		$objGroup->SetData($this->GetData()); 
+        try
+        {
+            $objGroup->save();
+            $MIOLO->Information('Group atualizado com sucesso.', $this->home );
+        }
+        catch (EMioloException $e)
+        {
+            $this->AddError($e->getMessage());
+	    }
+	}
+
+	function btnList_click()
+	{   
+		global $MIOLO, $module, $self, $theme, $action;
+
+        $columns = array(
+           new DataGridColumn('idgroup','Id','right', true, '10%',true),
+           new DataGridColumn('group','Group','left', true, '90%',true)
+        );
+		$query = $this->objGroup->ListAll();
+		$href_datagrid = $MIOLO->GetActionURL($module,$self,'', Array('event'=>'btnList_click'));
+        $datagrid = new DataGrid2($query, $columns, $href_datagrid,20);
+        $datagrid->SetTitle('Relação de Groups de Acesso');
+ 	    $href_edit = $MIOLO->GetActionURL($module,$self,'%0%',Array('event'=>'btnEdit:click'));
+	    $href_dele = $MIOLO->GetActionURL($module,$self,'%0%',Array('event'=>'btnDelete:click'));
+        $datagrid->AddActionIcon('Editar', 'update.gif', $href_edit);
+	    $datagrid->AddActionIcon('Excluir', 'delete.gif', $href_dele);
+        $datagrid->HeaderLink('new', 'Novo Registro',
+                  $MIOLO->GetActionURL($module,$self,'',Array('event'=>'btnInsert:click')));
+		$theme->InsertContent($datagrid);
+	}
+
+	function btnEdit_click($sender, $key='')
+	{   
+        global $item;
+
+        $group = $this->GetFieldValue('lkpGroup');
+        // verifica se está sendo executado através do evento do grid
+        $item = ($key != '') ? $key : $item;
+        if ($item != '')
+        {
+            $this->objGroup->GetById($item);
+        }		
+        else
+        {
+            $this->objGroup->GetByGroup($group);
+        }		
+        if ($this->objGroup->idGroup)
+        {
+            // coloca os dados do objeto nos campos do formulário
+            $this->SetData($this->objGroup);
+            // exibe os campos
+            $this->SetFieldsVisible(true);
+            $this->SetFieldAttr('lkpGroup','readonly',true);
+            $this->SetFieldValue('key',$this->objGroup->idGroup);
+            $this->AddButton(new MButton('btnCancel', 'Cancelar', $this->home));
+            $this->SetButtonAttr('btnEdit','name','btnPost');
+            $this->SetButtonAttr('btnPost','label','Gravar');
+            $this->SetButtonAttr('btnNew','visible', false);
+        }
+        else
+        {
+            $this->AddError("Group [$group] não encontrado!");
+        }
+	}
+
+	function btnNew_click()
+	{
+       $this->SetData();
+	}
+
+	function btnDelete_click()
+	{   
+		global $MIOLO, $module, $item, $self, $action;
+
+        $idgroup = isset($item) ? $item : $this->GetFieldValue('key'); // $item (get) ou $this->key (post)
+        $MIOLO->Assert( isset($idgroup), 'Group não foi informado!', $action);
+        $objGroup = &$this->objGroup;
+        $objGroup->GetById($idgroup);
+        $conf = $this->GetFormValue('conf');
+	    if ( $conf == 'sim')
+	    {
+            if ( $objGroup->Delete() )
+	        {
+			   $MIOLO->Prompt(Prompt::Information("Group [$objGroup->group] excluído com sucesso.",$this->listURL));
+	        }
+	        else
+	        {
+		       $MIOLO->Prompt(Prompt::Information( $objGroup->GetErrors(),$action));
+            }
+	    }
+	    elseif ( $conf == 'nao')
+        {
+	       $MIOLO->Prompt(Prompt::Information('Exclusão cancelada.',$this->listURL));
+        }
+	    else
+	    {
+		    $action_sim = $MIOLO->GetActionURL($module,$self,$idgroup, array('event'=>'btnDelete:click','conf'=>'sim'));
+		    $action_nao = $MIOLO->GetActionURL($module,$self,$idgroup, array('event'=>'btnDelete:click','conf'=>'nao'));
+	        $MIOLO->Prompt(Prompt::Question("Confirma a exclusão do group [$objGroup->group]?", 
+				$action_sim, $action_nao));
+	    }
+	}
+
+    function chunkRs($rs, $key=0, $value=1, $showKeyVal=true)
+    {
+        foreach ($rs as $rs1)
+        {
+            if (is_array($rs1))
+            {
+                if ($showKeyVal)
+                {
+                    $rsNew[trim($rs1[$key])] = trim($rs1[$key])." - ".trim($rs1[$value]);
+                }
+                else
+                {
+                    $rsNew[trim($rs1[$key])] = trim($rs1[$value]);
+                }
+            }
+            else
+            {
+                return $rs;
+            }
+        }
+    
+        return $rsNew;
+    }
+
+    function GetColumn($array, $col=null)
+    {
+       if (isset($col))
+       {
+          if (is_array($col))
+          {
+             for ($i=0; $i < count($array); $i++)
+             {
+                foreach($col as $c)
+                {
+                   $rs[][$c] = $array[$i][$c];
+                }
+             }
+          }
+          else
+          {
+             for ($i=0; $i < count($array); $i++)
+             {
+                $rs[] = $array[$i][$col];
+             }
+          }
+       }
+	   return $rs;
+    }
+
+
+}
+
+?>

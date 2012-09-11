@@ -1,0 +1,181 @@
+<?
+/**
+ * Form Uo
+ */
+class frmUo extends CompoundForm
+{
+	public $oid;
+    protected $objUo;
+    /**
+     * Construtor
+     */
+    function __construct($objUo)
+    {
+        global $MIOLO, $module, $self, $page;
+
+
+        $this->objUo = $objUo;
+        parent::__construct();
+        $this->SetClose($MIOLO->GetActionURL('adm','main:uo:find'));
+        $this->SetTitle($this->objUo->nome);
+        $this->SetIcon($MIOLO->GetUi()->GetImage('adm','default_mini.png'));
+    }
+
+    function CreateFields()
+    {
+        global $MIOLO, $page, $module, $context, $history;
+
+        $uo = $this->objUo;
+        if ($this->oid == NULL) $this->oid = $uo->idUo;
+
+        // form
+        $ui = $MIOLO->GetUI();
+        $form = Form::GetFormValue('form');
+        switch ($form)
+        {
+            case 'dados' : 
+				$this->_form[0] = $ui->GetForm($module,'frmUoDados', $uo, 'uo'); 
+                break;
+            case 'tipoReqs':
+				$uo->getTipoReqs();
+				if ( ($id = $this->getFormValue('id')) != NULL )
+				{
+					$uo->DeleteTipoReq($id);
+			    	$uo->getTipoReqs();
+				}
+				
+			 	$this->_form[] = $ui->GetForm($module,'frmUoTipoReqs',$uo,'uo');
+                $page->SetAction($history->Top('action'));
+                 array_unshift($this->_form, $ui->GetGrid($module,'gridTipoReqs', $uo));
+                 break;
+            case 'acesso':
+				$uo->getusuarios();
+
+				if ( ($id = $this->getFormValue('id')) != NULL )
+				{
+					$uo->DeleteUsuario($id);
+				    $uo->getusuarios();
+				}
+				
+			 	$this->_form[] = $ui->GetForm($module,'frmUoAcesso',$uo,'uo');
+                $page->SetAction($history->Top('action'));
+                 array_unshift($this->_form, $ui->GetGrid($module,'gridAcessoUoReq', $uo));
+                 
+                 break;
+            case 'excluir'     : 
+                 $this->_form[0] = $ui->GetForm($module,'frmUoDel', $uo, 'uo'); 
+                 break;
+            case 'orcamentointerno':
+                $idRubrica = Form::GetFormValue('idRubrica');
+                $ano = Form::GetFormValue('ano');
+                if ($idRubrica && $ano)
+                {
+                    $orcamento = $this->objUo->getOrcamento($idRubrica,$ano);
+                    if ($orcamento->isPersistent())
+                    {
+                        $this->_form[0] = $subpanel = new ActionPanel('pnlOrcamentoInterno',$orcamento->rubrica->descricao.' - '.$orcamento->ano,'',false);
+                       // $subpanel->SetIconType('small'); Comentado para figura se ajustar à resulução de vídeo. Por José Roberto
+                        $subpanel->InsertUserAction(0,'ADM_MANUTENCAO',A_EXECUTE,'Tipos de Requisições',$ui->GetImage('','default.png'),'adm',$action, $this->oid, array("form"=>"orcamentointerno","subform"=>"tipoRequisicoesRealizadas","idRubrica"=>$orcamento->idRubrica,"ano"=>$orcamento->ano));
+                        $subpanel->InsertUserAction(0,'ADM_MANUTENCAO',A_EXECUTE,'Operações de Crédito',$ui->GetImage('','default.png'),'adm',$action, $this->oid, array("form"=>"orcamentointerno","subform"=>"operacoesDeCredito","idRubrica"=>$orcamento->idRubrica,"ano"=>$orcamento->ano,"event"=>"btnEditar:click"));
+                        $subform = Form::GetFormValue('subform');
+                        if ($subform)
+                        {
+                            switch ($subform)
+                            {
+                                case 'operacoesDeCredito':
+                                    $this->_form[1] = $ui->GetForm('adm','frmUoOrcamentoInternoOperacoesDeCredito',$uo,'uo');
+                                break;
+                                case 'tipoRequisicoesRealizadas':
+                                    if (!$id = $this->getFormValue('idTipoReq')) $this->_form[1] = $ui->GetForm('adm','frmUoOrcamentoInternoTipoRequisicoesRealizadasFind',$uo,'uo');
+                                    else
+                                    {
+                                        $orcamento = $this->objUo->getOrcamento($this->getFormValue('idRubrica'),$this->getFormValue('ano'));
+                                        $requisita = $orcamento->getTipoReqPermitida($id);
+                                        if (!$requisita->isPersistent()) 
+											$this->_form[1] = $ui->GetForm('adm','frmUoOrcamentoInternoTipoRequisicoesRealizadasNew',$uo,'uo');
+                                        else 
+                                        {
+                                            $requisita->ativo = "S";
+											$requisita->save();
+                                            $this->_form[1] = $ui->GetForm('adm','frmUoOrcamentoInternoTipoRequisicoesRealizadasFind',$uo,'uo');
+                                        }
+                                    }
+                                break;
+								case 'tipoRequisicoesRealizadasSetAtivo':
+										$requisita =  $this->manager->GetBusiness('adm','requisita');
+										$requisita->GetById($this->getFormValue('idTipoReq'), $this->objUo->idUo,$this->getFormValue('ano'));
+										$requisita->ativo = "S";
+										$requisita->save();
+										$this->_form[1] = $ui->GetForm('adm','frmUoOrcamentoInternoTipoRequisicoesRealizadasFind',$uo,'uo');
+									break;
+								case 'tipoRequisicoesRealizadasSetInativo':
+                                        $requisita =  $this->manager->GetBusiness('adm','requisita');
+										$requisita->GetById($this->getFormValue('idTipoReq'), $this->objUo->idUo,$this->getFormValue('ano'));
+										$requisita->ativo = "N";
+										$requisita->save();
+										$this->_form[1] = $ui->GetForm('adm','frmUoOrcamentoInternoTipoRequisicoesRealizadasFind',$uo,'uo');
+
+                                break;
+                            }
+                        }
+                    }
+                    else $this->_form[0] = $ui->GetForm($module,'frmUoOrcamentoInternoNew', $uo, 'uo');
+                }
+                else $this->_form[0] = $ui->GetForm($module,'frmUoOrcamentoInternoFind', $uo, 'uo');
+            break;
+            case 'gestor':
+				if ( (($idu = $this->getFormValue('idu')) != NULL) && (($iduo = $this->getFormValue('iduo')) != NULL) )
+				{
+					$uo->DeleteGestor($idu);
+				}
+				
+			 	$this->_form[] = $ui->GetForm($module,'frmUoGestor',$uo,'uo');
+                $page->SetAction($history->Top('action'));
+                array_unshift($this->_form, $ui->GetGrid($module,'gridGestorUo', $uo));
+                break;
+            case 'executor':
+				if ( ($idu = $this->getFormValue('idu')) != NULL )
+				{
+					$uo->DeleteExecutor($idu);
+				}
+				
+			 	$this->_form[] = $ui->GetForm($module,'frmUoExecutor',$uo,'uo');
+                $page->SetAction($history->Top('action'));
+                array_unshift($this->_form, $ui->GetGrid($module,'gridExecutorUo', $uo));
+                break;
+            case 'acessoalmox': 
+				if ( ($id = Form::GetFormValue('id')) != NULL )
+				{
+					$this->_form[0] = $ui->GetForm('adm','frmUoAcessoAlmoxarifado',$uo,'uo');
+				}
+				else
+				{
+					$this->_form[0] = $ui->GetForm('adm','frmUoAcessoAlmoxarifadoFind',$uo,'uo');
+				}
+            break;
+            case 'transacao':
+				$this->_form[0] = $ui->GetForm('adm','frmUoTransacaoOrcamentaria',$uo,'uo');
+        }
+
+// panel        
+        $action = $context->action;
+        $this->_panel[0] = $panel = new ActionPanel('pnlCompound','Opções','',false);
+        //$panel->SetIconType('small');
+        $panel->AddUserAction('adm_adminorcamento',A_EXECUTE,'Editar',$ui->GetImageTheme('','icons/uo_editar.png'),'adm',$action, $this->oid, array("form"=>"dados"));
+        $panel->AddUserAction('adm_adminorcamento',A_EXECUTE,'Excluir',$ui->GetImageTheme('','icons/uo_excluir.png'),'adm',$action, $this->oid, array("form"=>"excluir"));
+        
+		$panel->AddUserAction('adm_adminorcamento',A_EXECUTE,'Incluir Executor',$ui->GetImageTheme('','icons/incluir_executor.png'),'adm',$action, $this->oid, array("form"=>"tipoReqs"));
+        $panel->AddUserAction('adm_adminorcamento',A_EXECUTE,'Acesso Almox.',$ui->GetImageTheme('','icons/acesso_almoxarifado.png'),'adm',$action, $this->oid, array("form"=>"acessoalmox"));
+		$panel->AddUserAction('adm_adminorcamento',A_EXECUTE,'Orçamento',$ui->GetImageTheme('','icons/orcamento.png'),'adm',$action, $this->oid, array("form"=>"orcamentointerno"));
+        $panel->AddUserAction('adm_adminuo',A_EXECUTE,'Transação Orçamentária',$ui->GetImageTheme('','icons/transacao_orcamentaria.png'),'adm',$action, $this->oid, array("form"=>"transacao"));
+
+        $panel->AddUserAction('adm_adminorcamento',A_EXECUTE,'Requisitantes',$ui->GetImageTheme('','icons/uo_requisitantes.png'),'adm',$action, $this->oid, array("form"=>"acesso"));
+        $panel->AddUserAction('adm_adminorcamento',A_EXECUTE,'Gestores',$ui->GetImageTheme('','icons/gestores.png'),'adm',$action, $this->oid, array("form"=>"gestor"));
+        $panel->AddUserAction('adm_adminorcamento',A_EXECUTE,'Executores',$ui->GetImageTheme('','icons/executores.png'),'adm',$action, $this->oid, array("form"=>"executor"));
+
+// info
+		$this->_info[0]	= new TextLabel('txtSigla',$this->objUo->sigla,'Sigla');
+		$this->_info[1]	= new TextLabel('txtNome',$this->objUo->nome,'Nome');
+	}
+}
+?>

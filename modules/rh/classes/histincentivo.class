@@ -1,0 +1,190 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class BusinessRhHistIncentivo extends MBusiness
+{
+    public $idHistIncentivo;
+    public $idHistFormacao;
+    public $dataIncentivo;
+    public $relacao;
+    public $percentualAplicado;
+    public $histFormacao;
+    public $idPercQualificacao;
+    public $idVinculo;
+    public $percQualificacao;
+    public $vinculo;
+    public $idHistTitulacao;
+    public $histTitulacao;
+    public $qualificacao;
+
+    function __construct($data=null)
+    {
+       parent::__construct('sigaept',$data);
+    }
+
+    function GetById($id, $proxy=true)
+    {
+       $this->idHistIncentivo = $id;
+       $this->retrieve();
+       return $this;
+    }
+
+    function getVinculo()
+    {
+        if ($this->idVinculo != null) {
+            $this->retrieveAssociation('vinculo');
+        }
+        return $this->vinculo;
+    }
+
+    function getHistFormacao() {
+        $this->retrieveAssociation('histFormacao');
+        return $this->histFormacao;
+    }
+
+    function getHistTitulacao() {
+        $this->retrieveAssociation('histTitulacao');
+        return $this->histTitulacao;
+    }
+
+    function getTipoQualificacao() {
+        if ($this->idHistFormacao) return 'formacao';
+        else if ($this->idHistTitulacao) return 'titulacao';
+
+    }
+
+    function getQualificacao() {
+
+        $tipoQualificacao = $this->getTipoQualificacao();
+        if ($tipoQualificacao == 'formacao') $this->qualificacao = $this->getHistFormacao();
+        else if ($tipoQualificacao == 'titulacao') $this->qualificacao = $this->getHistTitulacao();
+
+        return $this->qualificacao;
+    
+    }
+
+    function getPercQualificacao() {
+        $this->retrieveAssociation('percQualificacao');
+        return $this->percQualificacao;
+    }
+
+    function checkExistsNewIncentivo($objQualificacao, $relacao) {
+       global $MIOLO;
+        // Esse método verifica a existência de um novo incentivo, em caso positivo o retorna.
+        
+        $this->getVinculo();
+        /*$funcionario = $this->vinculo->getFuncionario();
+        $maiorHistFormacao = $funcionario->getMaiorFormacaoByPCCTAE();
+        $escolaridade = $funcionario->getFormacaoMaiorEscolaridade(-1);*/
+
+        //Criando novo incentivo e preenchendo atributos        
+        $novoIncentivo = $MIOLO->getBusiness('rh', 'histincentivo');
+
+        $novoIncentivo->dataIncentivo = date("d\/m\/Y");
+//echo"<br>dataIncentivo";//;var_dump($novoIncentivo->dataIncentivo);
+        $novoIncentivo->relacao = $relacao;
+//var_dump($novoIncentivo);
+        //Preenchendo dados específicos de formacao ou titulacao
+        if ($objQualificacao->idHistFormacao) $novoIncentivo->idHistFormacao = $objQualificacao->idHistFormacao;
+        else if ($objQualificacao->idHistTitulacao) $novoIncentivo->idHistTitulacao = $objQualificacao->idHistTitulacao;
+//echo"<br>QUAL ";var_dump($objQualificacao->idEscolaridadePCCTAE);
+        //Obtendo percentual de incentivo e preenchendo atributos
+        $novoIncentivo->idPercQualificacao = $this->getIdPercQualificacao($objQualificacao->idEscolaridadePCCTAE);
+//echo"<br>PERC ";var_dump($novoIncentivo->idPercQualificacao);
+        $percQualificacao = $novoIncentivo->getPercQualificacao();
+        
+        if ($relacao == 'D') $novoIncentivo->percentualAplicado = $percQualificacao->percentualDireto;
+        else $novoIncentivo->percentualAplicado = $percQualificacao->percentualIndireto;
+
+        $incentivoAtual = $this->getIncentivoAtual();
+        //Caso ele não tenha incentivo:
+        if (!$incentivoAtual->percentualAplicado) $incentivoAtual->percentualAplicado = 0;
+
+        if ($novoIncentivo->percentualAplicado >= $incentivoAtual->percentualAplicado) {
+
+            return $novoIncentivo;
+        } else {
+
+            return false;            
+        }
+        
+    }
+
+    function getIdPercQualificacao($idEscolaridadePCCTAE) {
+    global $MIOLO;
+
+        $this->vinculo->getProvimentos();        
+        $provimentoAtual = $this->vinculo->getProvimentoAtual();
+        $provimentoAtual->retrieveAssociation('ambiente');
+        $provimentoAtual->retrieveAssociation('classe');
+
+        $percQualificacao = $MIOLO->getBusiness('rh', 'percqualificacao');
+        $criteria = $percQualificacao->getCriteria();
+        $criteria->addColumnAttribute('idPercQualificacao');
+$id = $provimentoAtual->classe->classe;
+        $criteria->addCriteria('nivelClassificacao', '=', "'$id'");
+        $criteria->addCriteria('idEscolaridadePCCTAE', '=', $idEscolaridadePCCTAE);
+        $idPercQualificacao = $criteria->retrieveAsQuery()->getRowValues();
+        $idPercQualificacao = $idPercQualificacao[0];
+        return $idPercQualificacao;
+
+    }
+
+    function getIncentivoAtual() {
+    global $MIOLO;
+
+        $incentivo = $MIOLO->GetBusiness('rh', 'histincentivo');
+        $criteria = $incentivo->getCriteria();
+            $criteria->addColumnAttribute('idHistIncentivo');
+            $criteria->addCriteria('idVinculo', '=', $this->idVinculo);
+            $criteria->addOrderAttribute('percentualAplicado', false);
+            $criteria->addOrderAttribute('dataIncentivo', false);
+        $idHistIncentivo = $criteria->retrieveAsQuery()->getRowValues();        
+        $incentivo->idHistIncentivo = $idHistIncentivo[0];
+        $incentivo->retrieve();
+        return $incentivo;
+
+    }
+
+    function getArrayFormacoes() {
+
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('idHistFormacao');
+        $criteria->addCriteria('idVinculo', '=', $this->idVinculo);
+        $criteria->addCriteria('idHistFormacao', 'is not null', '');
+        $arrayFormacoes = $criteria->retrieveAsQuery()->chunkResult();
+        return $arrayFormacoes;
+
+    }
+
+    function getArrayTitulacoes() {
+
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('idHistTitulacao');
+        $criteria->addCriteria('idVinculo', '=', $this->idVinculo);
+        $criteria->addCriteria('idHistTitulacao', 'is not null', '');
+        $arrayTitulacoes = $criteria->retrieveAsQuery()->chunkResult();
+        return $arrayTitulacoes;
+
+    }
+
+    
+
+}
+?>

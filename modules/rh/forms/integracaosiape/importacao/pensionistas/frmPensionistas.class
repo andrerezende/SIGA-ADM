@@ -1,0 +1,221 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmPensionistas extends MForm
+{
+  function __construct()
+  {
+    parent::__construct('Carregamento do arquivo f-esp-pensao');
+    $this->SetClose($this->manager->GetActionURL('rh',
+      'main:integracaosiape:importacao'));
+    $this->EventHandler();
+  }
+
+  function CreateFields()
+  {
+    $ui = $this->manager->getUI();
+    $urlWindow = $this->manager->getActionURL('rh', 'main:winpensionistas', '');
+    $win = new MWindow('winHistProc', array('url' => $urlWindow, 'title' =>
+      "Processamento de arquivos", 'resizable' => true, 'width' => 800, 'height' =>
+      600));
+    $fields = array(new MText('txtObs', 'Envie apenas arquivos com extensão \'.txt\' ou \'.zip\'.'),
+      new MText('txtObs2',
+      'Todo arquivo enviado será processado no decorrer da madrugada do dia subsequente.'),
+      new MLink('lnkHistProc', '&nbsp;', $win->getLink(null, true, false),
+      'Verifique o processamento dos arquivos'), new MFileField('filePensionista', '',
+      'Arquivo SIAPE'), );
+    $this->SetFields($fields);
+
+    $buttons = array(new MButton('btnEnviar', 'Enviar'), );
+    $this->SetButtons($buttons);
+  }
+
+  function btnSaveFile_click()
+  {
+    $this->manager->SaveFile("rh", "md5summer.zip", "files/");
+  }
+
+  function btnEnviar_click()
+  {
+    $login = $this->manager->getLogin();
+    $data = $this->getData();
+    $filename = $_FILES['filePensionista']['tmp_name'];
+
+    //echo("<pre>"); var_dump($_FILES['filePensionista']); echo("</pre>");
+
+    // verifica se algum arquivo foi especificado
+    if ($filename != '')
+    {
+      //$tipoMime2 = finfo_file(FILEINFO_MIME, $filename);
+      //var_dump($tipoMime2);
+
+      // verifica o tipo de conteúdo do arquivo
+      $tipoMime = mime_content_type($filename);
+      //echo("<pre>"); var_dump($tipoMime); echo("</pre>");
+      //var_dump($tipoMime,disk_free_space("../modules/rh/files/integracaosiape/importacao/pensionistas/")/1024);
+      if (($tipoMime == "text/plain") or ($tipoMime == "application/x-zip"))
+      {
+        // verificar se o arquivo foi gravado (existe) no servidor e nao está em branco
+        if ((file_exists($filename)) and (filesize($filename) > 0))
+        {
+          //var_dump(mime_content_type($filename));
+          if (mime_content_type($filename) == "application/x-zip")
+          {
+            //$r = exec("unzip -xo ../modules/rh/files/integracaosiape/importacao/pensionistas/$fileNameCompac -d ../modules/rh/files/integracaosiape/importacao/pensionistas/",$array,$res);
+            $r = exec("unzip -xo $filename -d ./", $array, $res);
+            $arqUnZip = trim(str_replace('inflating: ', '', $r));
+            $arrRegistros = file(trim($arqUnZip));
+            $hashmd5 = hash_file('md5', $arqUnZip);
+            $tamanhoArquivo = filesize($arqUnZip);
+          } else
+          {
+            $arrRegistros = file($filename);
+            $tamanhoArquivo = filesize($filename);
+            $hashmd5 = hash_file('md5', $filename);
+          }
+
+          $REGISTRO_TIPO_0 = $arrRegistros[0];
+          $REGISTRO_TIPO_9 = $arrRegistros[count($arrRegistros) - 1];
+
+          $NOME_ARQUIVO = substr($REGISTRO_TIPO_0, 25, 12);
+          $ANO_REFERENCIA = intval(substr($REGISTRO_TIPO_0, 52, 4));
+          $MES_REFERENCIA = intval(substr($REGISTRO_TIPO_0, 56, 2));
+
+          $QUANTIDADE_PENSIONISTAS = intval(substr($REGISTRO_TIPO_9, 25, 7));
+
+          // consistir a integridade dos registros
+          $quantidadeRegistros = count($arrRegistros);
+          $quantidadeCaracteresQuebrasLinha = $quantidadeRegistros * 2;
+          $tamanhoSemQuebraLinha = $tamanhoArquivo - $quantidadeCaracteresQuebrasLinha;
+          if ($tamanhoSemQuebraLinha == ($quantidadeRegistros * 460))
+          {
+
+            // consistir 'nome' dentro do arquivo
+            if ($NOME_ARQUIVO == "F-ESP-PENSAO")
+            {
+              $arq = $this->manager->GetBusiness('common', 'arquivo');
+              $arq->mesReferencia = $MES_REFERENCIA;
+              $arq->anoReferencia = $ANO_REFERENCIA;
+              $arq->nome = $NOME_ARQUIVO;
+
+              // consistir se o arquivo já foi carregado (data)
+              $arquivoTabela = $this->manager->getBusiness('common', 'arquivo');
+
+              $arquivoTabela = $arquivoTabela->GetByMD5($hashmd5);
+
+              if (!$arquivoTabela->IsPersistent())
+              {
+                // copiar o arquivo para o local apropriado (caso haja espaço)
+                if ($tamanhoArquivo < disk_free_space("../modules/rh/files/integracaosiape/importacao/pensionistas/"))
+                {
+
+                  $fileNameTxt = "f-esp-pensao_{$MES_REFERENCIA}_{$ANO_REFERENCIA}.txt";
+                  if (mime_content_type($filename) == "text/plain")
+                  {
+                    copy($filename, $this->manager->getConf('home.modules') .
+                      "/rh/files/integracaosiape/importacao/pensionistas/$fileNameTxt");
+                    $hashmd5 = hash_file('md5', $this->manager->getConf('home.modules') .
+                      "/rh/files/integracaosiape/importacao/pensionistas/$fileNameTxt");
+                    exec("gzip -f9 " . $this->manager->getConf('home.modules') .
+                      "/rh/files/integracaosiape/importacao/pensionistas/$fileNameTxt");
+                  } else
+                  {
+                    copy($arqUnZip, "../modules/rh/files/integracaosiape/importacao/pensionistas/$fileNameTxt");
+                    $hashmd5 = hash_file('md5',
+                      "../modules/rh/files/integracaosiape/importacao/pensionistas/$fileNameTxt");
+                    exec("gzip -f9 " . $this->manager->getConf('home.modules') .
+                      "/rh/files/integracaosiape/importacao/pensionistas/$fileNameTxt");
+                  }
+
+                  $tamanhoArquivo = filesize("../modules/rh/files/integracaosiape/importacao/pensionistas/$fileNameTxt.gz");
+                  /*
+                  if ( !$arquivoTabela->isPersistent() )
+                  {
+                  $arquivoTabela->idArquivo	  = $hashmd5;
+                  }
+                  */
+                  //var_dump("passei aqui");
+                  $arquivoTabela->md5 = $hashmd5;
+                  $arquivoTabela->nome = "$fileNameTxt.gz";
+                  $arquivoTabela->caminho = "/rh/files/integracaosiape/importacao/pensionistas/";
+                  $arquivoTabela->tipoMime = "application/x-gz";
+                  $arquivoTabela->tamanho = $tamanhoArquivo;
+                  $arquivoTabela->mesReferencia = $MES_REFERENCIA;
+                  $arquivoTabela->anoReferencia = $ANO_REFERENCIA;
+                  $arquivoTabela->dataGravacao = date("d/m/Y");
+                  $arquivoTabela->idUsuario = $login->idkey;
+                  $arquivoTabela->scriptProcessamento = "importPensionista.php";
+                  $arquivoTabela->caminhoScript = "/rh/offline/";
+                  $arquivoTabela->Save();
+
+                }
+                // caso não tenha espaço em disco
+                else
+                {
+                  $erro[] = "O arquivo não pode ser armazenado no servidor. Entre em contato com administrador de sistemas imediatamente.";
+                }
+
+              } else
+              {
+                $erro[] = "O arquivo já foi carregado em $arquivoTabela->dataGravacao.";
+              }
+            } else
+            {
+              // TO DO: verificar ordem de prioridade das msgs.
+              $erro[] = "O arquivo apresenta inconsistência de dados ou está corrompido.";
+            }
+          } else
+          {
+            $erro[] = "A estrutura interna do arquivo não corresponde as especificações técnicas necessárias.";
+          }
+        } else
+        {
+          $erro[] = "Erro ao carregar o arquivo ou arquivo vazio.";
+        }
+      } else
+      {
+        $erro[] = "O arquivo não é do tipo 'txt' ou 'zip'.";
+      }
+    } else
+    {
+      $erro[] = "Arquivo não informado.";
+    }
+
+    // se ocorrer algum erro:
+    if (count($erro) > 0)
+    {
+      foreach ($erro as $e)
+      {
+        $this->addError($e);
+      }
+    } else
+    {
+      $info[] = "Arquivo enviado com sucesso! <br> Código de verificação do arquivo <b>texto:</b> $hashmd5";
+    }
+    if (count($info) > 0)
+    {
+      foreach ($info as $i)
+      {
+        $this->addInfo($i);
+      }
+    }
+  }
+}
+
+?>

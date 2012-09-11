@@ -1,0 +1,201 @@
+<?
+class frmLicitacaoMapa extends MForm
+{
+    protected $licitacao;
+    protected $mapa;
+
+	function __construct($licitacao)
+	{
+
+        $this->licitacao = $licitacao;
+		parent::__construct('Imprimir Mapa de Licitação');
+        $this->mapa = $this->manager->getBusiness('adm','mapalicitacao');
+		$this->eventHandler();
+	}
+	function createFields()
+	{
+		$this->addButton(new MButton('btnReport','Exibir Mapa','pdf'));
+		//$this->addButton(new MButton('btnReportJasper','Exibir Mapa Novo', 'pdf'));
+		$this->addButton(new MButton('btnReportJasper2','Exibir Mapa Novo', 'pdf'));
+	}
+
+	function btnReportJasper_click()
+	{
+		global $MIOLO;
+		$parameters['str_numero'] = $this->licitacao->numero;
+		$parameters['int_idlicitacao'] = $this->licitacao->idLicitacao;
+        $parameters['str_SUBREPORT_DIR'] = $this->manager->getConf('home.modules') . "/adm/reports/";
+		$parameters['str_HEADER_DIR'] 	 = $this->manager->getConf('home.modules') . "/common/reports/";
+		$report = new MJasperReport('sigaept');
+        $report->Execute('adm', 'MapaLicitacao', $parameters);
+    }
+
+	function btnReportJasper2_click()
+	{
+		$report = new MJasperReport('sigaept');
+		$parameters['int_IDLICITACAO'] = $this->licitacao->idLicitacao;
+		$parameters['str_SUBREPORT_DIR'] = $this->manager->getConf('home.modules') . '/adm/reports/';
+        $report->Execute('adm', 'MapaLicitacao2', $parameters);
+    }
+
+	function btnReport_click()
+	{
+		$cf = new MCurrencyFormatter();
+        $report = new MEzPDFReport('2','landscape');
+		$h = $report->pdf->getFontHeight(12);
+        $report->pdf->ezImage($this->manager->getUi()->getImage('','logonet.png'),5,50,'none','left',0);
+		$report->pdf->addText(95,555,12,'UFJF - Universidade Federal de Juiz de Fora');
+		$report->pdf->addText(95,555-$h,12,'CGCO - Centro de Gestão do Conhecimento Organizacional');
+		$report->pdf->addText(95,555-$h-$h,12,'SIGA - Sistema Integrado de Gestão Acadêmica');
+		$report->pdf->addText(95,555-$h-$h-$h,12,'COSUP - Coordenadoria de Suprimentos');
+        $report->pdf->ezText('',20);
+        $report->pdf->ezText("MAPA DE LICITAÇÃO",16,array("justification"=>"center","spacing"=>"1"));
+        $report->pdf->ezText("Licitação número {$this->licitacao->numero}",12,array("justification"=>"center","spacing"=>"1"));
+        $report->pdf->ezText('',20);
+        $options['textCol'] = array(0,0,0);
+        $options['shaded'] = 1;
+        $options['showLines'] = 1;
+        $options['fontSize'] = 10;
+        $options['width'] = 780;
+        $options['xPos'] = 'left';
+        $options['xOrientation'] = 'right';
+        
+        $itens = $this->mapa->getItensByLicitacao($this->licitacao->idLicitacao)->result;
+		
+		if ($this->licitacao->idTipoLicitacao == '1' OR $this->licitacao->idTipoLicitacao == '4') //se material
+		{
+			$itemreq = $this->manager->getBusiness('adm','itemreq');
+		}
+		elseif ($this->licitacao->idTipoLicitacao == '2') //se serviço
+		{
+			$itemreq = $this->manager->getBusiness('adm','itemservext');
+		}
+		elseif ($this->licitacao->idTipoLicitacao == '3') //se livro
+		{
+			$itemreq = $this->manager->getBusiness('adm','itemreqbib');
+		}
+
+		foreach ($itens as $item)
+        {
+           $status = $itemreq->getStatusByItem($this->licitacao->idLicitacao, $item[0]);
+           if (($status != 'C')&&($status != 0)) //Se recusado ou anulado entao nao mostra
+           {
+              $numItem[] = $item[0]; 			 
+           }
+        }
+        $qtdadeItens = count($numItem);
+		$aux=0;
+        if ($participantes = $this->licitacao->listParticipantes()->result)
+        {
+            $item = $this->licitacao->getItens();
+            //var_dump(count($this->licitacao->getItens()));
+            for ($i=1;$i <= $qtdadeItens;$i++)
+            {
+				//var_dump($i);
+				unset($cols);
+                foreach ($participantes as $participante)
+                {
+                    $coluna[1] = $participante[1];
+                    $coluna[0] = $participante[2];
+
+                    for ($j=0;$j<5;$j++)
+                    {
+                        $k = $j+$i;
+						if (($i-5)>0) //com exceção dos primeiros 5 itens
+						{
+							$it=$aux + $j;
+						}
+						else
+						{
+							$it=$j;
+						}
+
+					/**		var_dump("id forn: ".$participante[0]);
+							var_dump("IT: ".$it);
+							var_dump("mumItem{it}: ".$numItem[$it]);
+							var_dump("valor: ".$valor[0][0]);
+                    */
+						
+                        if ($numItem[$it])
+                        {
+                           $this->mapa->getById($this->licitacao->idLicitacao,$numItem[$it],$participante[0]);
+						   $valor = $this->mapa->getPrecoOfItemByLicitacao($this->licitacao->idLicitacao,$numItem[$it],$participante[0]);
+                   
+                            $cols[0] = '<b>CNPJ</b>';
+                            $cols[1] = '<b>Participantes</b>';
+                            $cols[$k+1] = "<b>Item {$numItem[$it]}</b>";
+                   
+                           if ($this->mapa->isPersistent())
+                           {
+
+                              if (($valor[0][0])&&($this->mapa->status == '1'))
+                              {
+                                  $preco = $cf->toDecimal($valor[0][0]);
+
+                                  if ($this->mapa->vencedor == '1')
+                                  {
+                                     $coluna[$k+1] = "<b>".$cf->formatWithSymbol($preco)."</b>";
+                                  }
+                                  else
+                                  {
+                                      $coluna[$k+1] = $cf->formatWithSymbol($preco);
+                                  }
+                              }
+                              else //caso o valor seja zero
+                              {
+                                  $coluna[$k+1] = 'NC';
+                              }
+							  
+                          }
+                          else //caso nao exista proposta deste fornecedor
+                          {
+                              $coluna[$k+1] = 'NC';
+                          }
+
+                       }
+                       //var_dump($this->mapa->status);
+
+                    }
+                    $data[] = $coluna;
+                    unset($coluna);
+
+                }
+                $report->pdf->ezText('',10);
+                $report->pdf->ezTable($data,$cols,'',$options);
+                $report->pdf->ezText('',10);
+                unset($data);
+                $i = $i + 4;
+				$aux=$aux+5;
+            }
+            
+            $report->pdf->ezText("<b>Descrição dos itens:</b>",9);
+            $report->pdf->ezText("",4);
+            
+            foreach ($numItem as $item)
+            {
+                if ($this->licitacao->idTipoLicitacao == '1' OR $this->licitacao->idTipoLicitacao == '4')   //se material
+                {
+                    $itemReq = $this->manager->getBusiness('adm','itemreq');
+                    $descricaoMat = $itemReq->getDescricaoByItemLicitacao($this->licitacao->idLicitacao,$item)->result[0][0];
+                    if ($descricaoMat)
+                    {
+                       $report->pdf->ezText("<b>Item $item:</b> {$descricaoMat}",9);
+                    }
+                }
+                else if ($this->licitacao->idTipoLicitacao == '2')
+                {
+                    $itemServ = $this->manager->getBusiness('adm','itemservext');
+                    $descricaoServ = $itemServ->getComplementoByItemLicitacao($this->licitacao->idLicitacao,$item)->result[0][0];
+                    if ($descricaoServ)
+                    {
+                       $report->pdf->ezText("<b>Item $item:</b> {$descricaoServ}",9);
+                    }
+                }
+
+            }
+        }
+
+	    $report->Execute();
+    }
+}
+?>

@@ -1,0 +1,264 @@
+<?
+MIOLO::Import('modules::protocolo::controls::linkBusca');
+class frmBusca extends MForm
+{
+    var $oid;
+    var $Busca;
+    var $Soundex;
+   
+
+    function __construct($objBusca)
+    {
+        global $MIOLO, $page, $module, $self; 
+    	  $this->Busca = $objBusca;
+        parent::__construct();
+        $this->SetClose($this->manager->GetActionURL('protocolo','main'));
+        $this->SetTitle('Busca de Documentos');
+        $this->SetIcon($this->manager->GetUI()->GetImage('','lupa.gif'));       
+    }
+
+    public function CreateFields()
+    {
+        
+    	global $MIOLO, $page, $module, $self;
+    	$Busca = $this->Busca;
+        Util::SetIfNull($this->oid, $Busca->numBusca);
+        $ui = $this->manager->GetUI();
+	   
+    	$fields = Array (			
+        new TextField('edtBusca','','Procurar por',50,'Palavra com no mínimo 3 letras'),
+        new CheckBox('chkBoxFonetica','1','',false,'Busca Fonética'),
+			);
+
+		
+      $this->SetFields($fields);
+				            
+      $this->edtBusca->addAttribute('maxlength','60');
+        
+             						
+      // Botões que aparecem no formulário
+      $buttons = Array(
+        new FormButton('btnConsulta', 'Consulta'),
+        new MButton('btnVoltar', 'Voltar',$MIOLO->GetActionURL($module,$self)),	
+        new FormButton('btnGerarPDF', 'Imprimir Resultado','PDF'),			
+			);
+		
+      //Insere os Botões
+		
+      $this->SetButtons($buttons);
+		
+		
+		
+      $this->SetButtonAttr('btnVoltar','visible',false);
+      $this->SetButtonAttr('btnGerarPDF','visible',false);
+		
+										
+      $this->EventHandler();		
+   }
+   
+   public function btnConsulta_click()
+   {	
+   		global $MIOLO, $page, $module, $self, $item, $context, $action;
+   		$ui = $this->manager->GetUI();
+      $this->Busca = $MIOLO->GetBusiness($module,'busca');
+   		$Busca = $this->Busca;
+      $data = $this->getData();    
+        
+      $this->Soundex = $MIOLO->GetBusiness($module,'soundex');
+   		
+			          
+      if (!$data->chkBoxFonetica)
+      {
+   			$resultado =  $Busca->Buscar($data->edtBusca);
+   			$this->AddField($ui->GetGrid("protocolo",'gridBusca', $resultado)); 
+      }else {
+        $fonetica = array();
+        $consulta = split(" ",$data->edtBusca);      
+	   	
+	    
+	    
+	    	if ($consulta)
+	    	{
+	    		foreach ($consulta as $indice => $registro )
+	    		{
+	    			if ((strlen($consulta[$indice])<=2))
+	    			{
+	    				$consulta[$indice] = NULL;
+	    			}
+	    	
+	    			if ($consulta[$indice])
+	    			{
+	    				array_push($fonetica, $Soundex->Soundex($consulta[$indice]));
+	    			}
+	    		}		
+	    	
+	   		}
+	   			if ($fonetica)
+	   			{
+	   		
+	   				$busca = $Soundex->GetNumPro($fonetica);
+	   		 		
+	   				if ($busca)
+	   				{	   					
+	   					$resultado =  $Busca->BuscarByNumpro($busca);	   					
+	   				
+	   				}
+	   			}
+	   			if ( $resultado )
+	   			{	   		 	   	    
+    				$this->AddField($ui->GetGrid("protocolo",'gridBusca', $resultado)); 
+	   			}
+	   			else 
+	   			{
+	   				$MIOLO->Prompt(Prompt::Error("Nenhum registro encontrado",$MIOLO->GetActionURL($module,$self)));
+	   			}
+        }
+          
+    }
+	
+   function btnVisualiza_click($item)
+   {	
+   		global $MIOLO, $page, $module, $self, $item, $context, $action;
+   		$ui = $this->manager->GetUI();
+      $this->Busca = $MIOLO->GetBusiness($module,'busca');
+   		$Busca = $this->Busca;
+        
+      $this->SetFieldAttr('edtBusca','visible', false);
+      $this->SetFieldAttr('chkBoxFonetica','visible',false);
+      $this->SetButtonAttr('btnConsulta','visible',false);        
+      $this->SetButtonAttr('btnVoltar','visible',true);   
+		
+	    $resultado = $Busca->Detalhes($item);
+	    $tramite = $Busca->Tramite($item);
+	    $stmpaber = $Busca->dataFormatada($resultado->result[0][6]);
+	   
+	   
+      if ( $resultado )
+      {
+	   	   if ($resultado->result[0][5] == 'P')$tipo = "Processo";
+	   	   elseif ($resultado->result[0][5] == 'A')$tipo = "Protocolado";	   	   
+	   	   else $tipo = "Não definido";
+	   	   
+	   	   if ($tramite->result[0][2]) $stmpent = $Busca->dataFormatada($tramite->result[0][2]);
+	       if ($tramite->result[0][4]) $stmpsai = $Busca->dataFormatada($tramite->result[0][4]);
+	   	   
+         $space = new MSpacer('10px');
+		   
+	       
+         $content = array ( new MLabel( "Título: "), $resultado->result[0][0], new MSeparator(),
+		   					  new MLabel( "Solicitante: "), $resultado->result[0][1], new MSeparator(),
+		   					  new MLabel( "Assunto: "), $resultado->result[0][2], new MSeparator(),
+		   					  new MLabel( "Instituição: "), $resultado->result[0][3], new MSeparator(),
+		   					  new MLabel( "Tipo: "), $tipo, new MSeparator(),
+		   					  new MLabel( "Aberto em : "), $stmpaber, new MSeparator(),
+		   					  new MLabel( "Setor de Origem: "), $resultado->result[0][4], new MSeparator(),
+		   					  new MLabel( "Caixa Arquivo: "), $resultado->result[0][7], new MSeparator(),
+         );
+		   
+         $content2 = array ( new MLabel( "Trâmite: "), $tramite->result[0][0], new MSeparator(),
+		  			      new MLabel( "Setor Atual: "), $tramite->result[0][1], new MSeparator(),
+		  				 	  new MLabel( "Entrada em : "), $stmpent, new MSeparator(),
+		  					  new MLabel( "Setor de destino: "), $tramite->result[0][3], new MSeparator(),
+		  					  new MLabel( "Saída em : "), $stmpsai, new MSeparator(),
+		   					  new MLabel( "Decisão: "), $tramite->result[0][5], new MSeparator(),
+		   					  
+         );
+	                 
+	       						
+         $box1 = new MThemeBox('Detalhes do processo: '.$Busca->numProcessoFormatadoPass($item), $content);
+         $box2 = new MThemeBox('Andamento do processo: '.$Busca->numProcessoFormatadoPass($item), $content2);
+	       $fields = array( $space, $box1, $space, $box2 );
+         $this->AddFields($fields);
+		   
+	   	   $this->SetButtonAttr('btnGerarPDF','visible',true);
+	   }
+	   
+
+          
+	}
+	
+	function btnGerarPDF_click($item)
+	{  
+      global $MIOLO, $page, $module, $self, $item, $context, $action;
+   		$ui = $this->manager->GetUI();
+      $this->Busca = $MIOLO->GetBusiness($module,'busca');
+   		$Busca = $this->Busca;
+        
+      $resultado = $Busca->Detalhes($item);
+	    $tramite = $Busca->Tramite($item);
+	    $stmpaber = $Busca->dataFormatada($resultado->result[0][6]);
+	   
+	    
+      if ( $resultado )
+      {
+	   	   if ($resultado->result[0][5] == 'P')$tipo = "PROCESSO";
+	   	   elseif ($resultado->result[0][5] == 'A')$tipo = "PROTOCOLADO";	   	   
+	   	   else $tipo = "NÃO DEFINIDO";
+	   	   
+	   	   if ($tramite->result[0][2]) $stmpent = $Busca->dataFormatada($tramite->result[0][2]);
+	       if ($tramite->result[0][4]) $stmpsai = $Busca->dataFormatada($tramite->result[0][4]);
+	        
+        
+	       // configura a página
+	       $report = new MEzPDFReport('2','portrait');
+	       $report->pdf->ezSetCmMargins(2.5,2.5,3.5,2.5);
+	       
+	       $h = $report->pdf->getFontHeight(10);
+         $report->pdf->ezImage($ui->GetImage('protocolo','logonet.png'),5,50,'','left',0);
+         $report->pdf->addText(110,810,10,'UNIVERSIDADE FEDERAL DE JUIZ DE FORA');
+         $report->pdf->addText(110,810-($h),10,'SISTEMA INTEGRADO DE GESTÃO ACADÊMICA - SIGA');
+         $report->pdf->addText(110,810-(2*$h),10,'RELATÓRIO DE SITUAÇÃO DE '.$tipo.' - '.date('d/m/Y'));
+         $report->pdf->ezText('',20); 
+	        
+	       // configura a tabela
+	       $options['textCol'] = array(0,0,0);
+	       $options['shaded'] = 0;
+	       $options['showLines'] = 0;
+	       $options['fontSize'] = 10;
+	       $options['maxWidth'] = 780;
+	       $options['xPos'] = 'left';
+	       $options['xOrientation'] = 'right';   	       	       
+	       
+	       $report->pdf->ezText($tipo.': '.$resultado->result[0][3].'.'.$Busca->numProcessoFormatadoPass($item),20);	      
+	
+	       // dados da tabela
+	       $cols = array('','');
+	       $dataRel[] = array('INTERESSADO:',$resultado->result[0][1]);
+	       $dataRel[] = array('','');
+	       $dataRel[] = array('ABERTO EM:',$stmpaber);
+	       $dataRel[] = array('','');
+	       $dataRel[] = array('SETOR ORIGEM:',$resultado->result[0][4]);
+	       $dataRel[] = array('','');
+	       $dataRel[] = array('TÍTULO:',$resultado->result[0][0]);
+	       $dataRel[] = array('','');
+	       $dataRel[] = array('ASSUNTO:',$resultado->result[0][2]);
+	       $dataRel[] = array('','');
+	       if ( $tramite );
+	       {
+	       		$dataRel[] = array('ÚLTIMO ANDAMENTO DO '.$tipo,'');
+	       		$dataRel[] = array('','');
+	       		$dataRel[] = array('TRÂMITE:',$tramite->result[0][0]);
+	       		$dataRel[] = array('','');
+	       		$dataRel[] = array('SETOR ATUAL:',$tramite->result[0][1]);
+	       		$dataRel[] = array('','');
+	       		$dataRel[] = array('ENTRADA EM:',$stmpent);
+	       		$dataRel[] = array('','');
+	       		$dataRel[] = array('SETOR DE DESTINO:',$tramite->result[0][3]);
+	       		$dataRel[] = array('','');
+	       		$dataRel[] = array('SAÍDA EM:',$stmpsai);
+	       		$dataRel[] = array('','');
+	       		$dataRel[] = array('DECISÃO:',$tramite->result[0][5]);	       			       			       
+	       }
+	       
+	       // gera a tabela
+	       $report->pdf->ezTable($dataRel,$cols,'',$options);
+	        
+	       // gera o relatório
+	       $report->Execute();
+        
+         
+	   }
+        
+    }	
+}
+?>

@@ -1,0 +1,555 @@
+<?xml version="1.0" encoding="UTF-8"  ?>
+<!-- Created with iReport - A designer for JasperReports -->
+<!DOCTYPE jasperReport PUBLIC "//JasperReports//DTD Report Design//EN" "http://jasperreports.sourceforge.net/dtds/jasperreport.dtd">
+<jasperReport
+		 name="MovimentacaoPorPeriodo"
+		 columnCount="1"
+		 printOrder="Vertical"
+		 orientation="Portrait"
+		 pageWidth="595"
+		 pageHeight="842"
+		 columnWidth="535"
+		 columnSpacing="0"
+		 leftMargin="20"
+		 rightMargin="20"
+		 topMargin="20"
+		 bottomMargin="20"
+		 whenNoDataType="NoPages"
+		 isTitleNewPage="false"
+		 isSummaryNewPage="false">
+	<property name="ireport.scriptlethandling" value="0" />
+	<property name="ireport.encoding" value="UTF-8" />
+	<import value="java.util.*" />
+	<import value="net.sf.jasperreports.engine.*" />
+	<import value="net.sf.jasperreports.engine.data.*" />
+
+	<parameter name="NOME_INSTITUICAO" isForPrompting="true" class="java.lang.String"/>
+	<parameter name="ID_UO" isForPrompting="true" class="java.lang.String"/>
+	<parameter name="DATA_INI" isForPrompting="true" class="java.lang.String"/>
+	<parameter name="DATA_FIM" isForPrompting="true" class="java.lang.String"/>
+	<parameter name="LOGO" isForPrompting="true" class="java.lang.String"/>
+	<parameter name="SUBREPORT_DIR" isForPrompting="false" class="java.lang.String">
+		<defaultValueExpression ><![CDATA["/home/siga/WORKSPACE SIGAEPT-ADM/modulos/trunk/adm/reports/"]]></defaultValueExpression>
+	</parameter>
+	<parameter name="ID_USUARIO" isForPrompting="true" class="java.lang.String"/>
+	<queryString><![CDATA[SELECT foo2.idelemento, foo2.idsubelemento, foo2.descricao,
+sum(foo2.valorentradas) AS valorentradas,
+sum(foo2.valorsaidas) AS valorsaidas,
+sum(foo2.valoratual) AS valoratual from
+(SELECT foo.idelemento, foo.idsubelemento, foo.descricao,
+sum(foo.valorentradas) AS valorentradas,
+sum(foo.valorsaidas) AS valorsaidas,
+foo.valoratual AS valoratual from
+(SELECT
+ad_subelemento.idelemento, ad_subelemento.idsubelemento, ad_subelemento.descricao,
+CASE WHEN ad_movimento.iditemnota is not null THEN ( sum( ad_movimento.valortotal ) ) END AS valorentradas,
+
+CASE WHEN ad_movimento.idordement is not null THEN ( sum( ad_movimento.valortotal ) ) END AS valorsaidas,
+ad_estoque.valortotal as valoratual
+
+FROM ad_movimento
+LEFT JOIN ad_estoque     ON ( ad_movimento.idmaterial = ad_estoque.idmaterial )
+LEFT JOIN ad_material    ON ( ad_movimento.idmaterial = ad_material.idmaterial )
+LEFT JOIN ad_subelemento ON ( ad_material.idsubelemento = ad_subelemento.idsubelemento AND
+			      ad_material.idelemento = ad_subelemento.idelemento)
+LEFT JOIN ad_itemnota    ON ( ad_movimento.iditemnota = ad_itemnota.iditemnota )
+LEFT JOIN ad_empenhado   ON ( ad_itemnota.idempenhado = ad_empenhado.idempenhado )
+LEFT JOIN ad_empenho     ON ( ad_empenhado.idempenho = ad_empenho.idempenho )
+LEFT JOIN ad_requisicao  ON ( ad_movimento.idrequisicao = ad_requisicao.idrequisicao )
+LEFT JOIN ad_ordentrega  ON ( ad_movimento.idordement = ad_ordentrega.idordement )
+LEFT JOIN ad_notafiscal  ON ( ad_itemnota.idnotafiscal = ad_notafiscal.idnotafiscal )
+
+
+WHERE (TO_CHAR(AD_MOVIMENTO.DATAMOV,'YYYY/MM/DD') >= $P{DATA_INI}) AND (TO_CHAR(AD_MOVIMENTO.DATAMOV,'YYYY/MM/DD') <= $P{DATA_FIM})
+AND ( (ad_movimento.tipomovimento = '1' AND ad_requisicao.iduoreq = CAST($P{ID_UO} AS integer)) OR (ad_movimento.tipomovimento = '3' AND ad_requisicao.iduoexec = CAST($P{ID_UO} AS integer)) OR (ad_movimento.tipomovimento = '5' AND ad_empenho.iduo = CAST($P{ID_UO} AS integer)) ) AND (ad_movimento.idmovimentoref is null)
+
+
+GROUP BY ad_subelemento.idelemento, ad_subelemento.idsubelemento, ad_subelemento.descricao,
+ad_estoque.valortotal, ad_movimento.iditemnota, ad_movimento.idordement) AS foo
+
+GROUP BY foo.idelemento, foo.idsubelemento, foo.descricao, foo.valoratual
+
+ORDER BY foo.idsubelemento ASC) AS foo2
+
+GROUP BY foo2.idelemento, foo2.idsubelemento, foo2.descricao
+
+ORDER BY foo2.idsubelemento ASC]]></queryString>
+
+	<field name="idelemento" class="java.math.BigDecimal"/>
+	<field name="idsubelemento" class="java.math.BigDecimal"/>
+	<field name="descricao" class="java.lang.String"/>
+	<field name="valorentradas" class="java.math.BigDecimal"/>
+	<field name="valorsaidas" class="java.math.BigDecimal"/>
+	<field name="valoratual" class="java.math.BigDecimal"/>
+
+	<variable name="SALDO_ATUAL" class="java.math.BigDecimal" resetType="Report" calculation="Sum">
+		<variableExpression><![CDATA[$F{valoratual}]]></variableExpression>
+	</variable>
+	<variable name="TOTAL_SAIDAS" class="java.math.BigDecimal" resetType="Report" calculation="Sum">
+		<variableExpression><![CDATA[$F{valorsaidas}]]></variableExpression>
+	</variable>
+	<variable name="TOTAL_ENTRADAS" class="java.math.BigDecimal" resetType="Report" calculation="Sum">
+		<variableExpression><![CDATA[$F{valorentradas}]]></variableExpression>
+	</variable>
+	<variable name="SALDO_ANTERIOR" class="java.math.BigDecimal" resetType="Report" calculation="Nothing">
+		<variableExpression><![CDATA[($F{valoratual}.add($F{valorsaidas})).subtract($F{valorentradas} == null ? new BigDecimal(0.00) : $F{valorentradas})]]></variableExpression>
+	</variable>
+	<variable name="TOTAL_SALDO_ANTERIOR" class="java.math.BigDecimal" resetType="Report" calculation="Sum">
+		<variableExpression><![CDATA[$V{SALDO_ANTERIOR}]]></variableExpression>
+	</variable>
+		<background>
+			<band height="0"  isSplitAllowed="true" >
+			</band>
+		</background>
+		<title>
+			<band height="93"  isSplitAllowed="true" >
+				<textField isStretchWithOverflow="false" pattern="dd/MM/yyyy" isBlankWhenNull="false" evaluationTime="Now" hyperlinkType="None"  hyperlinkTarget="Self" >
+					<reportElement
+						x="242"
+						y="69"
+						width="80"
+						height="20"
+						key="textField"/>
+					<box></box>
+					<textElement textAlignment="Left" verticalAlignment="Middle">
+						<font size="12"/>
+					</textElement>
+				<textFieldExpression   class="java.util.Date"><![CDATA[new java.util.Date($P{DATA_INI})]]></textFieldExpression>
+				</textField>
+				<textField isStretchWithOverflow="false" pattern="dd/MM/yyyy" isBlankWhenNull="false" evaluationTime="Now" hyperlinkType="None"  hyperlinkTarget="Self" >
+					<reportElement
+						x="332"
+						y="69"
+						width="80"
+						height="20"
+						key="textField"/>
+					<box></box>
+					<textElement verticalAlignment="Middle">
+						<font size="12"/>
+					</textElement>
+				<textFieldExpression   class="java.util.Date"><![CDATA[new java.util.Date($P{DATA_FIM})]]></textFieldExpression>
+				</textField>
+				<staticText>
+					<reportElement
+						x="136"
+						y="69"
+						width="106"
+						height="20"
+						key="staticText"/>
+					<box></box>
+					<textElement verticalAlignment="Middle">
+						<font size="12"/>
+					</textElement>
+				<text><![CDATA[Movimentação de ]]></text>
+				</staticText>
+				<staticText>
+					<reportElement
+						x="322"
+						y="69"
+						width="10"
+						height="20"
+						key="staticText"/>
+					<box></box>
+					<textElement verticalAlignment="Middle">
+						<font size="12"/>
+					</textElement>
+				<text><![CDATA[à]]></text>
+				</staticText>
+				<subreport  isUsingCache="true">
+					<reportElement
+						x="0"
+						y="0"
+						width="555"
+						height="66"
+						key="subreport"/>
+					<subreportParameter  name="pTitulo">
+						<subreportParameterExpression><![CDATA["MOVIMENTAÇÃO"]]></subreportParameterExpression>
+					</subreportParameter>
+					<subreportParameter  name="pURL">
+						<subreportParameterExpression><![CDATA[$P{LOGO}]]></subreportParameterExpression>
+					</subreportParameter>
+					<subreportParameter  name="pConsulta">
+						<subreportParameterExpression><![CDATA[new java.lang.Integer($P{ID_USUARIO})]]></subreportParameterExpression>
+					</subreportParameter>
+					<connectionExpression><![CDATA[$P{REPORT_CONNECTION}]]></connectionExpression>
+					<subreportExpression  class="java.lang.String"><![CDATA[$P{SUBREPORT_DIR} + "Cabecalho.jasper"]]></subreportExpression>
+				</subreport>
+			</band>
+		</title>
+		<pageHeader>
+			<band height="7"  isSplitAllowed="true" >
+			</band>
+		</pageHeader>
+		<columnHeader>
+			<band height="33"  isSplitAllowed="true" >
+				<rectangle>
+					<reportElement
+						x="0"
+						y="1"
+						width="555"
+						height="31"
+						backcolor="#C0C0C0"
+						key="rectangle"/>
+					<graphicElement stretchType="NoStretch">
+					<pen lineWidth="0.0" lineStyle="Solid"/>
+</graphicElement>
+				</rectangle>
+				<staticText>
+					<reportElement
+						x="0"
+						y="1"
+						width="87"
+						height="30"
+						key="staticText"/>
+					<box></box>
+					<textElement verticalAlignment="Middle">
+						<font size="12"/>
+					</textElement>
+				<text><![CDATA[Código]]></text>
+				</staticText>
+				<staticText>
+					<reportElement
+						x="87"
+						y="0"
+						width="160"
+						height="30"
+						key="staticText"/>
+					<box></box>
+					<textElement verticalAlignment="Middle">
+						<font size="12"/>
+					</textElement>
+				<text><![CDATA[Especificação]]></text>
+				</staticText>
+				<staticText>
+					<reportElement
+						x="283"
+						y="1"
+						width="47"
+						height="30"
+						key="staticText"/>
+					<box></box>
+					<textElement textAlignment="Right" verticalAlignment="Middle">
+						<font size="12"/>
+					</textElement>
+				<text><![CDATA[Saldo anterior]]></text>
+				</staticText>
+				<staticText>
+					<reportElement
+						x="331"
+						y="1"
+						width="71"
+						height="30"
+						key="staticText"/>
+					<box></box>
+					<textElement textAlignment="Right" verticalAlignment="Middle">
+						<font size="12"/>
+					</textElement>
+				<text><![CDATA[Entradas]]></text>
+				</staticText>
+				<staticText>
+					<reportElement
+						x="402"
+						y="0"
+						width="74"
+						height="30"
+						key="staticText"/>
+					<box></box>
+					<textElement textAlignment="Right" verticalAlignment="Middle">
+						<font size="12"/>
+					</textElement>
+				<text><![CDATA[Saidas]]></text>
+				</staticText>
+				<staticText>
+					<reportElement
+						x="500"
+						y="1"
+						width="55"
+						height="30"
+						key="staticText"/>
+					<box></box>
+					<textElement textAlignment="Right" verticalAlignment="Middle">
+						<font size="12"/>
+					</textElement>
+				<text><![CDATA[Saldo atual]]></text>
+				</staticText>
+			</band>
+		</columnHeader>
+		<detail>
+			<band height="21"  isSplitAllowed="true" >
+				<rectangle>
+					<reportElement
+						x="0"
+						y="0"
+						width="555"
+						height="20"
+						backcolor="#E2E2E2"
+						key="rectangle">
+							<printWhenExpression><![CDATA[new Boolean(((($V{COLUMN_COUNT}.intValue()) % 2) == 0))]]></printWhenExpression>
+						</reportElement>
+					<graphicElement stretchType="NoStretch">
+					<pen lineWidth="0.0" lineStyle="Solid"/>
+</graphicElement>
+				</rectangle>
+				<textField isStretchWithOverflow="false" isBlankWhenNull="false" evaluationTime="Now" hyperlinkType="None"  hyperlinkTarget="Self" >
+					<reportElement
+						x="0"
+						y="0"
+						width="87"
+						height="20"
+						key="textField"/>
+					<box></box>
+					<textElement verticalAlignment="Middle">
+						<font/>
+					</textElement>
+				<textFieldExpression   class="java.lang.String"><![CDATA[$F{idelemento} + "." + $F{idsubelemento}]]></textFieldExpression>
+				</textField>
+				<textField isStretchWithOverflow="false" isBlankWhenNull="false" evaluationTime="Now" hyperlinkType="None"  hyperlinkTarget="Self" >
+					<reportElement
+						x="87"
+						y="-1"
+						width="160"
+						height="20"
+						key="textField"/>
+					<box></box>
+					<textElement verticalAlignment="Middle">
+						<font/>
+					</textElement>
+				<textFieldExpression   class="java.lang.String"><![CDATA[$F{descricao}]]></textFieldExpression>
+				</textField>
+				<textField isStretchWithOverflow="false" isBlankWhenNull="false" evaluationTime="Now" hyperlinkType="None"  hyperlinkTarget="Self" >
+					<reportElement
+						x="479"
+						y="-1"
+						width="74"
+						height="20"
+						key="textField"/>
+					<box></box>
+					<textElement textAlignment="Right" verticalAlignment="Middle">
+						<font/>
+					</textElement>
+				<textFieldExpression   class="java.lang.String"><![CDATA[$F{valoratual} == null ? "R$ 0,00" : "R$ " + $F{valoratual}.setScale(2,2).toString().replace(".",",")]]></textFieldExpression>
+				</textField>
+				<textField isStretchWithOverflow="false" isBlankWhenNull="false" evaluationTime="Now" hyperlinkType="None"  hyperlinkTarget="Self" >
+					<reportElement
+						x="402"
+						y="-1"
+						width="74"
+						height="20"
+						key="textField"/>
+					<box></box>
+					<textElement textAlignment="Right" verticalAlignment="Middle">
+						<font/>
+					</textElement>
+				<textFieldExpression   class="java.lang.String"><![CDATA[$F{valorsaidas} == null ? "R$ 0,00" : "R$ " + $F{valorsaidas}.setScale(2,2).toString().replace(".",",")]]></textFieldExpression>
+				</textField>
+				<textField isStretchWithOverflow="false" isBlankWhenNull="false" evaluationTime="Now" hyperlinkType="None"  hyperlinkTarget="Self" >
+					<reportElement
+						x="331"
+						y="-1"
+						width="71"
+						height="20"
+						key="textField"/>
+					<box></box>
+					<textElement textAlignment="Right" verticalAlignment="Middle">
+						<font/>
+					</textElement>
+				<textFieldExpression   class="java.lang.String"><![CDATA[$F{valorentradas} == null ? "R$ 0,00" : "R$ " + $F{valorentradas}.setScale(2,2).toString().replace(".",",")]]></textFieldExpression>
+				</textField>
+				<textField isStretchWithOverflow="false" pattern="¤ #,##0.00" isBlankWhenNull="false" evaluationTime="Now" hyperlinkType="None"  hyperlinkTarget="Self" >
+					<reportElement
+						x="247"
+						y="1"
+						width="84"
+						height="18"
+						key="textField"/>
+					<box></box>
+					<textElement textAlignment="Right" verticalAlignment="Middle">
+						<font/>
+					</textElement>
+				<textFieldExpression   class="java.math.BigDecimal"><![CDATA[$V{SALDO_ANTERIOR} == null ? new BigDecimal(0.00) : $V{SALDO_ANTERIOR}]]></textFieldExpression>
+				</textField>
+			</band>
+		</detail>
+		<columnFooter>
+			<band height="45"  isSplitAllowed="true" >
+			</band>
+		</columnFooter>
+		<pageFooter>
+			<band height="18"  isSplitAllowed="true" >
+				<textField isStretchWithOverflow="false" isBlankWhenNull="false" evaluationTime="Now" hyperlinkType="None"  hyperlinkTarget="Self" >
+					<reportElement
+						x="4"
+						y="2"
+						width="418"
+						height="15"
+						key="textField"/>
+					<box></box>
+					<textElement>
+						<font/>
+					</textElement>
+				<textFieldExpression   class="java.lang.String"><![CDATA[$P{NOME_INSTITUICAO}]]></textFieldExpression>
+				</textField>
+				<line direction="TopDown">
+					<reportElement
+						x="0"
+						y="1"
+						width="555"
+						height="1"
+						key="line"/>
+					<graphicElement stretchType="NoStretch"/>
+				</line>
+				<textField isStretchWithOverflow="false" isBlankWhenNull="false" evaluationTime="Now" hyperlinkType="None"  hyperlinkTarget="Self" >
+					<reportElement
+						x="434"
+						y="2"
+						width="80"
+						height="15"
+						key="textField"/>
+					<box></box>
+					<textElement textAlignment="Right">
+						<font/>
+					</textElement>
+				<textFieldExpression   class="java.lang.String"><![CDATA["Página "+$V{PAGE_NUMBER}+" de"]]></textFieldExpression>
+				</textField>
+				<textField isStretchWithOverflow="false" isBlankWhenNull="false" evaluationTime="Report" hyperlinkType="None"  hyperlinkTarget="Self" >
+					<reportElement
+						x="514"
+						y="2"
+						width="40"
+						height="15"
+						key="textField"/>
+					<box></box>
+					<textElement>
+						<font/>
+					</textElement>
+				<textFieldExpression   class="java.lang.String"><![CDATA[" " + $V{PAGE_NUMBER}]]></textFieldExpression>
+				</textField>
+			</band>
+		</pageFooter>
+		<summary>
+			<band height="74"  isSplitAllowed="true" >
+				<staticText>
+					<reportElement
+						x="0"
+						y="15"
+						width="100"
+						height="15"
+						key="staticText"/>
+					<box></box>
+					<textElement verticalAlignment="Middle">
+						<font pdfFontName="Helvetica-Bold" isBold="true"/>
+					</textElement>
+				<text><![CDATA[Saldo anterior.........:]]></text>
+				</staticText>
+				<staticText>
+					<reportElement
+						x="0"
+						y="29"
+						width="100"
+						height="15"
+						key="staticText"/>
+					<box></box>
+					<textElement verticalAlignment="Middle">
+						<font pdfFontName="Helvetica-Bold" isBold="true"/>
+					</textElement>
+				<text><![CDATA[Total entradas........:]]></text>
+				</staticText>
+				<staticText>
+					<reportElement
+						x="0"
+						y="57"
+						width="100"
+						height="15"
+						key="staticText"/>
+					<box></box>
+					<textElement verticalAlignment="Middle">
+						<font pdfFontName="Helvetica-Bold" isBold="true"/>
+					</textElement>
+				<text><![CDATA[Saldo atual ..............:]]></text>
+				</staticText>
+				<staticText>
+					<reportElement
+						x="0"
+						y="43"
+						width="100"
+						height="15"
+						key="staticText"/>
+					<box></box>
+					<textElement verticalAlignment="Middle">
+						<font pdfFontName="Helvetica-Bold" isBold="true"/>
+					</textElement>
+				<text><![CDATA[Total saídas ............:]]></text>
+				</staticText>
+				<textField isStretchWithOverflow="false" isBlankWhenNull="false" evaluationTime="Now" hyperlinkType="None"  hyperlinkTarget="Self" >
+					<reportElement
+						x="100"
+						y="57"
+						width="100"
+						height="15"
+						key="textField"/>
+					<box></box>
+					<textElement verticalAlignment="Middle">
+						<font/>
+					</textElement>
+				<textFieldExpression   class="java.lang.String"><![CDATA["R$ " + $V{SALDO_ATUAL}.setScale(2,2).toString().replace(".",",")]]></textFieldExpression>
+				</textField>
+				<line direction="TopDown">
+					<reportElement
+						x="0"
+						y="14"
+						width="555"
+						height="1"
+						key="line"/>
+					<graphicElement stretchType="NoStretch"/>
+				</line>
+				<line direction="TopDown">
+					<reportElement
+						x="0"
+						y="73"
+						width="555"
+						height="1"
+						key="line"/>
+					<graphicElement stretchType="NoStretch"/>
+				</line>
+				<textField isStretchWithOverflow="false" isBlankWhenNull="false" evaluationTime="Now" hyperlinkType="None"  hyperlinkTarget="Self" >
+					<reportElement
+						x="100"
+						y="43"
+						width="100"
+						height="14"
+						key="textField"/>
+					<box></box>
+					<textElement>
+						<font/>
+					</textElement>
+				<textFieldExpression   class="java.lang.String"><![CDATA["R$ " + $V{TOTAL_SAIDAS}.setScale(2,2).toString().replace(".",",")]]></textFieldExpression>
+				</textField>
+				<textField isStretchWithOverflow="false" isBlankWhenNull="false" evaluationTime="Now" hyperlinkType="None"  hyperlinkTarget="Self" >
+					<reportElement
+						x="100"
+						y="29"
+						width="100"
+						height="15"
+						key="textField"/>
+					<box></box>
+					<textElement>
+						<font/>
+					</textElement>
+				<textFieldExpression   class="java.lang.String"><![CDATA["R$ " + $V{TOTAL_ENTRADAS}.setScale(2,2).toString().replace(".",",")]]></textFieldExpression>
+				</textField>
+				<textField isStretchWithOverflow="false" pattern="¤ #,##0.00" isBlankWhenNull="false" evaluationTime="Now" hyperlinkType="None"  hyperlinkTarget="Self" >
+					<reportElement
+						x="100"
+						y="15"
+						width="100"
+						height="15"
+						key="textField"/>
+					<box></box>
+					<textElement>
+						<font/>
+					</textElement>
+				<textFieldExpression   class="java.math.BigDecimal"><![CDATA[$V{TOTAL_SALDO_ANTERIOR}]]></textFieldExpression>
+				</textField>
+			</band>
+		</summary>
+</jasperReport>

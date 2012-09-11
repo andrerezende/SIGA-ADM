@@ -1,0 +1,186 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmJProximaProgressao extends MForm
+{
+	private $krono;
+	
+	function __construct()
+    {
+        parent::__construct('Relatório de Progressões');
+        $this->SetClose($this->manager->GetActionURL('rh','main:relatorio'));
+        $this->EventHandler();
+    }   
+
+
+	function CreateFields()
+    {
+        global $MIOLO, $module, $page, $context, $self, $action, $perms, $ui;
+		$this->krono = new MKrono();
+
+		$categorias = array("Tec. Admin. em Educação","Magistério Superior", "Magistério de 1ºe 2º Graus");;
+		$optionsSaida = array('PDF','Excel');
+		$fields = array(
+			$categoria = new MSelection('categoria','','Categoria',$categorias,false),
+			$mes = new MSelection('mes',date("m"),'Mês',$this->krono->months,false),
+			$ano = new MTextField('ano',date("Y"),'Ano','6','use 4 dígitos'),			
+			//$tipoSaida = new MRadioButtonGroup('tiposaida','Tipo de saída do relatório',$optionsSaida,false,'Seleciona o tipo de saída do relatório','horizontal','single')
+        );
+        $this->setFields($fields);
+
+		$this->ano->addAttribute('maxLength','4');
+		
+		//var_dump($tipoSaida->value);
+		//exit(0);
+		
+	    $buttons = array(
+            new MButton('btnReport','Gerar Relatório','PDF'),       
+            new MButton('btnGerarCSV','Gerar Planilha')
+        );
+        $this->setButtons($buttons);                               
+    }
+
+	function preparaDados()
+	
+	{
+ 		$data = $this->getData(); 
+
+		$krono = new MKrono();        
+		
+		$categoria = $data->categoria;
+		$mes = $data->mes;        
+		$ano = $data->ano;
+
+    $dataHoje =  '01/' . $mes . '/' . $ano;
+
+		switch($categoria)
+		{
+			case '0': 
+				$dataAntes =  $krono->operation('-',$dataHoje,'18%M');
+				break;
+			case '1': 
+				$dataAntes =  $krono->operation('-',$dataHoje,'24%M');
+				break;
+		};
+		
+		$dataAntesMes = $krono->GetMonth($dataAntes);
+		$dataAntesAno = $krono->GetYear($dataAntes);
+
+    $dataAntesDia = $krono->getLastDayOfMonth($dataAntesMes,$dataAntesAno);
+
+		$dataAntes = $dataAntesDia.'/'.$dataAntesMes.'/'.$dataAntesAno;
+		
+		$data->dataAntes = $dataAntes;
+		$data->dataHoje = $dataHoje;
+		
+		return $data;
+	}
+
+
+	function validaForm()
+	{
+		$data = $this->getData(); 
+		
+		if ($data->categoria == NULL)
+            $erro[] = "Selecione a categoria";
+            
+		if ($data->mes == NULL)
+            $erro[] = "Selecione o mês";
+
+        if ($data->ano == NULL)
+            $erro[] = "Selecione o ano";
+
+		if ( $data->ano >= date('Y') )
+            if ( $data->mes > (date('m') + 1) )
+                $erro[] = "O mês de referência deve ser ANTERIOR ou IGUAL ou SUBSEQUENTE ao mês corrente (".$this->krono->getMonthByNumber(date('m')).")";
+                
+		return $erro;                
+	}
+
+	function btnReport_click()
+    {
+    	$datax = $this->preparaDados();
+
+		$errox = $this->validaForm();
+
+        if ( count($errox) > 0 )
+        {
+            foreach ( $errox as $e )
+                $this->addError($e);
+        }
+        else
+        {
+            try
+            {
+				//var_dump($data->dataAntes,$data->dataHoje);  // Antes:31/08/2007  -18meses =  Depois:01/02/2009
+                $ui = $this->manager->getUi();
+                $report = $ui->getReport('rh','repProximaProgressao',$datax);
+                $report->generate();
+            }
+            catch ( Exception $e )
+            {
+                $this->manager->error($e->getMessage);
+            }
+        }
+    }
+    
+    function  btnGerarCSV_click()
+    {
+    	global $MIOLO;
+    	
+    	$datax = $this->preparaDados();
+
+		$errox = $this->validaForm();
+
+        if ( count($errox) > 0 )
+        {
+            foreach ( $errox as $e )
+                $this->addError($e);
+        }
+        else
+        {
+            try
+            {
+		     	switch($datax->categoria)
+				{
+		        	case '0':	            
+						$progmerito = $MIOLO->getBusiness('rh','progmerito');
+				        $query      = $progmerito->getProximasProgressoes($datax->dataAntes,$datax->dataHoje,$datax->categoria);		        
+				        break;
+		          	case '1':
+						$progmerito = $MIOLO->getBusiness('rh','progmeritomagistsup');
+				        $query      = $progmerito->getProximasProgressoes($datax->dataAntes,$datax->dataHoje,$datax->categoria);
+				        break;
+		    	}	    	
+		    	
+		    	//VAR_DUMP($query->result);
+		    	//exit(0);
+		    	
+				$query->GetCSV("PROXIMAS_PROGRESSOES");
+
+            }
+            catch ( Exception $e )
+            {
+                $this->manager->error($e->getMessage);
+            }
+        }    	
+    }
+}
+ 
+?>

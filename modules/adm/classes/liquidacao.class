@@ -1,0 +1,137 @@
+<?
+class BusinessAdmLiquidacao extends Business
+{
+	public $idLiquidacao;
+	public $dataLiquidacao;
+	public $obs;
+	public $notaFiscal;
+	public $dataNotaFiscal;
+	public $pago;
+	public $ordemBancaria;
+
+	public $valorIRRF;
+	public $valorINSS;
+	public $valorISS;
+
+	function __construct($data = null)
+	{
+		parent::__construct('sigaept', $data);
+	}
+
+    function OnCreate($data)
+    {
+        if (empty($data))
+        {
+//            $this->initialize();
+        }
+        else
+        {
+            $this->GetById($data);
+        }
+    }
+
+	function SetData($data)
+	{
+		foreach($data as $attr=>$value)
+		{
+			$this->$attr = $value;
+		}
+	}
+
+	function GetById($id)
+	{
+		$this->idLiquidacao = $id;
+		$this->retrieve();
+		return $this;
+	}
+
+	function ListByDataLiquidacao($data)
+	{
+        $criteria =  $this->getCriteria();
+        $criteria->addCriteria('dataLiquidacao','like', "'$data'");
+        $criteria->addOrderAttribute('dataLiquidacao');
+        return $criteria->retrieveAsQuery();
+	}
+
+	function GetNewId()
+	{
+		return $this->_db->GetNewId('seq_ad_liquidacao');
+	}
+
+	function getDadosRepLiquidacao($notas)
+	{
+		$criteria =  $this->getCriteria();
+		$criteria->setDistinct(true);
+		$criteria->AddColumnAttribute('notaFiscal.idEmpenho');
+		$criteria->AddColumnAttribute('notaFiscal.empenho.numero');
+		$criteria->AddColumnAttribute('notaFiscal.empenho.orcamento.idFonte');
+		$criteria->AddColumnAttribute('notaFiscal.empenho.orcamento.idRubrica');
+		$criteria->AddColumnAttribute('sum(notaFiscal.valor)', 'total');
+        $criteria->addCriteria('notaFiscal.idNotaFiscal','in', "($notas)");
+        $criteria->addGroupAttribute('notaFiscal.idEmpenho');
+        $criteria->addGroupAttribute('notaFiscal.empenho.numero');
+        $criteria->addGroupAttribute('notaFiscal.empenho.orcamento.idFonte');
+        $criteria->addGroupAttribute('notaFiscal.empenho.orcamento.idRubrica');
+        $criteria->addOrderAttribute('notaFiscal.idEmpenho');
+        return $criteria->retrieveAsQuery();
+	}
+
+	function GetDadosPagamento($idLiquidacao)
+	{
+        $criteria = $this->getCriteria();
+		$criteria->AddColumnAttribute('notaFiscal.empenho.numero');
+		$criteria->AddColumnAttribute('notaFiscal.notaFiscal');
+		$criteria->AddColumnAttribute('notaFiscal.dataNotaFiscal', 'dataNotaFiscal');
+		$criteria->AddColumnAttribute('dataLiquidacao', 'dataLiquidacao');
+		$criteria->AddColumnAttribute('valor');
+		$criteria->AddColumnAttribute('idLiquidacao');
+		$criteria->AddColumnAttribute('valorIRRF');
+		$criteria->AddColumnAttribute('valorINSS');
+		$criteria->AddColumnAttribute('valorISS');
+		$criteria->AddColumnAttribute('idLiquidacao');
+        $criteria->addCriteria('idLiquidacao','=', "$idLiquidacao");
+//        $criteria->addCriteria('ordemBancaria.numeroOrdemBancaria','is', "null");
+//		$criteria->setAssociationType('ordemBancaria', 'right');
+        $criteria->addOrderAttribute('notaFiscal.empenho.idEmpenho');
+        $query = $criteria->retrieveAsQuery();
+
+		$i = 0;
+		$result[$i] = array();
+		if($query->result)
+		{
+			foreach($query->result as $r)
+			{
+				$result[$i][0] = ($result[$i][0] == null) ? trim($r[0]) : $result[$i][0] . '<BR>' . trim($r[0]);
+				$result[$i][1] = ($result[$i][1] == null) ? trim($r[1]) : $result[$i][1] . '<BR>' . trim($r[1]);
+				$result[$i][2] = ($result[$i][2] == null) ? $r[2] : $result[$i][2] . '<BR>' . $r[2];
+				$result[$i][3] = ($result[$i][3] == null) ? $r[3] : $result[$i][3] . '<BR>' . $r[3];
+				$result[$i][4] = $r[4];
+				$result[$i][5] = $r[5];
+				$result[$i][6] = str_replace(',','.',$r[6]) + str_replace(',','.',$r[7]) + str_replace(',','.',$r[8]); //descontos
+				$result[$i][7] = str_replace(',','.',$r[4]) - $result[$i][6]; // valor a pagar
+				$result[$i][8] = $r[6]; // valor IRRF
+				$result[$i][9] = $r[7]; // valor INSS
+				$result[$i][10] = $r[8]; // valor ISS
+				if($query->result[$i][5] != $query->result[$i+1][5])
+				{
+					$i++;
+					if($i < count($query->result))
+					{
+						$result[$i] = array();
+					}
+				}
+			}
+		}
+		return $result;
+	}
+
+	function GetProcessoPagamento($idLiquidacao)
+	{
+        $criteria = $this->getCriteria();
+		$criteria->AddColumnAttribute('notaFiscal.empenho.numPro');
+        $criteria->addCriteria('idLiquidacao','=', "$idLiquidacao");
+        $query = $criteria->retrieveAsQuery();
+		return $query->fields('numPro');
+	}
+}
+?>

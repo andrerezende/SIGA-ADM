@@ -1,0 +1,241 @@
+<?
+// +-----------------------------------------------------------------+
+// | GCO - GCO Development Team - UFJF                               |
+// +-----------------------------------------------------------------+
+// | CopyLeft (L) 2002 UFJF, Juiz de Fora/MG - Brasil                |
+// +-----------------------------------------------------------------+
+// | Licensed under GPL: see COPYING.TXT or FSF at www.fsf.org for   |
+// |                     further details                             |
+// |                                                                 |
+// | Site: http://gco.ufjf.br                                        |
+// | E-mail: gco@ufjf.br                                             |
+// +-----------------------------------------------------------------+
+// | Abstract: Permite aos usuarios alterarem alguns dados pessoais  |
+// | Created: 06/01/2004                                             |
+// | Authors: Igor de Oliveira Knop                                  |
+// | Id: frmDadosPessoais                                            |
+// +-----------------------------------------------------------------+
+
+
+class frmDadosPessoais extends MFormAjax
+{
+	var $pessoa;
+
+	//Constructor Method
+	function __construct()
+	{
+		global $MIOLO;
+		$login = $MIOLO->GetLogin();
+        $user = $MIOLO->GetBusinessMAD('user',$login->idkey);
+		$this->pessoa = $MIOLO->GetBusiness('common','pessoa');
+		$this->pessoa->GetById($user->getIdPerson());
+		parent::__construct('Alterar Dados Pessoais');
+        $this->page->AddJsCode(file_get_contents(dirname(__FILE__) . '/js/frmDadosPessoais.js'));
+
+		$this->eventHandler();
+	}
+
+	function CreateFields()
+	{
+		global $MIOLO, $perms,$auth;
+		$pessoa =& $this->pessoa;
+        $pessoa->retrieveAssociation('municipio');
+        $pessoa->retrieveAssociation('municipioNascimento');
+
+        $aRaca = array(
+                    ' ' => 'Selecione',
+                    'B' => 'Branca',
+                    'N' => 'Preta',
+                    'P' => 'Parda',
+                    'A' => 'Amarela',
+                    'I' => 'Indígena'
+                 );
+        $aAtvRemunerada = array(
+                    ' ' => 'Selecione',
+                    'A' => 'Não',
+                    'B' => 'Sim, sou bolsista do CNPQ ou FAPEMIG',
+                    'C' => 'Sim, sou bolsista da UFJF',
+                    'D' => 'Sim, sou estagiário ou bolsista em uma empresa',
+                    'E' => 'Sim, trabalho em uma empresa com carteira assinada',
+                    'F' => 'Sim, faço trabalhos esporádicos (aulas particulares, digitação, tradução etc)',
+                    'G' => 'Sim, trabalho em uma atividade não listada anteriormente'
+                 );
+        $aAcessoNet = array(
+                    ' ' => 'Selecione',
+                    'A' => 'Em casa',
+                    'B' => 'Na Universidade',
+                    'C' => 'Na casa de colegas',
+                    'D' => 'No local de trabalho',
+                    'E' => 'Em outro local não listado anteriormente',
+                    'F' => 'Não uso ou uso pouco a Internet'
+                 );
+
+        $dataNascimento = new MCalendarField('txfDataNascimento',$pessoa->datanasc,'Data Nascimento');
+        $dataNascimento->setJsHint(_M("Clique na imagem para abrir um calendário."));
+		
+		$fields = array(
+                new MSeparator('Prezado(a) usuário(a),<br>antes de entrar nas funções do SIGA é necessário que você atualize seus dados cadastrais e responda às perguntas abaixo.<br>Obrigado.'),
+				new MTextLabel('lblUltimaAlteracao',$pessoa->dataultalt,'Última modificação',55),
+                new MSeparator(),
+                new MTextHeader('hdr','1','Identificação'),
+				new MTextField('txfPessoaNome',$pessoa->nome,'Nome',55),
+				new MTextField('txfPessoaPai',$pessoa->nomepai,'Nome do Pai',50),
+				new MTextField('txfPessoaMae',$pessoa->nomemae,'Nome da Mãe',50),
+                array(
+                    new MSelection('idUfNasc','','Estado Nascimento'),
+                    new MSelection('idMunicipioNasc','','Municipio Nascimento'),
+                ),
+                $dataNascimento,
+                new MSeparator(),
+                new MTextHeader('hdr','1','Contato'),
+				new MTextField('txfPessoaEndereco',$pessoa->endereco,'Endereço',52),
+				new MTextField('txfPessoaBairro',$pessoa->bairro,'Bairro',50),
+                array(
+                    new MSelection('idUf','','Estado'),
+                    new MSelection('idMunicipio','','Municipio'),
+                    //new MDiv('divSelMunicipio')
+                ),
+				new MTextField('txfPessoaCEP',$pessoa->cep,'CEP',8,'Não use separadores'),
+				new MTextField('txfPessoaEmail',$pessoa->email,'E-mail',50),
+				new MTextField('txfPessoaTelefone',$pessoa->telefone,'Telefone',20),
+				new MTextField('txfPessoaCelular',$pessoa->celular,'Celular',20),
+                new MSeparator(),
+                new MTextHeader('hdr','1','Documentos'),
+				array(
+					new MTextField('txfRG',$pessoa->numrg,'Número de RG',15),
+					new MTextField('txfOrgaoRG',$pessoa->orgaorg,'Órgão Expedidor',15),
+					new MSelection('selUFRG',$pessoa->ufrg,'UF do RG'), 
+				),
+                new MSpacer('8px'),
+				new MTextField('txfCPF',$this->formatCPF($pessoa->cpf),'CPF',14,'999.999.999-99'),
+                new MSeparator(''),
+        );
+		$this->SetFields($fields);
+        
+        $aguarde = $this->manager->getUI()->getImage('miolo','aguarde.gif');
+        $urlAjaxHandler = $this->manager->getActionURL('common','ajaxhandler');
+        $this->idUf->addAttribute('onChange',"doSelMunicipio('$urlAjaxHandler','$aguarde');");
+        $this->setFieldValue('idUf',$pessoa->municipio->idUF);
+
+        $this->idUfNasc->addAttribute('onChange',"doSelMunicipioNasc('$urlAjaxHandler','$aguarde');");
+        $this->setFieldValue('idUfNasc',$pessoa->municipioNascimento->idUF);
+
+        $this->txfCPF->addAttribute('maxlength',14);
+		if ( $perms->isMemberOf($auth->user,'ALUNO') || $perms->isMemberOf($auth->user,'J23_ALUNO'))
+		{
+            $this->addField(new MSeparator('Perguntas'));
+            $this->addField(new MSelection('selRaca',$pessoa->raca,'Qual a sua cor ou raça?', $aRaca));
+            $this->addField(new MSelection('selAtvRemunerada',$pessoa->atvremunerada,'Você tem alguma atividade remunerada?', $aAtvRemunerada));
+            $this->addField(new MSelection('selAcessoNet',$pessoa->acessonet,'Em que local você <b>mais</b> acessa a Internet?', $aAcessoNet));
+            $this->selRaca->formMode = MControl::FORM_MODE_SHOW_ABOVE;
+            $this->selAtvRemunerada->formMode = MControl::FORM_MODE_SHOW_ABOVE;
+            $this->selAcessoNet->formMode = MControl::FORM_MODE_SHOW_ABOVE;
+        }
+		$buttons = array(
+				new MButton('btnSalvarDados','Salvar alterações')
+		);
+		$validators = Array(
+			new MEmailValidator('txfPessoaEmail'),
+            new MCPFValidator('txfCPF','','required'),
+            new MRequiredValidator('txfDataNascimento')
+       );
+
+		$this->SetButtons($buttons);
+   	    $this->SetValidators($validators);
+
+        if ($pessoa->nomepai != '') 
+           $this->SetFieldAttr('txfPessoaPai','readonly',true); 
+        if ($pessoa->nomemae != '') 
+           $this->SetFieldAttr('txfPessoaMae','readonly',true); 
+
+        $this->setFieldAttr('txfPessoaNome','readonly',true);
+        
+		$uf = $MIOLO->GetBusiness('common','uf');
+		$objQuery = $uf->ListAll();
+		$this->SetFieldAttr('selUFRG','options', $objQuery->result);
+		$this->SetFieldAttr('idUf','options', $objQuery->result);
+		$this->SetFieldAttr('idUfNasc','options', $objQuery->result);
+
+        $uf->getById($pessoa->municipio->idUF);
+        //var_dump($uf->idUF, $uf->UF);exit;
+        $query = $uf->listMunicipios();
+		$this->SetFieldAttr('idMunicipio','options', $query->result);
+        $this->setFieldValue('idMunicipio',$pessoa->municipio->idMunicipio);
+        
+
+        $uf->getById($pessoa->municipioNascimento->idUF);
+        $query = $uf->listMunicipios();
+		$this->SetFieldAttr('idMunicipioNasc','options', $query->result);
+        $this->setFieldValue('idMunicipioNasc',$pessoa->municipioNascimento->idMunicipio);
+        
+        
+        
+    
+	}
+
+    function formatCPF($cpf)
+    {
+        if ($cpf != '')
+        {
+           return substr($cpf,0,3) . '.' . substr($cpf,3,3) . '.' . substr($cpf,6,3) . '-' . substr($cpf,9,2);
+        }
+    }
+
+	function btnSalvarDados_click()
+	{   global $MIOLO,$auth;
+                
+
+		$pessoa =& $this->pessoa;
+		
+		$telefone = $this->GetFormValue('txfPessoaTelefone');
+		$celular = $this->GetFormValue('txfPessoaCelular');
+		$email = $this->GetFormValue('txfPessoaEmail');
+		$raca = $this->GetFormValue('selRaca');
+		$acessoNet = $this->GetFormValue('selAcessoNet');
+		$atvRemunerada = $this->GetFormValue('selAtvRemunerada');
+
+		$pessoa->email = $email;
+		$pessoa->telefone = $telefone;
+		$pessoa->celular = $celular;
+		$pessoa->raca = $this->GetFormValue('selRaca');
+		$pessoa->acessonet = $this->GetFormValue('selAcessoNet');
+		$pessoa->atvremunerada = $this->GetFormValue('selAtvRemunerada');
+		$pessoa->endereco = $this->GetFormValue('txfPessoaEndereco');
+		$pessoa->bairro = $this->GetFormValue('txfPessoaBairro');
+		$pessoa->cep = $this->GetFormValue('txfPessoaCEP');
+		$pessoa->nomepai = $this->GetFormValue('txfPessoaPai');
+		$pessoa->nomemae = $this->GetFormValue('txfPessoaMae');
+		$pessoa->datanasc = $this->GetFormValue('txfDataNascimento');
+		$pessoa->numrg = $this->GetFormValue('txfRG');
+		$pessoa->orgaorg = $this->GetFormValue('txfOrgaoRG');
+		$pessoa->ufrg = $this->GetFormValue('selUFRG');
+		//$pessoa->idmunicipio = $this->GetFormValue('idMunicipio');
+                
+                // gambi mode on
+                $objMunicipio = $MIOLO->GetBusiness('common','municipio');                  
+                $pessoa->idmunicipio = $objMunicipio->getIdByIdTrim($this->GetFormValue('idMunicipio'));
+                $pessoa->idmunicipionascimento = $objMunicipio->getIdByIdTrim($this->GetFormValue('idMunicipioNasc'));
+                // gambi mode off   
+                
+		//$pessoa->idmunicipionascimento = $this->GetFormValue('idMunicipioNasc');
+        $cpf = $this->GetFormValue('txfCPF');
+		$pessoa->cpf = str_replace(".","", str_replace("-","", $cpf));
+        $pessoa->dataultalt = date('d/m/Y');
+                
+
+        try
+        {
+		   $pessoa->save();
+           $go = $MIOLO->GetActionURL('common','main');
+           $MIOLO->Information("Dados pessoais atualizados com sucesso.", $go );
+        }
+        catch ( Exception $e )
+        {
+            $this->AddError($e->GetMessage());
+        }
+	}
+        
+        
+	
+}
+?>

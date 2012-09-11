@@ -1,0 +1,235 @@
+<?
+class BusinessAdmMapaLicitacao extends Business
+{
+	public $idLicitacao;
+	public $item;
+	public $idFornecedor;
+	public $preco;
+	public $vencedor;
+	public $quantidade;
+	public $marcaModelo;
+	public $importado;
+    public $status;
+   
+    public $fornecedor;
+
+	function __construct($data = null)
+	{
+		parent::__construct('sigaept', $data);
+	}
+
+	function getById($idLicitacao,$item,$idFornecedor)
+	{
+		$this->idLicitacao = $idLicitacao;
+		$this->item = $item;
+		$this->idFornecedor = $idFornecedor;
+		$this->retrieve();
+		return $this;
+	}
+	function getByIdLicitacaoItemVencedor($idLicitacao,$item)
+	{
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('idFornecedor');
+        $criteria->addCriteria('idLicitacao','=', "$idLicitacao");
+        $criteria->addCriteria('item','=', "$item");
+        $criteria->addCriteria('vencedor','=', "'1'");
+        $query = $criteria->retrieveAsQuery();
+
+		$this->idLicitacao = $idLicitacao;
+		$this->item = $item;
+		$this->idFornecedor = $query->result[0][0];
+		$this->retrieve();
+		return $this;
+	}
+    function getParticipantesByLicitacao($idLicitacao)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('idParticipante');
+        $criteria->addCriteria('idLicitacao','=', "$idLicitacao");
+        $criteria->addGroupAttribute('idParticipante');
+        return $criteria->retrieveAsQuery();
+    }
+    
+    function getItensByLicitacao($idLicitacao)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('item');
+        $criteria->addGroupAttribute('item');
+        $criteria->addCriteria('idLicitacao','=', "$idLicitacao");
+        return $criteria->retrieveAsQuery();
+    }
+    
+    function getPrecoOfItemByLicitacao($idLicitacao,$item,$idFornecedor)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('preco');
+        $criteria->addCriteria('idLicitacao','=', "$idLicitacao");
+        $criteria->addCriteria('item','=', "$item");
+        $criteria->addCriteria('idFornecedor','=', "$idFornecedor");
+        return $criteria->retrieveAsQuery()->result;
+    }
+    
+    function countItensByLicitacao($idLicitacao)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('item');
+        $criteria->addCriteria('idLicitacao','=', "$idLicitacao");
+        $criteria->addGroupAttribute('item');
+        return count($criteria->retrieveAsQuery()->result);
+    }
+    function getParticipacao($idParticipante,$idLicitacao,$item)
+    {
+		$cf = new MCurrencyFormatter();
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('preco');
+        $criteria->addCriteria('idParticipante','=', "$idParticipante");
+        $criteria->addCriteria('idLicitacao','=', "$idLicitacao");
+        $criteria->addCriteria('item','=', "$item");
+        $resultado = intval($criteria->retrieveAsQuery()->result[0][0]);
+        if ($resultado > 0)
+        {
+            return $cf->formatWithSymbol($cf->toDecimal($resultado));
+        }
+        else
+        {
+            return 'NC';
+        }
+    }
+    function getFornecedor()
+    {
+        $this->retrieveAssociation('fornecedor');
+        return $this->fornecedor;
+    }
+	function getMapaQuantidadeVencedor($idLicitacao, $item)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('quantidade');
+		$criteria->addCriteria('idLicitacao','=', "$idLicitacao");
+		$criteria->addCriteria('item','=', "$item");
+		$criteria->addCriteria('vencedor','=', "'1'");
+		$query = $criteria->retrieveAsQuery();
+		return $query->result[0][0];
+	}
+	function getValorTotal($idLicitacao,$statusRequisicao,$statusItensReq)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('licitacao.idTipoLicitacao');
+        $criteria->addCriteria('licitacao.idLicitacao','=', "$idLicitacao");
+		$query0 = $criteria->retrieveAsQuery();
+
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('sum(quantidade*preco)');
+		$criteria->addCriteria('idLicitacao','=', "$idLicitacao");
+		$criteria->addCriteria('vencedor','=', "'1'");
+		if($query0->result[0][0] == '1')//COMPRA
+		{
+	        $criteria->addCriteria('itemlicitacao.itemreq.status', 'in', "$statusItensReq");
+	        $criteria->addCriteria('itemlicitacao.itemreq.requisicao.status', 'in', "$statusRequisicao");
+		}
+		elseif($query0->result[0][0] == '2')//SERVICO
+		{
+	        $criteria->addCriteria('itemlicitacao.itemservext.status', 'in', "$statusItensReq");
+		    $criteria->addCriteria('itemlicitacao.itemservext.requisicao.status', 'in', "$statusRequisicao");
+		}
+		$query = $criteria->retrieveAsQuery();
+		return $query->result[0][0];
+	}
+	function getMapaValorVencedor($idLicitacao, $item)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('preco');
+		$criteria->addCriteria('idLicitacao','=', "$idLicitacao");
+		$criteria->addCriteria('item','=', "$item");
+		$criteria->addCriteria('vencedor','=', "'1'");
+		$query = $criteria->retrieveAsQuery();
+		return $query->result[0][0];
+	}
+	function getItemMapaVencedor($idLicitacao, $item)
+	{
+		$this->idLicitacao = $idLicitacao;
+		$this->item = $item;
+		$this->vencedor = '1';
+		$this->retrieve();
+		return $this;
+	}
+	
+	function getStatusByItem($idLicitacao, $item)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('status');
+		$criteria->addCriteria('idLicitacao','=', "$idLicitacao");
+		$criteria->addCriteria('item','=', "$item");
+		$query = $criteria->retrieveAsQuery();
+		return $query->result[0][0];
+	}
+
+    function setItemByLicitacaoItem($idLicitacao,$itemAntigo,$itemNovo)
+    {
+        $sql = new sql("item","ad_mapalicitacao");
+        $sql->SetWhere("idlicitacao = ?");
+        $sql->SetWhereAnd("item = ?");
+
+        $args = array($itemNovo,$idLicitacao,$itemAntigo);
+
+        $query = $this->Execute($sql->Update($args));
+        return $query->result;
+    }
+	
+	//Para listar licitacoes por descricao/codigo do material ou servico
+	function listLicitacaoByDescricao($descricao, $codmaterial, $dataabertura, $tipo)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->addColumnAttribute('licitacao.idLicitacao', 'idlicitacao');
+		$criteria->addColumnAttribute('licitacao.numero', 'numero');
+		$criteria->addColumnAttribute('quantidade');
+		$criteria->addColumnAttribute('preco');
+		$criteria->addColumnAttribute('licitacao.status', 'status');
+		$criteria->addColumnAttribute('fornecedor.instituicao.nome', 'instituicao');
+		$ccMaterial = new CriteriaCondition();
+		
+		if($tipo == 6 || $tipo == 7){
+		$criteria->addCriteria('licitacao.itensDeMaterial.material.descricao','LIKE',$descricao);
+		$criteria->addCriteria('licitacao.itensDeMaterial.idMaterial','=','licitacao.itensDeMaterial.material.idMaterial');
+		$criteria->addCriteria('licitacao.itensDeMaterial.idLicitacao','=','licitacao.idLicitacao');
+		$criteria->addCriteria('licitacao.itensDeMaterial.item','=','item');
+			if ($codmaterial != null){
+			$criteria->addCriteria('licitacao.itensDeMaterial.material.codmaterial','=',$codmaterial);
+			}
+		}
+		else if($tipo == 10){
+		$criteria->addCriteria('licitacao.itensDeLivro.material.descricao','LIKE',$descricao);
+		$criteria->addCriteria('licitacao.itensDeLivro.idMaterial','=','licitacao.itensDeLivro.material.idMaterial');
+		$criteria->addCriteria('licitacao.itensDeLivro.idLicitacao','=','licitacao.idLicitacao');
+		$criteria->addCriteria('licitacao.itensDeLivro.item','=','item');
+			if ($codmaterial != null){
+			$criteria->addCriteria('licitacao.itensDeLivro.material.codmaterial','=', $codmaterial);
+			}
+		}
+		else if($tipo == 9){
+		$criteria->addCriteria('licitacao.itensDeServico.servico.descricao','LIKE',$descricao);
+		$criteria->addCriteria('licitacao.itensDeServico.idServico','=','licitacao.itensDeServico.servico.idServico');
+		$criteria->addCriteria('licitacao.itensDeServico.idLicitacao','=','licitacao.idLicitacao');
+		$criteria->addCriteria('licitacao.itensDeServico.item','=','item');
+			if ($codmaterial != null){
+			$criteria->addCriteria('licitacao.itensDeServico.servico.codmaterial','=', $codmaterial);
+			}
+		}
+		else {
+			$criteria->addCriteria('licitacao.itensDeMaterial.material.descricao','IS', 'NULL');
+		}
+		$criteria->addCriteria('idLicitacao','=','licitacao.idLicitacao');
+		$criteria->addCriteria('vencedor','=',"'1'");
+		$cc = new CriteriaCondition();
+		$cc->addCriteria($criteria->getCriteria('licitacao.status','=', "'4'"));
+		$cc->addOrCriteria($criteria->getCriteria('licitacao.status','=', "'5'"));
+		$criteria->addCriteria($cc);
+		
+		
+		   if($dataabertura)
+		   {
+		      $criteria->addCriteria('licitacao.dataAbertura','=',"'$dataabertura'");
+		   }
+		return $criteria->retrieveAsQuery();
+	}
+}
+?>

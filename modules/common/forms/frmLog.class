@@ -1,0 +1,108 @@
+<?
+class FrmLog extends Form
+{
+    var $objLog;
+
+	function FrmLog()
+    {   global $MIOLO, $module, $page, $context, $self;
+
+        $this->objLog = $MIOLO->GetBusiness($module,'log');
+		$this->Form('Log');
+	    $this->EventHandler();
+	}
+
+    function CreateFields()
+	{  global $MIOLO, $action;
+
+       $fields = Array(
+           new HiddenField('hidIdUsuario',''),
+           Array(
+             new LookupTextField('lkpUsuario','','Usuário',40),
+             new CalendarField('edtDataIni','','Data Inicial',15),
+             new CalendarField('edtDataFim','','Data Final',15)
+           ),  
+           Array(
+             new TextField('edtModulo','','Módulo',40),
+             new TextField('edtClasse','','Classe',40),
+             new TextField('edtDescricao','','Descrição',40)
+           )
+       );
+	   $this->SetFields($fields);
+	   $this->SetFieldAttr('lkpUsuario','module','common');
+	   $this->SetFieldAttr('lkpUsuario','item','usuario');
+	   $this->SetFieldAttr('lkpUsuario','event', 'filler');
+	   $this->SetFieldAttr('lkpUsuario','related', 'hidIdUsuario,lkpUsuario');
+
+       $buttons = Array(
+	       new FormButton('btnList', 'Consultar'),
+	       new FormButton('btnReport', 'Relatório','REPORT'),
+	       new FormButton('btnClear', 'Limpar', $action)
+       );
+	   $this->SetButtons($buttons);
+	}
+
+	function GetData()  // nome dos formfields != business fields
+	{   global $MIOLO;
+
+        $data = new FormData();
+		$data->idusuario = $this->GetFieldValue('hidIdUsuario');
+		$data->usuario = $this->GetFieldValue('lkpUsuario');
+        if ($data->idusuario == '')
+        {
+           if ($data->usuario != '')
+           {
+             $objUsuario = $MIOLO->GetBusiness('common','user');
+             $objUsuario->GetByLogin($data->usuario);
+  		     $data->idusuario = $objUsuario->idusuario;;
+           }
+        }
+		$data->modulo = $this->GetFieldValue('edtModulo');
+		$data->classe = $this->GetFieldValue('edtClasse');
+		$data->descricao = $this->GetFieldValue('edtDescricao');
+		$data->dataini = $this->GetFieldValue('edtDataIni');
+		$data->datafim = $this->GetFieldValue('edtDataFim');
+        return $data;
+	}
+
+	function SetData($data)
+	{
+	}
+
+	function btnList_click()
+	{   
+		global $MIOLO, $module, $self, $theme, $action;
+        $href_login = $MIOLO->GetActionURL('common','usuario','#?#',Array('event'=>'showByLogin'));
+        $columns = array(
+           new DataGridHyperlink('login','Usuario',$href_login,'15%',true,null,true),
+           new DataGridColumn('modulo','Modulo','left', true, '10%',true),
+           new DataGridColumn('classe','Classe','left', true, '10%',true,null,'l.modulo,l.classe',true),
+           new DataGridColumn('timestamp','Data/Hora','right', true, '15%',true),
+           new DataGridColumn('operacao','Operação','left', true, '5%',true,null,true),
+           new DataGridColumn('descricao','Descricao','left', false, '45%',true)
+        );
+        $data = $this->GetData();
+        $this->objLog->SetData($data);
+        $columns[0]->visible = ($data->idusuario == '');
+        $columns[1]->visible = ($data->modulo == '');
+        $columns[2]->visible = ($data->classe == '');
+		$href_datagrid = $MIOLO->GetActionURL($module,$self,'', Array('event'=>'btnList_click'));              
+        $query = $this->objLog->ListSelection();
+        $datagrid = new DataGrid2($query, $columns, $href_datagrid, 25);
+        $datagrid->SetTitle('Log de transações');
+        $datagrid->SetLinkType('linkbutton');
+		$theme->InsertContent($datagrid);
+	}
+
+	function btnReport_click()
+	{   global $page; 
+        $data = $this->GetData();
+        $classe = strtoupper($data->classe). '*';
+        $report = new CrystalReport('sigaept');
+        $report->Execute('common','cm_log',array("p_classe"=>$classe));
+        $page->Redirect($report->fileout);
+         
+    }
+
+}
+
+?>

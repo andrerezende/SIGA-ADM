@@ -1,0 +1,609 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+class frmEmprestimoRecintoComunidade extends Form
+{
+	var $objEmprestimo;
+	var $objUsuario;
+	var $objExemplar;
+	var $objEstado;
+	var $objMunicipio;
+	var $objMulta;
+	var $objPermiteMulta;
+	
+	function __construct()
+    {  
+		global $MIOLO, $action,$module;
+
+		$this->Form('Empréstimo no Recinto para Usuários da Comunidade');
+		$this->defaultButton = false;
+		
+		$this->objUsuario = $MIOLO->GetBusiness($module,'usuarioexterno');
+		$this->objEstado = $MIOLO->GetBusiness($module,'estado');
+		$this->objExemplar = $MIOLO->GetBusiness($module,'exemplar');
+		$this->objMunicipio = $MIOLO->GetBusiness('rh','municipio');
+
+		$this->EventHandler();
+		
+				// Botão 'fechar', direcionando para o handler biblioteca/main/emprestimos/emprestimosrecinto
+		$this->SetClose($this->manager->GetActionURL($module, 'main:emprestimos:emprestimorecinto'));
+	}
+	
+
+	function CreateFields()
+	{	
+		global $MIOLO, $module, $self, $theme, $action, $page;
+		
+		$fields = Array(
+		  	new LookupTextField('lkpNome','','Nome',70),
+			new HiddenField('hidId'),
+			new TextField('edtIdentidade','','Identidade',20,'Não use pontos ou traços'),
+ 			new TextField('edtTelefone','','Telefone',20,'Não use pontos ou traços'),
+ 			new CalendarField('edtNascimento','','Data de Nascimento',20),
+			new TextField('edtEndereco','','Endereço',70),		
+			new TextField('edtBairro','','Bairro',20),
+			new LookupTextField('lkpMunicipio','Juiz de Fora','Município',20),
+			new HiddenField('hidIdMunicipio'),
+			new TextField('edtCep','','Cep',20,'Não use pontos ou traços'),
+			new TextLabel('aviso', 'Ao alterar os dados acima, certifique-se de clicar em "Salvar Usuário"', 'Atenção'),
+			new Separator(),
+			new TextField('edtExemplar','','Exemplar',30),
+			new HiddenField('ListaExemplares','','',100) // é a lista de exemplares que aparece no GRID
+		);
+
+		$this->SetFields($fields);
+		
+		$buttons = Array(
+			new FormButton('btnEnviar', 'Salvar Usuário'),
+			new MButton('btnExcluir', 'Excluir Usuário'),
+			new MButton('btnConfirmar', 'Confirmar Empréstimo'),
+			//alteração Barbacena
+			new FormButton('btnImprimirRecibo', 'Imprimir Recibo' ),
+			new MButton('btnVoltar', 'Voltar',$MIOLO->GetActionURL($module,$self)),
+			);
+			
+		$this->SetButtons($buttons);
+		
+		//Esconde os campos 
+		$this->SetFieldAttr('edtExemplar','visible', false);
+		$this->SetFieldAttr('aviso','visible', false);
+		
+		// Atributo dos botões
+		$this->SetButtonAttr( 'btnConfirmar', 'visible',false );
+		$this->SetButtonAttr( 'btnVoltar', 'visible',false );
+		$this->SetButtonAttr( 'btnExcluir', 'visible',false );
+		$this->SetButtonAttr( 'btnImprimirRecibo', 'visible',false ); //Barbacena
+		
+		$this->SetFieldAttr('lkpNome','module','biblioteca');
+		$this->SetFieldAttr('lkpNome','item','usuarioexterno');
+		$this->SetFieldAttr('lkpNome','event','btnConsulta:click');
+		$this->SetFieldAttr('lkpNome','related', 'idusuario');
+		
+		$this->SetFieldAttr('lkpMunicipio','module','rh');
+        $this->SetFieldAttr('lkpMunicipio','item','municipio');
+        $this->SetFieldAttr('lkpMunicipio','event', 'filler');
+        $this->SetFieldAttr('lkpMunicipio','related', 'hidIdMunicipio,lkpMunicipio');
+      
+		//Validators
+		$this->AddValidator(new RequiredValidator('edtIdentidade'));
+		$this->AddValidator(new RequiredValidator('lkpNome'));
+	}	
+
+	
+	// pega os dados que estão no formuláio   
+    function GetData()
+    {
+    	$data = new FormData();
+    	$data->idusuario = $this->GetFormValue('hidId');
+       	$data->identidade = $this->GetFormValue('edtIdentidade');
+		$data->nome = $this->GetFormValue('lkpNome');
+       	$data->telefone = $this->GetFormValue('edtTelefone');
+       	$data->nascimento = $this->GetFormValue('edtNascimento');
+      	$data->endereco = $this->GetFormValue('edtEndereco');
+       	$data->bairro = $this->GetFormValue('edtBairro');
+       	$data->cep = $this->GetFormValue('edtCep');
+       	$data->municipio = $this->GetFormValue('lkpMunicipio');
+       	$data->idmunicipio = $this->GetFormValue('hidIdMunicipio');
+       	$data->exemplar = $this->GetFormValue('edtExemplar');
+		$data->ListaExemplares = $this->GetFormValue('ListaExemplares');
+    	return $data;
+    }
+
+	
+	// usada para inserir valores no formulário
+	function SetData($data)
+	{
+		$this->SetFieldValue('edtIdentidade',$data->numrg);
+		$this->SetFieldValue('hidId',$data->idusuario);
+		$this->SetFieldValue('lkpNome',$data->nome);
+		$this->SetFieldValue('edtNascimento',$data->datanasc);
+		$this->SetFieldValue('edtEndereco',$data->endereco);
+		$this->SetFieldValue('edtBairro',$data->bairro);
+		$this->SetFieldValue('edtCep',$data->cep);
+		$this->SetFieldValue('hidIdMunicipio',$data->idmunicipo);
+		$this->SetFieldValue('lkpMunicipio',$data->municipio);
+		$this->SetFieldValue('edtTelefone',$data->telefone);
+        $this->setFieldValue('edtExemplar',$data->exemplar);
+        $this->setFormValue('ListaExemplares',$data->ListaExemplares);
+	}
+	
+	
+	function btnEnviar_click()
+	{ 
+		global $MIOLO,$module,$item,$self,$page,$theme,$action;
+		
+		$data = $this->GetData();
+
+		//
+		// Verifica se existe idmunicipio
+		//  se nao existir, o usuário não usou lookup. Tenta obter o idmunicipio pelo que
+		//  o usuário digitou.
+		//
+		if ($data->idmunicipio==null)
+		{
+			$objectMunicipio = $this->objMunicipio->GetByMunicipio($data->municipio);
+			$data->idmunicipio = $objectMunicipio->idmunicipio;
+				
+			if ($data->idmunicipio==null)
+				 $MIOLO->Error("Município não encontrado", $action );
+		}
+				
+		if ($ok = $this->objUsuario->Insert($data))
+		{
+			$data->idusuario = $ok;
+			$this->SetFieldValue('hidId',$data->idusuario);
+
+			// Atributo dos botões
+///			$this->SetButtonAttr('btnEnviar','visible',false);
+			$this->SetButtonAttr( 'btnEnviar', 'visible', true );
+			$this->SetButtonAttr( 'btnConfirmar','visible', true );
+			$this->SetButtonAttr( 'btnVoltar', 'visible', true );
+			$this->SetButtonAttr( 'btnExcluir', 'visible', true );
+
+			//Atributo dos campos
+///			$this->SetFieldAttr('lkpNome','readonly',true);
+///			$this->SetFieldAttr('edtIdentidade','readonly',true);
+///			$this->SetFieldAttr('edtNascimento','readonly',true);
+///			$this->SetFieldAttr('edtTelefone','readonly',true);
+			
+///			$this->SetFieldAttr('edtEndereco','readonly',true);
+///			$this->SetFieldAttr('edtBairro','readonly',true);
+///			$this->SetFieldAttr('edtCep','readonly',true);
+///			$this->SetFieldAttr('lkpMunicipio','readonly',true);
+			
+			$this->SetFieldAttr('aviso','visible', true);
+			$this->SetFieldAttr('edtExemplar','visible', true);
+			
+			//$this->page->onLoad('document.'.$this->name.'.edtExemplar.focus();');
+			$this->page->onLoad("MIOLO_GetElementById('edtExemplar').focus();");
+		}
+	} 
+
+	
+	function btnConsulta_click($sender,$idusuario)
+	{ 
+		global $MIOLO,$module,$item;
+
+		$idusuario = ($idusuario != '') ? $idusuario : $item;
+		
+		$ok = $this->objUsuario->GetById($idusuario);
+
+		if ($ok)
+		{
+			$this->SetData($ok);
+			
+			// Atributo dos botões
+///			$this->SetButtonAttr('btnEnviar','visible',false);
+			$this->SetButtonAttr('btnEnviar','visible',true);
+			$this->SetButtonAttr('btnConfirmar','visible',true);
+			$this->SetButtonAttr('btnVoltar','visible',true);
+			$this->SetButtonAttr('btnExcluir','visible',true);
+
+			//Atributo dos campos
+///			$this->SetFieldAttr('lkpNome','readonly',true);
+///			$this->SetFieldAttr('edtIdentidade','readonly',true);
+///			$this->SetFieldAttr('edtNascimento','readonly',true);
+///			$this->SetFieldAttr('edtTelefone','readonly',true);
+			$this->SetFieldAttr('aviso','visible', true);
+			$this->SetFieldAttr('edtExemplar','visible', true);
+			
+///			$this->SetFieldAttr('edtEndereco','readonly',true);
+///			$this->SetFieldAttr('edtBairro','readonly',true);
+///			$this->SetFieldAttr('edtCep','readonly',true);
+///			$this->SetFieldAttr('lkpMunicipio','readonly',true);
+
+			//$this->page->onLoad('document.'.$this->name.'.edtExemplar.focus();');
+			$this->page->onLoad("MIOLO_GetElementById('edtExemplar').focus();");
+		}
+	}
+
+	
+	function btnConfirmar_click()
+	{ 
+		global $MIOLO,$module,$item,$self, $theme, $action, $page,$datagrid;
+		
+		$this->objEmprestimo = $MIOLO->GetBusiness($module,'emprestimo');
+		$this->objExemplar = $MIOLO->GetBusiness($module,'exemplar');
+		$this->objMulta = $MIOLO->GetBusiness($module,'multa');
+		$this->objPermiteMulta = $MIOLO->GetBusiness($module,'permitemulta');
+		
+		$data = $this->GetData();
+		
+		/* Verifica de é permitido cobrar multas ou se o administrador
+		 * escolheu a opção de penalidade */
+		$permiteMulta = $this->objPermiteMulta->CheckPermiteMulta();
+		if( $permiteMulta[ 0 ][ 0 ] == 'N' )
+		{
+			/* Neste caso deve-se apagar todos os registros da tabela bt_multa,
+			 * visto que esta não terá nenhuma utilidade. */
+			$this->objMulta->LiquidaMultas();
+		}
+		elseif( $permiteMulta[ 0 ][ 0 ] == 'P' )
+		{
+			$verificaMulta = true;
+			$this->objMulta->LiquidaMultas();
+
+			/* Verifica os dias de penalidade que o usuário possui.
+			 * Caso seja maior que 0, o usuário não poderá
+			 * realizar o empréstimo */
+			$n = $this->objEmprestimo->verificaPenalidadeUE( $data->idusuario );
+			if(  $n > 0 )
+			{
+				$go = $this->manager->GetActionURL( $module, 'main:emprestimos' );
+				$this->manager->Information( "Este usuário só poderá fazer empréstimos depois de $n dia(s) a partir de hoje.", $go );
+			}
+		}
+		
+		
+		/*
+		*	Nova consistência 
+		*	Verificar se existe multa para este usuário
+		*
+		*   Se existir multa, não pode emprestar !!!!
+		*/
+		if ( $this->verificaPendenciaMulta() )
+		{
+			
+			/*
+			*	Nova consistência 
+			*	Verificar se existem empréstimos atrasados
+			*/
+			if ($this->verificaPendenciaEmprestimoAtrasado())
+			{
+				$Exemplar = $data->exemplar;
+							
+				if ($Exemplar)
+				{
+				
+					// A 2 únicas consistências:
+					//     - se existe
+					//     - se está disponível
+					
+					//
+					// $Resultado é um array do resultado do emprestimo
+					//  $Resultado[0] = id exemplar
+					//  $Resultado[1] = título
+					//  $Resultado[2] = mensagem
+					//  $Resultado[3] = previsão de Devolução
+					//
+					
+					if ($this->objExemplar->GetIdByTombo($Exemplar))
+					{
+						if ($this->objExemplar->estaDisponivel($Exemplar))
+						{
+							// Realiza o Empréstimo
+							$Emp = $this->objEmprestimo->ConfirmarEmprestimoRecintoComunidade($Exemplar,$data,$this->manager->GetLogin()->idkey);
+							//$notaCirculacao = $this->objExemplar->getNotaCirculacao($Exemplar)->result[0][0];
+							$titulo = $this->objEmprestimo->getTitulo($Exemplar)->result[0][0];
+
+													
+							//$exemplar recebe o objeto, de acordo com o nº do tombo inserido
+							$exemplar = $this->objExemplar->GetByTombo($data->exemplar);
+							//tem-se a 'notadecirculacao' do objeto
+							$notaCirculacao = $exemplar->getObject()->notacirculacao;
+														
+							if ($notaCirculacao != null)
+							{
+								$Resultado[0] = $Exemplar;
+					  			$Resultado[1] = $titulo;
+					  			$Resultado[2] = "Empréstimo Confirmado - " . "<font color=red>Nota: $notaCirculacao </font>";
+					  			$Resultado[3] = $Emp[1];
+							}
+							
+							else 
+							{
+								$Resultado[0] = $Exemplar;
+					  			$Resultado[1] = $titulo;
+					  			$Resultado[2] = "Empréstimo Confirmado";
+					  			$Resultado[3] = $Emp[1];								
+							}
+
+						}
+						else 
+						{
+							$estadoExemplar = $this->objEstado->GetMnemonicoById($this->objExemplar->GetEstadoByExemplar($Exemplar));
+							
+							//O Exemplar não está disponível
+					  		$Resultado[0] = $Exemplar;
+					  		$Resultado[1] =  $this->objEmprestimo->getTitulo($Exemplar)->result[0][0];
+					  		$Resultado[2] = "<font color=red>Erro: Exemplar não está disponível - Estado atual: " . $estadoExemplar . "</font>";
+					  		$Resultado[3] = "";
+						}
+					}
+					else
+					{
+						//O Exemplar não existe
+					  	$Resultado[0] =$Exemplar;
+					  	$Resultado[1] = "";
+					  	$Resultado[2] = "<font color=red>Erro: Exemplar inexistente</font>";
+					  	$Resultado[3] = "";
+					}
+				
+				  $columns = array(
+		           new GridColumn('Exemplar', 'right', true, '10%',true,null,false,true),
+		           new GridColumn('Título', 'left', false, '30%',true,null,false,true),
+		           new GridColumn('Mensagem', 'left', false, '40%',true,null,false,true),
+		           new GridColumn('Prev Dev', 'left', true, '20%',true,null,false,true)
+		          );
+					
+		          $this->addListaExemplares($Resultado);
+		          
+		          $data=$this->GetData();
+		                    
+		          $href_datagrid = $MIOLO->GetActionURL($module,$self);
+		          $datagrid = new Grid($this->getListaExemplares(), $columns, $href_datagrid,50);
+		          $datagrid->SetTitle('Resultado');
+				  $datagrid->SetWidth('99%');
+				  $theme->AppendContent($datagrid);
+				}
+			}
+		}
+		
+			// Atributo dos botões
+///			$this->SetButtonAttr('btnEnviar','visible',false);
+			$this->SetButtonAttr('btnEnviar','visible',true);
+			$this->SetButtonAttr('btnConfirmar','visible',true);
+			$this->SetButtonAttr( 'btnImprimirRecibo', 'visible', true );
+			$this->SetButtonAttr('btnVoltar','visible',true);
+
+			//Atributo dos campos
+///			$this->SetFieldAttr('lkpNome','readonly',true);
+///			$this->SetFieldAttr('edtIdentidade','readonly',true);
+///			$this->SetFieldAttr('edtNascimento','readonly',true);
+///			$this->SetFieldAttr('edtTelefone','readonly',true);
+			$this->SetFieldAttr('edtExemplar','visible', true);
+			
+///			$this->SetFieldAttr('edtEndereco','readonly',true);
+///			$this->SetFieldAttr('edtBairro','readonly',true);
+///			$this->SetFieldAttr('edtCep','readonly',true);
+///			$this->SetFieldAttr('lkpMunicipio','readonly',true);
+
+		$this->SetFieldValue('edtExemplar','');
+		//$this->page->onLoad('document.'.$this->name.'.edtExemplar.focus();');
+		$this->page->onLoad("MIOLO_GetElementById('edtExemplar').focus();");
+	}
+
+	
+	function addListaExemplares($Exemplar)
+	{
+		global $MIOLO,$module,$item,$self, $theme, $action, $page,$datagrid;
+	
+		$data = $this->GetData();
+	
+		$lista = $data->ListaExemplares;
+		
+		//
+		// $lista é uma grande string concatenada para exibição dos resultados dos campos
+		// onde:
+		//           @@@ separa os campos
+		//           @@@|-|@@@ separa os registros
+		$lista = $lista . $Exemplar[0] . '@@@' . $Exemplar[1] . '@@@' . $Exemplar[2] .'@@@' . $Exemplar[3] . '@@@|-|@@@';
+				
+		$this->SetFieldValue('ListaExemplares',$lista);
+	}
+
+
+	function getListaExemplares()
+	{
+		// pega $data->ListaExemplares retorna um array
+		
+		$lista = $this->GetFieldValue('ListaExemplares');
+		$registros = explode('@@@|-|@@@',$lista);
+	
+		$exemplares = array();
+		
+		foreach ($registros as $registro)
+		{
+			if ($registro)
+			 array_push($exemplares,explode('@@@',$registro));
+		}
+
+		return $exemplares;
+	}
+	
+
+	function getDataLog($Emprestimo)
+	{
+		global $MIOLO;
+		$data = new FormData();
+		$data->data = date("d/m/Y H:i:s");
+		$data->identificador = $Emprestimo;
+		$data->idusuario = $MIOLO->GetLogin()->idkey;
+		$operacao = $MIOLO->GetBusiness('biblioteca','operacao');
+		$operacao = $operacao->GetIdoperacaoByMnemonico('EMPRHORAS');
+		$data->idoperacao = $operacao->GetIdoperacao();
+		return $data;
+	}
+
+
+	function btnExcluir_click($sender,$idusuario)
+	{ 
+		global $MIOLO,$module,$item,$self, $theme, $action, $page,$datagrid,$self;
+		
+		$data = $this->getData();
+
+		$this->objEmprestimo = $MIOLO->GetBusiness($module,'emprestimo');
+		$this->objExemplar = $MIOLO->GetBusiness($module,'exemplar');
+		$this->objMulta = $MIOLO->GetBusiness($module,'multa');
+
+		/*
+		*	Nova consistência 
+		*	Verificar se existe multa para este usuário
+		*
+		*   Se existir multa, não pode emprestar !!!!
+		*/
+		
+		if ($this->verificaPendenciaMulta())
+		{	
+			if ($this->verificaPendenciaEmprestimoAtrasado())
+			{
+				$msg = "ATENÇÃO, tem certeza que deseja excluir o usuário \"<font color=red>" . $data->nome . "</font>\" ?";
+			    $gotoYes = $MIOLO->GetActionURL($module,$self,$data->idusuario,array('event'=>'ConfirmarExclusao'));
+			    $gotoNo = $MIOLO->GetActionURL($module,$self);
+			    $eventNo = "promptHandler;Question_No";
+			    
+				$MIOLO->Question($msg, $gotoYes, $gotoNo, $eventYes, $eventNo);
+			}
+		}
+	}
+
+	
+	function ConfirmarExclusao()
+	{
+		global $MIOLO,$module,$item,$self, $theme, $action, $page,$datagrid,$self;
+		
+		if ($item)
+		{
+			$idusuario = $item;	
+		}	
+		else 
+		{
+			$MIOLO->Error("Ocorreu um problema ao excluir o usuário.",$MIOLO->GetActionURL($module,$self));	
+		}
+		
+				
+		if ($this->objUsuario->excluir($idusuario))
+		{
+			$MIOLO->Information("O usuário foi excluido com sucesso.",$MIOLO->GetActionURL($module,$self));	
+		}
+		else 
+		{
+			$MIOLO->Error("Ocorreu um problema ao excluir o usuário.",$MIOLO->GetActionURL($module,$self));	
+		}
+	}
+
+	
+	public function verificaPendenciaMulta()
+	{
+		global $MIOLO,$module,$item,$self, $theme, $action, $page,$datagrid,$self;
+		
+		$retorno = true;
+		
+		$data = $this->getData();
+			
+		/*
+		*	Nova consistência 
+		*	Verificar se existe multa para este usuário
+		*
+		*   Se existir multa, não pode emprestar !!!!
+		*/
+		if ($this->objMulta->ListMultasNaoPagas($data->idusuario)->result[0][0])
+		{
+			//existem multas
+			//$MIOLO->Error("Este usuário possui multas pendentes",$MIOLO->GetActionURL($module,$self) );
+			$msg = "USUÁRIO COM MULTA.<br><br>Deseja pagar a multa ?";
+        	$gotoYes = $MIOLO->GetActionURL($module,'main:emprestimos:multa',$data->identidade . '@',array('event'=>'btnConsulta_click'));
+        	//   ................................................................................. O Arroba diz ao sistema que o usuário é da comunidade
+        	$gotoNo = $MIOLO->GetActionURL($module,$self);
+        	//$eventYes = "promptHandler;Question_Yes";
+        	$eventNo = "promptHandler;Question_No";
+        	$MIOLO->Question($msg, $gotoYes, $gotoNo, $eventYes, $eventNo);
+        	$retorno = false;
+		}
+		
+		return $retorno;
+	}
+
+	
+	public function verificaPendenciaEmprestimoAtrasado()
+	{
+		global $MIOLO,$module,$item,$self, $theme, $action, $page,$datagrid,$self;
+		
+		$retorno = true;
+		
+		$data = $this->getData();
+			
+		/*
+		*	Nova consistência 
+		*	Verificar se existem empréstimos atrasados
+		*
+		*   Se existir multa, não pode emprestar !!!!
+		*/
+		if ($this->objEmprestimo->getEmprestimosPorHoraAtrasados($data->idusuario)->result[0][0])
+		{
+			//$MIOLO->Error("Este usuário possui empréstimos de horas atrasados.",$MIOLO->GetActionURL($module,$self) );
+			$msg = "Este usuário possui empréstimos de horas atrasados.<br><br> Deseja ver estas informações?";
+        	$gotoYes = $MIOLO->GetActionURL($module,'main:emprestimos:situacaousuario',$data->identidade . '@',array('event'=>'btnVerificar_click'));
+        	//   ................................................................................. O Arroba diz ao sistema que o usuário é da comunidade
+        	$gotoNo = $MIOLO->GetActionURL($module,$self);
+        	//$eventYes = "promptHandler;Question_Yes";
+        	$eventNo = "promptHandler;Question_No";
+        	$MIOLO->Question($msg, $gotoYes, $gotoNo, $eventYes, $eventNo);
+        	
+        	$retorno = false;
+			
+		}
+		
+		return $retorno;
+	}
+	
+	//Barbacena
+	function btnImprimirRecibo_click()
+	{
+		global $MIOLO, $module, $item;
+		$Exemplares =  array();
+		$Exemplares = $this->getListaExemplares();
+		
+		$i = 0;
+		foreach ($Exemplares as $Exemplar)
+		$i++;
+			
+		$ui = $MIOLO->GetUI();
+		$report = new MJasperReport( 'sigabib' );
+		
+		$parameters[ 'int_IDUSUARIO' ] = $this->getFieldValue( 'hidId' );
+			
+		if ($i <= 2 )
+			$report->Execute('biblioteca','Ticket1_Emprestimo_UE',$parameters);
+		else
+			if ($i <= 4 )
+				$report->Execute('biblioteca','Ticket2_Emprestimo_UE',$parameters);
+			else
+				$report->Execute('biblioteca','Ticket3_Emprestimo_UE',$parameters);
+	}
+
+}
+?>

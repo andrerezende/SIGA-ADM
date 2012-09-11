@@ -1,0 +1,46 @@
+<?php
+class frmRepExecFinanceira extends MForm {
+
+	protected $requisicao;
+	protected $tiporeq;
+
+	public function __construct() {
+		global $MIOLO;
+        parent::__construct('Requisições Feitas');
+		$this->SetClose($this->manager->GetActionURL('adm','main:relatorios'));
+        $this->eventHandler();
+    }
+
+	public function CreateFields() {
+		$gestor = $this->manager->GetBusiness('adm','gestor');
+		if (!$options = $gestor->listUoByUsuario($this->manager->getLogin()->idkey)->result) {
+			$acesso = $this->manager->GetBusiness('adm','acessouoreq');
+			if (!$options = $acesso->listUoSaldoPublicoByUsuario($this->manager->getLogin()->idkey)->result) {
+				$this->manager->error('Não existem UOs associadas a este usuário.',$this->manager->GetActionURL('adm','main:reports'));
+				return;
+			}
+		}
+		$this->addField(new MSelection('selUO','','UO',$options));
+		$this->addField(new MCalendarField('calDataInicial','','Data Inicial'));
+		$this->addField(new MCalendarField('calDataFinal','','Data Final'));
+		$this->addButton(new MButton('btnRelatorio','Gerar Relatório','PDF'));
+	}
+
+	public function btnRelatorio_click() {
+		global $MIOLO;
+
+		$inicio = $this->getFieldValue('calDataInicial');
+		$inicio = substr($inicio,6,4).'/'.substr($inicio,3,2).'/'.substr($inicio,0,2);
+		$final = $this->getFieldValue('calDataFinal');
+		$final = substr($final,6,4).'/'.substr($final,3,2).'/'.substr($final,0,2);
+		$report = new MJasperReport('sigaept');
+		$parameters['dataInic'] 	= Form::GetFormValue('calDataInicial');
+		$parameters['dataFim'] 		= Form::GetFormValue('calDataFinal'); 
+		$parameters['SUBREPORT_DIR']	= $MIOLO->GetConf('home.modules');
+		$parameters['int_pIdUsuario']	= $MIOLO->login->idkey;
+		$parameters['pURL']		= $MIOLO->GetConf('home.url');
+		$idUO = $this->getFieldValue('selUO');
+		$parameters['int_idUo'] = $idUO;
+		$report->Execute('adm', 'repRequisicaoPorUO', $parameters);
+	}
+}

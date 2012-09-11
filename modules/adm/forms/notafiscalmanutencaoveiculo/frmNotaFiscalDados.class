@@ -1,0 +1,138 @@
+<?
+class frmNotaFiscalDados extends MForm
+{
+    protected $objNF;
+    public function __construct($objNF)
+    {
+        global $MIOLO;
+		$this->objNF = $objNF;
+        parent::__construct('Nota Fiscal');
+        $this->SetClose($MIOLO->GetActionURL('adm','main'));
+        $this->EventHandler();
+    }    
+    public function CreateFields()
+    {
+		global $MIOLO;
+	
+		$session = $MIOLO->getSession();
+		$session->set('notaFiscal',$this->objNF->idNotaFiscal);
+		$session->set('form',"editmandel");
+		$grid = $this->manager->GetUI()->GetGrid('adm','gridManutencaoVeiculo');
+       	$grid->SetTitle('Manutenções');
+
+		$fields = array(
+			new MHiddenField('placa'),
+			new LookupTextField('lkpVeiculo','','Veículo','15'),
+			new MHiddenField('idEmpresa'),
+			new LookupTextField('lkpEmpresa','','Empresa','30'),
+			new MCalendarField('data','','Data',10),
+			$grid,
+			new Text('manutencao','<b>MANUTENÇÃO</b>'),
+			new MHiddenField('idTipoManutencao'),
+			new LookupTextField('lkpTManutencao','','Tipo de Manutencao',20),
+			new MCurrencyField('valor','','Valor'),
+			new MultiLineField('obs','','Obs','',3,50),
+			new MTextField('valorTotal','','Total','9'),
+					);
+
+		$buttons = array(
+			new MButton('btnManutencao','Cadastrar Manutenção'),
+			new MButton('btnSalvarManutencao','Cadastrar Manutenção'),
+			new MButton('btnEnviar','Finalizar')
+						);
+		$this->SetFields($fields);
+		$this->SetButtons($buttons);
+
+		$this->SetFieldAttr('lkpVeiculo','module','adm');
+		$this->SetFieldAttr('lkpVeiculo','item','veiculo');
+		$this->SetFieldAttr('lkpVeiculo','event','filler');
+//		$this->SetFieldAttr('lkpVeiculo','related','placa,NULL,lkpVeiculo');
+		$this->SetFieldAttr('lkpVeiculo','related','null,placa,lkpVeiculo,null');
+
+		$this->SetFieldAttr('lkpEmpresa','module','adm');
+		$this->SetFieldAttr('lkpEmpresa','item','empresamanutencaoveiculo');
+		$this->SetFieldAttr('lkpEmpresa','event','filler');
+		$this->SetFieldAttr('lkpEmpresa','related','idEmpresa,lkpEmpresa');
+	
+		$this->SetFieldAttr('lkpTManutencao','module','adm');
+		$this->SetFieldAttr('lkpTManutencao','item','tipomanutencao');
+		$this->SetFieldAttr('lkpTManutencao','event','filler');
+		$this->SetFieldAttr('lkpTManutencao','related','idTipoManutencao,lkpTManutencao');
+
+	
+		$this->setButtonAttr('btnSalvarManutencao','visible',false);
+		$this->SetFieldAttr('manutencao','visible',false);
+		$this->SetFieldAttr('lkpTManutencao','visible',false);
+		$this->SetFieldAttr('valor','visible',false);
+		$this->SetFieldAttr('obs','visible',false);
+		$this->SetFieldAttr('valorTotal','readonly',true);
+		$this->SetFieldValue('placa',$this->objNF->placa);
+		$this->SetFieldValue('idEmpresa',$this->objNF->idEmpresa);
+		$this->setFieldValue('lkpEmpresa',$this->objNF->empresa->nome);
+		$this->SetFieldValue('lkpVeiculo',$this->objNF->veiculo->modelo);
+		$this->setFieldValue('data',$this->objNF->data);
+		$this->SetFieldValue('valorTotal',$this->objNF->valorTotal);	
+        $validators = array (
+            new MRequiredValidator('placa'),
+            new MRequiredValidator('idEmpresa'),
+           		    );
+        $this->SetValidators($validators);
+
+    }
+    function btnManutencao_click()
+    {
+		$this->setButtonAttr('btnSalvarManutencao','visible',true);
+		$this->setButtonAttr('btnManutencao','visible',false);
+		$this->setFieldAttr('lkpTManutencao','visible',true);
+		$this->setFieldAttr('valor','visible',true);
+		$this->setFieldAttr('obs','visible',true);
+    }
+    function btnSalvarManutencao_click()
+    {
+		global $MIOLO;
+	
+		$cf = new MCurrencyFormatter();
+		$session = $MIOLO->getSession();
+		$notaFiscal = $this->objNF->idNotaFiscal;
+		$data = $this->getData();
+		$data->valor = $cf->toDecimal($data->valor);
+		$objManutencao = $MIOLO->GetBusiness('adm','manutencaoveiculo');
+		$objManutencao->setData($data);
+	
+		$idTipoManutencao = $this->getFormValue('idTipoManutencao');
+		$objManutencao->setIdTipoManutencao($idTipoManutencao);
+		$objManutencao->setIdNotaFiscal($notaFiscal);
+		try
+		{
+			$objManutencao->Save();
+			$valorTotal = $objManutencao->valor + $this->objNF->valorTotal;
+			$this->objNF->valorTotal = $valorTotal;
+			$this->objNF->Update();
+			$msg = "Manutenção Cadastrada com sucesso. Para finalizar clique em 'finalizar'";
+			$MIOLO->Information($msg);
+		}
+		catch(Exception $e)
+		{
+			$this->manager->Error($e->getMessage());
+		}
+    }
+    function btnEnviar_click()
+    {
+		global $MIOLO;
+	
+		$data = $this->getData();
+		$objNotaFiscal = $this->objNF;
+		$objNotaFiscal->setData($data);
+		try
+		{
+			$objNotaFiscal->Update();
+			$msg = "Nota Fiscal alterada com sucesso";
+			$MIOLO->Information($msg,$this->manager->GetActionURL('adm','notafiscalmanutencaoveiculo:find',$objNotaFiscal->idNotaFiscal));
+		}
+		catch(Exception $e)
+		{
+			$this->manager->Error($e->getMessage());
+		}
+	}    
+}
+?>

@@ -1,0 +1,197 @@
+<?
+class frmAgencia extends Form
+{
+	var $listURL;
+	var $objBanco;
+	var $objAgencia;
+
+	function __construct()
+	{
+		global $MIOLO, $module, $self;
+
+		$this->objBanco = $MIOLO->GetBusiness($module,'banco');
+		$this->objAgencia = $MIOLO->GetBusiness($module,'agencia');
+
+		parent::Form("Agencia");
+		$this->EventHandler();
+	}
+
+	function CreateFields()
+	{
+		global $MIOLO, $module, $self, $action;
+
+		$fields = Array(
+			new Selection('selBanco','','Banco','',true),
+			new LookupTextField('lkpAgencia','','Número',10,'sem pontuação'),
+			new TextField('txtNome','','Nome',30),
+			new HiddenField('key',''),
+		);
+
+		$this->SetFields($fields);
+		
+		$validators = array(
+        	new MaskValidator('lkpAgencia','','aaaaaa','required'),
+			new RegExpValidator('txtNome','', '[A-Za-z0-9_]+','required')
+		);
+
+		$this->SetValidators($validators);
+		
+		$this->SetFieldAttr('lkpAgencia','module','adm');
+	   	$this->SetFieldAttr('lkpAgencia','item','bancoagencianova');
+	   	$this->SetFieldAttr('lkpAgencia','event','btnEdit:click');
+	   	$this->SetFieldAttr('lkpAgencia','related','lkpAgencia,selBanco');
+	   	$this->SetFieldAttr('lkpAgencia','filter','selBanco,lkpAgencia');
+
+		$objQuery = $this->objBanco->ListAll();
+		$this->SetFieldAttr('selBanco','options', $objQuery->result);
+
+		$buttons = Array
+		(
+			new FormButton('btnPost', 'Enviar'),
+			new FormButton('btnNew', 'Novo', $action),
+			new FormButton('btnDelete', 'Excluir'),
+		);
+
+		$this->SetButtons($buttons);
+
+		$this->SetButtonAttr('btnDelete','visible',false);
+		$this->SetButtonAttr('btnNew','visible',false);
+
+		$this->SetClose($MIOLO->GetActionURL($module,$self));
+	}
+
+	function GetData()
+	{
+	    $data = new FormData();
+		$data->idagenc = $this->GetFieldValue('lkpAgencia');
+		$data->idbanco = $this->GetFieldValue('selBanco');
+		$data->nome = strtoupper($this->GetFieldValue('txtNome'));
+		
+    	return $data;
+	}
+
+
+	function SetData($data)
+	{
+		$this->SetFieldValue('selBanco', $data->idbanco);
+		$this->SetFieldValue('txtNome', $data->nome);
+		$this->SetFieldValue('lkpAgencia', $data->idagenc);
+	}
+
+	function btnEdit_click($key='')
+	{
+		global $MIOLO, $module, $item, $self, $action;
+
+		$item = ($key != '') ? $key : $item;
+			
+		$objAgencia = $this->objAgencia;
+		if ($objAgencia)
+		{
+			if($item!='')
+			{
+				$this->SetFieldValue('key',$item);
+
+				$item = explode('_',$item);
+				$idagenc = trim($item[0]);
+				$idbanco = trim($item[1]);
+				
+				$this->SetData($objAgencia->GetByIds($idagenc,$idbanco));
+			}
+			
+			$this->SetButtonAttr('btnNew','label','Cancelar');
+			$this->SetButtonAttr('btnNew','visible',true);
+			
+			$this->SetFieldAttr('selBanco','readonly',true);
+			$this->SetFieldAttr('lkpAgencia','readonly',true);
+
+			$this->SetButtonAttr('btnDelete','visible',true);
+			
+			$this->AddError( $objAgencia->GetErrors() );
+		}
+	}
+	
+	function btnPost_click()
+	{
+		global $MIOLO, $module, $self, $action;
+
+		$objAgencia = $this->objAgencia;
+
+		if ( $objAgencia )
+		{
+			$data = $this->GetData();
+			$objAgencia->SetData($data);
+		 
+			if( ($this->GetFieldValue('lkpAgencia')!= '') && ($this->GetFieldValue('selBanco')!= '') && ($this->GetFieldValue('txtNome')!= '') )
+			{
+				$is_update = ($this->GetFieldValue('key') != '');
+				if ( $is_update )
+				{
+					$ok = $objAgencia->Update();
+				}
+				else
+				{
+					$ok = $objAgencia->Insert();
+				}
+				if ( $ok )
+				{
+					$MIOLO->Information('Operação realizada com sucesso.', $action );
+					return true;
+				}
+				else
+				{
+					$MIOLO->Error("Não foi possivel inserir Agência.<br>Agência já cadastrada.",$action);
+					return;
+				}
+			}
+			else
+			{
+				$MIOLO->Error("Campo não imformado!",$action);
+				return;
+			}
+
+			$this->AddError($objAgencia->GetErrors());
+		}
+	}
+
+	function btnNew_click()
+	{
+		$this->SetData();
+	}
+
+	function btnDelete_click()
+	{
+		global $MIOLO, $module, $item, $self, $action;
+
+		$item = ($item!='') ? $item : $this->GetFieldValue('key');
+		
+		$MIOLO->Assert( isset($item), 'Número da Agência não foi informado!', $action);
+		$objAgencia = $this->objAgencia;
+		
+		$vetItem = explode('_',$item);
+		$objAgencia->GetByIds($vetItem[0],$vetItem[1]);
+		
+		$conf = $this->GetFormValue('conf');
+		if ( $conf == 'sim')
+		{
+			if ( $objAgencia->Delete() )
+			{
+				$MIOLO->Prompt(Prompt::Information("Agência excluída com sucesso.",$action));
+			}
+			else
+			{
+				$MIOLO->Prompt(Prompt::Information( $objAgencia->GetErrors(),$action));
+			}
+		}
+		elseif ( $conf == 'nao')
+		{
+			$MIOLO->Prompt(Prompt::Information('Exclusão cancelada.',$action));
+		}
+		else
+		{
+			$action_sim = $MIOLO->GetActionURL($module,$self,$item, array('event'=>'btnDelete:click','conf'=>'sim'));
+			$action_nao = $MIOLO->GetActionURL($module,$self,$item, array('event'=>'btnDelete:click','conf'=>'nao'));
+			$MIOLO->Prompt(Prompt::Question("Confirma a exclusão da agência {$objAgencia->nome} ?",$action_sim, $action_nao));
+		}
+	}
+}
+?>

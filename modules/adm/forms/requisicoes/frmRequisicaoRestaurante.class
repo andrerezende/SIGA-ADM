@@ -1,0 +1,1268 @@
+<?
+class frmRequisicaoRestaurante extends Form
+{
+	protected $objRequisicao;
+		
+    function __construct($objRequisicao)
+    {
+		$this->objRequisicao = $objRequisicao;
+        $this->Form('Requisição de refeição em Restaurante');
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+	
+       $fields = array
+		   (
+				new TextField('cpf','','CPF',20,'999.999.999-99'),
+				new TextField('nome','','Nome',50),
+                new TextField('numrg','','Identidade',20),
+				new TextField('telefone','','Telefone de Contato',20), 
+				new TextField('endereco','','Rua',52),
+				new TextField('bairro','','Bairro',50),	   		 
+				new TextField('cep','','CEP',8,'99999-999'),
+				new LookupTextField('lkpMunicipio','','Municipio',50),
+				new HiddenField('idmunicipio',''),
+				new TextField('edtEstado','','Estado','2'),
+				new Selection('idRestaurantePref','','Restaurante Preferido'),        
+				new MultiLineField('motivo','','Motivo','',3,50),
+				new CalendarField('dataInicio','','Data Início'),
+				new CalendarField('dataFim','','Data Fim'),
+				new MLookupFieldValue('lkpAcompanhante','','Acompanhante',50),
+				new TextField('numeroAlmocos','','N&ordm; Almoços','2'),
+				new TextField('numeroJantares','','N&ordm; Jantares','2'),
+				new CurrencyField('valorEstimado','','Valor Estimado',10,''),
+				new HiddenField('idPessoa'),
+				new HiddenField('idPessoaAcompanhante')
+           );
+		
+       $this->SetFields($fields);
+	   
+	   $this->SetFieldAttr('lkpAcompanhante','module','adm');
+	   $this->SetFieldAttr('lkpAcompanhante','item','Funcionario');
+	   $this->SetFieldAttr('lkpAcompanhante','event','filler');
+       $this->SetFieldAttr('lkpAcompanhante','related','idPessoaAcompanhante,lkpAcompanhante');
+
+	   $this->SetFieldAttr('lkpMunicipio','module','common');
+       $this->SetFieldAttr('lkpMunicipio','item','municipio');
+       $this->SetFieldAttr('lkpMunicipio','event','filler');
+       $this->SetFieldAttr('lkpMunicipio','related','idmunicipio,lkpMunicipio,edtEstado');
+	   
+	   $restaurante = $this->manager->getBusiness('adm','restaurante');
+	   $query = $restaurante->listAtivos();
+	   $this->SetFieldAttr('idRestaurantePref','options',$query->result);
+	   
+		$buttons = array
+		(
+    	   new FormButton('btnSolicitar', 'Enviar'),
+           new FormButton('btnSalvar', 'Confirmar'),
+           new FormButton('btnAtender','Enviar'),
+           new FormButton('btnConfirmarAtendimento','Confirmar'),
+           new FormButton('btnExecutar','Enviar'),
+           new FormButton('btnConfirmarExecucao', 'Confirmar Execução'),
+           new FormButton('btnAnular','Anular Requisição'),
+           new FormButton('btnLiberar','Enviar'),
+           new FormButton('btnRecusar','Recusar'),
+           new FormButton('btnConfirmarRecusa','Confirmar'),
+           new FormButton('btnAvaliar','Enviar'),
+           new FormButton('btnConfirmarAvaliacao','Confirmar'),
+           new FormButton('btnRetornaExecucao','Retornar Execução'),
+           new FormButton('btnConfirmarRetorno','Confimar Retorno'),
+           new FormButton('btnEstornar','Estornar'),
+           new FormButton('btnCancelar','Cancelar'),
+		   new FormButton('btnCPF', 'Enviar')
+        );
+		$this->SetButtons($buttons);
+		
+		$this->setButtonAttr('btnSalvar','visible',FALSE);
+		$this->setButtonAttr('btnCancelar','visible',FALSE);
+		$this->setButtonAttr('btnSolicitar','visible',FALSE);
+		$this->setButtonAttr('btnAtender','visible',FALSE);
+        $this->setButtonAttr('btnConfirmarAtendimento','visible',FALSE);
+	    $this->setButtonAttr('btnCPF','visible',FALSE);
+		$this->setButtonAttr('btnExecutar','visible',FALSE);
+        $this->setButtonAttr('btnConfirmarExecucao','visible',FALSE);
+ 		$this->setButtonAttr('btnLiberar','visible',FALSE);       
+ 		$this->setButtonAttr('btnRecusar','visible',FALSE);       
+ 		$this->setButtonAttr('btnConfirmarRecusa','visible',FALSE);    
+  		$this->setButtonAttr('btnAvaliar','visible',FALSE);       
+ 		$this->setButtonAttr('btnConfirmarAvaliacao','visible',FALSE);
+    	$this->setButtonAttr('btnEstornar','visible',FALSE);
+  		$this->setButtonAttr('btnConfirmarRetorno','visible',FALSE);
+   		$this->setButtonAttr('btnAnular','visible',FALSE);
+        $this->setButtonAttr('btnRetornaExecucao','visible',FALSE);
+
+		if ( $this->objRequisicao->status != '1' )
+		{
+			$this->setButtonAttr('btnSolicitar','visible',FALSE);
+			$this->setObjectData();
+		}
+
+       $idUsuario = $this->manager->GetLogin()->idkey;
+       switch ( $this->objRequisicao->status )
+	   {
+			case 1: //Pendente
+                // validators quando o usuário está fazendo a requisição
+        		$validators = array(
+									new CPFValidator('cpf','','required'),
+									new MRequiredValidator('nome'),
+									new MRequiredValidator('numrg'),
+									new MRequiredValidator('endereco'),
+									new MRequiredValidator('bairro'),
+									new MCepValidator('cep','','required'),
+									new MRequiredValidator('motivo', '', 'required'),
+									new MRequiredValidator('dataInicio'),
+									new MRequiredValidator('dataFim')
+								);		
+		        $this->SetValidators($validators);
+
+				$this->visible(false);
+			    $this->setButtonAttr('btnCPF','visible',TRUE);
+            break;
+			
+			case 2: // Solicitada, a ser autorizada pelo gestor da UO requisitante
+				$this->objRequisicao->getUoRequisitante();
+				if ( $this->objRequisicao->uoRequisitante->isGestorOf($idUsuario) )
+				{
+            		$itemRequisicao = $this->objRequisicao->getItem();
+                    $this->AddField(new Separator('<b>AÇÕES DO GESTOR DA UO REQUISITANTE</b>'));
+                    $this->AddField(New Selection('acaoGestorUoReq','','Ação'));
+                    $this->AddField(new MultiLineField('motivoRejeicao','','Motivo','',3,50));
+
+                    $tipoAcao = array("4"=>"AUTORIZAR","5"=>"DEVOLVER","6"=>"RECUSAR");
+                    $this->SetFieldAttr('acaoGestorUoReq','options',$tipoAcao);
+                    $this->setButtonAttr('btnAtender','visible',TRUE);
+				}
+   			break;
+
+            case 4: // Autorizada, a ser liberada para execução
+ 				$this->objRequisicao->getUoExecutante();
+				if ( $this->objRequisicao->uoExecutante->isExecutorOf($idUsuario) )
+				{          
+                    $this->AddField(new Separator('<b>LIBERAÇÃO DA REQUISIÇÃO</b>'));
+                    $tipoAcao = array("1"=>"LIBERAR","2"=>"RECUSAR");
+                    $this->AddField(New Selection('acaoGestorUoExec','','Ação',$tipoAcao));
+                    $this->AddField(new MultiLineField('motivoRejeicao','','Motivo da Recusa','',3,50));
+                    $this->setButtonAttr('btnLiberar','visible',TRUE);
+                }
+            break;
+
+            case 5: // Devolvida para acertos
+         		$this->setReadOnly(FALSE,TRUE);
+                $this->setButtonAttr('btnSolicitar','visible',TRUE);
+                $this->AddField(new MultiLineField('motivoRejeicao',$this->objRequisicao->motivoRejeicao,'Motivo da Devolução','',3,50));
+                $this->setFieldAttr('motivoRejeicao','readonly',TRUE);
+            break;
+           
+			case 7: // Liberada pela UO Exec, a ser executada pelo gestor da UO executante
+				$this->objRequisicao->getUoExecutante();
+				if ( $this->objRequisicao->uoExecutante->isExecutorOf($idUsuario) )
+				{
+               		$itemRequisicao = $this->objRequisicao->getItem();
+                    $this->AddField(new Separator('<b>EXECUÇÃO DA REQUISIÇÃO</b>'));
+                    $this->AddField(new CalendarField('dataInicio2',$itemRequisicao->dataInicio,'Data Inicio'));
+                    $this->AddField(new CalendarField('dataFim2',$itemRequisicao->dataFim,'Data Fim'));
+                    $this->AddField(new CurrencyField('valorReal','','Valor Real',10,''));
+                    $this->AddField(new LookupTextField('lkpEmpenho','','Empenho',30));
+                    $this->AddField(new MultiLineField('notaFiscal','','NotaFiscal','',3,50));                  
+                    $this->AddField(new CalendarField('dataNotaFiscal','','Data N. Fiscal'));
+                    $this->AddField(new MultiLineField('ocorrencias','','Ocorrências','',3,50));
+                    $this->AddField(new HiddenField('idEmpenho',''));
+
+                    $this->setButtonAttr('btnExecutar','visible',TRUE);
+                    $this->setButtonAttr('btnAnular','visible',TRUE);
+					$this->SetFieldAttr('lkpEmpenho','module','adm');
+			        $this->SetFieldAttr('lkpEmpenho','item','numeroEmpenho');
+			        $this->SetFieldAttr('lkpEmpenho','event','filler');
+			        $this->SetFieldAttr('lkpEmpenho','related','idEmpenho,lkpEmpenho');
+				}
+			break;
+
+            case 9: // Executada, a ser avaliada pelo usuário requisitante
+            
+         		$this->objRequisicao->getUoRequisitante();
+           	    $itemRequisicao = $this->objRequisicao->getItem();	
+                $this->AddField(new CurrencyField('valorReal2',$itemRequisicao->valorReal,'Valor Real',10,''));
+                $this->AddField(new TextLabel('dataInicio',$itemRequisicao->dataInicio,'Data Início'));
+                $this->AddField(new TextLabel('dataFim',$itemRequisicao->dataFim,'Data Fim'));
+                $this->AddField(new TextLabel('lkpEmpenho',$itemRequisicao->empenho->numero,'Empenho',30));
+                $this->AddField(new TextLabel('notaFiscal',$itemRequisicao->notaFiscal,'NotaFiscal',10));                  
+                $this->AddField(new TextLabel('dataNotaFiscal',$itemRequisicao->dataNotaFiscal,'Data N. Fiscal'));
+                $this->AddField(new TextLabel('ocorrencias',$itemRequisicao->ocorrencias,'Ocorrências','',3,50));
+        		$this->setFieldAttr('valorReal2','readonly','true');
+                
+                /*
+                // Se é o gestor da Uo Executante, habilita opção de estorno de requisição
+				$this->objRequisicao->getUoExecutante();
+				if ( $this->objRequisicao->uoExecutante->isExecutorOf($idUsuario) )
+                {
+                    $this->AddField(new Separator('<b>ESTORNO DE EXECUÇÃO</b>'));
+                    $this->AddField(new TextField('dataInicio',$itemRequisicao->dataInicio,'Data Início'));
+                    $this->AddField(new CalendarField('dataFim',$itemRequisicao->dataFim,'Data Fim'));
+                    $this->AddField(new TextField('valorReal',$itemRequisicao->valorReal,'Valor Real',10,''));
+                    $this->AddField(new LookupTextField('lkpEmpenho',$itemRequisicao->empenho->numero,'Empenho',30));
+                    $this->AddField(new TextField('notaFiscal',$itemRequisicao->notaFiscal,'NotaFiscal',10));                  
+                    $this->AddField(new CalendarField('dataNotaFiscal',$itemRequisicao->dataNotaFiscal,'Data N. Fiscal'));
+                    $this->AddField(new MultiLineField('ocorrencias',$itemRequisicao->ocorrencias,'Ocorrências','',3,50));
+                    $this->AddField(new HiddenField('idEmpenho',$itemRequisicao->idEmpenho));
+               		$this->setButtonAttr('btnEstornar','visible',TRUE);     
+
+					$this->SetFieldAttr('lkpEmpenho','module','adm');
+			        $this->SetFieldAttr('lkpEmpenho','item','numeroEmpenho');
+			        $this->SetFieldAttr('lkpEmpenho','event','filler');
+			        $this->SetFieldAttr('lkpEmpenho','related','idEmpenho,lkpEmpenho');
+                }
+                */
+
+                // Se é o usuário requisitante ou um gestor da uo de onde ele requisitou
+        		/*if (($this->objRequisicao->getIdUsuarioRequisitante() == $idUsuario) || ($this->objRequisicao->uoRequisitante->isGestorOf($idUsuario))) 
+                {
+                    $tabelaGeral = $this->manager->getBusiness('common','tabelageral');
+
+                    $opcoes = array(
+                        "1"=>"SIM",
+                        "2"=>"NÃO",
+                        );
+                        
+                    $opcoes2 = array(
+                        "1"=>"SATISFATÓRIO",
+                        "2"=>"INSATISFATÓRIO",
+                        );
+
+                    $this->AddField(new Separator('<b>AVALIAÇÃO DO SERVIÇO</b>'));
+                    //$this->AddField(new Selection('autorizarPagamento','','Autorizar Pagamento',$opcoes));
+                    $this->AddField(new Selection('conceito','','Conceito',$opcoes2));
+                    $this->AddField(new MultiLineField('obs','','Observações','',3,50));
+             	    $this->setButtonAttr('btnAvaliar','visible',TRUE);       
+                }*/              
+
+            break;
+
+            case A: // Recusada a ser acompanhada pela pessoa que requisitou
+                    $this->AddField(new MultiLineField('motivoRejeicao',$this->objRequisicao->motivoRejeicao,'Motivo da Recusa','',3,50));
+                    $this->setFieldAttr('motivoRejeicao','readonly',TRUE);
+            break;         
+            
+            case D: // Pagamento não autorizado pelo pelo requisitante
+                // Se é o gestor da Uo Executante, habilita opção de estorno de requisição
+				$this->objRequisicao->getUoExecutante();
+				if ( $this->objRequisicao->uoExecutante->isExecutorOf($idUsuario) )
+                {
+            		$itemRequisicao = $this->objRequisicao->getItem();           
+                    $this->AddField(new CalendarField('dataInicio',$itemRequisicao->dataInicio,'Data Início'));
+                    $this->AddField(new CalendarField('dataFim',$itemRequisicao->dataFim,'Data Fim'));
+                    $this->AddField(new TextField('valorReal',$itemRequisicao->valorReal,'Valor Real',10,''));
+                    $this->AddField(new LookupTextField('lkpEmpenho',$itemRequisicao->empenho->numero,'Empenho',30));
+                    $this->AddField(new MultiLineField('notaFiscal',$itemRequisicao->notaFiscal,'NotaFiscal','',3,50));                  
+                    $this->AddField(new CalendarField('dataNotaFiscal',$itemRequisicao->dataNotaFiscal,'Data N. Fiscal'));
+                    $this->AddField(new MultiLineField('ocorrencias',$itemRequisicao->ocorrencias,'Ocorrências','',3,50));
+                    $this->AddField(new HiddenField('idEmpenho',$itemRequisicao->idEmpenho));
+             		$this->setButtonAttr('btnRetornaExecucao','visible',TRUE);     
+                    
+					$this->SetFieldAttr('lkpEmpenho','module','adm');
+			        $this->SetFieldAttr('lkpEmpenho','item','numeroEmpenho');
+			        $this->SetFieldAttr('lkpEmpenho','event','filler');
+			        $this->SetFieldAttr('lkpEmpenho','related','NULL,idEmpenho,lkpEmpenho');                    
+                }
+            break;
+
+            case E: // Pagamento autorizado pelo pelo requisitante
+                $itemRequisicao = $this->objRequisicao->getItem();
+				$itemRequisicao->retrieveAssociation('empenho');
+                
+				$this->AddField(new CurrencyField('valorReal',$itemRequisicao->valorReal,'Valor Real',10,''));
+				$this->AddField(new TextField('numeroEmpenho',$itemRequisicao->empenho->numero,'Empenho',30));
+                $this->AddField(new MultiLineField('notaFiscal',$itemRequisicao->notaFiscal,'NotaFiscal','',3,50)); 
+                $this->AddField(new TextField('dataNotaFiscal',$itemRequisicao->dataNotaFiscal,'Data N. Fiscal'));
+                $this->AddField(new MultiLineField('ocorrencias',$itemRequisicao->ocorrencias,'Ocorrências','',3,50));
+                $this->AddField(new HiddenField('idEmpenho',''));
+				
+				$this->setFieldAttr('valorReal','readonly',TRUE);
+				$this->setFieldAttr('numeroEmpenho','readonly',TRUE);
+				$this->setFieldAttr('notaFiscal','readonly',TRUE);
+				$this->setFieldAttr('dataNotaFiscal','readonly',TRUE);
+				$this->setFieldAttr('ocorrencias','readonly',TRUE);
+           		$this->setButtonAttr('btnEstornar','visible',TRUE);
+				
+				
+            break;
+
+	   }
+    }
+
+	function setObjectData()	
+	{	
+		$itemRequisicao = $this->objRequisicao->getItem();
+		$itemRequisicao->retrieveAssociation('pessoa');
+		$itemRequisicao->retrieveAssociation('pessoaAcompanhante');
+		$itemRequisicao->pessoa->retrieveAssociation('municipio');
+        
+    	$this->SetFieldValue('nome',$itemRequisicao->pessoa->nome);
+        $this->SetFieldValue('numrg',$itemRequisicao->pessoa->numrg);
+		$this->SetFieldValue('cpf',$itemRequisicao->pessoa->cpf);
+		$this->SetFieldValue('telefone',$itemRequisicao->pessoa->telefone);
+		$this->SetFieldValue('endereco',$itemRequisicao->pessoa->endereco);
+		$this->SetFieldValue('bairro',$itemRequisicao->pessoa->bairro);
+		$this->SetFieldValue('cep',$itemRequisicao->pessoa->cep);
+		$this->SetFieldValue('lkpMunicipio',$itemRequisicao->pessoa->municipio->municipio);
+		$this->SetFieldValue('edtEstado',$itemRequisicao->pessoa->municipio->idUF);
+		$this->SetFieldValue('motivo',$itemRequisicao->motivo);
+		$this->SetFieldValue('valorEstimado',$itemRequisicao->valorEstimado);
+		$this->SetFieldValue('lkpAcompanhante',$itemRequisicao->pessoaAcompanhante->nome);
+		$this->SetFieldValue('idRestaurantePref',$itemRequisicao->idRestaurantePref);
+		$this->SetFieldValue('dataInicio',$itemRequisicao->dataInicio);
+		$this->SetFieldValue('dataFim',$itemRequisicao->dataFim);
+		$this->SetFieldValue('numeroAlmocos',$itemRequisicao->numeroAlmocos);
+		$this->SetFieldValue('numeroJantares',$itemRequisicao->numeroJantares);    
+		$this->setReadOnly();
+	}
+
+	function setReadOnly($all=true,$pessoa=true)
+	{
+		$this->setFieldAttr('nome','readonly',$pessoa);
+        $this->setFieldAttr('numrg','readonly',$pessoa);
+		$this->setFieldAttr('cpf','readonly',$pessoa);
+		$this->setFieldAttr('telefone','readonly',$pessoa);
+		$this->setFieldAttr('endereco','readonly',$pessoa);
+		$this->setFieldAttr('bairro','readonly',$pessoa);
+		$this->setFieldAttr('cep','readonly',$pessoa);
+		$this->setFieldAttr('lkpMunicipio','readonly',$pessoa);
+		$this->setFieldAttr('edtEstado','readonly',$pessoa);
+		$this->setFieldAttr('motivo','readonly',$all);
+		$this->setFieldAttr('valorEstimado','readonly',$all);
+		$this->setFieldAttr('lkpAcompanhante','readonly',$all);
+		$this->setFieldAttr('idRestaurantePref','readonly',$all);
+		$this->setFieldAttr('dataInicio','readonly',$all);
+		$this->setFieldAttr('dataFim','readonly',$all);
+		$this->setFieldAttr('numeroAlmocos','readonly',$all);
+  		$this->setFieldAttr('numeroJantares','readonly',$all);
+    }
+
+	function btnSolicitar_click()
+	{
+    	$data = $this->GetData();
+ 
+        // Se o usuario digitou um nome de municipio sem usar a lupa
+        $municipioPessoa = $this->manager->getBusiness('common','municipio');
+        if (!$data->idmunicipio)
+        {
+            $municipioPessoa->getIdByNomeEstado($data->lkpMunicipio,$data->edtEstado);
+            $data->idmunicipio = $municipioPessoa->idMunicipio;
+    		$this->SetFieldValue('idmunicipio',$data->idmunicipio);
+        }
+       
+		if ((is_null($data->idmunicipio)) && (!$municipioPessoa))
+		{
+			$this->addError("Município do requisitante inválido! Use a lupa para localizar o município.");
+			$this->btnCPF_Click();
+		}
+        		
+        /*
+		elseif (is_null($data->telefone))
+ 		{
+			$this->addError("Telefone do requisitante em branco. Este campo é de preenchimento obrigatório!");
+			$this->btnCPF_Click();
+		}
+        */
+        
+		/*
+		elseif (is_null($data->cep))
+ 		{
+			$this->addError("CEP do requisitante em branco. Este campo é de preenchimento obrigatório!");
+			$this->btnCPF_Click();
+		}
+		*/
+		
+		/*elseif ($data->motivo == '')
+		{
+			$this->addError("Motivo da solicitação em branco!");
+			$this->btnCPF_Click();
+		}*/
+		
+        else
+        {
+            $this->visible(true);
+            $this->setTitle("Confirmação da requisição de Restaurante");
+            $this->setData();
+            $this->setReadOnly();
+            $this->setButtonAttr('btnSalvar','visible',TRUE);
+            $this->setButtonAttr('btnCancelar','visible',TRUE);
+            $this->setButtonAttr('btnSolicitar','visible',FALSE);
+            $this->setButtonAttr('btnCPF','visible',FALSE);
+	    }
+	}
+
+	function btnCancelar_click()
+	{
+		$this->setData();
+        $idUsuario = $this->manager->GetLogin()->idkey;
+
+		// Se a primeira requisicao está sendo aberta.		
+		if (($this->objRequisicao->status == '1') && ($this->objRequisicao->idUsuarioRequisitante == $idUsuario) && ($controle = $this->getFormValue('controle') == null))
+		{
+			$this->visible(true);
+			$this->setReadOnly(false,true);
+		  	$this->setButtonAttr('btnCPF','visible',FALSE);   
+			$this->setButtonAttr('btnSolicitar','visible',TRUE);
+    	}
+	}
+
+	function setData()
+	{
+ 		$data = $this->GetData();
+        
+        // Calcula o valor Estimado da requisicao
+        $restaurante = $this->manager->getBusiness('adm','restaurante');
+	    $restaurante = $restaurante->GetById($data->idRestaurantePref);
+        $data->valorEstimado = (($data->numeroAlmocos + $data->numeroJantares) * str_replace(',','.',$restaurante->valorRefeicao));
+        
+        $this->SetFieldValue('nome',$data->nome);
+        $this->SetFieldValue('numrg',$data->numrg);
+		$this->SetFieldValue('cpf',$data->cpf);
+		$this->SetFieldValue('telefone',$data->telefone);
+		$this->SetFieldValue('endereco',$data->endereco);
+		$this->SetFieldValue('bairro',$data->bairro);
+		$this->SetFieldValue('cep',$data->cep);
+		$this->SetFieldValue('lkpMunicipio',$data->lkpMunicipio);
+        $this->SetFieldValue('motivo',$data->motivo);
+		$this->SetFieldValue('valorEstimado',$data->valorEstimado);
+		$this->SetFieldValue('lkpAcompanhante',$data->lkpAcompanhante);
+		$this->SetFieldValue('idRestaurantePref',$data->idRestaurantePref);
+		$this->SetFieldValue('idPessoa',$data->idPessoa);
+		$this->SetFieldValue('idPessoaAcompanhante',$data->idPessoaAcompanhante);
+		$this->SetFieldValue('dataInicio',$data->dataInicio);
+		$this->SetFieldValue('dataFim',$data->dataFim);
+		$this->SetFieldValue('numeroAlmocos',$data->numeroAlmocos);
+		$this->SetFieldValue('numeroJantares',$data->numeroJantares);
+	}
+
+	public function btnSalvar_click()
+	{
+      	$itemRequisicao = $this->objRequisicao->getItem();
+		$this->objRequisicao->getUoRequisitante();
+        $idUsuario = $this->manager->GetLogin()->idkey;
+
+		$data = $this->getData();
+        $data->cpf = str_replace(".","",$data->cpf);
+        $data->cpf = str_replace("-","",$data->cpf);
+		$data->cep = str_replace("-","",$data->cep);
+
+        $pessoa = $this->manager->getBusiness('common','pessoa');
+	    $pessoa = $pessoa->GetByCpf($data->cpf);
+
+		if  ( !$pessoa ) 
+		{	  
+            $pessoa = $this->manager->getBusiness('common','pessoa');
+            $pessoa->nome = $data->nome;
+            $pessoa->numrg = $data->numrg;
+			$pessoa->cpf = $data->cpf;
+			$pessoa->telefone = $data->telefone;
+			$pessoa->endereco = $data->endereco;
+			$pessoa->bairro = $data->bairro;
+			$pessoa->cep = $data->cep;
+			$pessoa->idmunicipio = $data->idmunicipio;
+			$pessoa->datanasc = "01/01/1990";
+			$pessoa->idpais = "024";
+			$pessoa->idpaisnascimento = "024";
+			$pessoa->sexo = "I";
+			$pessoa->save();
+			$data->idpessoa = $pessoa->idpessoa;
+			
+			$pessoa->Log(OP_INS,"Nova Pessoa criada. idPessoa: ".$pessoa->idpessoa);
+		}
+       
+		$itemRequisicao->setData($data);
+		$this->objRequisicao->addItem($itemRequisicao);
+		try
+		{
+            if ($this->objRequisicao->uoRequisitante->isGestorOf($idUsuario))
+			{
+		        $requisita = $this->manager->getBusiness('adm','requisita');
+    		    $requisita->GetById($this->objRequisicao->idTipoReq,$this->objRequisicao->idUoRequisitante,$this->objRequisicao->getAno());
+ 
+                if ($this->objRequisicao->uoRequisitante->temSaldoByRubrica($requisita->idRubrica,$itemRequisicao->valorEstimado))
+                {
+                    $this->objRequisicao->beginTransaction();
+                    $this->objRequisicao->setStatus('4');
+                    $this->objRequisicao->save();                
+                   
+                    $this->objRequisicao->getUoRequisitante();
+                    $this->objRequisicao->uoRequisitante->setTransaction($this->objRequisicao->getTransaction());
+                    $this->objRequisicao->uoRequisitante->addPrevisaoDebito($requisita->idRubrica,$data->valorEstimado,$this->objRequisicao->getAno());
+                    $this->objRequisicao->Log(OP_UPD,"Requisicao ".$this->objRequisicao->idRequisicao.": adicao da previsao de ".$data->valorEstimado." na UO ".$this->objRequisicao->uoRequisitante->idUo);
+
+                    $lancamentoInt = $this->manager->getBusiness('adm','lancamentoint');
+                    $lancamentoInt->setTransaction($this->objRequisicao->getTransaction());
+                    $lancamentoInt->tipoLancamento = '4';
+					$lancamentoInt->obs = "Adicao de previsao devido a requisicao feita pelo proprio gestor";
+                    $lancamentoInt->data = date("d/m/Y");                
+                    $lancamentoInt->valor = $data->valorEstimado;
+                    $lancamentoInt->ano = date("Y");
+                    $lancamentoInt->idUoRequisitante = $this->objRequisicao->idUoRequisitante;       
+                    $lancamentoInt->idUoExecutante = $this->objRequisicao->idUoExecutante;
+                    $lancamentoInt->idRubrica = $requisita->idRubrica;           
+                    $lancamentoInt->idRequisicao = $this->objRequisicao->idRequisicao;
+                    $lancamentoInt->save();
+                    $lancamentoInt->Log(OP_INS,"Lançamento Interno numero ".$lancamentoInt->idLancamentoInt." gerado com sucesso para a Requisicao ".$this->objRequisicao->idRequisicao.".");
+                    
+                    $this->objRequisicao->endTransaction(); 
+
+                    $this->objRequisicao->Log(OP_INS,"Requisicao ".$this->objRequisicao->idRequisicao." submetida a avaliação do gestor.");
+                    $this->manager->information("Solicitação criada e autorizada. O número da requisição é ".$this->objRequisicao->idRequisicao.".",$this->manager->getActionUrl('adm','main:requisicoes:find') );
+                }
+                else
+                {
+                    $this->manager->information("Saldo insuficiente para esta rubrica.",$this->manager->getActionUrl('adm','main:requisicoes:find') );
+                }
+            }
+            else
+            {
+                $this->objRequisicao->setStatus('2');
+              	$this->objRequisicao->save();
+			    $this->objRequisicao->Log(OP_INS,"Requisicao ".$this->objRequisicao->idRequisicao.": submetida a avaliação do gestor.");
+    		    $this->manager->information("Solicitação submetida à avaliação do gestor. O número da requisição é ".$this->objRequisicao->idRequisicao.".",$this->manager->getActionUrl('adm','main:requisicoes:find') );               
+            }
+		}
+		catch (Exception $e)
+		{
+			$this->addError($e->getMessage());
+		}
+	}
+
+	function visible($bool)
+    {
+        $this->SetFieldAttr('nome','visible',$bool);
+        $this->SetFieldAttr('numrg','visible',$bool);
+        $this->SetFieldAttr('telefone','visible',$bool);
+        $this->SetFieldAttr('endereco','visible',$bool);
+        $this->SetFieldAttr('bairro','visible',$bool);
+        $this->SetFieldAttr('cep','visible',$bool);
+        $this->SetFieldAttr('lkpMunicipio','visible',$bool);
+        $this->SetFieldAttr('edtEstado','visible',$bool);
+        $this->SetFieldAttr('idRestaurantePref','visible',$bool);
+        $this->SetFieldAttr('motivo','visible',$bool);
+        $this->SetFieldAttr('lkpAcompanhante','visible',$bool);
+        $this->SetFieldAttr('valorEstimado','visible',$bool);
+    	$this->setFieldAttr('dataInicio','visible',$bool);
+		$this->setFieldAttr('dataFim','visible',$bool);
+		$this->setFieldAttr('numeroAlmocos','visible',$bool);
+  		$this->setFieldAttr('numeroJantares','visible',$bool);
+	}
+
+	function btnAtender_click()
+	{
+        $data = $this->getData();       
+        $this->objRequisicao->getUoRequisitante();
+        $itemRequisicao = $this->objRequisicao->getItem();
+        $requisita = $this->manager->getBusiness('adm','requisita');
+        $requisita->GetById($this->objRequisicao->idTipoReq,$this->objRequisicao->idUoRequisitante,$this->objRequisicao->getAno());
+
+        if ($data->acaoGestorUoReq == '')
+        {
+    		$this->manager->Error("Você precisa selecionar uma ação a fazer (autorizar, devolver ou recusar).",'');
+        }
+
+        if ($this->objRequisicao->uoRequisitante->temSaldoByRubrica($requisita->idRubrica,$itemRequisicao->valorEstimado) || ($data->acaoGestorUoReq == '5') || ($data->acaoGestorUoReq == '6'))
+        {        
+            // Se selecionou recusar ou devolver
+            if (($data->acaoGestorUoReq == '5') || ($data->acaoGestorUoReq == '6'))
+            {
+                if ($data->motivoRejeicao == '')
+                {
+                    $this->manager->Error("Você precisa informar o motivo.",'');
+                }
+            }    
+
+            $this->setTitle("Confirmação do atendimento do Gestor da UO Requisitante");
+            $this->setData();
+            $this->setReadOnly();
+            
+            $this->setFieldAttr('motivoRejeicao','readonly',TRUE);
+            $this->setFieldAttr('acaoGestorUoReq','readonly',TRUE);
+
+            $this->setButtonAttr('btnAtender','visible',FALSE);
+            $this->setButtonAttr('btnConfirmarAtendimento','visible',TRUE);
+            $this->setButtonAttr('btnCancelar','visible',TRUE);
+ 		}
+        else
+        {
+            $this->manager->information("Saldo insuficiente para esta rubrica.",$this->manager->getActionUrl('adm','main:requisicoes:find') );
+		}
+	}
+
+	function btnCPF_click()
+    {
+	   $this->visible(true);
+	   $pessoa = $this->manager->getBusiness('common','pessoa');
+
+       // Retira os caracteres extras do cpf, deixando só os numeros
+	   $cpf = $this->GetFieldValue('cpf');
+       $cpf = str_replace(".","",$cpf);
+       $cpf = str_replace("-","",$cpf);
+       
+	   $pessoa = $pessoa->GetByCpf($cpf);
+	   if ($pessoa)
+       { 
+	      $id = $pessoa->idpessoa;
+	      $pessoa = $pessoa->GetById($id);
+	      $this->setFieldPessoa($pessoa);
+          $this->setReadOnly(false);  
+	   } 
+	   else
+       {
+         $this->setReadOnly(false,false);
+		 $this->setFieldAttr('cpf', 'readonly', TRUE);
+		 if ( ($this->getFormValue('btnCPF')))
+         { 
+	        $this->AddInfo('CPF não cadastrado! Por favor, insira os dados desta pessoa!');	   
+	     }   
+	   }
+       $this->setFieldAttr('valorEstimado','visible',FALSE);
+	   $this->setButtonAttr('btnCPF','visible',FALSE);
+       $this->setButtonAttr('btnSolicitar','visible',true);
+	} 
+
+	function setFieldPessoa($pessoa)
+	{
+	   $pessoa->retrieveAssociation('municipio');
+       $this->SetFieldValue('idPessoa',$pessoa->idpessoa); 
+	   $this->SetFieldValue('nome',$pessoa->nome);
+       $this->SetFieldValue('numrg',$pessoa->numrg);
+	   $this->SetFieldValue('telefone',$pessoa->telefone);
+	   $this->SetFieldValue('endereco',$pessoa->endereco);
+	   $this->SetFieldValue('bairro',$pessoa->bairro);
+	   $cepFormatado = chunk_split($pessoa->cep, 5, "-");
+	   $cepFormatado[9] = "";
+	   $this->SetFieldValue('cep',trim($cepFormatado));
+       $this->SetFieldValue('lkpMunicipio',$pessoa->municipio->municipio);
+	   $this->SetFieldValue('idmunicipio',$pessoa->idmunicipio);
+       $this->SetFieldValue('edtEstado',$pessoa->municipio->idUF);
+	}
+
+    function btnConfirmarAtendimento_click()
+	{
+		$itemRequisicao = $this->objRequisicao->getItem();		
+        $data = $this->getData();
+
+        $proximaRequisicao = $this->manager->getBusiness('adm','requisicao',$this->objRequisicao->getProximaASerAtendida());
+ 
+        $itemRequisicao->setData($data);
+		$this->objRequisicao->addItem($itemRequisicao);
+        $this->objRequisicao->setStatus($data->acaoGestorUoReq);
+        $this->objRequisicao->setMotivoRejeicao($data->motivoRejeicao);
+        $this->objRequisicao->setDataHoraAutorizacao();
+        $this->objRequisicao->beginTransaction();
+
+        try
+        {
+            if ($data->acaoGestorUoReq == '4')
+            {
+ 	    	        $requisita = $this->manager->getBusiness('adm','requisita');
+        		    $requisita->GetById($this->objRequisicao->idTipoReq,$this->objRequisicao->idUoRequisitante,$this->objRequisicao->getAno());                   
+                    
+                    $this->objRequisicao->getUoRequisitante();
+                    $this->objRequisicao->uoRequisitante->setTransaction($this->objRequisicao->getTransaction());
+                    $this->objRequisicao->uoRequisitante->addPrevisaoDebito($requisita->idRubrica,$data->valorEstimado,$this->objRequisicao->getAno());
+    	   			$this->objRequisicao->Log(OP_UPD,"Requisicao ".$this->objRequisicao->idRequisicao.": adicao da previsao de ".$data->valorEstimado." na UO ".$this->objRequisicao->uoRequisitante->idUo);
+        
+                    $lancamentoInt = $this->manager->getBusiness('adm','lancamentoint');
+                    $lancamentoInt->setTransaction($this->objRequisicao->getTransaction());
+                    $lancamentoInt->tipoLancamento = '4';
+					$lancamentoInt->obs = "Adicao de previsao devido a autorizacao da requisicao pelo gestor";
+                    $lancamentoInt->data = date("d/m/Y");                
+                    $lancamentoInt->valor = $data->valorEstimado;
+                    $lancamentoInt->ano = date("Y");
+                    $lancamentoInt->idUoRequisitante = $this->objRequisicao->idUoRequisitante;       
+                    $lancamentoInt->idUoExecutante = $this->objRequisicao->idUoExecutante;
+                    $lancamentoInt->idRubrica = $requisita->idRubrica;           
+                    $lancamentoInt->idRequisicao = $this->objRequisicao->idRequisicao;
+                    $lancamentoInt->save();
+                    $lancamentoInt->Log(OP_INS,"Lançamento Interno numero ".$lancamentoInt->idLancamentoInt." gerado com sucesso para a Requisicao ".$this->objRequisicao->idRequisicao.".");
+
+            }               
+        }
+ 		catch (Exception $e)
+		{
+			$this->addError($e->getMessage());
+		}
+			
+		$this->objRequisicao->save();
+        $this->objRequisicao->endTransaction();
+		$this->objRequisicao->Log(OP_UPD,"Requisicao ".$this->objRequisicao->idRequisicao.": avaliada com sucesso.");
+
+		//Passa para a proxima requisicao a ser atendida
+		if ($proximaRequisicao->idRequisicao)
+    		$action_voltar = $this->manager->getActionUrl('adm','main:requisicoes',$proximaRequisicao->idRequisicao,array("form"=>"item","tipoReq"=>$proximaRequisicao->idTipoReq));
+        else
+            $action_voltar = $this->manager->getActionUrl('adm','main:requisicoes:find','');
+
+
+		$this->manager->information("Requisição atendida com sucesso.",$action_voltar);
+	}
+
+ 	function btnExecutar_click()
+	{
+        $data = $this->getData();
+        $k = new MKrono();  
+        
+		if (abs($k->DaysDiff($data->dataInicio2,$data->dataInicio)) > 180)
+		{
+			$this->addError("A diferença entre a data de início real e a previsa não deve ser superior a 180 dias.");
+			$this->btnCancelar_Click();
+		}
+		elseif (abs($k->DaysDiff($data->dataFim2,$data->dataFim)) > 180)
+		{
+			$this->addError("A diferença entre a data final real e a previsa não deve ser superior a 180 dias.");
+			$this->btnCancelar_Click();
+		}
+        else if ($data->valorReal <= 0)
+    	{
+			$this->adderror("Valor real precisa ser um número maior que zero!");
+			$this->btncancelar_click();
+		} 
+        else
+        {
+            $this->setTitle("Confirmação de execução do Gestor da UO Executante");
+            $this->setData();
+            $this->setReadOnly();
+            
+            $this->setFieldAttr('motivoRejeicao','readonly',TRUE);
+            $this->setFieldAttr('acaoGestorUoReq','readonly',TRUE);
+            
+            $this->setFieldAttr('dataRefeicao','readonly',TRUE);
+            $this->setFieldAttr('valorReal','readonly',TRUE);
+            $this->setFieldAttr('ocorrencias','readonly',TRUE);
+            $this->setFieldAttr('notaFiscal','readonly',TRUE);
+            $this->setFieldAttr('dataNotaFiscal','readonly',TRUE);
+            $this->setFieldAttr('lkpEmpenho','readonly',TRUE);       
+            $this->setFieldAttr('dataInicio2','readonly',TRUE);
+            $this->setFieldAttr('dataFim2','readonly',TRUE);
+          
+            $this->setButtonAttr('btnExecutar','visible',FALSE);
+            $this->setButtonAttr('btnConfirmarExecucao','visible',TRUE);
+            $this->setButtonAttr('btnCancelar','visible',TRUE);
+    	}            
+	}
+
+    public function btnConfirmarExecucao_click()
+	{
+        $cf = new MCurrencyFormatter();
+ 
+		$itemRequisicao = $this->objRequisicao->getItem();		
+        $data = $this->getData();
+	
+        $valorReal = $cf->toDecimal($data->valorReal);
+        $valorEstimado = $cf->toDecimal($data->valorEstimado);
+
+        // Se ja os lançamentos já foram feitos então deve abortar a repetição da operação
+        if ($this->objRequisicao->checkLancamento('5',$valorReal) && $this->objRequisicao->checkLancamento('7',$valorEstimado))
+        {
+            return true;
+        }
+
+		$proximaRequisicao = $this->manager->getBusiness('adm','requisicao',$this->objRequisicao->getProximaASerExecutada());
+		
+        $data->dataInicio = $data->dataInicio2;
+        $data->dataFim = $data->dataFim2;
+
+    
+        $itemRequisicao->setData($data);
+		$this->objRequisicao->addItem($itemRequisicao);
+        $this->objRequisicao->setStatus('9');
+        try
+        {
+            $this->objRequisicao->beginTransaction();
+
+            $requisita = $this->manager->getBusiness('adm','requisita');
+            $requisita->GetById($this->objRequisicao->idTipoReq,$this->objRequisicao->idUoRequisitante,$this->objRequisicao->getAno());
+
+            $executa = $this->manager->getBusiness('adm','executa');
+            $executa->GetById($this->objRequisicao->idTipoReq,$this->objRequisicao->idUoExecutante);
+
+            // Remove a previsão de débito e adiciona o debito no orçamento da Uo requisitante
+            $this->objRequisicao->getUoRequisitante();
+               
+            $this->objRequisicao->setStatus('9');
+            $this->objRequisicao->uoRequisitante->setTransaction($this->objRequisicao->getTransaction());
+
+            $this->objRequisicao->uoRequisitante->addDebitoRemovePrevisao($requisita->idRubrica,$valorReal,$valorEstimado,$this->objRequisicao->getAno());
+            $this->objRequisicao->Log(OP_UPD,"Requisição ".$this->objRequisicao->idRequisicao.": debito de ".$valorReal." na UO ".$this->objRequisicao->uoRequisitante->idUo);
+            $this->objRequisicao->Log(OP_UPD,"Requisicao ".$this->objRequisicao->idRequisicao.": adicao da previsao de ".$valorEstimado." na UO ".$this->objRequisicao->uoRequisitante->idUo);
+          
+            // Lançamento interno de retorno da previsão de débito
+            $lancamentoInt = $this->manager->getBusiness('adm','lancamentoint');
+            $lancamentoInt->setTransaction($this->objRequisicao->getTransaction());
+            $lancamentoInt->tipoLancamento = '7';
+			$lancamentoInt->obs = "Retorno de previsao feito na execucao";
+            $lancamentoInt->data = date("d/m/Y");                
+            $lancamentoInt->valor = $valorEstimado;
+            $lancamentoInt->ano = date("Y");
+            $lancamentoInt->idUoRequisitante = $this->objRequisicao->idUoRequisitante;       
+            $lancamentoInt->idUoExecutante = $this->objRequisicao->idUoExecutante;
+            $lancamentoInt->idRubrica = $requisita->idRubrica;           
+            $lancamentoInt->idRequisicao = $this->objRequisicao->idRequisicao;
+            $lancamentoInt->save();
+            $lancamentoInt->Log(OP_INS,"Lançamento Interno numero ".$lancamentoInt->idLancamentoInt." gerado com sucesso para a Requisicao ".$this->objRequisicao->idRequisicao.".");
+
+
+            // Adiciona o credito na Uo Executante
+            $this->objRequisicao->getUoExecutante();
+            $this->objRequisicao->uoExecutante->setTransaction($this->objRequisicao->getTransaction());
+            $this->objRequisicao->uoExecutante->addCreditoExecutante($executa->idRubrica,$valorReal,$this->objRequisicao->getAno());
+            $this->objRequisicao->Log(OP_UPD,"Requisição ".$this->objRequisicao->idRequisicao.": credito de ".$itemRequisicao->valorReal." na UO ".$this->objRequisicao->uoExecutante->idUo);
+
+            // Lançamento interno do crédito/débito
+            $lancamentoInt2 = $this->manager->getBusiness('adm','lancamentoint');
+            $lancamentoInt2->setTransaction($this->objRequisicao->getTransaction());
+            $lancamentoInt2->tipoLancamento = '5';
+			$lancamentoInt2->obs = "Credito/debito feito na execucao.";
+            $lancamentoInt2->data = date("d/m/Y");                
+            $lancamentoInt2->valor = $valorReal;
+            $lancamentoInt2->ano = date("Y");
+            $lancamentoInt2->idUoRequisitante = $this->objRequisicao->idUoRequisitante;       
+            $lancamentoInt2->idUoExecutante = $this->objRequisicao->idUoExecutante;
+            $lancamentoInt2->idRubrica = $requisita->idRubrica;           
+            $lancamentoInt2->idRequisicao = $this->objRequisicao->idRequisicao;
+            $lancamentoInt2->save();
+            $lancamentoInt2->Log(OP_INS,"Lançamento Interno numero ".$lancamentoInt2->idLancamentoInt." realizado com sucesso para a Requisicao ".$this->objRequisicao->idRequisicao);
+
+    		$this->objRequisicao->save();
+            $this->objRequisicao->endTransaction();
+        	$this->objRequisicao->Log(OP_UPD,"Requisicao ".$this->objRequisicao->idRequisicao." executada com sucesso.");
+			
+			if ($proximaRequisicao->idRequisicao)
+    			$action_voltar = $this->manager->getActionUrl('adm','main:requisicoes',$proximaRequisicao->idRequisicao,array("form"=>"item","tipoReq"=>$proximaRequisicao->idTipoReq));
+            else
+                $action_voltar = $this->manager->getActionUrl('adm','main:requisicoes:find','');
+			
+    		$this->manager->information("Requisição executada com sucesso.",$action_voltar );
+		}
+		catch (Exception $e)
+		{
+			$this->addError($e->getMessage());
+		}
+	}
+
+    public function btnLiberar_click()
+	{
+        $data = $this->getData();
+		$proximaRequisicao = $this->manager->getBusiness('adm','requisicao',$this->objRequisicao->getProximaASerExecutada());
+        $this->objRequisicao->beginTransaction();
+
+        // Se não selecionou nada
+        if ($data->acaoGestorUoExec == '')
+        {
+    		$this->manager->Error("Você precisa selecionar uma ação a fazer (liberar ou recusar).",'');
+        }       
+        
+        // Se selecionou liberar
+        if ($data->acaoGestorUoExec == '1')
+        {
+        	$this->objRequisicao->setStatus('7');
+            $status = "liberada";
+        }
+
+        // Se selecionou recusar
+        if ($data->acaoGestorUoExec == '2')
+        {
+            if ($data->motivoRejeicao == '')
+            {
+    	    	$this->manager->Error("Você precisa informar o motivo.",'');
+            }
+            else
+            {
+                $requisita = $this->manager->getBusiness('adm','requisita');
+                $requisita->GetById($this->objRequisicao->idTipoReq,$this->objRequisicao->idUoRequisitante,$this->objRequisicao->getAno());
+
+                // Remove a previsão de débito e adiciona o debito no orçamento da Uo requisitante
+                $this->objRequisicao->getUoRequisitante();
+                $this->objRequisicao->uoRequisitante->setTransaction($this->objRequisicao->getTransaction());
+                $this->objRequisicao->uoRequisitante->removePrevisaoDebito($requisita->idRubrica,$data->valorEstimado,$this->objRequisicao->getAno());
+   	   			$this->objRequisicao->Log(OP_UPD,"Requisicao ".$this->objRequisicao->idRequisicao.": remocao da previsao de ".$data->valorEstimado." na UO ".$this->objRequisicao->uoRequisitante->idUo);
+
+    	        $this->objRequisicao->setMotivoRejeicao($data->motivoRejeicao);
+            	$this->objRequisicao->setStatus('A');
+                $status = "recusada";
+                
+                // Lançamento interno de retorno da previsão de débito
+                $lancamentoInt = $this->manager->getBusiness('adm','lancamentoint');
+                $lancamentoInt->setTransaction($this->objRequisicao->getTransaction());
+                $lancamentoInt->tipoLancamento = '7';
+				$lancamentoInt->obs = "Retorno de previsao devido a recusa pelo executor.";
+                $lancamentoInt->data = date("d/m/Y");                
+                $lancamentoInt->valor = $data->valorEstimado;
+                $lancamentoInt->ano = date("Y");
+                $lancamentoInt->idUoRequisitante = $this->objRequisicao->idUoRequisitante;       
+                $lancamentoInt->idUoExecutante = $this->objRequisicao->idUoExecutante;
+                $lancamentoInt->idRubrica = $requisita->idRubrica;           
+                $lancamentoInt->idRequisicao = $this->objRequisicao->idRequisicao;
+                $lancamentoInt->save();
+                $lancamentoInt->Log(OP_INS,"Lançamento Interno numero ".$lancamentoInt->idLancamentoInt." gerado com sucesso para a Requisicao ".$this->objRequisicao->idRequisicao.".");
+
+            }
+        }    
+		try
+		{
+        	$this->objRequisicao->save();            
+            $this->objRequisicao->endTransaction();
+  
+			$this->objRequisicao->Log(OP_UPD,"Requisicao ".$this->objRequisicao->idRequisicao.": ".$status." com sucesso.");
+
+			//Passa para a proxima requisicao a ser executada
+			if ($proximaRequisicao->idRequisicao)
+    			$action_voltar = $this->manager->getActionUrl('adm','main:requisicoes',$proximaRequisicao->idRequisicao,array("form"=>"item","tipoReq"=>$proximaRequisicao->idTipoReq));
+		    else
+			    $action_voltar = $this->manager->getActionUrl('adm','main:requisicoes:find','');
+
+			if ($data->acaoGestorUoExec == '1')
+        	{
+				$action_rep = $this->manager->getActionURL('adm','main:requisicoes:reprequisicaoalimentacao','',array("req"=>"{$this->objRequisicao->idRequisicao}"));
+				$this->manager->Confirmation("Requisição ".$status." com sucesso. Clique OK para imprimir a requisicão e CANCELAR para voltar.",$action_rep, $action_voltar);
+			}
+			else
+			{
+				$this->manager->information("Requisição recusada.",$action_voltar);
+			}
+		}
+		catch (Exception $e)
+		{
+			$this->addError($e->getMessage());
+		}
+	}
+
+ 	function btnAvaliar_click()
+	{
+        $data = $this->getData();
+        
+        // Se não selecionou o autorizar Pagamento
+        /*
+        if ($data->autorizarPagamento == '')
+        {
+    		$this->manager->Error("Você precisa informar se o pagamento será autorizado ou não.",'');
+        }
+        */
+        
+         // Se não selecionou o conceito
+        if ($data->conceito == '')
+        {
+    		$this->manager->Error("Você precisa conceituar o serviço.",'');
+        }
+
+		$this->setTitle("Confirmação de avaliação da requisição");
+		$this->setData();
+		$this->setReadOnly();
+	
+        //$this->setFieldAttr('autorizarPagamento','readonly',TRUE);		
+        $this->setFieldAttr('conceito','readonly',TRUE);
+        $this->setFieldAttr('obs','readonly',TRUE);
+        
+        $this->setButtonAttr('btnAvaliar','visible',FALSE);
+        $this->setButtonAttr('btnConfirmarAvaliacao','visible',TRUE);
+		$this->setButtonAttr('btnCancelar','visible',TRUE);
+	}
+    
+    public function btnConfirmarAvaliacao_click()
+	{
+		$itemRequisicao = $this->objRequisicao->getItem();		
+        $data = $this->getData();
+
+        $itemRequisicao->setData($data);
+		$this->objRequisicao->addItem($itemRequisicao);
+
+        try
+		{
+            // Transferencias monetárias passaram as ser feitas na execução da requisicao
+            // Danilo 09/01/2006
+            /*
+        	if ($data->autorizarPagamento == '1')
+	        {
+                $this->objRequisicao->beginTransaction();
+
+                $requisita = $this->manager->getBusiness('adm','requisita');
+                $requisita->GetById($this->objRequisicao->idTipoReq,$this->objRequisicao->idUoRequisitante);
+
+            	$executa = $this->manager->getBusiness('adm','executa');
+	            $executa->GetById($this->objRequisicao->idTipoReq,$this->objRequisicao->idUoExecutante);
+	
+                // Remove a previsão de débito e adiciona o debito no orçamento da Uo requisitante
+             	$this->objRequisicao->getUoRequisitante();
+                //if ($this->objRequisicao->uoRequisitante->temSaldoByRubrica($requisita->idRubrica,$itemRequisicao->valorReal,$itemRequisicao->valorEstimado))
+				if (true)
+                {               
+                    $this->objRequisicao->setStatus('E');
+                    $this->objRequisicao->uoRequisitante->setTransaction($this->objRequisicao->getTransaction());
+                    $this->objRequisicao->uoRequisitante->addDebitoRemovePrevisao($requisita->idRubrica,$itemRequisicao->valorReal,$data->valorEstimado,$this->objRequisicao->getAno());
+                    $this->objRequisicao->Log(OP_UPD,"Requisição ".$this->objRequisicao->idRequisicao.": debito de ".$itemRequisicao->valorReal." na UO ".$this->objRequisicao->uoRequisitante->idUo);
+
+                    $this->objRequisicao->Log(OP_UPD,"Requisicao ".$this->objRequisicao->idRequisicao.": adicao da previsao de ".$data->valorEstimado." na UO ".$this->objRequisicao->uoRequisitante->idUo);
+                  
+                    // Lançamento interno de retorno da previsão de débito
+                    $lancamentoInt = $this->manager->getBusiness('adm','lancamentoint');
+                    $lancamentoInt->setTransaction($this->objRequisicao->getTransaction());
+                    $lancamentoInt->tipoLancamento = '7';
+                    $lancamentoInt->data = date("d/m/Y");                
+                    $lancamentoInt->valor = $data->valorEstimado;
+                    $lancamentoInt->ano = date("Y");
+                    $lancamentoInt->idUoRequisitante = $this->objRequisicao->idUoRequisitante;       
+                    $lancamentoInt->idUoExecutante = $this->objRequisicao->idUoExecutante;
+                    $lancamentoInt->idRubrica = $requisita->idRubrica;           
+                    $lancamentoInt->idRequisicao = $this->objRequisicao->idRequisicao;
+                    $lancamentoInt->save();
+                    $lancamentoInt->Log(OP_INS,"Lançamento Interno numero ".$lancamentoInt->idLancamentoInt." gerado com sucesso para a Requisicao ".$this->objRequisicao->idRequisicao.".");
+
+
+                    // Adiciona o credito na Uo Executante
+                    $this->objRequisicao->getUoExecutante();
+                    $this->objRequisicao->uoExecutante->setTransaction($this->objRequisicao->getTransaction());
+                    $this->objRequisicao->uoExecutante->addCreditoExecutante($executa->idRubrica,$itemRequisicao->valorReal,$this->objRequisicao->getAno());
+                    $this->objRequisicao->Log(OP_UPD,"Requisição ".$this->objRequisicao->idRequisicao.": credito de ".$itemRequisicao->valorReal." na UO ".$this->objRequisicao->uoExecutante->idUo);
+
+                    // Lançamento interno do crédito/débito
+                    $lancamentoInt2 = $this->manager->getBusiness('adm','lancamentoint');
+                    $lancamentoInt2->setTransaction($this->objRequisicao->getTransaction());
+                    $lancamentoInt2->tipoLancamento = '5';
+                    $lancamentoInt2->data = date("d/m/Y");                
+                    $lancamentoInt2->valor = $itemRequisicao->valorReal;
+                    $lancamentoInt2->ano = date("Y");
+                    $lancamentoInt2->idUoRequisitante = $this->objRequisicao->idUoRequisitante;       
+                    $lancamentoInt2->idUoExecutante = $this->objRequisicao->idUoExecutante;
+                    $lancamentoInt2->idRubrica = $requisita->idRubrica;           
+                    $lancamentoInt2->idRequisicao = $this->objRequisicao->idRequisicao;
+                    $lancamentoInt2->save();
+                    $lancamentoInt2->Log(OP_INS,"Lançamento Interno numero ".$lancamentoInt2->idLancamentoInt." realizado com sucesso para a Requisicao ".$this->objRequisicao->idRequisicao);
+            	}
+            	else                
+                {
+                    $this->manager->Error("Esta UO não possui orçamento definido para esta rubrica.");
+                }
+        	}
+        	else
+        	{
+    			$this->objRequisicao->setStatus('D');
+        	}
+            */
+            $this->objRequisicao->setStatus('G'); //Finalizada
+        	$this->objRequisicao->save();
+			$this->objRequisicao->Log(OP_UPD,"Requisicao ".$this->objRequisicao->idRequisicao." avaliada com sucesso.");
+    		$this->manager->information("Requisição avaliada com sucesso.",$this->manager->getActionUrl('adm','main:requisicoes:find') );
+		}
+		catch (Exception $e)
+		{
+			$this->addError($e->getMessage());
+		}
+	}
+    
+  	function btnRetornaExecucao_click()
+	{
+		$this->setTitle("Confirmação de retorno de execução");
+		$this->setData();
+		$this->setReadOnly();
+		
+        $this->setFieldAttr('dataInicio','readonly',TRUE);
+        $this->setFieldAttr('dataFim','readonly',TRUE);
+        $this->setFieldAttr('valorReal','readonly',TRUE);
+        $this->setFieldAttr('lkpEmpenho','readonly',TRUE);
+        $this->setFieldAttr('notaFiscal','readonly',TRUE);
+        $this->setFieldAttr('dataNotaFiscal','readonly',TRUE);
+        $this->setFieldAttr('ocorrencias','readonly',TRUE);
+        
+        $this->setButtonAttr('btnRetornaExecucao','visible',FALSE);
+        $this->setButtonAttr('btnConfirmarRetorno','visible',TRUE);
+		$this->setButtonAttr('btnCancelar','visible',TRUE);
+	}
+    
+	public function btnConfirmarRetorno_click()
+	{
+        $cf = new MCurrencyFormatter();
+
+		$this->objRequisicao->retrieveAssociation('uoRequisitante');
+		$this->objRequisicao->retrieveAssociation('uoExecutante');
+
+		$itemRequisicao = $this->objRequisicao->getItem();
+        $data = $this->getData();
+
+        $valorAntigo = $itemRequisicao->valorReal;
+        $valorAtual = $cf->toDecimal($data->valorReal);
+
+        // Se ja os lançamentos já foram feitos então deve abortar a repetição da operação
+        if ($this->objRequisicao->checkLancamento('6',$valorAtual))
+        {
+            return true;
+        }
+
+		$itemRequisicao->setData($data);
+		$this->objRequisicao->addItem($itemRequisicao);
+ 
+		try
+		{
+	        // Se a requisição já foi confirmada, então é necessário também um estorno no orçamento interno
+        	if ($this->objRequisicao->status == 'E')
+	        {
+                $this->objRequisicao->beginTransaction();
+    	        $requisita = $this->manager->getBusiness('adm','requisita');
+        	    $requisita->GetById($this->objRequisicao->idTipoReq,$this->objRequisicao->idUoRequisitante,$this->objRequisicao->getAno());                
+                $idRubrica = trim($requisita->idRubrica);
+
+                $this->objRequisicao->uoRequisitante->setTransaction($this->objRequisicao->getTransaction());
+                $this->objRequisicao->uoExecutante->setTransaction($this->objRequisicao->getTransaction());
+
+            	$executa = $this->manager->getBusiness('adm','executa');
+	            $executa->GetById($this->objRequisicao->idTipoReq,$this->objRequisicao->idUoExecutante);
+
+                // Defaz o lançamento financeiro da execução anterior
+                $this->objRequisicao->uoExecutante->removeCreditoExecutante($idRubrica,$valorAntigo,$this->objRequisicao->getAno());
+	            $this->objRequisicao->uoRequisitante->removeDebito($idRubrica,$valorAntigo,$this->objRequisicao->getAno());
+    	     
+        	    // Faz o lançamento financeiro com o novo valor
+	            $this->objRequisicao->uoRequisitante->addDebito($idRubrica,$data->valorReal,$this->objRequisicao->getAno());
+	            $this->objRequisicao->uoExecutante->addCreditoExecutante($executa->idRubrica,$data->valorReal,$this->objRequisicao->getAno());
+       	
+        	    $lancamentoInt = $this->manager->getBusiness('adm','lancamentoint');
+                $lancamentoInt->setTransaction($this->objRequisicao->getTransaction());
+            	$lancamentoInt->tipoLancamento = '6'; //Estorno de Débito/Crédito
+				$lancamentoInt->obs = "Estorno de credito/debito feito pelo executante.";
+	            $lancamentoInt->data = date("d/m/Y");                
+    	        $lancamentoInt->valor = $itemRequisicao->valorReal;
+        	    $lancamentoInt->ano = date("Y");
+            	$lancamentoInt->idUoRequisitante = $this->objRequisicao->idUoRequisitante;       
+	            $lancamentoInt->idUoExecutante = $this->objRequisicao->idUoExecutante;
+    	        $lancamentoInt->idRubrica = $idRubrica;           
+        	    $lancamentoInt->idRequisicao = $this->objRequisicao->idRequisicao;
+            	$lancamentoInt->save();           
+            	$lancamentoInt->Log(OP_INS,"Lançamento Interno numero ".$lancamentoInt->idLancamentoInt." gerado com sucesso para a Requisicao ".$this->objRequisicao->idRequisicao.".");
+
+
+                $this->objRequisicao->setStatus('H');
+        	}
+            else
+            {
+        		$this->objRequisicao->setStatus('9');
+        	}
+
+        	$this->objRequisicao->save();
+            $this->objRequisicao->endTransaction();
+			$this->objRequisicao->Log(OP_UPD,"Requisicao ".$this->objRequisicao->idRequisicao." estornada com sucesso");
+    		$this->manager->information("Requisição estornada com sucesso.",$this->manager->getActionUrl('adm','main:requisicoes:find') );
+		}
+		catch (Exception $e)
+		{
+			$this->addError($e->getMessage());
+		}
+	}
+    
+    public function btnAnular_click()
+	{
+		$proximaRequisicao = $this->manager->getBusiness('adm','requisicao',$this->objRequisicao->getProximaASerExecutada());
+
+		$itemRequisicao = $this->objRequisicao->getItem();
+		$this->objRequisicao->addItem($itemRequisicao);
+		$this->objRequisicao->setStatus('A');
+        $requisita = $this->manager->getBusiness('adm','requisita');
+        $requisita->GetById($this->objRequisicao->idTipoReq,$this->objRequisicao->idUoRequisitante,$this->objRequisicao->getAno());                    
+		try
+		{
+            $this->objRequisicao->beginTransaction();
+			$this->objRequisicao->retrieveAssociation('uoRequisitante');
+            $this->objRequisicao->uoRequisitante->setTransaction($this->objRequisicao->getTransaction());
+            $this->objRequisicao->uoRequisitante->removePrevisaoDebito($requisita->idRubrica,$itemRequisicao->valorEstimado,$this->objRequisicao->getAno());
+			$this->objRequisicao->Log(OP_UPD,"Requisicao ".$this->objRequisicao->idRequisicao.": remocao da previsao de ".$data->valorEstimado." na UO ".$this->objRequisicao->uoRequisitante->idUo);
+        	$this->objRequisicao->save();
+
+            // Lançamento interno de retorno da previsão de débito
+            $lancamentoInt = $this->manager->getBusiness('adm','lancamentoint');
+            $lancamentoInt->setTransaction($this->objRequisicao->getTransaction());
+            $lancamentoInt->tipoLancamento = '7';
+			$lancamentoInt->obs = "Retorno de previsao devido a anulacao do executante.";
+            $lancamentoInt->data = date("d/m/Y");                
+            $lancamentoInt->valor = $itemRequisicao->valorEstimado;
+            $lancamentoInt->ano = date("Y");
+            $lancamentoInt->idUoRequisitante = $this->objRequisicao->idUoRequisitante;       
+            $lancamentoInt->idUoExecutante = $this->objRequisicao->idUoExecutante;
+            $lancamentoInt->idRubrica = $requisita->idRubrica;           
+            $lancamentoInt->idRequisicao = $this->objRequisicao->idRequisicao;
+            $lancamentoInt->save();
+            $lancamentoInt->Log(OP_INS,"Lançamento Interno numero ".$lancamentoInt->idLancamentoInt." gerado com sucesso para a Requisicao ".$this->objRequisicao->idRequisicao.".");
+
+            
+            $this->objRequisicao->endTransaction();
+            
+			$this->objRequisicao->Log(OP_UPD,"Requisicao ".$this->objRequisicao->idRequisicao." anulada.");
+			//Passa para a proxima requisicao a ser executada
+			if ($proximaRequisicao->idRequisicao)
+    			$action_voltar = $this->manager->getActionUrl('adm','main:requisicoes',$proximaRequisicao->idRequisicao,array("form"=>"item","tipoReq"=>$proximaRequisicao->idTipoReq));
+		    else
+			    $action_voltar = $this->manager->getActionUrl('adm','main:requisicoes:find','');
+
+    		$this->manager->information("Requisição anulada com sucesso.",$action_voltar);
+		}
+		catch (Exception $e)
+		{
+			$this->addError($e->getMessage());
+		}
+	}
+
+	public function btnEstornar_click()
+	{
+		$this->objRequisicao->retrieveAssociation('uoRequisitante');
+		$this->objRequisicao->retrieveAssociation('uoExecutante');
+        $this->objRequisicao->beginTransaction();
+
+		$itemRequisicao = $this->objRequisicao->getItem();	        
+        $data = $this->getData();
+        $itemRequisicao->setData($data);
+		$this->objRequisicao->addItem($itemRequisicao);
+
+		try
+		{
+	        // Se a requisição já foi confirmada, então é necessário também um estorno no orçamento interno
+    	    if ($this->objRequisicao->status == 'E')
+        	{
+                $this->objRequisicao->uoRequisitante->setTransaction($this->objRequisicao->getTransaction());                
+                $this->objRequisicao->uoExecutante->setTransaction($this->objRequisicao->getTransaction());
+
+            	$requisita = $this->manager->getBusiness('adm','requisita');
+	            $requisita->GetById($this->objRequisicao->idTipoReq,$this->objRequisicao->idUoRequisitante,$this->objRequisicao->getAno());
+                $idRubrica = trim($requisita->idRubrica);
+                
+            	$executa = $this->manager->getBusiness('adm','executa');
+	            $executa->GetById($this->objRequisicao->idTipoReq,$this->objRequisicao->idUoExecutante);
+
+                // Defaz o lançamento financeiro da execução anterior
+                $this->objRequisicao->uoExecutante->removeCreditoExecutante($idRubrica,$itemRequisicao->valorReal,$this->objRequisicao->getAno());
+	            $this->objRequisicao->uoRequisitante->removeDebito($idRubrica,$itemRequisicao->valorReal,$this->objRequisicao->getAno());
+                    	     
+        	    // Faz o lançamento financeiro com o novo valor
+	            // $this->objRequisicao->uoRequisitante->addDebito($idRubrica,$valorAtual);
+	            // $this->objRequisicao->uoExecutante->addCreditoExecutante($executa->idRubrica,$valorAtual);
+      
+    	        $lancamentoInt = $this->manager->getBusiness('adm','lancamentoint');
+                $lancamentoInt->setTransaction($this->objRequisicao->getTransaction());
+        	    $lancamentoInt->tipoLancamento = '6'; //Estorno de Débito/Crédito
+				$lancamentoInt->obs = "Estorno de credito/debito feito pelo executor.";
+            	$lancamentoInt->data = date("d/m/Y");                
+	            $lancamentoInt->valor = $itemRequisicao->valorReal;
+    	        $lancamentoInt->ano = date("Y");
+        	    $lancamentoInt->idUoRequisitante = $this->objRequisicao->idUoRequisitante;       
+            	$lancamentoInt->idUoExecutante = $this->objRequisicao->idUoExecutante;
+	            $lancamentoInt->idRubrica = $requisita->idRubrica;           
+    	        $lancamentoInt->idRequisicao = $this->objRequisicao->idRequisicao;
+        	    $lancamentoInt->save();           
+				$lancamentoInt->Log(OP_INS,"Lançamento Interno numero ".$lancamentoInt->idLancamentoInt." realizado para a Requisicao ".$this->objRequisicao->idRequisicao);
+
+                $this->objRequisicao->setStatus('H');
+        	}
+
+        	$this->objRequisicao->save();
+            $this->objRequisicao->endTransaction();
+			$this->objRequisicao->Log(OP_UPD,"Requisicao ".$this->objRequisicao->idRequisicao." estornada com sucesso");
+    		$this->manager->information("Requisição estornada com sucesso.",$this->manager->getActionUrl('adm','main:requisicoes:find') );
+		}
+		catch (Exception $e)
+		{
+			$this->addError($e->getMessage());
+		}
+	}
+
+}	
+?>

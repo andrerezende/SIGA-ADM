@@ -1,0 +1,595 @@
+<?
+class frmRequisicaoBiblioteca extends Form
+{
+
+	protected $objRequisicao;
+    function __construct($objRequisicao)
+    {
+		$this->objRequisicao = $objRequisicao;
+	if ($this->objRequisicao->idTipoReq == '10')
+	        $this->Form('Requisição de Compra de Acervos para a Biblioteca');
+	else
+	if ($this->objRequisicao->idTipoReq == '13')
+		$this->Form('Requisição de Compra de Coleções e Materiais de Bibliográficos'); 
+        $this->EventHandler();
+    }
+    function CreateFields()
+    {
+        $ui = $this->manager->getUi();
+        $login = $this->manager->GetLogin();
+        $idUsuario = $login->idkey;
+      /*  $objCurso = $this->manager->GetBusiness('ensino','curso');
+        $objGenero = $this->manager->GetBusiness('biblioteca','genero');
+        $objUnidade = $this->manager->GetBusiness('biblioteca','unidade'); */
+        $objUO = $this->manager->GetBusiness('adm','uo');
+		$opt = $objUO->listUosOrdemNome();
+
+		//lista de gêneros
+		//$queryGenero = $objGenero->ListGenero();
+
+      /*  foreach ($queryGenero->result as $genero)
+		{
+			$generos[$genero[0]] = $genero[1];
+		}
+
+        //lista de cursos
+		$queryCurso = $objCurso->ListCursosGraduacao();
+        foreach ($queryCurso->result as $curso)
+        {
+            $cursos[$curso[0]] = $curso[1];
+        }
+        
+        //lista de unidades
+        $queryUnidade = $objUnidade->listUnidade();
+        foreach ($queryUnidade->result as $unidade)
+        {
+            $unidades[$unidade[0]] = $unidade[1];
+        } */
+        
+
+	if ($this->objRequisicao->idTipoReq == '10')
+	{
+		$codelem = '339030';
+		$codsubelem = '46';
+	}
+
+	else
+	
+	if ($this->objRequisicao->idTipoReq == '13')
+	{
+		$codelem = '449052';
+		$codsubelem = '18';
+	}
+
+        $fields = Array (
+                        new MHiddenField('idMaterial',''),
+                  Array(new MMultiLineField('desccatmat','','Código ou Descrição do Material','',3,70),
+                        new MLookupField('lkpMaterialAcervo','&npsp;','&nbsp;')),
+                  Array(new MTextField('quantPedida','','Quantidade',9),
+                        //new MTextField('idMaterial',$material->material->idMaterial,'Id Material',10),
+                        new MTextField('unidade','','Un',10),
+                        new MTextField('elemento',$codelem,'Elemento',10),
+                        new MTextField('subelemento',$codsubelem,'Subelemento',10),
+                        new MCurrencyField('precoEstimado','','Valor Unitário',14),
+                        new MCurrencyField('valorTotalPedido','','Valor Total',14)),
+
+		          new MTextField('titulo','','Título',60),
+			      new MTextField('subtitulo','','Subtítulo',60),
+		          new MTextField('autor','','Autor',60),
+			      new MTextField('edicao','','Edição',20),
+			      new MTextField('localPublicacao','','Local de Publicação',60),
+			      new MTextField('editora','','Editora',60),
+			      new MTextField('dataPublicacao','','Data de Publicação',5,'Somente o ano. Ex.: 1998'),
+			      new MTextField('descFisica','','Descrição Física',80),
+			  /*    new MSelection('idGenero','','Gênero',$generos),
+   			      new MSelection('idCurso','','Curso',$cursos),
+   			      new MSelection('idUnidade','','Unidade de Destino',$unidades),  */
+                  );
+
+         $this->SetFields($fields);
+         $this->AddButton(new MButton('btnConfirmarSolicitar', 'Enviar'));
+         $this->SetFieldAttr('unidade','readonly',true);
+         $this->SetFieldAttr('elemento','readonly',true);
+         $this->SetFieldAttr('subelemento','readonly',true);
+         $this->setFieldAttr('valorTotalPedido','visible',false);
+         $this->SetFieldAttr('lkpMaterialAcervo','module','adm');
+         $this->SetFieldAttr('lkpMaterialAcervo','item','materialAcervo');
+         $this->SetFieldAttr('lkpMaterialAcervo','event','filler');
+         $this->SetFieldAttr('lkpMaterialAcervo','filter','desccatmat');
+         $this->SetFieldAttr('lkpMaterialAcervo','related','idMaterial,desccatmat,codMaterial,unidade');
+
+	$FieldsReq = Array(
+                    new MMultiLineField('justificativa','','Justificativa',200,3,50),
+					new MSeparator('DADOS DE ENTREGA'),
+                    new MTextField('localEntrega','','Local',40),
+                    new MMultiLineField('obs','','Obs',200,3,50)
+					);
+	$this->addFields($FieldsReq);
+
+       $this->addValidator(new MRequiredValidator('localEntrega'));
+       $this->addValidator(new MRequiredValidator('justificativa'));
+		//Alterado 6/4/2010 	Ñ exibe item para o requisitante em caso de pendente.
+		//Alterado 9/4/2010 O Status pendente ñ utilizado para requisição de acervo
+		//	$this->setObjectData();
+        if ($this->objRequisicao->status != '1')
+		{
+			$this->setButtonAttr('btnConfirmarSolicitar','visible',FALSE);
+            $this->setObjectData();
+			$this->setReadOnly(true);
+		}
+
+        $url = $this->manager->GetActionURL('adm','main:requisicoes:find');
+
+        switch ($this->objRequisicao->status)
+        {
+            case 1: //PENDENTE
+                  $validators = array(
+                                   // new MRequiredValidator ('idMaterial','IdMaterial'),
+                                    new MRequiredValidator ('titulo'),
+
+                                    );
+		          $this->SetValidators($validators);
+
+                if ($this->objRequisicao->idUsuarioRequisitante != $idUsuario)
+                {
+			$this->setButtonAttr('btnConfirmarSolicitar','visible',FALSE);
+			$this->setObjectData();
+			$this->setReadOnly(true);
+                }
+
+            break;
+            
+
+            case 2: //SOLICITADA
+
+			    $this->objRequisicao->getUoRequisitante();
+                if ($this->objRequisicao->uoRequisitante->isGestorOf($idUsuario))
+                {
+                    $this->AddField(new Separator('<b>AÇÕES DO GESTOR DA UO REQUISITANTE</b>'));
+                    $tipoAcao = array(""=>"","4"=>"AUTORIZAR","5"=>"DEVOLVER","6"=>"RECUSAR");
+                    $this->AddField(New MSelection('acaoGestorUoReq','','Ação',$tipoAcao));
+                    $this->AddField(new MMultiLineField('motivoRejeicao','','Motivo da recusa','',3,50));
+                    $this->AddButton(new MButton('btnConfirmarAutorizar','Enviar'));
+                }
+                else
+                {
+
+                    $this->AddButton(new MButton('btnSair','Voltar',$url));
+                }
+            break;
+            case 4: //AUTORIZADA
+                $this->objRequisicao->getUoExecutante();
+				if ( $this->objRequisicao->uoExecutante->isExecutorOf($idUsuario) )
+				{
+                    $this->AddField(new Separator('<b>LIBERAÇÃO DA REQUISIÇÃO</b>'));
+                    $tipoAcao = array("1"=>"LIBERAR","2"=>"RECUSAR");
+                    $this->AddField(New Selection('acaoGestorUoExec','','Ação',$tipoAcao));
+                    $this->AddField(new MultiLineField('motivoRejeicao','','Motivo da Recusa','',3,50));
+                    $this->setButtonAttr('btnLiberar','visible',TRUE);
+                }
+                $this->AddButton(new MButton('btnSair','Voltar',$url));
+            break;
+
+            case 5:   //DEVOLVIDA
+                 echo "DEVOLVIDA<br>";
+                 $this->objRequisicao->getUoRequisitante();
+                 if ($this->objRequisicao->getIdUsuarioRequisitante() == $idUsuario)
+                 {
+                     $this->setReadOnly(FALSE);
+                 }
+             	 $this->AddField(new MMultiLineField('motivoRejeicao',$this->objRequisicao->motivoRejeicao,'Motivo da Devolução','',3,50));
+                 $this->setFieldAttr('motivoRejeicao','readonly',TRUE);
+             	 $url2 = $this->manager->GetActionURL('adm','main:requisicoes',$this->objRequisicao->idRequisicao,array('form'=>'item','motivoRejeicao'=>$data->motivoRejeicao));
+             	 $this->AddButton(new MButton('btnSalvarDevolvida','Enviar'));
+                 $this->AddButton(new MButton('btnSair','Voltar',$url));
+            break;
+            case 6:   //RECUSADA
+                $this->AddButton(new MButton('btnSair','Voltar',$url));
+                $this->AddField(new MMultiLineField('motivoRejeicao','','Motivo da Rejeição','',3,50));
+                $this->setFieldValue('motivoRejeicao',$this->objRequisicao->motivoRejeicao);
+                $this->setFieldAttr('motivoRejeicao','readonly',true);
+            break;
+
+        }
+	}
+    
+    function btnConfirmarSolicitar_click()
+	{
+		$data = $this->getData();
+		$cf = new MCurrencyFormatter();
+
+
+       /* if ($data->idGenero=='')
+        {
+           $this->addError('Você precisa indicar o Gênero');
+        }
+        if ($data->idCurso=='')
+        {
+           $this->addError('Você precisa indicar o Curso');
+        }
+        if ($data->idUnidade=='')
+        {
+           $this->addError('Você precisa indicar a Unidade de Destino');
+        }*/
+
+        //$data->precoEstimado = str_replace("R$","",$data->precoEstimado);
+	$data->precoEstimado = $cf->toDecimal($data->precoEstimado);
+
+        if ($data->precoEstimado == 0.00)//o valor estimado não pode ser igual a zero
+ 		{
+			$this->addError("O valor unitário tem que ser um valor maior que zero");
+		}
+		if (!$data->quantPedida)//o valor estimado não pode ser igual a zero
+ 		{
+			$this->addError("Quantidade não pode ser igual a zero.");
+		}
+
+        /**
+        foreach ($data as $chave => $valor )
+        {
+            $dados[$chave] = $valor;
+        }
+        $dados['form'] = 'item';
+        $dados['tipoReq'] = $this->objRequisicao->idTipoReq;
+
+        $this->setTitle("Confirmação de requisição de Biblioteca");
+
+        //$this->setReadOnly(true);
+
+        $msg = 'Confirmar esta requisição?';
+        $url = $this->manager->GetActionURL('adm','main:requisicoes',$this->objRequisicao->idRequisicao,$dados);
+        $eventYes = "btnSolicitar:click";
+        */
+        if (!$this->hasErrors())
+        {
+            $this->setReadOnly(TRUE);
+            $this->setButtonAttr('btnConfirmarSolicitar','visible',FALSE);
+            $this->AddButton(new MButton('btnSolicitar','Confirmar'));
+            $this->AddButton(new MButton('btnVoltar','Voltar'));
+        }
+
+        
+        //$this->manager->Question($msg, $url, $url, $eventYes, $eventNo);
+    }
+        
+    function btnSolicitar_click()
+    {
+        global $item;
+        $cf = new MCurrencyFormatter();
+
+        $data = $this->getData();
+        $material = $this->manager->GetBusiness('adm','material');
+
+        if (!$data->idMaterial)
+        {
+
+           $material->getByCod(trim($data->desccatmat));
+           $data->idMaterial = $material->idMaterial;
+           $data->unidade = $material->unidade;
+           $data->elemento = $material->idelemento;
+           $data->subelemento = $material->idsubelemento;
+           if ($material->idMaterial=='')
+           {
+              $this->addError('Código do material não encontrado, favor utilizar a lupa para pesquisa');
+           }
+        }
+
+        //$data->precoEstimado = str_replace('R$','',$data->precoEstimado);
+	$data->precoEstimado = $cf->toDecimal($data->precoEstimado);
+
+        $objItemReqBib = $this->manager->GetBusiness('adm','itemreqbib');
+        $objItemReqBib->setData($data);
+
+        $valorEstimado = ($cf->toDecimal($data->quantPedida))*($cf->toDecimal($data->precoEstimado));
+        $data->valorEstimado = $valorEstimado;
+        $objItemReqBib->setStatus(0);
+
+        $this->objRequisicao->addItem($objItemReqBib);
+
+        $this->objRequisicao->getUoRequisitante();
+        $ui = $this->manager->getUi();
+        $login = $this->manager->GetLogin();
+        $idUsuario = $login->idkey;
+
+	$this->objRequisicao->obs = $data->obs;
+        $this->objRequisicao->justificativa = $data->justificativa;
+        $this->objRequisicao->localEntrega = $data->localEntrega;
+
+        //$data->valorEstimado = $this->objRequisicao->getItemValorEstimado();
+        if (!$this->hasErrors())
+        {
+         try
+         {
+            if ($this->objRequisicao->uoRequisitante->isGestorOf($idUsuario))
+            {
+                if ($this->objRequisicao->status == 1 || $this->objRequisicao->status == 5)
+                {
+
+                    $idRequisicao = $this->objRequisicao->idRequisicao;
+                    $uoRequisitante = $this->objRequisicao->uoRequisitante;
+
+                    if ($this->objRequisicao->getSaldo() < $cf->toDecimal($valorEstimado))
+                    {
+                        $this->addError('Saldo insuficiente.');
+                    }
+                    else
+                    {
+                        $this->objRequisicao->beginTransaction();
+                        $this->objRequisicao->setStatus('4');
+                        $this->objRequisicao->save();
+
+                        $requisita = $this->manager->getBusiness('adm','requisita');
+                        $requisita->GetById($this->objRequisicao->idTipoReq,$this->objRequisicao->idUoRequisitante);
+                        
+                        $this->objRequisicao->getUoRequisitante();
+                        $this->objRequisicao->uoRequisitante->setTransaction($this->objRequisicao->getTransaction());
+                        $this->objRequisicao->uoRequisitante->addPrevisaoDebito($requisita->idRubrica,$data->valorEstimado,$this->objRequisicao->getAno());
+                        $this->objRequisicao->Log(OP_UPD,"Requisicao ".$this->objRequisicao->idRequisicao.": adicao da previsao de ".$data->valorEstimado." na UO ".$this->objRequisicao->uoRequisitante->idUo);
+
+                        $lancamentoInt = $this->manager->getBusiness('adm','lancamentoint');
+                        $lancamentoInt->setTransaction($this->objRequisicao->getTransaction());
+                        $lancamentoInt->tipoLancamento = '4';
+                        $lancamentoInt->data = date("d/m/Y");                
+                        $lancamentoInt->valor = $data->valorEstimado;
+                        $lancamentoInt->ano = date("Y");
+                        $lancamentoInt->idUoRequisitante = $this->objRequisicao->idUoRequisitante;       
+                        $lancamentoInt->idUoExecutante = $this->objRequisicao->idUoExecutante;
+                        $lancamentoInt->idRubrica = $requisita->idRubrica;           
+                        $lancamentoInt->idRequisicao = $this->objRequisicao->idRequisicao;
+                        $lancamentoInt->save();
+                        $this->objRequisicao->endTransaction();            
+                       
+                        $idRequisicao = $this->objRequisicao->idRequisicao;
+                        $this->objRequisicao->Log(OP_INS,"Requisicão de compra número ".$idRequisicao." solicitada e autorizada com sucesso.");
+                        $url = $this->manager->GetActionURL('adm','main:requisicoes',$idRequisicao,array('form'=>'item','tipoReq'=>$this->objRequisicao->idTipoReq));
+                        $this->manager->information("Requisição ".$this->objRequisicao->idRequisicao." solicitada e autorizada com sucesso.",$url);
+                    }
+                }
+                else
+                {
+                    if ($this->objRequisicao->status == 4)
+                    {
+                        $this->manager->information("Solicitação criada e autorizada. O número da requisição é ".$this->objRequisicao->idRequisicao.".",$this->manager->getActionUrl('adm','main:requisicoes:find') );
+                    }
+                    else
+                    {
+                        $this->addError('Não foi possível efetuar a transação. Tente novamente.');
+                    }
+                }
+            }
+            else
+            {
+
+                $this->objRequisicao->setStatus('2');
+                $this->objRequisicao->save();
+                $idRequisicao = $this->objRequisicao->idRequisicao;
+                $this->objRequisicao->Log(OP_INS,"Requisicão de compra número ".$idRequisicao." solicitada com sucesso.");
+                $msg = "Requisição ".$this->objRequisicao->idRequisicao." solicitada com sucesso. Deseja realizar outra requisição?";
+                $urlYes = $this->manager->GetActionURL('adm','main:requisicoes:new','',array("idTipoReq"=>$this->objRequisicao->idTipoReq,"idUoRequisitante"=>$this->objRequisicao->idUoRequisitante,"idUoExecutante"=>$this->objRequisicao->idUoExecutante,"event"=>"btnNew_click","jaRedirecionou"=>"sim"));
+                $urlNo = $this->manager->GetActionURL('adm','main:requisicoes',$idRequisicao,array('form'=>'item','tipoReq'=>$this->objRequisicao->idTipoReq));
+                $this->manager->Question($msg, $urlYes, $urlNo);
+            }
+         }
+         catch (Exception $e) {$this->addError($e->getMessage());}
+        }
+    }
+
+    function btnConfirmarAutorizar_click()
+    {
+        $data = $this->getData();
+
+        if (($data->motivoRejeicao == '')&&($data->acaoGestorUoReq!=4))
+        {
+           if ($data->acaoGestorUoReq=='')
+           {
+               $this->manager->Error("Você precisa selecionar uma ação.",'');
+           }
+           else
+           {
+               $this->manager->Error("Você precisa informar o motivo.",'');
+           }
+        }
+        else
+        {
+           switch ($data->acaoGestorUoReq)
+           {
+            case 4:
+                $msg = 'Deseja autorizar esta requisição?';
+            break;
+            case 5:
+
+                $msg = 'Deseja devolver esta requisição?';
+            break;
+            case 6:
+                $msg = 'Deseja recusar esta requisição?';
+            break;
+           }
+        }
+        $url = $this->manager->GetActionURL('adm','main:requisicoes',$this->objRequisicao->idRequisicao,array('form'=>'item','motivoRejeicao'=>$data->motivoRejeicao,'acaoGestorUoReq'=>$data->acaoGestorUoReq));
+        $eventYes = "btnAutorizar:click";
+        $this->manager->Question($msg, $url, $url, $eventYes, $eventNo);
+    }
+
+    function btnAutorizar_click()
+    {
+        $data = $this->getData();
+        $url = $this->vaiParaProximaRequisicao();
+        $data->precoEstimado = str_replace('R$','',$data->precoEstimado);
+
+        if (!$data->acaoGestorUoReq)
+        {
+            $this->addError('Você deve escolher uma ação.');
+        }
+        else
+        {
+            $idRequisicao = $this->objRequisicao->idRequisicao;
+            $uoRequisitante = $this->objRequisicao->uoRequisitante;
+            //$url = $this->manager->GetActionURL('adm','main:requisicoes',$idRequisicao,array('form'=>'item','tipoReq'=>$this->objRequisicao->idTipoReq));
+            $this->objRequisicao->setStatus($data->acaoGestorUoReq);
+            $this->objRequisicao->setDataHoraAutorizacao();
+			//Inserido em 22/02/2010 
+			$this->objRequisicao->suplementar = "N";
+            $data->valorEstimado = $this->objRequisicao->getItemValorEstimado();
+            switch ($data->acaoGestorUoReq)
+            {
+                case 4:
+                    $cf = new MCurrencyFormatter();
+                    if ($this->objRequisicao->getSaldo() < $this->objRequisicao->getItemValorEstimado())
+                    {
+                         $this->addError('Saldo insuficiente.');
+                    }
+                    else
+                    {
+                        try
+                        {
+                            $this->objRequisicao->beginTransaction();
+                            $this->objRequisicao->save();
+                            $requisita = $this->manager->getBusiness('adm','requisita');
+                            $requisita->GetById($this->objRequisicao->idTipoReq,$this->objRequisicao->idUoRequisitante);
+
+                            $this->objRequisicao->getUoRequisitante();
+                            $this->objRequisicao->uoRequisitante->setTransaction($this->objRequisicao->getTransaction());
+                            $this->objRequisicao->uoRequisitante->addPrevisaoDebito($requisita->idRubrica,$data->valorEstimado,$this->objRequisicao->getAno());
+                            $this->objRequisicao->Log(OP_UPD,"Requisicao ".$this->objRequisicao->idRequisicao.": adicao da previsao de ".$data->valorEstimado." na UO ".$this->objRequisicao->uoRequisitante->idUo);
+
+                            $lancamentoInt = $this->manager->getBusiness('adm','lancamentoint');
+                            $lancamentoInt->setTransaction($this->objRequisicao->getTransaction());
+                            $lancamentoInt->tipoLancamento = '4';
+                            $lancamentoInt->data = date("d/m/Y");
+                            $lancamentoInt->valor = $data->valorEstimado;
+                            $lancamentoInt->ano = date("Y");
+                            $lancamentoInt->idUoRequisitante = $this->objRequisicao->idUoRequisitante;
+                            $lancamentoInt->idUoExecutante = $this->objRequisicao->idUoExecutante;
+                            $lancamentoInt->idRubrica = $requisita->idRubrica;
+                            $lancamentoInt->idRequisicao = $this->objRequisicao->idRequisicao;
+                            $lancamentoInt->save();
+                            $this->objRequisicao->endTransaction();
+
+                            $idRequisicao = $this->objRequisicao->idRequisicao;
+                            $this->manager->information("Requisição ".$idRequisicao." autorizada com sucesso.",$url);
+                        }
+                        catch (Exception $e) {$this->addError($e->getMessage());}
+                    }
+                break;
+                case 5:
+                    try
+                    {
+                        $this->objRequisicao->motivoRejeicao = $data->motivoRejeicao;
+                        $this->objRequisicao->save();
+                        $this->manager->information("Requisição ".$idRequisicao." devolvida com sucesso.",$url);
+                    }
+                    catch (Exception $e) {$this->addError($e->getMessage());}
+                break;
+                case 6:
+                    try
+                    {
+                        $this->objRequisicao->motivoRejeicao = $data->motivoRejeicao;
+                        $this->objRequisicao->save();
+                        $this->manager->information("Requisição ".$idRequisicao." recusada com sucesso.",$url);
+                    }
+                    catch (Exception $e) {$this->addError($e->getMessage());}
+                break;
+            }
+        }
+    }
+
+    function btnSalvarDevolvida_click()
+    {
+	$cf = new MCurrencyFormatter();
+        $this->objRequisicao->getItem();
+        $data = $this->getData();
+        //$data->precoEstimado = str_replace('R$','',$data->precoEstimado);
+	$data->precoEstimado = $cf->toDecimal($data->precoEstimado);        
+	$this->objRequisicao->biblioteca->setData($data);
+        try
+        {
+                $this->objRequisicao->setStatus('2');
+                $this->objRequisicao->save();
+                $idRequisicao = $this->objRequisicao->idRequisicao;
+                $this->objRequisicao->Log(OP_INS,"Requisicão de compra número ".$idRequisicao." solicitada com sucesso.");
+                $msg = "Requisição ".$this->objRequisicao->idRequisicao." solicitada com sucesso. Deseja realizar outra requisição?";
+                $urlYes = $this->manager->GetActionURL('adm','main:requisicoes:new','',array("idTipoReq"=>$this->objRequisicao->idTipoReq,"idUoRequisitante"=>$this->objRequisicao->idUoRequisitante,"idUoExecutante"=>$this->objRequisicao->idUoExecutante,"event"=>"btnNew_click","jaRedirecionou"=>"sim"));
+                $urlNo = $this->manager->GetActionURL('adm','main:requisicoes',$idRequisicao,array('form'=>'item','tipoReq'=>$this->objRequisicao->idTipoReq));
+                $this->manager->Question($msg, $urlYes, $urlNo);
+        }
+        catch (Exception $e) {$this->addError($e->getMessage());}
+    }
+    
+    function setObjectData()
+	{
+		$itemRequisicao = $this->objRequisicao->getItem();
+        $itemRequisicao->retrieveAssociation('material');
+	//	$itemRequisicao->retrieveAssociation('curso');
+		
+        $this->SetFieldValue('idMaterial',$itemRequisicao->idMaterial);
+		$this->SetFieldValue('desccatmat',$itemRequisicao->material->descricao);
+        $this->SetFieldValue('unidade',$itemRequisicao->material->unidade);
+        if ($this->objRequisicao->idTipoReq == '10')
+	{
+		$this->SetFieldValue('elemento','339030');
+		$this->SetFieldValue('subelemento','46');
+	}
+	else
+        if ($this->objRequisicao->idTipoReq == '13')
+	{
+		$this->SetFieldValue('elemento','449052');
+		$this->SetFieldValue('subelemento','18');
+	}
+        $this->SetFieldValue('quantPedida',$itemRequisicao->quantPedida);
+        $this->SetFieldValue('precoEstimado',$itemRequisicao->precoEstimado);
+        $this->SetFieldValue('titulo',$itemRequisicao->titulo);
+        $this->SetFieldValue('subtitulo',$itemRequisicao->subtitulo);
+        $this->SetFieldValue('autor',$itemRequisicao->autor);
+        $this->SetFieldValue('edicao',$itemRequisicao->edicao);
+        $this->SetFieldValue('localPublicacao',$itemRequisicao->localPublicacao);
+        $this->SetFieldValue('editora',$itemRequisicao->editora);
+        $this->SetFieldValue('dataPublicacao',$itemRequisicao->dataPublicacao);
+        $this->SetFieldValue('descFisica',$itemRequisicao->descFisica);
+	$this->SetFieldValue('justificativa',$this->objRequisicao->justificativa);
+	$this->SetFieldValue('localEntrega',$this->objRequisicao->localEntrega);
+	$this->SetFieldValue('obs',$this->objRequisicao->obs);
+        /* $this->SetFieldValue('idGenero',$itemRequisicao->idGenero);
+        $this->SetFieldValue('idUnidade',$itemRequisicao->idUnidade);
+        $this->SetFieldValue('idCurso',$itemRequisicao->idCurso); */
+
+   }
+   
+   function setReadOnly($boolean)
+   {
+        $this->SetFieldAttr('desccatmat','readonly',$boolean);
+        $this->SetFieldAttr('unidade','readonly',$boolean);
+        $this->SetFieldAttr('elemento','readonly',$boolean);
+        $this->SetFieldAttr('subelemento','readonly',$boolean);
+        $this->SetFieldAttr('quantPedida','readonly',$boolean);
+        $this->SetFieldAttr('precoEstimado','readonly',$boolean);
+        $this->SetFieldAttr('titulo','readonly',$boolean);
+        $this->SetFieldAttr('subtitulo','readonly',$boolean);
+        $this->SetFieldAttr('autor','readonly',$boolean);
+        $this->SetFieldAttr('edicao','readonly',$boolean);
+        $this->SetFieldAttr('localPublicacao','readonly',$boolean);
+        $this->SetFieldAttr('editora','readonly',$boolean);
+        $this->SetFieldAttr('dataPublicacao','readonly',$boolean);
+        $this->SetFieldAttr('descFisica','readonly',$boolean);
+	$this->SetFieldAttr('justificativa','readonly',$boolean);
+	$this->SetFieldAttr('localEntrega','readonly',$boolean);
+	$this->SetFieldAttr('obs','readonly',$boolean);
+        /* $this->SetFieldAttr('idGenero','readonly',$boolean);
+        $this->SetFieldAttr('idCurso','readonly',$boolean);
+        $this->SetFieldAttr('idUnidade','readonly',$boolean); */
+   }
+   
+   function vaiParaProximaRequisicao()
+   {
+        $proximaRequisicao = $this->manager->getBusiness('adm','requisicao',$this->objRequisicao->getProximaASerAtendida());
+        if ($proximaRequisicao->idRequisicao)
+        {
+            $url = $this->manager->getActionUrl('adm','main:requisicoes',$proximaRequisicao->idRequisicao,array("form"=>"item","tipoReq"=>$proximaRequisicao->idTipoReq));
+        }
+        else
+        {
+            $url = $this->manager->getActionUrl('adm','main:requisicoes:find','');
+        }
+        return $url;
+   }
+}
+?>

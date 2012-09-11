@@ -1,0 +1,180 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+class BusinessBibliotecaFicha extends Business
+{
+    public $opcao;
+
+	function __construct($data = NULL)
+	{
+        parent::__construct('sigaept', $data);
+	}
+
+	function GetPosicao($idficha, $idsubficha)
+	{
+		$sql = new sql('p.idetiqueta,p.posicao,p.descricao,p.idopcao','','(ps.idficha = ?) and (ps.idsubficha = ?)', 'p.posicao');
+        $sql->setJoin('bt_posicaosubficha ps','bt_posicao p','(ps.idetiqueta = p.idetiqueta) and (ps.posicao = p.posicao)');
+		$query = $this->Query($sql,array($idficha, $idsubficha));
+		return $query; 
+	}
+
+    function GetInputField($idSubFicha, $oPosicao)
+    {
+        // obtem lista de opcoes; se estiver vazio, o campo é MTextField, senão é um MSelection        
+	//$sql = new sql('ol.idopcao, ol.idopcaolista, ol.indice,ol.texto,ol.ordem','bt_opcaolista ol','(ol.idopcao = ?)','to_number(ol.ordem)');
+	$sql = new sql('ol.idopcao, ol.idopcaolista, ol.indice,ol.texto,ol.ordem','bt_opcaolista ol','(ol.idopcao = ?)',"to_number(ol.ordem, '99999D9')");
+		$opcaolista = $this->Query($sql, $oPosicao->idopcao);
+        $name = $idSubFicha . '_' . $oPosicao->idetiqueta . '_' . $oPosicao->posicao;
+        if ($opcaolista->eof)
+        {
+            $f = new MTextField($name,'',$oPosicao->descricao);
+        }
+        else
+        {
+            while (!$opcaolista->eof)
+            {
+//                $array[$opcaolista->fields('indice')] = $opcaolista->fields('texto');
+                $array[$opcaolista->fields('indice')] = $opcaolista->fields('indice') . ' - ' . $opcaolista->fields('texto');
+                $opcaolista->moveNext();
+            }
+//            $f = new MSelection($name,'',$oPosicao->descricao, $array);
+            $f = new MComboBox($name,'',$oPosicao->descricao, $array);
+        } 
+        return $f;
+    }
+
+	function GetCampo($idficha, $idsubficha, $idetiqueta, $ocorrencia)
+	{
+		$sql = new sql('c.idetiqueta,c.subcampo,c.descricao,c.temrepeticoes,c.estaativo,c.emlistas,c.emdemonstracao, c.obsoleto,c.mnemonico,c.idopcao','','(cs.idficha = ?) and (cs.idsubficha = ?) and (cs.idetiqueta = ?)', 'cs.ordem,cs.subcampo');
+        $sql->setJoin('bt_camposubficha cs','bt_subcampo c','(cs.idetiqueta = c.idetiqueta) and (cs.subcampo = c.subcampo)');
+		$query = $this->Query($sql,array($idficha, $idsubficha,$idetiqueta));
+        return $query; 
+    }
+
+    function GetInputFieldVar($idSubFicha, $oCampo, $tag=null)
+    {
+		global $MIOLO,$module;
+
+        $name = $idSubFicha . '_' . $oCampo->idetiqueta . '_' . $oCampo->subcampo;
+		$label = '['. $oCampo->subcampo . '] ' . $oCampo->descricao;
+        // verifica se o campo é repetitivo (MMultiTextField) ou não (MTextField ou MSelection)
+        if ($oCampo->temrepeticoes)
+        {
+            $f1 = array(
+               new MTextField('txtLin'.$name,'','Linha',28),
+               new MTextField('txt'.$name,'','Conteúdo',28),
+            );
+            $f = new MMultiTextField3($name,null,$label,$f1,200,true,'horizontal');
+        }
+        else
+        { 
+            // obtem lista de opcoes; se estiver vazio, o campo é MTextField, senão é um MSelection        
+		    $sql = new sql('ol.idopcao, ol.idopcaolista, ol.indice,ol.texto,ol.ordem','bt_opcaolista ol','(ol.idopcao = ?)',"to_number(ol.ordem, '99999D9')");
+		    $opcaolista = $this->Query($sql, MUtil::NVL($oCampo->idopcao, -1));
+			if (trim($tag) == '902')
+			{
+				$objGenero = $MIOLO->getBusiness($module,'genero');
+				$query = $objGenero->ListGenero();
+				$array = array();
+				foreach($query->result as $row)
+				{
+					$array[$row[0]] = $row[0] . ' - ' . $row[1];
+				}
+				$f = new MComboBox($name,'',$label, $array);
+			}
+			elseif ($opcaolista->eof)
+            {
+                $f = new MTextField($name,'',$label,28);
+            }
+            else
+            {
+                while (!$opcaolista->eof)
+                {
+                    $array[$opcaolista->fields('indice')] = $opcaolista->fields('texto');
+                    $opcaolista->moveNext();
+                }
+                $f = new MSelection($name,'',$label, $array);
+            }
+        } 
+        return $f;
+    }
+
+    function GetInputFieldInd($idSubFicha, $oCampo)
+    {
+        $name = $idSubFicha . '_IND_' . $oCampo->indicador;
+        $label = 'Indicador ' . $oCampo->indicador;
+        // obtem lista de opcoes; se estiver vazio, o campo é MTextField, senão é um MSelection        
+        $sql = new sql('ol.idopcao, ol.idopcaolista, ol.indice,ol.texto,ol.ordem','bt_opcaolista ol','(ol.idopcao = ?)',"to_number(ol.ordem, '99999D9')");
+        $opcaolista = $this->Query($sql, MUtil::NVL($oCampo->idopcao, -1));
+        if ($opcaolista->eof)
+        {
+            $f = new MTextField($name,'',$label,28);
+        }
+        else
+        {
+            while (!$opcaolista->eof)
+            {
+//                $array[$opcaolista->fields('indice')] = $opcaolista->fields('texto');
+                $array[$opcaolista->fields('indice')] = $opcaolista->fields('indice') . ' - ' . $opcaolista->fields('texto');
+                $opcaolista->moveNext();
+            }
+//            $f = new MSelection($name,'',$label, $array);
+            $f = new MComboBox($name,'',$label, $array);
+        } 
+        return $f;
+    }
+
+	function GetData()
+	{
+		$data = new FormData();
+		$data->idgenero = $this->idgenero;
+		$data->descricao = $this->descricao;
+		return $data;
+	}
+
+	function SetData($data)
+	{
+        $this->idObra          = $data->idobra          ;
+        $this->numeroDaObra    = $data->numerodaobra    ;
+        $this->titulo          = $data->titulo          ;
+        $this->autor           = $data->autor           ;
+        $this->edicao          = $data->edicao          ;
+        $this->localPublicacao = $data->localpublicacao ;
+        $this->editora         = $data->editora         ;
+        $this->dataPublicacao  = $data->datapublicacao  ;
+        $this->classificacao   = $data->classificacao   ;
+        $this->qtdVolumes      = $data->qtdvolumes      ;
+        $this->idGenero        = $data->idgenero        ;
+	}
+
+	function ListAll()
+	{
+		$sql = new sql('idficha,categoria,nivel','bt_ficha');
+		$query = $this->Query($sql);
+		return $query->result;
+	}
+}
+?>

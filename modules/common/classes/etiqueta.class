@@ -1,0 +1,217 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+class BusinessCommonEtiqueta extends Business
+{
+	public $idEtiqueta;
+    public $tag;
+    public $indicador1;
+    public $indicador2;
+    public $mnemonico;
+    public $descricao;
+    public $observacao;
+    public $temRepeticoes;
+    public $temSubcampos;
+    public $estaAtivo;
+    public $emDemonstracao; 
+    public $obsoleto; 
+
+    private $allFields;
+
+	function __construct($data = NULL)
+	{
+        parent::__construct('sigaept', $data);
+        $this->allFields = 'idetiqueta,tag,indicador1,indicador2,mnemonico,descricao,observacao,temrepeticoes,temsubcampos,estaativo,emdemonstracao,obsoleto';
+	}
+
+	function GetById($idEtiqueta)
+	{
+		$sql = new sql($this->allFields,'bt_etiqueta','idetiqueta = ?');
+		$query = $this->Query($sql,$idEtiqueta);
+		if ( !$query->eof() )
+			$this->SetData($query->GetRowObject());
+        	return $this;
+	}
+
+	function GetByTag($tag)
+	{
+		$sql = new sql($this->allFields,'bt_etiqueta','tag = ?');
+		$query = $this->Query($sql,$tag);
+		if ( !$query->eof() )
+			$this->SetData($query->GetRowObject());
+        return $this;
+	}
+
+	function GetData()
+	{
+		$data = new FormData();
+		return $data;
+	}
+
+	function SetData($data)
+	{
+        $this->idEtiqueta     = $data->idetiqueta;   
+        $this->tag            = $data->tag;          
+        $this->indicador1     = $data->indicador1;   
+        $this->indicador2     = $data->indicador2;   
+        $this->mnemonico      = $data->mnemonico;    
+        $this->descricao      = $data->descricao;    
+        $this->observacao     = $data->observacao;   
+        $this->temRepeticoes  = $data->temrepeticoes;
+        $this->temSubcampos   = $data->temsubcampos; 
+        $this->estaAtivo      = $data->estaativo;    
+        $this->emDemonstracao = $data->emdemonstracao;
+    }
+
+	function GetByFicha($idficha, $idsubficha)
+	{
+	//Código substituído devido a utilização da estrutura decode, que não existe em PostgreSQL
+	//$sql = new sql("e.idetiqueta, e.tag, decode(e.temrepeticoes,1,'[r]','')",'','(cs.idficha = ?) and (cs.idsubficha = ?)', 'e.tag');
+	$sql = new sql("e.idetiqueta, e.tag, (CASE WHEN e.temrepeticoes = '1' THEN e.temrepeticoes = '[r]' ELSE e.temrepeticoes = '' END)",'','(cs.idficha = ?) and (cs.idsubficha = ?)', 'e.tag');
+        $sql->distinct = TRUE; 
+        $sql->setJoin('bt_camposubficha cs','bt_etiqueta e','(cs.idetiqueta = e.idetiqueta)');
+		$query = $this->Query($sql,array($idficha, $idsubficha));
+        return $query; 
+	}
+
+
+	function GetByFichaCatalogacao($idficha, $idsubficha)
+	{
+       		$sql = new sql("e.idetiqueta, e.tag, (CASE WHEN e.temrepeticoes = '1' THEN e.temrepeticoes = '[r]' ELSE e.temrepeticoes = '' END)",'',"(cs.idficha = ?) and (cs.idsubficha = ?) and ((e.tag<'600') or (e.tag>'690'))", 'e.tag');
+	       	$sql->distinct = TRUE;
+	       	$sql->setJoin('bt_camposubficha cs','bt_etiqueta e','(cs.idetiqueta = e.idetiqueta)');
+	       	$query = $this->Query($sql,array($idficha, $idsubficha));
+      		return $query;
+       }
+
+//20/05/2009 : Criado para retirar da ficha Campos variaveis a etiqueta 100,700(de autor) e editora= 260)
+       function GetByFichaCatalogacaoVar($idficha, $idsubficha)
+       {
+               
+               $sql = new sql("e.idetiqueta, e.tag, (CASE WHEN e.temrepeticoes = '1' THEN e.temrepeticoes = '[r]' ELSE e.temrepeticoes = '' END)",'',"(cs.idficha = ?) and (cs.idsubficha = ?) and ((e.tag<'600') or (e.tag>'690')) and (e.tag<>'100') and (e.tag<>'700') and (e.tag<>'260')", 'e.tag');
+               $sql->distinct = TRUE;
+               $sql->setJoin('bt_camposubficha cs','bt_etiqueta e','(cs.idetiqueta = e.idetiqueta)');
+               $query = $this->Query($sql,array($idficha, $idsubficha));
+               return $query;
+       }
+	/*
+	function GetIndicadores()
+	{
+		$sql = new sql("indicador1, indicador2",'bt_etiqueta','(idetiqueta = ?)');
+		$query = $this->Query($sql, $this->idEtiqueta);
+        $array = array("1" => $query->fields("indicador1"),"2" => $query->fields("indicador2"));
+        return $array; 
+	}
+	*/
+	
+	
+	function GetIndicadores($idEtiqueta)
+	{
+		$sql = new sql("indicador1, indicador2","bt_etiqueta",'(idetiqueta = ?)');
+		$query = $this->Query($sql, $idEtiqueta);
+        $array = array("1" => $query->fields("indicador1"),"2" => $query->fields("indicador2"));
+        return $array; 
+	}
+	
+
+	function GetOpcao($posicao)
+	{
+		$sql = new sql('idopcao','bt_posicao','(posicao = ?) and (idetiqueta = ?)');
+		$query = $this->Query($sql,array($posicao, $this->idEtiqueta));
+        return $query->fields("idopcao"); 
+	}
+
+	function Insert($data)
+	{
+		
+		$sql = new sql('idgenero,descricao','bt_genero');
+
+		$novo_codigo = $this->_db->GetNewId('seq_bt_genero');
+		
+		$values = array($novo_codigo,$data->descricao);
+		
+		$ok = $this->Execute($sql->Insert($values));
+    if($ok){$ok = $novo_codigo;}
+    
+	return $ok;
+
+	}
+
+	
+	function Delete($data)
+	{
+		
+		$sql = new sql('','bt_genero','idgenero = ?');
+
+		$ok = $this->Execute($sql->Delete($data->idgenero));
+  		return $ok;
+	}
+
+	function ListGenero()
+	{
+		$sql = new sql('idgenero,descricao','bt_genero','','idgenero');
+        $query = $this->Query($sql);
+        return $query;
+	}
+
+
+	function GetIdByTag($tag)
+	{
+		$sql = new sql('idetiqueta','bt_etiqueta',"tag = '$tag'");
+		$query = $this->Query($sql);
+	        return $query;
+	}
+
+	function ListAssuntos($idficha, $idsubficha)
+	{
+		$sql = new sql('distinct(e.tag)','bt_etiqueta e, bt_camposubficha cs',"e.tag>'599' and e.tag<'700' and (cs.idficha = $idficha) and (cs.idsubficha = $idsubficha) and (cs.idetiqueta = e.idetiqueta)");
+	        $query = $this->Query($sql);
+        	return $query;
+	}
+
+	function ListIdAssuntos()
+	{
+		$sql = new sql('idetiqueta','bt_etiqueta',"tag>'599' and tag<'700'");
+	        $query = $this->Query($sql);
+        	return $query;
+	}
+	function GetTagById($idEtiqueta)
+	{
+		$sql = new sql('tag','bt_etiqueta',"idetiqueta = $idEtiqueta");
+		$query = $this->Query($sql)->result[0][0];
+	        return $query;
+	}
+
+
+	function GetOpcaoAssunto($posicao, $idEtiqueta)
+	{
+		$sql = new sql('idopcao','bt_posicao','(posicao = ?) and (idetiqueta = ?)');
+		$query = $this->Query($sql,array($posicao, $idEtiqueta));
+        return $query->fields("idopcao"); 
+	}
+
+}
+?>

@@ -1,0 +1,224 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+$MIOLO->Uses('ui/controls/lkppublicacao.class','rh');
+
+//se a função possuir mandato, não adianta alterar a data de término: ela será automaticamente definida pelo mandato
+
+class frmOcupacaoFuncaoAlterar extends MForm
+{
+    protected $objocupacaofuncao, $setoratual;
+
+    function __construct($objocupacaofuncao)
+    {
+        $this->objocupacaofuncao = $objocupacaofuncao;
+        parent::__construct('Alteração de Ocupação de Função');
+        $this->EventHandler();
+    } // __construct
+
+
+    function CreateFields()
+    {
+        global $module;
+        $k = new MKrono();
+
+        //obtém o setor atual do servidor
+          $objprovimento = $this->manager->GetBusiness($module,'provimento');
+
+          $objprovimento->getUltimoProvimento($this->objocupacaofuncao->idvinculo);
+
+          $vinculo = $this->manager->GetBusiness($module,'vinculo');
+          if ($vinculo->isTA())
+          {
+              $this->setoratual = $objprovimento->idSetor;
+          }
+          else
+          {
+              $this->setoratual = false;
+          }
+
+        //oferece funções disponíveis no setor
+          $objfuncao = $this->manager->GetBusiness($module,'funcao');
+        //como a função da ocupação atual não seria oferecida por parecer não disponível, acrescenta-a ao rol de disponíveis
+          $funcoesdisponiveis = $objfuncao->listDisponiveisnoSetor($this->setoratual);
+            //junta a função ocupada atualmente no rol de disponíveis, para que o usuário possa manter a função
+            //if ( (! $this->objocupacaofuncao->datafim)  or  $k->compareDate($this->objocupacaofuncao->datafim, '>=', date('d/m/Y')) )
+            //{
+                $this->objocupacaofuncao->retrieveAssociation('funcao');
+                $funcoesdisponiveis[] = array( $this->objocupacaofuncao->idfuncao, $this->objocupacaofuncao->funcao->descricao);
+            //}
+
+        $fields[] = new MSelection('idfuncao',$this->objocupacaofuncao->idfuncao,'Funções disponíveis no setor',$funcoesdisponiveis);
+
+        $fields[] = new MSpacer(1);
+        $fields[] = new MSeparator();
+
+        //bloco para Início da Função ---------------------------------------------------------------------------------------------
+
+        $fields[] = new MCalendarField('datainicio',$this->objocupacaofuncao->datainicio,'Início','10');
+
+        //para recuperar descrição da publicação, ??????? após refazimento de tela por lookup não de publicação
+        $idpublicacaoinicio = MForm::GetFormValue('idpublicacaoinicio');
+        if (! $idpublicacaoinicio)
+        {
+            //ou para recuperar descrição na abertura do formulário, com a publicação gravada
+            $idpublicacaoinicio = $this->objocupacaofuncao->idpublicacaoinicio;
+        }
+        lkppublicacao($fields,'idpublicacaoinicio','Publicação início',$idpublicacaoinicio);
+        
+        //bloco Término da Função --------------------------------------------------------------------------------------
+        $datafim = $this->objocupacaofuncao->datafim;
+
+        if ($datafim)
+        {
+            $fields[] = new MSeparator();
+
+            $datafim = new MCalendarField('datafim',$datafim,'Término','10');
+            $datafim->setColor('red');
+            $datafim->addStyle('fontWeight','bold');
+            $fields[] = $datafim;
+
+            $fields[] = new MSpacer(1);
+
+            //para recuperar descrição da publicação, ??????? após refazimento de tela por lookup não de publicação
+            $idpublicacaofim = MForm::GetFormValue('idpublicacaofim');
+            if (! $idpublicacaofim)
+            {
+                //ou para recuperar descrição na abertura do formulário, com a publicação gravada
+                //note que se a data de término for desfeita por digitação em branco, a publicação será apagada
+                  //e também, que se existir mandato na função, a data e a publicação de término serão apagadas
+                //no entanto, se acontecer um erro de verificação, tais campos não serão apagados,
+                  //somente o serão na efetiva gravaçao dos dados
+                $idpublicacaofim = $this->objocupacaofuncao->idpublicacaofim;
+            }
+            lkppublicacao($fields,'idpublicacaofim','Publicação término',$idpublicacaofim);
+            $fields[] = new MLabel('Note: se a data de término for apagada a publicação também o será, automaticamente','red');
+        } // se Data de Término prrenchida
+        $fields[] = new MSeparator();
+        $fields[] = new MLabel('Note: se a função escolhida tiver mandato pré-estabelecido, a data e a publicação de término serão apagadas, automaticamente','red');
+
+        //--------------------------------------------------------------------------------------------------------------
+        $this->SetFields($fields);
+
+        $validators[] = new MRequiredValidator('idfuncao','',8);
+        $validators[] = new MRequiredValidator('datainicio');
+        //$validators[] = new MRequiredValidator('idpublicacaofim','Publicação');
+        $this->SetValidators($validators);
+
+        $buttons = array( new MButton('btnSalvar', 'Salvar Alteração') );
+        $this->SetButtons($buttons);
+        //$this->SetBackgroundColor('#FFF');
+    } // CreateFields
+
+
+    function Verifica($data,$funcaodatainicio)
+    {
+        $dataidpublicacaoinicio = $this->GetFieldValue('dataidpublicacaoinicio'); //campo não editável (MTextLabel), que não é recuperado em GetData()
+        $errosinicio   = $this->objocupacaofuncao->VerificaInicio($data,             //dados digitados
+                                                                  $dataidpublicacaoinicio,    //dado obtido na escolha da publicação
+                                                                  $this->setoratual, //para comparar nos últimos provimentos
+                                                                  $funcaodatainicio, //data de início da função
+                                                                  false);            //não verifica última ocupação
+
+        if ( ($data->datafim) and (! $data->mandato) )  //só verifica data de término para funções sem mandato
+        { 
+            $errosfim = $this->objocupacaofuncao->VerificaTermino($data->datainicio        ,   //gravada anteriormente e alterada
+                                                                  $data->datafim           ,   //gravada anteriormente e alterada
+                                                                  $data->idpublicacaoinicio,   //gravada anteriormente e alterada
+                                                                  $data->idpublicacaofim   );  //gravada anteriormente e alterada
+            /*$dataidpublicacaofim = $this->GetFieldValue('dataidpublicacaofim');    //campo não editável (MTextLabel), que não é recuperado em GetData()
+            $errosfim      = $this->objocupacaofuncao->V erificaTermino($data , $dataidpublicacaofim);*/
+            $erros = array_merge( (array)$errosinicio , (array)$errosfim );
+        }
+        else
+        { 
+            $erros = $errosinicio;
+        }
+
+        if ( count($erros) > 0 )
+        {
+            foreach ( $erros as $e )
+            {
+                $this->addError($e);
+            }
+            return false;
+        }
+
+        return TRUE;
+    } // Verifica
+
+
+    function btnSalvar_click()
+    {
+        global $module;
+        $data = $this->GetData();                   //recupera somente os editáveis
+        $data->idvinculo = $this->objocupacaofuncao->idvinculo;
+
+        //note que se a data de término for desfeita por digitação em branco, a publicação será apagada
+          //e também, que se existir mandato na função, a data e a publicação de término serão apagadas
+        //no entanto, se acontecer um erro de verificação, tais campos não serão apagados,
+          //somente o serão na efetiva gravaçao dos dados
+
+        if (! $data->datafim) //se está limpando data de término então limpa também publicação de término
+        {
+            $data->idpublicacaofim = NULL;
+        }
+
+        $funcao = $this->manager->getBusiness($module,'funcao',$data->idfuncao); //$this->objocupacaofuncao->idfuncao
+        if ($funcao->mandato > 0)   //define automaticamente a finalização quando a função tem mandato pré-definido
+        {
+            $k = new MKrono();
+            $data->datafim = $k->operation('+',$data->datainicio,$funcao->mandato.'%Y');
+            $data->datafim = $k->operation('-',$data->datafim   ,'1%D');
+            $data->mandato = ' Data de término definida pelo mandato: ' . $funcao->mandato;
+
+            $data->idpublicacaofim = NULL;  //no caso de haver mandato a publicação de término, se havia,  perde o sentido
+        }
+
+        if (! $this->Verifica($data, $funcao->datainicio)) //dados digitados e data de início da função
+        {
+            RETURN;
+        }
+
+        $this->objocupacaofuncao->SetData($data);
+
+        $this->objocupacaofuncao->BeginTransaction();
+        TRY
+        {
+            $this->objocupacaofuncao->save();
+
+            $msg = ' Ocupação alterada, vínculo: ' . $this->objocupacaofuncao->idvinculo
+                 . $data->mandato
+                 . '  data de término: '           . $this->objocupacaofuncao->datafim;
+            $this->objocupacaofuncao->Log(OP_UPD,       $this->objocupacaofuncao->idocupacaofuncao
+                                      . ' idfuncao: ' . $this->objocupacaofuncao->idfuncao . $msg);
+            $this->objocupacaofuncao->EndTransaction();
+//            $go = $this->manager->GetActionURL($module,$self, $this->objocupacaofuncao->idocupacaofuncao);
+            $go = $this->manager->GetActionURL
+                  ($module,'main:vinculo', $this->objocupacaofuncao->idvinculo,array('form'=>'funcao'));
+            $this->manager->Information($msg,$go);
+        }
+        CATCH (Exception $e)
+        {
+            $this->AddError($e->GetMessage());
+        }
+    } // btnSalvar_click
+
+}
+?>

@@ -1,0 +1,116 @@
+<?
+class frmProcessoEditar extends MForm
+{
+    protected $processo;
+    protected $setor;
+    protected $setoracesso;
+    protected $perms;
+    function __construct($objProcesso)
+    {
+//      construct
+        global $MIOLO;
+		$this->processo = $objProcesso;
+	$this->setor = $MIOLO->getBusiness('protocolo','setor');
+	$this->setoracesso = $MIOLO->getBusiness('protocolo','setoracesso');
+        $this->perms = $MIOLO->getPerms();
+        parent::__construct('Alterar processo');
+        $this->SetClose($MIOLO->GetActionURL('protocolo','main'));
+        $this->eventHandler();
+    }
+
+    function CreateFields()
+    {
+	/* IFRO - Controle de segurança de acesso */
+	$setores = ($this->perms->checkAccess('PROT_ADMIN', A_ACCESS)) ? $this->setor->selAll() : $this->setoracesso->selSetoresAcesso($this->processo->getSetorUsuario());
+	if (
+                $this->processo->retencao->setor
+                && in_array($this->processo->retencao->setor,$setores) 
+           )
+	{
+	//      dados do processo
+		$titulo = new MTextField('titulo',$this->processo->titulo,'Titulo:',90);
+		$titulo->addAttribute('maxlength','80');
+		$solicitante = new MTextField('solicitante',$this->processo->solicitante,'Solicitante:',90);
+		$solicitante->addAttribute('maxlength','80');
+		$assunto = new MMultiLineField('assunto',$this->processo->assunto,'Assunto:',240,5,88);
+		$groupDadosProcesso = new MBaseGroup( 'groupTipoProcesso', 'Dados do processo',array($titulo,$solicitante,$assunto),'vertical','css');
+		$groupDadosProcesso->addAttribute('style','padding:10px');
+	//      origem do processo
+		$instituicao =  new MTextField('instituicao',$this->processo->instituicao,'Instituição:',15);
+		$instituicao->setReadOnly(true);
+		$setorOrigem = new MTextField('setorOrigem',$this->processo->setorOrigem,'Setor:',15);
+		$setorOrigem->setReadOnly(true);
+		$groupOrigem = new MBaseGroup('groupOrigem', 'Origem do processo',array($instituicao,$setorOrigem),'horizontal','css');
+		$groupOrigem->addAttribute('style','padding:10px');
+	//      arquivo do processo 
+		$arquivo = new MTextField('arquivo',$this->processo->arquivo,'Caixa Arquivo:',15);
+		$arquivo->addAttribute('maxlength','7');
+		$groupArquivo = new MBaseGroup('groupArquivo', 'Arquivo do processo',array($arquivo),'horizontal','css');
+		$groupArquivo->addAttribute('style','padding:10px');
+	//      fields
+		      $fields = array(
+		    array(
+		        $groupDadosProcesso,
+		        $groupOrigem,
+		        $groupArquivo
+		    ),
+		);
+		$this->SetFields($fields);
+		
+	    	if ($this->processo->tipo == 'A')
+		{
+			$this->setFieldAttr('titulo','readonly',true);   
+		}
+
+	//      required fields
+		$validators = array(
+				new MRequiredValidator('titulo'),
+				new MRequiredValidator('solicitante'),
+				new MRequiredValidator('assunto'),
+			);
+			$this->SetValidators($validators);
+	//      buttons
+			$buttons = array(
+			new MButton('btnSalvar', 'Alterar')
+		    );
+			$this->SetButtons($buttons);
+	}
+	else {
+		$msg = 'Este usuário não tem permissão para alterar este Processo/Protocolo';
+		$this->manager->Information($msg,$this->manager->GetActionURL('protocolo','main:processos',$this->processo->numProcesso));
+	}
+	
+    }
+    public function btnSalvar_click()
+    {
+	/* IFRO - Controle de segurança de acesso */
+	$setores = ($this->perms->checkAccess('PROT_ADMIN', A_ACCESS)) ? $this->setor->selAll() : $this->setoracesso->selSetoresAcesso($this->processo->getSetorUsuario());
+	if (
+                $this->processo->retencao->setor
+                && in_array($this->processo->retencao->setor,$setores) 
+                && $this->processo->retencao->status == 'N' 
+           )
+	{
+	//      data
+		$data = $this->getData();
+	//      set and save
+		try 
+		{
+		    $this->processo->beginTransaction();
+		    $this->processo->setData($data);
+		    $this->processo->save();
+		    $msg = "Processo ".$this->processo->numProcessoFormatado()." alterado com sucesso.";
+		    $this->processo->Log(OP_UPD,$msg);
+		    $this->processo->endTransaction();
+		    $this->manager->Information($msg,$this->manager->GetActionURL('protocolo','main:processos',$this->processo->numProcesso));
+		}
+		catch(Exception $e) {$this->addError($e->getMessage());}
+	}
+	else {
+		$msg = 'Este usuário não tem permissão para alterar este Processo/Protocolo';
+		$this->manager->Information($msg,$this->manager->GetActionURL('protocolo','main:processos',$this->processo->numProcesso));
+	}
+    }
+
+ }
+?>

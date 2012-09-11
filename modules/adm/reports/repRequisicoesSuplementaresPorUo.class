@@ -1,0 +1,149 @@
+<?php
+class repRequisicoesSuplementaresPorUo extends PDFReport
+{
+	var $img;
+	var $timestamp;
+
+	function __construct()
+	{
+		global $MIOLO, $module, $page, $context, $self, $action, $perms;
+
+		parent::__construct(NULL, NULL, 55);
+		$ui = $MIOLO->GetUI();
+		$this->img = $ui->GetImageSrc('logo_siga.png',$module); 
+		$this->timestamp = date('d/m/Y G:i');
+		$this->pdf->ezStartPageNumbers(520, 800, 12, 'rigth', 'Página: {PAGENUM}');
+		$this->pdf->ezSetMargins(100, 30, 30, 30);
+		$this->GeneratePageHeader();
+		$this->GeneratePageFooter();
+		$this->SetOption('fontSize',9);
+
+		$cf = new MCurrencyFormatter();
+		$uo = Form::GetFormValue('selUO');
+		$inicio = Form::GetFormValue('calDataInicial');
+		$final = Form::GetFormValue('calDataFinal');
+		$inicio = substr($inicio,6,4).'/'.substr($inicio,3,2).'/'.substr($inicio,0,2);
+		$final = substr($final,6,4).'/'.substr($final,3,2).'/'.substr($final,0,2);
+
+		$requisicao = $MIOLO->GetBusiness('adm','requisicao');
+		$result = $requisicao->listSuplementaresLicitacoesEmpenhosByUo($uo, $inicio, $final);
+
+		$empenho = $MIOLO->GetBusiness('adm','empenho');
+		$result2 = array();
+		for($i = 0; $i < count($result); $i++)
+		{
+			$empenhos = $empenho->ListByRequisicao($result[$i][0]);
+			if($empenhos)
+			{
+				foreach($empenhos as $e)
+				{
+					$valor = $cf->toDecimal($e[1]) * $cf->toDecimal($e[2]);
+					$valor = number_format(str_replace(',','.',$valor),2,',','.');
+					$result2[] = array($result[$i][0], $result[$i][3], $result[$i][1], $valor, $result[$i][2], $e[0]);
+				}
+			}
+			else
+			{
+				$requisicao = $MIOLO->GetBusiness('adm','requisicao',$result[$i][0]);
+				$valor = $requisicao->getItemValorEstimado();
+				$valor = number_format(str_replace(',','.',$valor),2,',','.');
+				$result2[] = array($result[$i][0], $result[$i][3], $result[$i][1], $valor, $result[$i][2]);
+			}
+		}
+
+		// define as colunas
+		$columns = array(
+			new PDFReportColumn('det0', '<b>Requisição</b>', 'center', false, 15, true),
+			new PDFReportColumn('det1', '<b>UO Req</b>', 'center', false, 15, true),
+			new PDFReportColumn('det2', '<b>Tipo</b>', 'center', false, 25, true),
+			new PDFReportColumn('det3', '<b>Valor R$</b>', 'right', false, 15, true),
+			new PDFReportColumn('det4', '<b>Licitação</b>', 'center', false, 15, true),
+			new PDFReportColumn('det5', '<b>Empenho</b>', 'center', false, 15, true),
+		);
+
+		// Largura do report, em %
+		$this->SetWidth(100);
+
+		// registra as colunas de detalhes e summary
+		$this->SetColumns($columns);
+		$colDetail = $this->columns;
+
+		// gera o report
+		$this->SetOption('showHeadings', 1);
+		$this->SetOption('showLines', 0);
+		$this->columns = $colDetail;
+		$this->GenerateData($result2);
+	}
+
+	function GeneratePageHeader()
+	{
+		global $MIOLO;
+
+		$dataInicial = Form::GetFormValue('calDataInicial');
+		$dataFinal = Form::GetFormValue('calDataFinal');
+		$uo = Form::GetFormValue('selUO');
+		$objUo = $MIOLO->GetBusiness('adm','uo',$uo);
+		$sigla = $objUo->sigla;
+
+		$x0 = $this->pdf->left;
+		$x1 = $this->pdf->right;
+		$h = $this->pdf->getFontHeight(12);
+		$header = $this->pdf->openObject();
+		$this->pdf->saveState();
+
+		$x00=$this->pdf->left;
+		$hh = $this->pdf->getFontHeight(12);
+		$this->pdf->addText($x00, 800, 12, $this->manager->getConf('instituicao.sigla')." - ".$this->manager->getConf('instituicao.nome'));
+		$this->pdf->addText($x00, 800 - $hh, 12, $this->manager->getConf('theme.system'));
+
+/*
+		$this->pdf->addPngFromFile($this->img, $x0, 780, 50, 25);
+		$this->pdf->addText($x0 + 60, 800, 12, 'UFJF - Universidade Federal de Juiz de Fora');
+		$this->pdf->addText($x0 + 60, 800 - $h, 12, 'CGCO - Centro de Gestão do Conhecimento Organizacional');
+		$this->pdf->addText($x0 + 60, 800 - $h - $h, 12, 'SIGA - Sistema Integrado de Gestão Acadêmica');
+*/
+
+		$this->pdf->SetStrokeColor(0, 0, 0);
+		$y = 800 - $h - $h - 5;
+		$this->pdf->line($x0, $y, $x1, $y);
+		if($uo > 0)
+		{
+			$stringUo = " para $sigla";
+		}
+		$this->pdf->addText($x0, $y - 13, 14, "Requisições Suplementares $stringUo: de $dataInicial a $dataFinal");
+		$this->pdf->line($x0, $y - 15, $x1, $y - 15);
+		$this->pdf->restoreState();
+		$this->pdf->closeObject();
+		$this->pdf->addObject($header, 'all');
+	}
+
+	function GeneratePageFooter()
+	{
+		$x0 = $this->pdf->left;
+		$x1 = $this->pdf->right;
+		$footer = $this->pdf->openObject();
+		$this->pdf->saveState();
+		$this->pdf->SetStrokeColor(0, 0, 0);
+		$this->pdf->line($x0, 28, $x1, 28);
+		$this->pdf->addText($x0, 19, 9, $this->timestamp . ' - CGCO/DSI');
+		$this->pdf->restoreState();
+		$this->pdf->closeObject();
+		$this->pdf->addObject($footer, 'all');
+	}
+
+	function GenerateData($data)
+	{
+//		$this->pdf->ezSetDy(-5);
+		$this->SetData($data);
+		$this->rawdata = $this->GenerateTableData();
+		$this->GenerateBody($this->rawdata);
+	}
+
+	function Generate()
+	{
+		$this->SetOutput();
+		$this->Execute();
+	}
+
+}
+?>

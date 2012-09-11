@@ -1,0 +1,227 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmRemocao extends MForm
+{
+    function __construct()
+    {
+        parent::__construct("Remoção Múltipla de Servidores");
+        $this->eventHandler();
+    }
+
+    function createFields()
+    {
+        $fields = array(
+	        new MLookupFieldValue('lkpSetorOrigem','','Setor Origem',25),
+            new MHiddenField('idSetorOrigem'),
+	        new MLookupFieldValue('lkpSetorDestino','','Setor Destino',25),
+            new MHiddenField('idSetorDestino'),
+            new MTextField('dataRemocao',date('d/m/Y'),'Data'),            
+			new MHiddenField('idPublicacao'),
+			new MLookupFieldValue('numero','','Publicação',50),
+            /*
+            array(
+		        new MHiddenField('idPublicacao'),
+		        new MTextField('numero','','Publicação', 8),
+                new MLookupField('lkpPublicacao','&nbsp;','&nbsp;'),
+		        new MTextField('diploma','',' ', 15),
+		        new MTextField('de','de',' ', 3),
+		        new MTextField('data','',' ', 10),
+		        new MTextField('autoridade','',' ', 15),
+            ),
+            */
+        );
+
+        $this->setFields($fields);
+        $this->setFieldAttr('lkpSetorOrigem','module','common');
+    	$this->setFieldAttr('lkpSetorOrigem','item','setor');
+    	$this->setFieldAttr('lkpSetorOrigem','event', 'filler');
+       	$this->setFieldAttr('lkpSetorOrigem','related', 'idSetorOrigem,lkpSetorOrigem');
+        $this->setFieldAttr('lkpSetorDestino','module','common');
+    	$this->setFieldAttr('lkpSetorDestino','item','setor');
+    	$this->setFieldAttr('lkpSetorDestino','event', 'filler');
+       	$this->setFieldAttr('lkpSetorDestino','related', 'idSetorDestino,lkpSetorDestino');
+       	$this->setFieldAttr('dataRemocao','visible',FALSE);
+        
+	   	$this->SetFieldAttr('numero','module','rh');
+		$this->SetFieldAttr('numero','item','publicacao');
+		$this->SetFieldAttr('numero','event','btnPublicacao_click');
+        $this->setFieldAttr('numero','visible',FALSE);
+
+        /*
+        //fields publicacao
+        $this->setFieldAttr('numero','readonly',TRUE);
+        $this->setFieldAttr('diploma','readonly',TRUE);
+        $this->setFieldAttr('de','readonly',TRUE);
+        $this->setFieldAttr('data','readonly',TRUE);
+        $this->setFieldAttr('autoridade','readonly',TRUE);
+        //lookup publicacao
+	   	$this->SetFieldAttr('lkpPublicacao','module','rh');
+		$this->SetFieldAttr('lkpPublicacao','item','publicacao');
+		$this->SetFieldAttr('lkpPublicacao','event','filler');
+		//$this->SetFieldAttr('numero','related','idPublicacao,null,numero');
+        */
+
+        $buttons = array(
+            new MButton('btnPost','Enviar'),
+            new MButton('btnConfirmar','Confirmar Remoção'),
+            new MButton('btnCancelar','Cancelar'),
+            new MButton('btnVoltar','Voltar')
+        );
+        
+    	$this->setButtons($buttons);
+
+        $this->setButtonAttr('btnConfirmar','visible',FALSE);
+        $this->setButtonAttr('btnCancelar','visible',FALSE);
+        $this->setButtonAttr('btnVoltar','visible',FALSE);
+    }
+
+    function btnPost_click()
+    {
+        $data = $this->getData();
+        try
+        {
+            $this->valida($data);
+            $funcionario = $this->manager->getBusiness('rh','funcionario');
+
+            $query = $funcionario->listBySetor($data->idSetorOrigem);
+
+            //colunas do grid dos servidores do setor de origem
+            $columns = array(
+                new MDataGridColumn('idvinculo','Vínculo','left','true','20%'),
+                new MDataGridColumn('nome','Nome','left','true','80%')
+            );
+
+            $hrefGrid = $this->manager->getActionURL('rh', 'utils:remocao' );
+            $grid = new MDataGrid($query,$columns,$hrefGrid);
+            $grid->setTitle("Servidores do setor de origem");
+            $grid->addActionSelect();
+
+            $this->addField($grid);
+
+            $this->setFieldAttr('lkpSetorOrigem','readonly',TRUE);
+            $this->setFieldAttr('lkpSetorDestino','readonly',TRUE);
+            $this->SetFieldAttr('dataRemocao','visible',TRUE);
+            $this->setFieldAttr('numero','visible',TRUE);
+
+            $this->setButtonAttr('btnPost','visible',FALSE);
+            $this->setButtonAttr('btnConfirmar','visible',TRUE);
+            $this->setButtonAttr('btnCancelar','visible',TRUE);
+        }
+        catch ( Exception $e )
+        {
+            $this->addError($e->getMessage());
+        }
+
+    }
+
+    function btnConfirmar_click()
+    {
+        $data = $this->getData();
+        $vinculos = $this->page->request('select');
+        if ( count($vinculos) )
+        {
+            $vinculo = $this->manager->getBusiness('rh','vinculo');
+
+            foreach ( $vinculos as $idVinculo )
+            {
+                try
+                {
+                    $vinculo->getById($idVinculo);
+                    $vinculo->retrieveAssociation('funcionario');
+                    $vinculo->validaRemocao($data->dataRemocao);
+                   //$vinculo->remove($data->dataRemocao,$data->idPublicacao,$data->idSetorDestino);
+                    $vinculo->remove($data->dataRemocao,$data->idPublicacao,$data->idSetorDestino,$data->idAmbiente);
+                    $oks[] = array($vinculo->idVinculo,$vinculo->funcionario->pessoa->nome);
+                }
+                catch ( Exception $e )
+                {
+                    $vinculo->retrieveAssociation('funcionario');
+                    $erros[] = array($vinculo->idVinculo,$vinculo->funcionario->pessoa->nome,$e->getMessage());
+                    unset($e);
+                }
+            }
+            if ( count($oks) )
+            {
+                $this->AddField(new TableRaw('Servidores transferidos com sucesso', $oks,array("Vínculo","Nome")));
+            }
+            if ( count($erros) )
+            {
+                $this->AddField(new TableRaw('Ocorreram alguns erros', $erros,array("Vínculo","Nome","Erro")));
+            }
+            $this->setButtonAttr('btnVoltar','visible',TRUE);
+            $this->setButtonAttr('btnPost','visible',FALSE);
+        }
+        else
+        {
+            $this->btnPost_click();
+            $this->addError("Selecione ao menos um servidor para realizar a remoção.");
+        }
+    }
+    
+	function btnPublicacao_click($sender=NULL,$key)
+	{
+		$publicacao = $this->manager->getBusiness('rh','publicacao',$key);
+		$this->setFieldValue('numero',$publicacao->diplomaLegal->descricao.' '.$publicacao->numero.' de '.$publicacao->data.' - '.$publicacao->autoridade);
+		$this->setFieldValue('idPublicacao',$key);
+		$this->btnPost_click();
+	}
+
+    function btnCancelar_click()
+    {
+        $this->setFieldValue('idSetorOrigem','');
+        $this->setFieldValue('idSetorDestino','');
+        $this->setFieldValue('lkpSetorOrigem','');
+        $this->setFieldValue('lkpSetorDestino','');
+    }
+    
+    function btnVoltar_click()
+    {
+        $this->btnCancelar_click();
+    }
+
+    function valida($data)
+    {
+        if ( $data->idSetorOrigem == '' || $data->idSetorDestino == '' )
+        {
+            throw new Exception("É obrigatório informar os setores de origem/destino.");
+        }
+
+        if ( $data->idSetorOrigem == $data->idSetorDestino )
+        {
+            throw new Exception("O setor de origem deve ser diferente do setor de destino.");
+        }
+
+        $setorDestino = $this->manager->getBusiness('common','setor');
+        $setorDestino->getById($data->idSetorDestino);
+        if ( $setorDestino->dataFim )
+        {
+            throw new Exception("Setor de destino não pode estar fechado.");
+        }
+        
+        $funcionario = $this->manager->getBusiness('rh','funcionario');
+        $query = $funcionario->listBySetor($data->idSetorOrigem);
+        if ( $query->eof() )
+        {
+            throw new Exception("Não existem servidores lotados no setor de origem.");
+        }
+    }
+
+}
+

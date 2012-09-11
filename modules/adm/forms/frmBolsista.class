@@ -1,0 +1,546 @@
+<?
+class frmBolsista extends Form
+{
+	var $objPessoa;
+	var $objBolsista;
+	var $listURL;
+
+	function frmBolsista()
+	{
+		global $MIOLO, $page, $module, $self;
+
+        $urlBase = $MIOLO->getActionUrl($module,$self);
+        $page->setAction($urlBase);
+
+		$this->listURL = $MIOLO->GetActionURL($module,$self,'',Array('event'=>'btnList:click') );
+		$this->objPessoa = $MIOLO->GetBusiness('common','pessoa');
+		$this->objBolsista = $MIOLO->GetBusiness($module,'bolsista');
+		
+		$this->Form('Bolsista');
+		
+        $this->EventHandler();
+
+		$this->SetClose($MIOLO->GetActionURL($module,'main:sispag'));
+	}
+
+	function CreateFields()
+	{
+
+		global $MIOLO,$module,$self, $action;
+    
+		$fields = Array
+		(
+	         new HiddenField('key','',''),
+			 new TextLabel('lblInfo','','ATENÇÃO'),
+			 new Selection('selTipoBolsista','','Filtra por'),
+			 new LookupTextField('lkpNome','','Nome',40),
+			 new TextField('cpf','','CPF',20),
+			 			 
+             new Selection('selbanco','','Banco'),
+			 new LookupTextField('lkpAgencia','','Agencia',15),
+			 new TextField('conta','','Conta',15,'completa, sem pontuação'),
+
+			 new Separator(),
+			 new CalendarField('edtDataInc','','Data Inclusão',15,'mês atual'),
+			 new CalendarField('clnDataExclusao','','Data Exclusão',15),
+			 new HiddenField('idpessoa',''),
+			 new HiddenField('hdnBolsa',''), 
+			 new HiddenField('hdnOperacao',''),
+			 new Selection('idbolsa','','Bolsa'),
+			 new TextField('txtHorasPrevistas','','Horas Previstas(mês)',10,'opcional')
+		);
+		$this->SetFields($fields);
+		$this->SetFieldAttr('lkpNome','module','adm');
+	   	$this->SetFieldAttr('lkpNome','item','nomepessoaportipobolsista');
+		$this->SetFieldAttr('lkpNome','event', 'btnConsulta:click');
+	   	$this->SetFieldAttr('lkpNome','filter','selTipoBolsista,lkpNome');
+
+    	$this->SetFieldAttr('edtDataInc','visible',false);
+		$this->SetFieldAttr('clnDataExclusao','visible',false);
+		$this->SetFieldAttr('lblInfo','visible',false);
+    	$this->SetFieldAttr('txtHorasPrevistas','visible',false); 
+		$this->SetFieldAttr('cpf','visible',false); 
+		$this->SetFieldAttr('selbanco','visible',false); 
+		$this->SetFieldAttr('lkpAgencia','visible',false); 
+		$this->SetFieldAttr('conta','visible',false); 
+		
+		$login = $MIOLO->auth->GetLogin();
+		
+		$bolsa = $MIOLO->GetBusiness($module,'cadastrobolsa');
+		$query = $bolsa->ListAll($login->idkey);
+
+		$this->SetFieldAttr('idbolsa','options',($query->result) ? $query->result : Array('vazio'=>'vazio'));
+		$this->SetFieldAttr('idbolsa','visible',false);
+
+		$validators = array(
+			new CompareValidator('txtHorasPrevistas','','<=','999','i')
+		);
+
+		$this->SetValidators($validators);
+
+
+		$buttons = Array
+		(
+			new FormButton('btnPost', 'Enviar'),
+			new FormButton('btnNew', 'Novo', $action),
+			new FormButton('btnList', 'Relação'),
+			new FormButton('btnCancelar', 'Cancelar')
+		);
+		$this->SetButtons($buttons);
+		$this->SetButtonAttr('btnPost','visible',false);
+		$this->SetButtonAttr('btnNew','visible',false);
+		$this->SetButtonAttr('btnCancelar','visible',false);
+		$this->SetButtonAttr('btnList','visible',false);
+
+		$objBanco = $MIOLO->GetBusiness('common','banco');
+		$objQuery = $objBanco->ListAllAtivo();
+		
+		// insere no inicio no result um array vazio para obrigar o usuário a escolher um banco
+		array_unshift($objQuery->result,Array('0'=>'','1'=>''));
+		$this->SetFieldAttr('selbanco','options', $objQuery->chunkResult());
+
+		$vetTipoBolsista = Array('alunos'=>'Alunos','funcs'=>'Funcionários','nofilter'=>'Sem Filtro'); 
+		$this->SetFieldAttr('selTipoBolsista','options',$vetTipoBolsista);
+
+		$this->SetFieldAttr('lkpAgencia','module','adm');
+	   	$this->SetFieldAttr('lkpAgencia','item','bancoagencianova');
+	   	$this->SetFieldAttr('lkpAgencia','event','filler');
+	   	$this->SetFieldAttr('lkpAgencia','related',',lkpAgencia,selbanco');
+	   	$this->SetFieldAttr('lkpAgencia','filter','selbanco,lkpAgencia');		
+    }// Fim do Create Fields
+
+	function GetData()
+	{
+		$data = new FormData();
+		$data->idbolsista = $this->GetFormValue('key');
+		$data->idpessoa = $this->GetFormValue('idpessoa');
+		$data->idbolsa = $this->GetFormValue('idbolsa');
+		$data->nome = strtoupper($this->GetFormValue('lkpNome'));
+		$data->cpf = ereg_replace("[^0-9]","",$this->GetFormValue('cpf'));
+		$data->datainclusao = $this->GetFormValue('edtDataInc');
+		$data->dataexclusao = $this->GetFormValue('clnDataExclusao');
+		$data->horasprevistas = $this->GetFormValue('txtHorasPrevistas');
+
+		$data->idbanco = $this->GetFormValue('selbanco');
+		$data->idagenc = $this->GetFormValue('lkpAgencia');
+		$data->conta = strtoupper($this->GetFormValue('conta'));
+
+		return $data;
+	}
+
+	function SetData($data)
+	{		
+		$this->SetFieldValue('key',trim($data->idbolsista));
+		$this->SetFieldValue('idpessoa',trim($data->idpessoa));
+		$this->SetFieldValue('idbolsa',trim($data->idbolsa));
+		$this->SetFieldValue('lkpNome',$data->nome);
+	
+		// se cpf NAO vazio coloca mascara
+		$data->cpf = ($data->cpf) ? substr($data->cpf,0,3). '.'. substr($data->cpf,3,3). '.'. substr($data->cpf,6,3). '-'. substr($data->cpf,9,2) : $data->cpf;
+		$this->SetFieldValue('cpf',$data->cpf);
+
+		//formato de 4 digitos para ano da data de inclusao
+		if($data->datainclusao!='')
+		{
+			$data->datainclusao = $vetData = explode('/',$data->datainclusao);
+			$data->datainclusao = date("d/m/Y", mktime(0, 0, 0, $data->datainclusao[1], $data->datainclusao[0], $data->datainclusao[2]));
+		}
+
+		//formato de 4 digitos para ano da data de exclusao
+		if($data->dataexclusao!='')
+		{
+			$data->dataexclusao = $vetDataExc = explode('/',$data->dataexclusao);
+			$data->dataexclusao = date("d/m/Y", mktime(0, 0, 0, $data->dataexclusao[1], $data->dataexclusao[0], $data->dataexclusao[2]));
+		}
+
+		$this->SetFieldValue('edtDataInc',$data->datainclusao);
+		$this->SetFieldValue('clnDataExclusao',$data->dataexclusao);
+		$this->SetFieldValue('txtHorasPrevistas',$data->horasprevistas);
+		$this->SetFieldValue('selbanco',"{$data->idbanco}");
+		$this->SetFieldValue('lkpAgencia',($data->idagencia)?trim($data->idagencia):($data->idagenc));
+		$this->SetFieldValue('conta',$data->conta);
+	}
+
+	function btnEdit_click($key='')
+	{
+		global $MIOLO, $module, $item, $self, $action;
+
+		$item = ($key != '') ? $key : $item;
+		$objBolsista = &$this->objBolsista;
+		if ($objBolsista)
+		{
+			$objTemp = $objBolsista->GetById($item);
+			$this->SetData($objTemp);
+			
+			$this->SetFieldValue('key',$item);
+			$this->SetFieldValue('hdnOperacao','update');
+			
+			$this->SetFieldAttr('idbolsa','visible',true);
+			$this->SetFieldAttr('idbolsa','readonly',true);
+
+			$this->SetFieldAttr('clnDataExclusao','visible',true);
+			$this->SetFieldAttr('edtDataInc','visible',true);
+			$this->SetFieldAttr('edtDataInc','readonly',true);
+
+			$this->SetFieldAttr('txtHorasPrevistas','visible',true);
+			$this->SetButtonAttr('btnPost','visible',true);
+			$this->SetButtonAttr('btnList','visible',false);
+			$this->SetButtonAttr('btnCancelar','visible',true);
+
+     		$this->SetFieldAttr('lkpNome','readonly',true);
+			$this->SetFieldAttr('cpf','visible',true);
+
+			$objBolsa= $MIOLO->GetBusiness($module,'cadastrobolsa');
+			$objBolsa= $objBolsa->GetById($objTemp->idbolsa);
+				
+			if( ($objBolsa->paga == 'S') )
+			{
+		   		$this->SetFieldAttr('selbanco','visible',true); 
+				$this->SetFieldAttr('lkpAgencia','visible',true); 
+				$this->SetFieldAttr('conta','visible',true);
+			}
+			$this->AddError( $objBolsista->GetErrors() );
+		}
+	}
+
+	function btnConsulta_click($sender=null,$idpessoa='')
+	{
+		global $MIOLO, $module, $item, $self, $action, $page;
+	
+		$item = ($idpessoa != '') ? $idpessoa : $item;
+
+		$objBolsista = $this->objBolsista;
+
+		if ($objBolsista)
+		{		
+			$ok = $objBolsista->GetByIdPessoa($item);
+			
+			if( !$ok ) // pessoa nao e bolsista
+			{
+				$this->SetFieldValue('hdnOperacao','consulta');
+
+				$this->SetFieldAttr('lblInfo','visible',true);	
+				$this->SetFieldValue('lblInfo','Esta pessoa não esta cadastrada como bolsista. Para cadastrá-la informe a Data de Inclusão.');
+				
+				$ok = $this->objPessoa->GetById($item);
+				
+         		$this->SetFieldAttr('lkpNome','readonly',true);
+				$this->SetFieldAttr('cpf','visible',true);
+
+				$this->SetFieldAttr('selbanco','visible',true); 
+				$this->SetFieldAttr('lkpAgencia','visible',true); 
+				$this->SetFieldAttr('conta','visible',true);
+			}
+			else  // pessoa ja e bolsista
+			{
+				$lstBolsista = $MIOLO->GetActionURL($module,'main:listabolsista',$objBolsista->idpessoa);
+				$page->Redirect($lstBolsista);
+			}
+			$this->SetData($ok);
+			$this->SetButtonAttr('btnNew','label','Cancelar');
+			$this->AddError( $objBolsista->GetErrors() );
+			
+			$this->SetFieldAttr('edtDataInc','visible',true);
+			$this->SetFieldAttr('clnDataExclusao','visible',true);
+			$this->SetFieldAttr('txtHorasPrevistas','visible',true);
+			$this->SetFieldAttr('idbolsa','visible',true);
+			$this->SetButtonAttr('btnPost','visible',true);
+			$this->SetButtonAttr('btnNew','visible',true);
+		}
+	}
+
+	function btnPost_click()
+	{
+		global $MIOLO, $module, $self, $action;
+
+		$objBolsista = $this->objBolsista;
+		$objPagBolsa = $MIOLO->GetBusiness($module,'pagbolsa');
+	
+		if ( $objBolsista )
+		{
+			if( $objBolsista->DesTravado() )
+			{
+                $dados=$this->GetData();
+				$objBolsista->SetData($dados);
+                
+				$op = $this->GetFormValue('hdnOperacao');
+
+				if( $op == 'consulta' )
+				{
+					$lnkVoltar = $MIOLO->GetActionURL($module,$self,$objBolsista->idpessoa,Array('event'=>'btnConsulta:click') );
+				}
+				elseif( $op == 'insert' )
+				{
+					$lnkVoltar = $MIOLO->GetActionURL($module,$self,$objBolsista->idbolsista,Array('event'=>'btnPreparaNovo:click') );
+				}
+				elseif( $op == 'update' )
+				{
+					$lnkVoltar = $MIOLO->GetActionURL($module,$self,$objBolsista->idbolsista,Array('event'=>'btnEdit:click') );
+				}
+
+				if( $objBolsista->idbolsa == 'vazio')
+				{
+					$MIOLO->Error('Bolsa não informada!', $lnkVoltar);
+					return;
+				}
+
+				$is_update = ($this->GetFormValue('hdnOperacao') == 'update');
+				$idpessoa_ok = ($this->GetFormValue('idpessoa') != '');
+
+				if ($op == 'insert')
+				{
+					/** Verif. datas */
+					$dataTemp = explode('/',$this->GetFormValue('edtDataInc'));
+					$dataComparacao = ''.$dataTemp[2].'-'.$dataTemp[1].'-'.$dataTemp[0].'';
+					$dataAtual = date("Y-m-d");
+					$dataDiaAtual = date("Y-m").'-'.'31'.'';
+					/*if ($dataComparacao < $dataAtual)
+					{
+						$MIOLO->Error('Data Inválida: A data de inclusão não pode ser menor que a data atual!', $lnkVoltar);
+						return;
+					}*/
+								
+					if ($dataComparacao > $dataDiaAtual)
+					{
+						$MIOLO->Error('Data Inválida: A data de inclusão deve estar no mês corrente', $lnkVoltar);
+						return;
+					}
+				}
+				
+				if( trim($this->GetFormValue('edtDataInc')) == "")
+				{
+					$MIOLO->Error('Data de Inclusão não informada!', $lnkVoltar);
+					return;
+				}
+				
+				if( ! ereg("^(0?[1-9]|[12][0-9]|3[01])/(0[0-9]|1[012])/(1[89]|2[0-9])[0-9][0-9]$",trim($this->GetFormValue('edtDataInc'))) )
+				{
+					$MIOLO->Error("Data Inválida: {$this->GetFormValue('edtDataInc')} <BR>Obs: a data deve estar no seguinte padrão: 01/12/2004",$lnkVoltar);
+					return;
+				}
+				
+				
+				if( trim($this->GetFormValue('clnDataExclusao')) != "" )
+				{
+					if( ! ereg("^(0?[1-9]|[12][0-9]|3[01])/(0[0-9]|1[012])/(1[89]|2[0-9])[0-9][0-9]$",trim($this->GetFormValue('clnDataExclusao'))) )
+					{
+						$MIOLO->Error("Data Inválida: {$this->GetFormValue('clnDataExclusao')} <BR>Obs: a data deve estar no seguinte padrão: 01/12/2004",$lnkVoltar);
+						return;
+					}
+					
+					$vetData = explode('/',$this->GetFormValue('edtDataInc'));
+					$vetDataExc = explode('/',$this->GetFormValue('clnDataExclusao'));
+
+					if( mktime(0,0,0,$vetDataExc[1],$vetDataExc[0],$vetDataExc[2]) < mktime(0,0,0,$vetData[1],$vetData[0],$vetData[2]) )
+					{
+						$MIOLO->Error("Data de Exclusao Superior a data de Inclusao!",$lnkVoltar);
+						return;
+					}
+
+                    $objPagBolsa->GetById($dados->idbolsista,substr($dados->dataexclusao,3,10));
+                    if ($objPagBolsa->valor)
+                   	{
+						$MIOLO->Error("Existe um pagamento para este bolsista informado neste mês/ano!",$lnkVoltar);
+						return;
+					} 
+				}
+				
+				if( ! $this->isCPF($objBolsista->cpf) )
+				{
+					$MIOLO->Error("CPF inválido: {$objBolsista->cpf}",$lnkVoltar);
+					return;
+				}
+				
+				$objAgencia = $MIOLO->GetBusiness('common','agencia');
+				$objAgencia->GetByIds($objBolsista->idagenc,$objBolsista->idbanco);
+
+				$estadoInsert = $objBolsista->VerificarReg();
+				
+				$objBolsa= $MIOLO->GetBusiness($module,'cadastrobolsa');
+				$objBolsa= $objBolsa->GetById($objBolsista->idbolsa);
+				
+				if( ($objBolsa->paga == 'S') )
+				{
+					$campos_pagamento = true;
+
+					if( $objBolsista->idbanco == '' )
+					{
+						$MIOLO->Error('Banco não informado!', $lnkVoltar);
+						return;			
+					}
+					
+					if( $objAgencia->idAgencia == 0 )
+					{
+						$MIOLO->Error("Agência inválida!",$lnkVoltar);
+						return;
+					}
+					
+					if( !$objBolsista->conta )
+					{
+						$MIOLO->Error("Conta não informada!",$lnkVoltar);
+						return;
+					}
+				}
+				else
+				{
+					$campos_pagamento = false; // pois a bolsa NAO e do tipo PAGA
+				}
+				
+				if ( $is_update )
+				{
+					$ok = $objBolsista->Update($campos_pagamento);
+				}
+				else
+				{
+					if( ($estadoInsert == 'NenhumRegistroAtivo') || ($estadoInsert == 'ok') )
+					{
+						if ( $idpessoa_ok )
+						{
+							$ok = $objBolsista->Insert($campos_pagamento);
+						}
+						else
+						{
+							$MIOLO->Information('Id pessoa nao informado!', $lnkVoltar );
+						}
+					}
+					else
+					{
+						$MIOLO->Error("Não é possível inserir registro!Bolsista já cadastrado nesse tipo de bolsa!",$lnkVoltar);
+					}
+				}
+
+				if ( $ok )
+				{
+					$MIOLO->Information('Informações enviadas com sucesso.', $lnkVoltar );
+					return true;
+				}
+				$this->AddError($objBolsista->GetErrors());
+			} //DestravaTrava
+			else
+			{
+				$MIOLO->Error('Sistema Travado!',$lnkVoltar);
+			}
+		}
+	}
+
+	function btnNew_click()
+	{
+		$this->SetData();
+	}
+
+	function btnList_click($idbol)
+	{   
+		global $MIOLO, $module, $self, $action, $page;
+
+		$columns = array
+		(
+			new DataGridColumn('idbolsista','Id','right', true, '0%',false),
+			new DataGridColumn('nome','Nome','left', true, '40%',true, null, false,true),
+			new DataGridColumn('datainclusao','Inclusao','left',true, '10%',true, null, false,true),
+			new DataGridColumn('bolsa','Bolsa','left', true, '30%',true, null, false,true),
+			new DataGridColumn('idpessoa','idpessoa','left', true, '0%',false, null, false,false),
+			new DataGridColumn('idbanco','Banco','left', true, '10%',true, null, false,false),
+			new DataGridColumn('idagenc','Agência','left', true, '10%',true, null, false,false),
+			new DataGridColumn('conta','Conta','left', true, '10%',true, null, false,false),
+		);
+
+		$href_datagrid = $MIOLO->GetActionURL($module,$self,'', Array('event'=>'btnList_click'));
+    	$page->action = $href_datagrid;
+		$query = $this->objBolsista->ListBolsistasDistinct();
+    	$datagrid = new DataGrid2($query, $columns, $href_datagrid,20);
+
+		$datagrid->AddFilterText('nome','Nome:','');
+        $datagrid->SetFilter(true);
+		
+		$datagrid->SetTitle('Relação de Bolsistas');
+		$datagrid->SetLinkType('linkbutton'); // ???
+		$href_edit = $MIOLO->GetActionURL($module,'main:listabolsista','%4%');
+		$datagrid->AddActionIcon('Editar', 'update.gif', $href_edit);
+		$datagrid->HeaderLink('new', 'Novo Registro',
+		$MIOLO->GetActionURL($module,$self,'',Array('event'=>'btnInsert:click')));
+		$MIOLO->theme->InsertContent($datagrid);
+		$datagrid->SetClose($MIOLO->GetActionURL($module,'main:sispag'));
+	}
+	
+	function btnCancelar_click()
+	{
+		global $MIOLO,$module,$page;
+
+		$lstBolsista = $MIOLO->GetActionURL($module,'main:listabolsista',$this->GetFormValue('idpessoa'));
+		$page->Redirect($lstBolsista);
+	}
+
+	function btnPreparaNovo_click()
+	{
+		global $MIOLO, $module, $item, $self, $action;
+
+		$item = ($key != '') ? $key : $item;
+		$objBolsista = &$this->objBolsista;
+		if ($objBolsista)
+		{
+			$objTemp = $objBolsista->GetByIdPessoa($item);
+			
+			$this->SetData($objTemp);
+			
+			/* ++zerar campos Bolsista++ */
+			$this->SetFieldValue('edtDataInc','');
+			$this->SetFieldValue('clnDataExclusao','');
+			$this->SetFieldValue('idbolsa','');
+			$this->SetFieldValue('txtHorasPrevistas','');
+			/*---------------------------*/
+			
+			$this->SetFieldValue('key',$item);
+			$this->SetFieldValue('hdnOperacao','insert');
+
+			$this->SetFieldAttr('idbolsa','visible',true);
+			$this->SetFieldAttr('clnDataExclusao','visible',true);
+			$this->SetFieldAttr('edtDataInc','visible',true);
+			$this->SetFieldAttr('txtHorasPrevistas','visible',true);
+			$this->SetButtonAttr('btnPost','visible',true);
+			$this->SetButtonAttr('btnCancelar','visible',true);
+			$this->SetButtonAttr('btnList','visible',false);
+
+     		$this->SetFieldAttr('lkpNome','readonly',true);
+			$this->SetFieldAttr('cpf','visible',true);
+
+		   	$this->SetFieldAttr('selbanco','visible',true); 
+			$this->SetFieldAttr('lkpAgencia','visible',true); 
+			$this->SetFieldAttr('conta','visible',true);
+
+			$this->AddError( $objBolsista->GetErrors() );
+		}
+	}
+	
+	function isCPF($cpf) // private
+	{
+		/*
+		** @return true se é CPF
+		*/
+	    $cpf=ereg_replace("[^0-9]","",$cpf); 
+	    $c=substr($cpf, 0,9); 
+	    $v=substr($cpf, 9,2); 
+	    $d=0;         
+	    $val=true; 
+        
+	    for ($i=0;$i<9;$i++){ 
+	        $d+=$c[$i]*(10-$i); 
+	    } 
+        
+	    $d==0 ? $val=false:null; 
+    	$d= (11-($d%11))>9 ? 0:11-($d%11); 
+    	$v[0]!=$d ? $val=false:null; 
+    	$d *=2; 
+        
+    	for ($i=0;$i<9;$i++){ 
+        	$d+=$c[$i]*(11-$i); 
+    	} 
+        
+    	$d= (11-($d%11))>9 ? 0:11-($d%11); 
+    	$v[1]!=$d ? $val=false:null; 
+        
+    	ereg("0{11}|1{11}|2{11}|3{11}|4{11}|5{11}|6{11}|7{11}|8{11}|9{11}",$cpf) ? $val=false : null; 
+        
+    	return $val;
+	}
+}
+?>

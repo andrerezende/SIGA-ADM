@@ -1,0 +1,135 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+global $MIOLO;
+class frmPessoaDadosBancarios extends MForm
+{
+	protected $pessoa;
+	
+	public function __construct($pessoa)
+	{
+        $this->pessoa = $pessoa;
+		parent::__construct('Dados Bancários');
+        $this->EventHandler();
+    }
+
+    public function CreateFields()
+    { 
+
+        $perms = $this->manager->getPerms();
+		$objBanco = $this->manager->GetBusiness('common','banco');
+		$objQuery = $objBanco->ListAll();
+		array_unshift($objQuery->result,Array('0'=>'','1'=>''));
+
+        $pispasep[] = new MTextField('pispasep','','Número',20);
+        $pispasep[] = new MCalendarField('datapispasep','','Data',20);
+        $pispasep[] = new MSelection('selBancoPisPasep','','Banco', $objQuery->result, true);
+
+        $cc[] = new MSelection('selBanco','','Banco', $objQuery->result, true);
+		$cc[] = new MTextField('agencia','','Agencia',15);
+		$cc[] = new MLookupField('lkpAgencia','&nbsp;','&nbsp;');
+		$cc[] = new MTextField('conta','','Conta',15,'completa, sem pontuação');
+		$fields = array(
+            new MBaseGroup('grpConta','Conta Corrente',$cc,'horizontal'),
+            new MBaseGroup('grpPisPasep','PIS/PASEP',$pispasep,'horizontal')
+		);
+
+		$this->SetFields($fields);
+        $this->SetFieldAttr('grpConta', 'showLabel', true);
+        $this->SetFieldAttr('grpPisPasep', 'showLabel', true);
+		$this->SetFieldAttr('lkpAgencia','module','common');
+	   	$this->SetFieldAttr('lkpAgencia','item','bancoagencia');
+	   	$this->SetFieldAttr('lkpAgencia','event','filler');
+	   	$this->SetFieldAttr('lkpAgencia','related',',agencia,selBanco');
+	   	$this->SetFieldAttr('lkpAgencia','filter','selBanco,agencia');		
+
+        
+		$buttons = array(
+			new MButton('btnSalvar','Enviar')
+		);
+					
+		
+		
+		$this->SetButtons($buttons);
+        $this->setButtonAttr('btnSalvar','visible',($perms->checkAccess('rh_pessoas',A_ACCESS) || $perms->checkAccess('adm_dados_bancarios',A_ACCESS) ) );
+		  $pispasep[0]->AddAttribute('maxlength','11');
+		$this->SetData();
+		
+    }
+		
+	function SetData()  
+	{
+        global $MIOLO;
+
+        $data = $this->pessoa;
+        $this->SetFieldValue('pispasep', $data->pispasep);
+        $this->SetFieldValue('datapispasep', $data->datapispasep);
+        $this->SetFieldValue('selBancoPisPasep', $data->bancopispasep);
+        $this->SetFieldValue('conta', $data->conta);
+        $this->SetFieldValue('agencia', $data->idagencia);
+        $this->SetFieldValue('selBanco', $data->idbanco);
+	}
+
+	function GetData()  
+	{
+        $data					= $this->pessoa;
+		$data->pispasep         = $this->GetFieldValue('pispasep');
+		$data->datapispasep     = $this->GetFieldValue('datapispasep');
+		$data->bancopispasep    = $this->GetFieldValue('selBancoPisPasep');
+		$data->conta			= $this->GetFieldValue('conta');
+		$data->idagencia        = $this->GetFieldValue('agencia');
+		$data->idbanco          = $this->GetFieldValue('selBanco');
+		return $data;
+	}
+
+	public function btnSalvar_click()
+	{
+        try
+        {
+            $data = $this->GetData();
+            $objAgencia->agencia = $data->idagencia;
+            $objAgencia->banco = $data->idbanco;
+            
+            if (!(is_numeric($data->pispasep)))
+            {
+            	$this->AddError("Número do PIS/PASEP inválido!");
+            
+            }
+            
+            $agencia = $this->manager->getBusiness('common','agencia');
+            $agencia->getById($objAgencia);
+            if ($agencia->nome == NULL)
+            {
+                $this->AddInfo("Agência não existe.");
+            }
+            else
+            {
+                $this->pessoa->SetData($data);
+                @$this->pessoa->save();
+                $this->pessoa->log(OP_UPD,"Atualização dos dados bancários. Id pessoa: ".$this->pessoa->idpessoa." Via rh");
+				$this->AddInfo('Dados atualizados');
+            }
+        }
+        catch ( Exception $e )
+        {	
+            $this->AddError("Erro! Verifique os dados fornecidos");
+        }
+	}
+}
+?>

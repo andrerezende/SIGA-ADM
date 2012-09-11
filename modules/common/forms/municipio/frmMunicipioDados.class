@@ -1,0 +1,111 @@
+<?
+class frmMunicipioDados extends MFormAjax
+{
+	protected $obj;
+
+	function __construct($obj)
+	{
+		$this->obj = $obj;
+		parent::__construct('Dados do Municipio');
+		$this->eventHandler();
+		$this->page->AddJsCode(file_get_contents(dirname(__FILE__) . '/js/frmMunicipio.js'));
+	}
+
+	function CreateFields()
+	{
+		global $MIOLO;
+
+		$municipio = $MIOLO->GetBusiness('common','municipio');
+		$this->obj = $municipio->GetById($this->obj->idMunicipio);
+		$pais = $this->manager->getBusiness('common', 'pais');
+		$uf = $this->manager->getBusiness('common', 'uf');
+		$fields = array(
+			new MTextField('municipio','','Municipio', 50),
+			array(
+				new MSelection('idPais','','País',$pais->ListAll()->result),
+				new MSelection('idUF','','Estado',array(''=>'--Selecione o País--'))
+			),
+			new MTextField('categoriaDiaria','','Categoria Diária', 1),
+			new MTextField('populacao','','População', 10),
+		);
+
+		$this->SetFields($fields);
+
+		$aguarde = $this->manager->getUI()->getImage('miolo','aguarde.gif');
+		$urlAjaxHandler = $this->manager->getActionURL('common','ajaxhandler');
+		$this->idPais->addAttribute('onChange',"doSelUF('$urlAjaxHandler','$aguarde');");
+
+		$buttons = array(
+			new MButton('btnSave', 'Gravar')
+		);
+		$this->SetButtons($buttons);
+
+		$validators = array(
+			new MRequiredValidator('municipio'),
+		);
+		$this->SetValidators($validators);
+		$this->setData();
+	}
+
+	function setData()
+	{
+		$uf = $this->manager->getBusiness('common', 'uf');
+		$data = $this->obj;
+		//$data->GetById($this->obj->idMunicipio);
+		$data->idMunicipio = $this->obj->idMunicipio;
+		$data->retrieveAssociation('uf');
+		$this->setFieldValue('municipio',$data->municipio);
+		$this->setFieldValue('idPais',$data->pais[0]->idPais);
+
+		if(trim($data->idPais) == '024')
+			$options = $uf->ListAll()->result;
+		else
+			$options = array('FB'=>'FORA DO BRASIL');
+
+		$this->setFieldAttr('idUF', 'options', $options);
+		$this->setFieldValue('idUF',$data->uf->idUF);
+		$this->setFieldValue('categoriaDiaria',$data->categoriaDiaria);
+		$this->setFieldValue('populacao',$data->populacao);
+	}
+
+	function btnSave_click()
+	{
+		$data = $this->getData();
+		$this->obj->setData($data);
+		
+		if( strlen(trim(Form::GetFormValue('municipio'))) < 3)
+		{
+			$this->AddError('O nome do município precisa ser maior.');
+		}
+		elseif($this->getFieldValue('idPais') == '')
+		{
+			$this->addError('Por favor, selecione um país');
+		}
+		elseif($this->getFieldValue('idUF') == '')
+		{
+			if(trim($this->getFieldValue('idPais')) == '024')
+			{
+				$estado = $this->manager->getBusiness('common', 'uf');
+				$this->setFieldAttr('idUF', 'options', $estado->ListAll()->result);
+			}
+			else
+			    $this->setFieldAttr('idUF', 'options', array('FB'=>'FORA DO BRASIL'));
+
+			$this->addError('Por favor, selecione um estado');
+		}
+		else
+		{
+			try
+			{
+				$this->obj->Update();
+				$this->manager->information('Municipio modificado com sucesso.',$this->manager->getActionUrl('common','main:municipio:find'));
+			}
+			catch ( Exception $e )
+			{
+				$this->addError($e->getMessage());
+			}
+		}
+	}
+
+}
+?>

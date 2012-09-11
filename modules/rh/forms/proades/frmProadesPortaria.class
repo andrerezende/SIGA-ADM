@@ -1,0 +1,121 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmProadesPortaria extends MForm
+{
+    var $proades; 
+
+    function __construct($proades)
+    {
+        $this->proades = $proades;
+        parent::__construct('Dados da portaria de cria&ccedil;&atilde;o da coordena&ccedil;o setorial');
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+        for ( $i = 1; $i <= 31; $i++ )
+        {
+            $dias[$i] = $i;
+        }
+
+        $meses = array(
+                "01"=>"Janeiro",
+                "02"=>"Fevereiro",
+                "03"=>"Mar&ccedil;o",
+                "04"=>"Abril",
+                "05"=>"Maio",
+                "06"=>"Junho",
+                "07"=>"Julho",
+                "08"=>"Agosto",
+                "09"=>"Setembro",
+                "10"=>"Outubro",
+                "11"=>"Novembro",
+                "12"=>"Dezembro"
+            );
+
+        $anoAtual = date('Y');
+        for ( $i = 0; $i < 20; $i++ )
+        {
+            $ano = $anoAtual - $i;
+            $anos[$ano] = $ano;
+        }
+		$fields = array(
+            new MTextField('numero','','N&uacute;mero da portaria','20','Interno a unidade'),
+            new MSeparator(),
+            new MLabel("Informe a seguir os dados da portaria de desgina&ccedil;&atilde;o do dirigiente da unidade:"),
+            new MTextField('numDirigente','','N&uacute;mero','20'),
+            new MSelection('diaDirigente','','Dia',$dias),
+            new MSelection('mesDirigente','','M&ecirc;s',$meses),
+            new MSelection('anoDirigente','','Ano',$anos)
+        );
+
+        $this->SetFields($fields);
+        
+		$buttons = array(
+        	new FormButton('btnPost', 'Enviar')
+            );
+		$this->SetButtons($buttons);
+    }
+
+    function btnPost_click()
+    {
+        $data = $this->GetData();
+
+        if ( $data->numero == '' || $data->numDirigente == '' || $data->diaDirigente == '' || $data->mesDirigente == '' || $data->anoDirigente == '' )
+        {
+            $this->addError("Confira o preenchimento do formul&aacute;rio. Todos os campos s&atilde;o obrigat&oacute;rios");
+        }
+        else
+        {
+            $publicacao = $this->manager->GetBusiness('rh','publicacao');
+            $publicacao->data = date('d/m/Y');
+            $publicacao->numero = $data->numero;
+
+            $setor = $this->manager->getBusiness('common','setor');
+            $setor->getById($this->proades->idSetor);
+
+            $publicacao->obs = "Portaria criada para a definicao da coordenacao setoria do PROADES. Setor: $setor->nome";
+
+            try 
+            {
+                $publicacao->save();
+
+                $this->proades->idPublicacao = $publicacao->idPublicacao;
+                $this->proades->numeroPortariaDirigente = $data->numDirigente;
+                $this->proades->diaPortariaDirigente = $data->diaDirigente;
+                $this->proades->mesPortariaDirigente = $data->mesDirigente;
+                $this->proades->anoPortariaDirigente = $data->anoDirigente;
+
+                $this->proades->save();
+
+                $this->proades->idPublicacao = $publicacao->idPublicacao;
+                $this->proades->save;
+
+                $this->manager->information("Dados da portaria salvos com sucesso.",$this->manager->getActionUrl('rh','main:proades:main',$this->proades->idProades,array('form'=>'fase1','subform'=>'coord')));
+            }
+            catch ( Exception $e )
+            {
+                $this->addError($e->getMessage());
+            }
+        }
+    }
+
+ }
+?>

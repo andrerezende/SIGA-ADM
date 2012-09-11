@@ -1,0 +1,100 @@
+<?
+class frmUoGestor extends Form
+{
+	protected $objUo;
+	
+    function __construct($objUo)
+    {
+        global $MIOLO, $module, $self, $page;
+        
+		$this->objUo = $objUo;
+        
+        $urlBase = $MIOLO->getActionUrl($module,'main:uo',$this->objUo->idUo,array('form'=>'gestor'));
+        $page->setAction($urlBase);
+        
+        $this->Form('Incluir');
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+		$fields = array(
+			new MLookupTextField('lkpUsuario','','Login',20),
+			new MTextField('nome','','Nome',50),
+            new MCalendarField('dataInicio','','Data Inicio',15),
+			new MHiddenField('idUsuario','')
+        );
+		
+        $this->SetFields($fields);
+
+        $validators = array(
+            new MDateDMYValidator('dataInicio','','required')
+        );
+        
+        $this->SetValidators($validators);
+		
+        $this->SetFieldAttr('lkpUsuario','module','common');
+	    $this->SetFieldAttr('lkpUsuario','item','usuario');
+	    $this->SetFieldAttr('lkpUsuario','event','filler');
+	    $this->SetFieldAttr('lkpUsuario','related','idUsuario,lkpUsuario,NULL,NULL,NULL,NULL,nome');
+		
+		$buttons = array(
+        	new FormButton('btnSalvar', 'Incluir')
+        );
+
+		$this->SetButtons($buttons);
+    }
+
+	public function btnSalvar_click()
+	{
+		$idUsuario = $this->GetFormValue('idUsuario');
+
+        if( ! isset($idUsuario) )
+        {
+            $this->manager->Error('Usuário gestor não informado corretamente.',false);
+            return;
+        }
+        
+        $gestor = $this->objUo->getGestor($idUsuario);
+
+        $msgLog = '';
+
+        /* caso gestor ja existir */
+        if( $gestor )
+        {
+            if( $gestor->dataFim )
+            {
+                $gestor->dataFim = '';
+                $msgLog = 'Reativando Gestor relacionado à UO';
+                $this->AddError('Gestor já está relacionado à UO');
+            }
+            /*else
+            {
+                $this->manager->Error('Gestor já está relacionado à UO',false);
+                return;
+            }*/
+        }
+        else
+        {
+            $gestor = $this->manager->GetBusiness('adm','gestor');
+            $gestor->setData($this->getData());
+            $gestor->idUo = $this->objUo->idUo;
+            $msgLog = 'Novo gestor relacionado à UO';
+        }
+		try
+		{
+            $gestor->save();
+			$this->objUo->Log(OP_INS,$msgLog);
+		}
+		catch (Exception $e)
+		{
+            $this->manager->Error("Informe o seguinte erro à equipe do CGCO: ",$e->getMessage());
+		}        
+
+		$this->SetFieldValue('lkpUsuario','');
+		$this->SetFieldValue('nome','');
+                $this->SetFieldValue('dataInicio','');
+	}
+
+ }
+?>

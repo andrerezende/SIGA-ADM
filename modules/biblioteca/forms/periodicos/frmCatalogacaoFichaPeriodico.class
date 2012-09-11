@@ -1,0 +1,164 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+class frmCatalogacaoFichaPeriodico extends MForm
+{
+    public $periodico;
+    public $operacao;
+    public $logOperacao;
+	public $usuario;
+    public $idPeriodico;
+
+    function __construct($data)
+    {
+        $this->idPeriodico = $data->idPeriodico;
+       
+        parent::__construct('Periodico');
+    
+        // Botão 'fechar', direcionando para o handler biblioteca/main/catalogacao
+        $this->SetClose($this->manager->GetActionURL($module, 'main:catalogacao:periodicos'));
+    }
+
+    function CreateFields()
+    {
+        global $MIOLO, $module, $action;
+        $this->periodico = $this->manager->getBusiness('biblioteca','periodico');
+        $this->periodico->GetById($this->idPeriodico);
+
+        $this->operacao = $this->manager->getBusiness('biblioteca','operacao');
+        $this->logOperacao = $this->manager->getBusiness('biblioteca','log');
+
+        $objOperacao = $this->operacao->GetIdoperacaoByMnemonico('INCPERIODICO');
+        $query = $this->logOperacao->GetIdusuarioByIdentificadorAndIdoperacao($this->periodico->idPeriodico, $objOperacao->idoperacao);
+        $idUsuario = $query->result[0][0];
+        $this->usuario = $this->manager->getBusiness('common','usuario',$idUsuario);
+        $opPreCatalogacao = $this->usuario->nome;
+
+        $fields = array(
+        new MTextLabel('issn', ($this->periodico->issn!= null) ? $this->periodico->issn: '&nbsp;', 'ISSN'),
+        new MTextLabel('ccn', ($this->periodico->ccn!= null) ? $this->periodico->ccn: '&nbsp;', 'CCN'),
+        new MTextLabel('secs', ($this->periodico->secs != null) ? $this->periodico->secs : '&nbsp;', 'SECS'),
+        new MTextLabel('avaliacaoCapes', ($this->periodico->avaliacaoCapes!= null) ? $this->periodico->avaliacaoCapes: '&nbsp;', 'Avaliação Capes'),
+        new MTextLabel('titulo', ($this->periodico->titulo != null) ? $this->periodico->titulo : '&nbsp;', 'Título'),
+        new MTextLabel('subtitulo', ($this->periodico->subtitulo != null) ? $this->periodico->subtitulo : '&nbsp;', 'Subtítulo'),
+        new MTextLabel('TituloAbreviado', ($this->periodico->tituloAbreviado!= null) ? $this->periodico->tituloAbreviado : '&nbsp;', 'Título Abreviado'),
+       // new MTextLabel('edicao', ($this->periodico->edicao != null) ? $this->periodico->edicao : '&nbsp;', 'Edição'),
+        new MTextLabel('editora', ($this->periodico->editora != null) ? $this->periodico->editora : '&nbsp;', 'Editora'),
+        new MTextLabel('cidade', ($this->periodico->cidade!= null) ? $this->periodico->cidade : '&nbsp;', 'Cidade'),
+        new MTextLabel('periodicidade', ($this->periodico->periodicidade!= null) ? $this->periodico->periodicidade : '&nbsp;', 'Periodicidade'),
+        new MTextLabel('modoDeAquisicao', ($this->periodico->modoDeAquisicao!= null) ? $this->periodico->modoDeAquisicao : '&nbsp;', 'Modo de aquisição'),
+        new MTextLabel('Assuntos', ($this->periodico->assuntos!= null) ? $this->periodico->assuntos : '&nbsp;', 'Assuntos'),
+        new MTextLabel('localizacaoAcessoEletronico', ($this->periodico->localizacaoAcessoEletronico!= null) ? $this->periodico->localizacaoAcessoEletronico: '&nbsp;', 'Localização e Acesso Eletronico'),
+
+
+        new MTextLabel('opprecatalogacao', ($opPreCatalogacao != null) ? $opPreCatalogacao : '&nbsp;', 'Operador de Pré-Catalogação'),
+        );
+        $this->setFields($fields);
+        $this->labelWidth = '25';//era 25, mudar depois
+        $this->setAlternate('#fff','#eee');
+        $this->setBackgroundColor('#FFF');
+
+        $perms = $this->manager->getPerms();
+        if ( $perms->checkAccess('bib_catalog_exclusao',A_ACCESS) )
+        {
+            $buttons = Array(
+                new MButton('btnExcluir', 'Excluir Periódico'),
+                new MButtonWindow('btnMarc', 'MARC', $MIOLO->GetActionURL($module = $module, 'catalogacao/periodicos/marcPeriodico', $this->idPeriodico)),
+                new FormButton('btnVoltar', 'Escolher Outro Periódico',  $MIOLO->GetActionURL($module =  $module, "main:catalogacao:periodicos:catalogacaoperiodico" )),
+                new MButton('btnPost', 'Alterar Catalogacao'),
+				//CONTINUAR DEPOIS DE TESTAR E IMPLANTAR MODULO PERIODICOS
+                //new MButtonWindow('btnAssunto', 'Cadastrar Assuntos', $MIOLO->GetActionURL($module = $module , 'main:catalogacao:periodicos:assuntoperiodico', $this->idPeriodico)),
+            );
+        }
+        else
+        {
+            $buttons = Array(
+                new MButtonWindow('btnMarc', 'MARC', $MIOLO->GetActionURL($module = $module, 'catalogacao/periodicos/marcPeriodico', $this->idPeriodico)),
+                new FormButton('btnVoltar', 'Escolher Outro Periódico',  $MIOLO->GetActionURL($module =  $module, "main:catalogacao:periodicos:catalogacaoperiodico" )),
+            );
+        }
+
+        $this->SetButtons($buttons);
+     }
+
+	
+
+	function btnExcluir_click()
+    {
+            
+		global $MIOLO,$module,$action,$item;
+               
+		$this->setAlternate('','');
+		$this->AddField(new MSpacer(1));
+		$this->AddField(new MSeparator());
+		$field = new MLabel('<font size=3 color=red><b>Atenção:</b></font><font size=2> Clicando no botão <font color=blue><b>"Confirma Exclusão"</b></font> o Periódico  <b>' . $this->periodico->titulo . '</b> será excluído da base de dados.</font>');
+		$this->AddField($field);
+		$buttons = Array(
+			new FormButton('btnCancelar', 'Cancelar', $MIOLO->GetActionURL($module, $action, $item)),
+			new MButton('btnExcluir2', 'Confirma Exclusão'),
+		);
+		$this->SetButtons($buttons);
+		$this->SetButtonAttr('btnExcluir','visible',false);
+	}
+
+	function btnExcluir2_click()
+	{
+		global $MIOLO,$module;
+		$aPeriodico = $this->manager->getBusiness('biblioteca','periodico');
+                $aPeriodico->GetById($this->idPeriodico);
+
+		try
+		{
+			$aPeriodico->DeletePeriodico();
+
+			$MIOLO->Information("Periodico ".$aPeriodico->titulo." excluído com sucesso.", $MIOLO->GetActionURL($module, $action, $item));
+		}
+		catch (Exception $e)
+		{
+			$MIOLO->Error($e->getMessage(), $MIOLO->GetActionURL($module, $action, $item));
+		}
+	}
+
+    function btnPost_click()
+    {
+        $item = $this->idPeriodico;
+        //var_dump($item);
+        if ($item == NULL)
+        {
+          //  $obra = $this->manager->getBusiness('biblioteca','periodico');
+           // $obra->getByNumero($this->getFieldValue('numero'));
+           // $item = $obra->idObra;
+        }
+        if ($item != NULL)
+        {
+            $go = $this->manager->getActionURL('biblioteca','main:catalogacao:periodicos:catalogacaoalteracaoperiodico',$item);
+            $this->page->redirect($go);
+        }
+    }
+
+}
+
+?>

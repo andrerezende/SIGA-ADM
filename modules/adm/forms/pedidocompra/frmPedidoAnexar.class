@@ -1,0 +1,77 @@
+<?php
+class frmPedidoAnexar extends MForm {
+
+	/**
+	 * Business utilizado
+	 * @var BusinessAdmPedidoCompra
+	 */
+	public $pedido;
+
+	public function __construct($objPedido) {
+		global $MIOLO, $module;
+		$this->pedido = $objPedido;
+		parent::__construct('Incluir Solicitação de Compra');
+		$this->defaultButton = false;
+		$this->page->addJsCode(file_get_contents(dirname(__FILE__) . '/js/frmPedidoNew.js'));
+		$this->EventHandler();
+	}
+
+	public function CreateFields() {
+		global $MIOLO, $page, $module, $context, $action, $history;
+		parent::CreateFields();
+
+		// Campos
+		$fields = array(
+			new MTextField('numPro', '', 'Processo', 20, 'Ex: Processo: 23059.000707/2009-92, coloca-se 000707/2009-92'),
+		);
+		$this->SetFields($fields);
+
+		// Validadores
+		$validators = array(
+			new MRequiredValidator('numPro'),
+		);
+		$this->setValidators($validators);
+
+		// Botão
+		$buttons = array(
+			new FormButton('btnNew', 'Anexar'),
+		);
+		$this->SetButtons($buttons);
+		$this->page->onLoad("MIOLO_GetElementById('numPro').focus();");
+	}
+
+	public function btnNew_click() {
+		global $MIOLO, $module, $action;
+
+		$data = $this->getData();
+		$msg = 'Solicitação de compra ' . $this->pedido->idPedidoCompra . ' anexada ao processo ' . $data->numPro;
+		$serie = substr($data->numPro, 0, 6);
+		$ano = substr($data->numPro, 7, 4);
+		$codigo = substr($data->numPro, 12, 2);
+
+		$processo = $this->manager->GetBusiness('protocolo', 'processo');
+		$processo->getByNumeroFormatado($data->numPro);
+
+		$data->numPro = $ano . $serie . $codigo;
+
+		$this->pedido->situacao = 'ANEXADO';
+		$this->pedido->numPro = $data->numPro;
+
+		try {
+			if (!$processo->tipo || !$data->numPro) {
+				$this->addError('Processo não encontrado. Por favor verifique se o código foi digitado corretamente.');
+				return false;
+			}
+
+			$this->pedido->beginTransaction();
+			$this->pedido->Log(OP_INS, $msg);
+			$this->pedido->setData($data);
+			$this->pedido->save();
+			$this->pedido->endTransaction();
+			$this->manager->Information($msg, $this->manager->GetActionURL('adm', 'main:pedidocompra'));
+			$this->addInfo($msg);
+		} catch (Exception $e) {
+			$this->manager->Error($e->getMessage());
+		}
+	}
+}

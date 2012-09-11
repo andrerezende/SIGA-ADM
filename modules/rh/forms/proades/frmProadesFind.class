@@ -1,0 +1,131 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmProadesFind extends MForm
+{
+    function __construct()
+    {
+        parent::__construct("PROADES");
+        $this->eventHandler();
+    }
+
+    function createFields()
+    {
+        $idVinculo = $this->manager->getLogin()->id;
+
+	$login = $idVinculo;
+
+        $vinculo = $this->manager->getBusiness('rh','vinculo');
+        $id = $vinculo->getIdVinculo($idVinculo);
+	$idVinculo = substr($id, 1);
+	$idVinculo = substr($idVinculo, 0, -1);
+        $vinculo->getById($idVinculo);
+        $ui = $this->manager->getUi();
+
+        if ( $vinculo->isPersistent() )
+        {
+            $vinculo->getProvimentos();
+            $provimento = $vinculo->getProvimentoAtual();
+
+            if ( $provimento->isPersistent() )
+            {
+                $proades = $this->manager->getBusiness('rh','proades');
+                $proades->getByIdDirigente($idVinculo);
+
+                if ( $proades->isPersistent() )
+                {
+                    $idSetor = $proades->idSetor;
+                    $qryAndamento = $proades->ListByDirigente($provimento->idVinculo);
+                }
+                else
+                {
+                    $usuario = $this->manager->getBusiness('common','usuario');
+		    $usuario->getByLogin($login);
+                    $proades->getByIdUsuario($usuario->idUsuario);
+                    $idSetor = $proades->idSetor;
+                    $qryAndamento = $proades->ListBySetorEmAndamento($idSetor);
+                }
+                $session = $this->manager->session;
+                $session->register("idSetor");
+                $session->setValue("idSetor",$idSetor);
+
+                $proades = $this->manager->getBusiness('rh','proades');
+
+
+                if ( $qryAndamento->eof() ) 
+                {
+                    $lnkNew = new MLink('lnkNew','&nbsp;','','Deseja iniciar o programa de avalia&ccedil;&atilde;o de desempenho?');
+                    $lnkNew->setAction('rh','main:proades:new',$idSetor);
+
+                    $fields[] = new MLabel("O programa de avalia&ccedil;&atilde;o de desempenho para este setor ainda n&atilde;o foi aberto.");
+                    $fields[] = $lnkNew;
+                    $fields[] = new MSpacer('8px');
+                }
+                else //grid com a avaliacao aberta
+                {
+                    $gridEmAndamento = $ui->getGrid('rh','gridProades',$qryAndamento);
+                    $fields[] = new MLabel("Programa de Avalia&ccedil;&atilde;o de desempenho em andamento no per&iacute;odo");
+                    $fields[] = $gridEmAndamento;
+                }
+
+                $qryEncerradas = $proades->ListBySetorEncerrada($idSetor);
+                if ( ! $qryEncerradas->eof() ) //grid com a avaliacao aberta
+                {
+                    $gridEncerradas = $ui->getGrid('rh','gridProades',$qryEncerradas);
+                    $fields[] = new MSeparator();
+                    $fields[] = new MLabel("Avalia&ccedil;&atilde;o em andamento no per&iacute;odo");
+                    //$fields[] = $gridEncerradas;
+                }
+                
+                $panel = new MActionPanel('pn1Compound','Links &uacute;teis','',false);
+                //manual Plano de metas
+                $linkManual = new MLink('manual','Manual');
+                $linkManual->setAction('rh','html:files:manualproades1.pdf');
+                $panel->addLink('Manual',$ui->GetImage('rh','relatorio2_mini.png'),$linkManual,'NEW');
+
+                //manual Plano de metas
+                $linkManualPM = new MLink('manual','Manual Plano de Metas');
+                $linkManualPM->setAction('rh','html:files:Plano_de_metas.pdf');
+                $panel->addLink('Manual Plano de Metas',$ui->GetImage('rh','relatorio2_mini.png'),$linkManualPM,'NEW');
+
+                //resolucao
+                $linkResolucao = new MLink('manual','Resolucao');
+                $linkResolucao->setAction('rh','html:files:resolucao_proades.pdf');
+                $panel->addLink('Resolu&ccedil;&atilde;o',$ui->GetImage('rh','relatorio2_mini.png'),$linkResolucao,'NEW');
+
+                
+                $fields[] = $panel;
+                $fields[] =	new MImageFormLabel('foto', '',$ui->getImage('rh','proades.jpg'));
+                $this->setFields($fields);
+
+                $this->setShowPostButton(FALSE);
+            }
+            else
+            {
+                $this->error("Vinculo inativo...");
+            }
+
+        }
+        else
+        {
+            $this->manager->error("Seu usuário não está habilitado para realizar essa transação");
+        }
+    }
+}
+?>

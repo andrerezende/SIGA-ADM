@@ -1,0 +1,184 @@
+<?
+class BusinessAdmItemLicitacao extends Business
+{
+	public $idLicitacao;
+	public $item;
+    public $justificativa;
+    public $excecao;
+    
+    public $itemreq;
+    public $itemservext;
+    public $itemreqbib;
+
+	function __construct($data = null)
+	{
+		parent::__construct('sigaept', $data);
+	}
+
+    function OnCreate($data)
+    {
+        if (empty($data))
+        {
+//            $this->initialize();
+        }
+        else
+        {
+            $this->GetById($data);
+        }
+    }
+
+	function GetById($id,$item)
+	{
+		$this->idLicitacao = $id;
+		$this->item = $item;
+		$this->retrieve();
+		return $this;
+	}
+    function getLicitacao()
+    {
+        if (!$this->licitacao) $this->retrieveAssociation('licitacao');
+        return $this->licitacao;
+    }
+
+    function getItemReq()
+    {
+        if (!$this->itemreq) $this->retrieveAssociation('itemreq');
+        return $this->itemreq;
+    }
+
+    function getItemServExt()
+    {
+        if (!$this->itemservext) $this->retrieveAssociation('itemservext');
+        return $this->itemservext;
+    }
+
+    function getItemReqBib()
+    {
+        if (!$this->itemreqbib) $this->retrieveAssociation('itemreqbib');
+        return $this->itemreqbib;
+    }
+
+    function setExcecao($id)
+    {
+        $this->excecao = $id;
+    }
+
+	/* ---------------------------------------
+
+    Método GetNewItemLicitacao($idlicitacao)
+
+    Retorna o próximo numero do item da tabela
+    itemlicitação
+
+    ----------------------------------------*/
+    function GetNewItemLicitacao($idlicitacao)
+    {
+            $sql = new sql("max(item) as item","ad_itemlicitacao","idlicitacao = ?");
+            $args = array($idlicitacao);
+            $query = $this->ObjQuery($sql->Select($args));
+            $item = $query->fields('item')+1;
+            //var_dump($item);
+            return $item;
+    }
+
+	function GetQuantidadeEmpenhada($idLicitacao, $item)
+	{
+		$cf = new MCurrencyFormatter();
+		$sql = new sql();
+		$sql->SetColumns("sum(d.quantidadeemp)");
+		$sql->SetTables("ad_empenhado d");
+		$sql->SetWhere("(d.idlicitacao = ?) and (d.item = ?)"); 
+		$query1 = $this->Query($sql, array($idLicitacao, $item));
+
+		$sql = new sql();
+		$sql->SetColumns("sum(d.quantidadeanulada)");
+		$sql->SetTables("ad_empenhado d");
+		$sql->SetWhere("(d.idlicitacao = ?) and (d.item = ?) and (d.motivoanulacao in ('1','3','4')) and (d.status = '3')"); //MOTIVO: 1 é IMPOSSIBILIDADE ENTREGA P/ EMPRESA - 3 é PRAZO DE EMPENHO EXPIRADO - 4 é DIFERENCA DE FATURAMENTO
+		$query2 = $this->Query($sql, array($idLicitacao, $item));
+
+		return $cf->toDecimal($query1->fields('sum(d.quantidadeemp)')) + $cf->toDecimal($query2->fields('sum(d.quantidadeanulada)'));
+	}
+
+	function GetValorEmpenhado($idLicitacao, $item)
+	{
+		$cf = new MCurrencyFormatter();
+		$sql = new sql();
+		$sql->SetColumns("sum(d.valoremp) as valoremp");
+		$sql->SetTables("ad_empenhado d");
+		$sql->SetWhere("(d.idlicitacao = ?) and (d.item = ?)"); 
+		$query1 = $this->Query($sql, array($idLicitacao, $item));
+
+		$sql = new sql();
+		$sql->SetColumns("sum(d.valoranulado) as valoranulado");
+		$sql->SetTables("ad_empenhado d");
+		$sql->SetWhere("(d.idlicitacao = ?) and (d.item = ?) and (d.motivoanulacao in ('1','3','4')) and (d.status = '3')"); //MOTIVO: 1 é IMPOSSIBILIDADE ENTREGA P/ EMPRESA - 3 é PRAZO DE EMPENHO EXPIRADO - 4 é DIFERENCA DE FATURAMENTO
+		$query2 = $this->Query($sql, array($idLicitacao, $item));
+
+		return $cf->toDecimal($query1->fields('valoremp')) + $cf->toDecimal($query2->fields('valoranulado'));
+	}
+
+	function GetItens($idLicitacao)
+	{
+		$criteria = $this->getCriteria();
+		$criteria->AddColumnAttribute('item');
+		$criteria->addCriteria('idLicitacao','=',$idLicitacao);
+		return $criteria->retrieveAsQuery();
+	}
+
+    function setStatusByLicitacao($idLicitacao,$item,$status)
+    {
+        $sql = new sql("excecao","ad_itemlicitacao");
+        $sql->SetWhere("idlicitacao = ?");
+
+        if ($item == 'all') // se forem todos os itens
+        {
+            $args = array($status,$idLicitacao);
+        }
+        else
+        {
+            $sql->SetWhereAnd("item = ?"); // senao especifica um item a ser alterado
+            $args = array($status,$idLicitacao,$item);
+        }
+
+        $query = $this->Execute($sql->Update($args));
+        return $query->result;
+    } 
+
+   function removeDaLicitacao($idLicitacao,$item)
+   {
+        $sql = new sql("excecao,item","ad_itemlicitacao");
+        $sql->SetWhere("idlicitacao = ?");
+        $sql->SetWhereAnd("item = ?"); 
+
+        $args = array("0",NULL,$idLicitacao,$item);
+        $query = $this->Execute($sql->Update($args));
+        return $query->result;
+    }
+
+   function setItemByLicitacaoItem($idLicitacao,$itemAntigo,$itemNovo)
+   {
+        $sql = new sql("item","ad_itemlicitacao");
+        $sql->SetWhere("idlicitacao = ?");
+        $sql->SetWhereAnd("item = ?");
+
+        $args = array($itemNovo,$idLicitacao,$itemAntigo);
+
+        $query = $this->Execute($sql->Update($args));
+        return $query->result;
+    }
+
+   function removeUltimoItem($idLicitacao)
+   {
+        $item = $this->GetNewItemLicitacao($idLicitacao) - 1;
+
+        $sql = new sql("","ad_itemlicitacao");
+        $sql->SetWhere("idlicitacao = ?");
+        $sql->SetWhereAnd("item = ?"); 
+
+        $args = array($idLicitacao,$item);
+        $query = $this->Execute($sql->Delete($args));
+        return $query->result;
+    }
+    
+}
+?>

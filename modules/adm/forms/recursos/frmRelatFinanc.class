@@ -1,0 +1,93 @@
+<?
+/**
+/**
+ * Formulário para relatório financeiro
+ * 
+ */
+class frmRelatFinanc extends Form
+{
+	var $objGestor;
+	var $objLancamentoInt;
+
+	function __construct()
+    {
+		global $MIOLO;
+        $this->Form('Relatório Financeiro');
+		$this->SetClose($this->manager->GetActionURL('adm','main'));
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+		global $MIOLO, $module;
+
+		$idUsuario = $MIOLO->GetLogin()->idkey;
+
+		$this->objGestor = $MIOLO->GetBusiness($module,'gestor');
+		$lista = $this->objGestor->listUoByUsuario($idUsuario);
+
+		for ($i=0; $i<count($lista->result); $i++){
+			$options[$lista->result[$i][0]] = $lista->result[$i][1];
+		}
+        
+		$fields = array(
+			new TextField('ano',date('Y'),'Ano',5,''),
+			new Selection('selUO','','UO',$options,false),
+		);
+
+       	$this->SetFields($fields);
+
+		$button = array(
+			new FormButton('btnRelatorio','Gerar Relatório','PDF'),
+		);
+       	$this->SetButtons($button);
+		$this->defaultButton = false;
+	}
+
+    
+    function btnRelatorio_click()
+    {   
+
+      global $MIOLO, $module, $item;
+
+		$uo = $this->GetFormValue('selUO');
+		$ano = $this->GetFormValue('ano');
+
+                if($uo == '' || $ano == '')
+		{
+		    $MIOLO->Error('Você deve selecionar a UO e o Ano.',$self);
+		    return;
+		}
+
+		$this->objLancamentoInt = $MIOLO->GetBusiness($module,'lancamentoint');
+		$rubrica = $this->objLancamentoInt->ListRubricas($uo,$ano);
+		$numRubricas = count($rubrica);
+		if($numRubricas == 0)
+		{
+			$MIOLO->Error('Não existem movimentos para esta UO neste ano.');
+                        return;
+		}
+
+				
+                $report = new MJasperReport('sigaept');
+		$parameters['pURL'] = $MIOLO->GetConf('home.url');
+	        $parameters['SUBREPORT_DIR'] = $MIOLO->GetConf('home.modules').'/common/reports/';
+	        $parameters['pTitulo'] = "FINANCEIRO";
+	        $parameters['int_pConsulta'] = $MIOLO->login->idkey;
+	        $parameters['int_ANO'] = $ano;
+                $parameters['int_IDUO'] = $uo;
+		$parameters['str_TIPO_LANCAMENTO'] = "5";
+		$parameters['SUB_FINANCEIRO'] = $MIOLO->GetConf('home.modules').'/adm/reports/';
+		
+
+		$report->Execute('adm','Financeiro',$parameters);
+				
+				
+		/*$ui = $MIOLO->GetUI();
+                $report = $ui->GetReport($module,'repFinanceiroUO');
+                $report->Generate();*/
+		
+    }
+
+}
+?>

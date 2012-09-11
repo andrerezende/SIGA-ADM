@@ -1,0 +1,138 @@
+<?php
+class frmDepreciacaoPorItemTodos extends MForm
+{
+
+
+   
+
+    function __construct()
+    {
+        global $MIOLO,$module,$action,$item;
+
+	
+
+	parent::__construct('Depreciação Por Item - Todos');
+        $this->SetClose(null);
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+        global $MIOLO,$module;
+
+      $fields = array(
+		);
+
+        $this->SetFields($fields);
+		
+	
+        $this->SetButtons($buttons);
+
+       // $this->SetData();
+    }
+function btnSalvar_click(){
+  global $MIOLO, $module, $item;
+  
+                    $auth = $this->manager->auth;
+        $idUsuario = $auth->login->idkey;
+        $bussUsuario = $MIOLO->GetBusiness("common",'usuario');
+                
+        $objUsuario = $bussUsuario->GetById2($idUsuario);
+        
+         $idSetor_usuario = $objUsuario->idSetor;
+         
+         if($idInstituicao_usuario != 2){
+            var_dump(2); 
+            $this->addError("Você não tem permissão para Editar Notas Fiscais!");
+            return;
+            //echo "<SCRIPT language='text/javascript'>Você não tem permissão para incluir Itens Patrimoniais!<SCRIPT>";
+             
+             
+         }else{
+    
+	if ($this->GetFormValue('tfCnpj')) {
+                    $cnpj = str_replace('.', '', $this->GetFormValue('tfCnpj'));
+                    $cnpj = str_replace('-', '', $cnpj);
+                    $cnpj = str_replace('/', '', $cnpj);
+			if (!is_numeric($cnpj)) {
+				$this->addError("Insira apenas números no campo CNPJ");
+			}
+		}
+		if ($this->errors != '') {
+			$this->GenerateErrors();
+		} else {
+			$this->objNotaFiscal->notaFiscal = $this->GetFormValue('tfNotaFiscal');
+			//$this->objNotaFiscal->cnpj = $this->GetFormValue('tfCnpj');
+                          $this->objNotaFiscal->cnpj = $cnpj;
+			$this->objNotaFiscal->dataNotaFiscal = $this->GetFormValue('cfDataNotaFiscal');
+			$this->objNotaFiscal->valor = @ereg_replace(",", ".", $this->GetFormValue('tfValor'));
+			$this->objNotaFiscal->dataAteste = $this->GetFormValue('cfDataAteste');
+			$this->objNotaFiscal->obs = $this->GetFormValue('tfObs');
+			$this->objNotaFiscal->desconto = $this->GetFormValue('tfDesconto');
+
+			//echo $this->objNotaFiscal->situacao;
+
+//			Alteraçao dos valores dos itempatrimonio
+			$valorUnit = ((double)$this->GetFormValue('tfValor')) / $this->quantidadeItensNota;
+			
+			//24-04-2012 Tiago Macedo
+			$valorUnit = explode(".", $valorUnit);
+			$valorUnit = $valorUnit[0].".".substr($valorUnit[1],  0, 2);			
+			$restoContador =  ((double)$this->GetFormValue('tfValor')) - ($valorUnit*$this->quantidadeItensNota);
+			$restoContador = (int)(number_format($restoContador*100, 2));
+			sort($this->valorUnidade);
+			$replicacaoOK = false;
+			$array_id=$this->itemPatrimonio->getValorByIDNotaFiscal($this->iditem);
+			for ($i=0; $i < $restoContador; $i++) {
+				$idItemPatrimonio = $array_id[$i][0];
+				$objItemPatrimonio = $this->itemPatrimonio->GetById($idItemPatrimonio);
+				$objItemPatrimonio->notaFiscal = trim(strtoupper($this->GetFormValue('tfNotaFiscal')));
+				$objItemPatrimonio->valor = $valorUnit + 0.01;
+				$objItemPatrimonio->descricao = trim(strtoupper($this->GetFormValue('tfDescricao')));
+				$objItemPatrimonio->numeroEmpenho = $this->GetFormValue('tfNumeroEmpenho');			
+				try {
+					$objItemPatrimonio->update();
+//					$this->AddInfo("Atualização feita com sucesso.");
+					$replicacaoOK = true;
+					$flag2 = true;
+				} catch (Exception $e) {
+					$this->AddInfo("ad_itempatrimonio: Falha ao atualizar o registro $idItemPatrimonio");
+				}
+			}
+			for ($i=$i; $i < $this->quantidadeItensNota; $i++) {
+				$idItemPatrimonio = $this->valorUnidade[$i][0];
+				$objItemPatrimonio = $this->itemPatrimonio->GetById($idItemPatrimonio);
+				$objItemPatrimonio->notaFiscal = trim(strtoupper($this->GetFormValue('tfNotaFiscal')));
+				$objItemPatrimonio->valor = $valorUnit;
+				$objItemPatrimonio->descricao = trim(strtoupper($this->GetFormValue('tfDescricao')));
+				$objItemPatrimonio->numeroEmpenho = $this->GetFormValue('tfNumeroEmpenho');
+				try {
+					$objItemPatrimonio->update();
+//					$this->AddInfo("Atualização feita com sucesso.");
+					$replicacaoOK = true;
+					$flag2 = true;
+				} catch (Exception $e) {
+					$this->AddInfo("ad_itempatrimonio: Falha ao atualizar o registro $idItemPatrimonio");
+				}
+			}
+//			update na nota fiscal
+			try {
+				$this->objNotaFiscal->update();
+
+				$this->AddInfo("Atualização feita com sucesso.");
+			} catch (Exception $e) {
+				$this->AddInfo("ad_notafiscal: Falha ao atualizar o registro.");
+			}
+
+//			Atualiza os labels na tela se obtiver sucesso na acao
+			if ($replicacaoOK) {
+				if ($restoContador == 0) $this->SetFieldValue('tfValorUni', $valorUnit);
+				else $this->SetFieldValue('tfValorUni', $valorUnit + 0.01);
+			}
+		}
+}
+  
+}
+    
+}
+?>

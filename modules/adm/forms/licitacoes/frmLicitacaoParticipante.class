@@ -1,0 +1,318 @@
+<?
+class frmLicitacaoParticipante extends Form
+{
+	protected $objLicitacao;
+	
+    function __construct($objLicitacao)
+    {
+		global $MIOLO;
+
+		$this->objLicitacao = $objLicitacao;
+
+        $this->Form('Incluir Participante');
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+                
+        $objBanco = $this->manager->GetBusiness('common','banco');
+		$objQuery = $objBanco->ListAll();
+		array_unshift($objQuery->result,Array('0'=>'','1'=>''));
+
+		$fields = array(
+            new LookupTextField('lkpFornecedor','','Fornecedor',40),
+            new Separator('CASO NÃO TENHA ENCONTRADO O FORNCEDOR, FAÇA O CADASTRO AQUI:'),
+
+            array(
+				new MTextField('cnpj', $this->objFornecedor->instituicao->cgc,'CNPJ',20),
+	            new TextField('empresa',$this->objFornecedor->instituicao->nome,'Empresa',50)
+	            ),
+	            
+			new HiddenField('idBanco',$this->objFornecedor->idBanco,'idBanco'),            
+			
+            array(
+            	//new LookupTextField('lkpBanco',$banco->nome,'Banco',40),
+            	new MSelection('selBanco',$this->objFornecedor->idBanco,'Banco', $objQuery->result, true),
+	           // new TextField('idAgencia',$this->objFornecedor->idAgencia,'Agência',10),
+           		new LookupTextField('idAgencia',$this->objFornecedor->idAgencia,'Agência',10),
+
+	            new TextField('contaCorrente',$this->objFornecedor->contaCorrente,'Conta',10)
+            ),
+            
+            array(
+            	new LookupTextField('lkpMunicipio','','Município',40),
+            	new HiddenField('idmunicipio','7107','idmunicipio'),
+            	),
+
+            array
+            	(
+            	$rua = new MTextField('rua',$this->objFornecedor->instituicao->rua, 'Endereço',50),
+				new TextField('cep',$this->objFornecedor->instituicao->cep, 'CEP',15)
+				),
+			array
+			(
+				new TextField('fax',$this->objFornecedor->instituicao->fax, 'FAX',15),
+				new TextField('telefone',$this->objFornecedor->instituicao->telefone,'Telefone',15),
+				new TextField('email',$this->objFornecedor->instituicao->email,'E-Mail',30)
+			),
+            new HiddenField('idPessoa',$this->objFornecedor->idPessoa,'idPessoa'),
+        );
+		
+        $this->SetFields($fields);
+        $this->SetFieldAttr('lkpFornecedor','module','adm');
+		$this->SetFieldAttr('lkpFornecedor','item','FornecedorParticipante');
+		$this->SetFieldAttr('lkpFornecedor','event','btnSalvar:click');
+        //
+		$SESSAO = $this->manager->getSession();
+		$SESSAO->set('idLicitacao',$this->objLicitacao->idLicitacao);
+		//
+        $this->SetFieldAttr('idAgencia','module','common');
+        $this->SetFieldAttr('idAgencia','item','bancoAgencia');
+        $this->SetFieldAttr('idAgencia','event','preencherBanco');
+        $this->SetFieldAttr('idAgencia','filter','selBanco,idAgencia');
+
+        $this->SetFieldAttr('lkpMunicipio','module','common');
+        $this->SetFieldAttr('lkpMunicipio','item','municipio');
+        $this->SetFieldAttr('lkpMunicipio','event','filler');
+        $this->SetFieldAttr('lkpMunicipio','related','idmunicipio,lkpMunicipio');
+
+
+		$buttons = Array(
+	        	new FormButton('btnFinaliza','Finalizar Inclusão de Participantes'),
+                new FormButton('btnCadastraNovoFornecedor','Cadastrar novo Fornecedor')
+		);
+		$this->SetButtons($buttons);
+    }
+    
+    function preencherBanco($sender='',$key="")
+	{
+		$dadosBanco = split("_",$key);
+	    $this->SetFieldValue('idAgencia', $dadosBanco[0]);
+	    
+	    $this->SetFieldValue('selBanco', $dadosBanco[1]);
+	    $this->SetFieldValue('idBanco', $dadosBanco[1]);
+	  
+	}
+	
+	public function btnSalvar_click($sender='',$key="")
+	{
+		global $MIOLO;
+
+        $k = new MKrono();
+
+		$idFornecedor = ($key != '') ? $key : $item;
+
+        $fornecedor = $MIOLO->getBusiness('adm','fornecedor');
+
+        if ($fornecedor->getTotalDeLicitacoesVencidas($idFornecedor) >= '8000')
+        {
+            $action = $this->manager->GetActionURL('adm','main:licitacoes',$this->objLicitacao->idLicitacao,array('form'=>'participantes'));
+    		$this->addInfo("Este fornecedor já venceu licitações de convite totalizando R$ 8.000,00 ou mais no último ano.",$action);
+        }
+
+        if ($fornecedor->getTotalDeLicitacoesVencidasPorMaterial($idFornecedor,$this->objLicitacao->idLicitacao) > 0)
+        {
+            $action = $this->manager->GetActionURL('adm','main:licitacoes',$this->objLicitacao->idLicitacao,array('form'=>'participantes'));
+    		$this->addInfo("Este fornecedor já venceu licitações de convite contendo algum dos materiais desta licitação no último ano.",$action);
+        }       
+       
+        if (!$erro)
+        {           
+            try
+            {
+                //var_dump($k->compareDate(substr($this->objLicitacao->dataCriacao,0,10),'>','17/09/2007'));
+
+                if ($k->compareDate(substr($this->objLicitacao->dataCriacao,0,10),'>','17/09/2007'))
+                {
+                    // Procedimento novo
+                    $participante = $MIOLO->GetBusiness('adm','participante');
+                    $participante->idLicitacao = $this->objLicitacao->idLicitacao;
+                    $participante->idFornecedor = $idFornecedor;
+                    $participante->save();
+
+                    //Se ja existe o mapa de licitação então este participante já deve ser inserido no mapa
+                    if ($this->objLicitacao->ExisteMapaLicitacao())
+                    {
+                        $precoZerado = '0';
+                        $queryList = $this->objLicitacao->ListItensByIdLicitacao();
+                        foreach ($queryList as $rs)
+                        {
+                            if (!$this->objLicitacao->ExisteMapaLicitacao($rs[0],$idFornecedor))
+                                $this->objLicitacao->InsertMapaLicitacao($rs[0],$idFornecedor,$precoZerado);
+                        }
+                    }
+                }
+                else
+                {
+                    // Procedimento antigo
+                    $precoZerado = '0';
+                    $queryList = $this->objLicitacao->ListItensByIdLicitacao();
+                    foreach ($queryList as $rs)
+                    {
+                        if (!$this->objLicitacao->ExisteMapaLicitacao($rs[0],$idFornecedor))
+                            $this->objLicitacao->InsertMapaLicitacao($rs[0],$idFornecedor,$precoZerado);
+                    }
+                }
+            }
+            catch (Exception $e)
+            {
+                $this->AddError("Informe o seguinte erro a equipe do CGCO: ".$e->getMessage());
+            }
+        }
+	}
+
+	/*------------------------------------------------
+
+	btnFinaliza_click()
+	
+	Finaliza a Gravação de Propostas
+
+	------------------------------------------------*/
+	function btnFinaliza_click()	
+	{
+		global $MIOLO, $module,$item, $page, $theme, $action;
+
+        $k = new MKrono();
+
+        $idLicitacao = $this->objLicitacao->idLicitacao;
+	
+        $this->objLicitacao->alteraStatus('2'); //Passa para "Participantes Cadastrados"
+
+        // Instancia objItem com um dos itemreq existentes
+		if ($this->objLicitacao->idTipoLicitacao == '1' OR $this->objLicitacao->idTipoLicitacao == '4')
+            $objItem = $MIOLO->GetBusiness('adm','itemreq');
+        elseif ($this->objLicitacao->idTipoLicitacao == '2')
+            $objItem = $MIOLO->GetBusiness('adm','itemservext');
+        elseif ($this->objLicitacao->idTipoLicitacao == '3')
+            $objItem = $MIOLO->GetBusiness('adm','itemreqbib');
+
+		try
+		{
+			$this->objLicitacao->save();
+
+            // Se licitação foi feita depois de 17/09/2007 deve cadastrar todos os fornecedores no mapa E se não existe um mapa já definido
+            if ($k->compareDate(substr($this->objLicitacao->dataCriacao,0,10),'>','17/09/2007') && (!$this->objLicitacao->ExisteMapaLicitacao()))
+            {
+                $itensDeRequisicao = $this->objLicitacao->GetItensRequisitados();
+
+                // Laco para criar o mapa de licitacao
+                $this->objLicitacao->getFornecedores();
+                $queryList = $this->objLicitacao->ListItensByIdLicitacao();
+
+                $precoZerado = '0';
+                foreach ($this->objLicitacao->fornecedores as $fornecedor)
+                {
+                    //var_dump($fornecedor->idFornecedor);
+                    foreach ($queryList as $item)
+                    {
+                        if (!$this->objLicitacao->ExisteMapaLicitacao($item[0],$fornecedor->idFornecedor))
+                        {
+                            $this->objLicitacao->InsertMapaLicitacao($item[0],$fornecedor->idFornecedor,$precoZerado);
+                        }
+                    }
+                }
+
+            } //Fim do compareDate
+
+            $action = $this->manager->GetActionURL('adm','main:licitacoes',$this->objLicitacao->idLicitacao,array('form'=>'participantes'));
+    		$this->manager->information("Inclusão de participantes concluida com sucesso.",$action);
+		}
+		catch (Exception $e)
+		{
+			$this->AddError("Informe o seguinte erro a equipe do CGCO: ".$e->getMessage());
+		}
+	}
+
+	 function btnCadastraNovoFornecedor_click()	
+    {
+        global $MIOLO, $module,$item, $page, $theme, $action;
+
+        $data = $this->GetData();
+        $instituicao = $this->manager->getBusiness('common','instituicao');
+        
+        $municipio = $this->manager->getBusiness('common','municipio');
+		 $municipio->GetById($data->idmunicipio);
+        //aplicando a máscara no cnpj
+        $mascara = array(".","/","-");
+        $cnpj = str_replace($mascara, "", $data->cnpj);
+        $data->cnpj =  $cnpj;
+
+        /**
+         * Verifica o cnpj da instituição
+         */
+        $temCGC = $instituicao->GetByCgc($data->cnpj);
+
+        if ($temCGC->idinstituicao)
+        {
+            $action = $this->manager->GetActionURL($module,'main:fornecedor:find');
+            $MIOLO->Error("O CNPJ desta empresa já está cadastrada",$action);
+        }
+        else
+        {
+            try
+            {
+                if ($data->cnpj)
+                {
+                    if ((strlen($data->cnpj)==11) || (strlen($data->cnpj)==14))
+                    {
+                        $data->empresa = strtoupper($data->empresa);
+                        $instituicao->cgc = $data->cnpj;
+                        $instituicao->nome = $data->empresa;
+                        $instituicao->idpais = '024';
+                        $instituicao->idmunicipio = $data->idmunicipio;
+                        $instituicao->telefone = $data->telefone;
+                        $instituicao->rua = $data->rua;      
+                        $instituicao->cep = $data->cep;      
+                        $instituicao->fax = $data->fax;      
+                        $instituicao->email = $data->email;           
+                        $instituicao->Insert();
+                        
+                        $instituicao->Log(OP_INS,"Nova Instituicao criada. Nome ".$data->empresa." com o idInstituicao: ".$instituicao->idinstituicao);
+                    }
+                    else $MIOLO->Error("Número inválido de carácteres no campo CNPJ",$action);
+                }
+                      
+                $fornecedor = $this->manager->getBusiness('adm','fornecedor');
+                $fornecedor->contaCorrente = $data->contaCorrente;
+                $fornecedor->idInstituicao = $instituicao->idinstituicao;
+                $fornecedor->idPessoa = $data->idPessoa;
+                $fornecedor->idBanco = $data->idBanco;
+                $fornecedor->idAgencia = $data->idAgencia;
+                $fornecedor->save();
+                $fornecedor->Log(OP_INS,"Novo fornecedor criado. idInstituicao: ".$instiuicao->idinstituicao.", idFornecedor: ".$fornecedor->idFornecedor);
+
+                $action = $this->manager->GetActionURL('adm','main:licitacoes',$this->objLicitacao->idLicitacao,array('form'=>'participantes'));
+                $idFornecedor = $fornecedor->idFornecedor;
+         //       $this->manager->information("Inclusão de fornecedor efetuada com sucesso.",$action);
+            }
+            catch (Exception $e)
+            {
+				if ($data->cnpj)
+				{
+				$instituicao->Delete($instituicao->idinstituicao);
+				}
+                $this->AddError("Informe o seguinte erro: ".$e->getMessage());
+            }
+
+	try
+		{
+            $participante = $MIOLO->GetBusiness('adm','participante');
+            $participante->idLicitacao = $this->objLicitacao->idLicitacao;
+            $participante->idFornecedor = $idFornecedor;
+            $participante->save();
+
+           
+
+            $action = $this->manager->GetActionURL('adm','main:licitacoes',$this->objLicitacao->idLicitacao,array('form'=>'participantes'));
+    		$this->manager->information("Inclusão de fornecedor efetuada com sucesso.",$action);
+		}
+		catch (Exception $e)
+		{
+			$this->AddError("Informe o seguinte erro a equipe do CGCO: ".$e->getMessage());
+		}
+		            
+        }
+    }
+}
+?>

@@ -1,0 +1,165 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class repAdicionais extends MPDFReport
+{
+    var $img;
+    var $timestamp;
+    var $query;
+    function __construct($data)
+    {
+        global $MIOLO, $module, $page, $context, $self, $action, $perms;
+        parent::__construct(NULL,NULL,55,NULL,'landscape','a4');
+        $ui = $MIOLO->GetUI();
+        $this->img = $ui->GetImageSrc('logo_siga.png',$module);
+        $this->timestamp = date('d/m/Y G:i');
+        $this->pdf->ezStartPageNumbers(800,540,10,'rigth','Página: {PAGENUM}/{TOTALPAGENUM}');
+        $this->pdf->ezSetMargins(100,30,20,20);
+
+        $adicional = $MIOLO->GetBusiness('rh', 'adicional');
+        $this->query = $adicional->RelatorioAdicional($data->dataAdicional,$data->idAdicional,$data->idAtivos,$data->idOrdem);
+        $total = count($this->query->result);
+
+        $this->GeneratePageHeader();
+        $this->GeneratePageFooter();
+
+        $colunaGrau = false;
+        $colunaExclusao = false;
+        $tamanhoNome = 28;
+        $tamanhoCargo = 26;
+        $tamanhoLotacao = 21;
+        if(($data->idAdicional == 1) || ($data->idAdicional == 4)) $colunaGrau = true;  
+        if($data->idAtivos == 2) $colunaExclusao = true;    
+        if(($colunaGrau) && ($colunaExclusao))
+        {
+            $tamanhoNome = 24;
+            $tamanhoCargo = 22;
+            $tamanhoLotacao = 17;
+        } 
+
+        $columns = array (
+            new MPDFReportColumn('matricula', 'Matrícula', 'center', true, 6, true, null, true),
+            new MPDFReportColumn('nome', 'Nome', 'left', true, $tamanhoNome, true, null, true),
+            new MPDFReportColumn('cargo', 'Cargo', 'left', true, $tamanhoCargo, true, null, true),
+            new MPDFReportColumn('lotacao', 'Lotação', 'left', true, $tamanhoLotacao, true, null, true),
+            new MPDFReportColumn('tipo', 'Tipo', 'center', true, 10, true, null, true),
+            new MPDFReportColumn('concessao', 'Concessão', 'center', true, 7, true, null, true),
+            new MPDFReportColumn('exclusao', 'Exclusão', 'center', true, 7, $colunaExclusao, null, true),
+            new MPDFReportColumn('grau', 'Grau', 'center', true, 5, $colunaGrau, null, true),
+        );
+        $this->SetColumns($columns);
+        while ( ! $this->query->eof() )
+        {
+            $servidores[$this->query->fields('lotacao')][] = array(
+                $this->query->fields('matricula'), 
+                $this->query->fields('nome'),
+                $this->query->fields('cargo'),
+                $this->query->fields('lotacao'),
+                $this->query->fields('tipo'),
+                $this->query->fields('concessao'),
+                $this->query->fields('exclusao'),
+                $this->query->fields('grau'),
+            );
+            $this->query->moveNext();
+        }
+        $i = 0;
+        $totalS = count($servidores);
+ if (!$servidores)
+                $servidores = array();
+        foreach ( $servidores as $key => $data )
+        {
+            $i++;
+            $this->SetOption('showHeadings',1);
+            $this->SetOption('fontSize',7);
+            $this->SetOption('showLines',0);
+            $this->SetOption('showTableTitle',1);
+            $this->generateGroupHeader($key);
+            $this->generateData($data);
+            $this->generateGroupFooter($data);
+            if ( $i != $totalS )
+                $this->pdf->ezNewPage();
+        }
+        $this->generateData('');
+    }
+
+    function GenerateGroupHeader($title)
+    {
+        $this->pdf->SetStrokeColor(0, 0, 0);
+        $x0 = $this->pdf->left;
+        $this->pdf->ezSetDy(-32, 'makeSpace');
+        $y = $this->pdf->y;
+        $this->pdf->addText($x0, $y + 19, 8, 'Setor: ' . $title);
+    }
+    
+    function GenerateGroupFooter($data)
+    {
+        $total = count($data);
+        $this->pdf->ezText(" ", 9, array('justification' => 'left'));
+        $this->pdf->ezText("Total de Adicionais por Setor: $total",8, array('justification' => 'left'));
+    }
+    
+    function GeneratePageHeader()
+    {
+        $x0 = $this->pdf->left;
+        $x1 = $this->pdf->right;
+        $h = $this->pdf->getFontHeight(10);
+        $header = $this->pdf->openObject();
+        $this->pdf->saveState();
+        $this->pdf->addPngFromFile($this->img, 40, 520 + $x0, 54, 27);
+        $this->pdf->addText($x0+85, 560, 12, 'IF - Instituto Federal');
+        $this->pdf->addText($x0+85, 560 -$h -$h , 10, 'SIGA - Sistema Integrado de Gestão Acadêmica - Módulo Recursos Humanos');
+        $y = 550 - $h - $h - 5;
+        $this->pdf->SetColor(0.4,0.4,0.4);
+        $this->pdf->filledRectangle($x0, $y-20, $x1-30, 16 );
+        $this->pdf->SetColor(1,1,1);
+        $this->pdf->addText($x0 + 5, $y - 16, 10, "Relatório de Adicionais");
+        $this->pdf->restoreState();
+        $this->pdf->closeObject();
+        $this->pdf->addObject($header, 'all');
+    }
+
+    function GeneratePageFooter()
+    {
+        $x0 = $this->pdf->left;
+        $x1 = $this->pdf->right;
+        $footer = $this->pdf->openObject();
+        $this->pdf->saveState();
+        $this->pdf->SetStrokeColor(0, 0, 0);
+        $this->pdf->line($x0, 28, $x1, 28);
+        $this->pdf->addText($x0, 19, 9, $this->timestamp);
+        $this->pdf->restoreState();
+        $this->pdf->closeObject();
+        $this->pdf->addObject($footer, 'all');
+    }
+    
+    function GenerateData($data)
+    {
+        $this->pdf->ezSetDy(0);
+        $this->SetData($data);
+        $this->rawdata = $this->GenerateTableData();
+        $this->GenerateBody($this->rawdata);
+    }
+
+    function Generate()
+    {
+        $this->SetOutput();
+        $this->Execute();
+    }
+}
+?>

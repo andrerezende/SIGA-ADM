@@ -1,0 +1,79 @@
+<?
+class frmUoAlmoxarifadoRepOrdemEntrega extends MForm
+{
+    var $uoalmoxarifado;
+    function __construct($uoalmoxarifado)
+    {
+ 	    global $MIOLO, $module, $self;
+        $this->uoalmoxarifado = $uoalmoxarifado;
+ 	    parent::__construct('Gerar todas Ordens de Entrega');
+ 	    $this->eventHandler();
+    }
+    function CreateFields()
+    {
+	    $buttons = array
+        (
+	        new MButton('btnRelatorio','Gerar Relatório','PDF'),
+	    );
+        $this->setButtons($buttons);
+    }
+    function btnRelatorio_click()
+    {   
+		$cf = new MCurrencyFormatter();
+        $report = new MEzPDFReport('2','landscape');
+        $report->pdf->ezText('',20);
+        $cols = array('Código','Material','Unidade','Requisição','Quantidade','Valo Unitário','Valor Total');
+        $options['textCol'] = array(0,0,0);
+        $options['shaded'] = 1;
+        $options['showLines'] = 0;
+        $options['fontSize'] = 10;
+        $options['width'] = 740;
+        $options['xPos'] = 'left';
+        $options['xOrientation'] = 'right';
+        $report->pdf->ezText('',20);
+        $movimentos = $this->uoalmoxarifado->getMovimentosByOENaoImpressas();
+        if ($movimentos)
+        {
+            try
+            {
+                $movimentos[0]->beginTransaction();
+                foreach ($movimentos as $movimento)
+                {
+                    $movimento->retrieveAssociation('requisicao');
+                    $movimento->requisicao->retrieveAssociation('uoRequisitante');
+                    $movimento->retrieveAssociation('itemreq');
+                    $movimento->retrieveAssociation('ordem');
+                    $movimento->ordem->setTransaction($movimentos[0]->getTransaction());
+                    $movimento->ordem->impresso = 1;
+                    $movimento->ordem->save();
+                    $dados[$movimento->requisicao->uoRequisitante->nome][$movimento->idOrdemEntrega][] = array($movimento->idMaterial,$movimento->itemreq->material->descricao,$movimento->itemreq->material->unidade,$movimento->idRequisicao,$movimento->quantidade,$cf->formatWithSymbol($cf->toDecimal($movimento->valorTotal)/$movimento->quantidade),$cf->formatWithSymbol($cf->toDecimal($movimento->valorTotal)));
+                }
+                $movimentos[0]->endTransaction();
+            }
+            catch (Exception $e)
+            {
+                $this->addError($e->getMessage());
+            }
+            foreach ($dados as $nome=>$dadosOE)
+            {
+                foreach ($dadosOE as $oe=>$dado)
+                {
+                    $report->pdf->ezText("UNIVERSIDADE FEDERAL DE JUIZ DE FORA\nCGCO - CENTRO DE GESTÃO DO CONHECIMENTO ORGANIZACIONAL\nSISTEMA INTEGRADO DE GESTÃO ACADÊMICA - SIGA\nCOORDENADORIA DE SUPRIMENTOS - SETOR DE ESTOQUE",12,array("spacing"=>"1"));
+                    $report->pdf->ezText('',20);
+                    $report->pdf->ezText("NÚMERO OE: {$oe} - SETOR: {$nome}",16,array("justification"=>"center","spacing"=>"1"));
+                    $report->pdf->ezText('',20);
+                    $report->pdf->ezText('',5);
+                    $report->pdf->ezTable($dado,$cols,'',$options);
+                    $report->pdf->ezText('',20);
+                    $report->pdf->ezText('COORDENADOR DE SUPRIMENTOS',8,array("justification"=>"center","spacing"=>"1"));
+                    $report->pdf->ezText('',20);
+                    $report->pdf->ezText('COORDENADOR DE SUPRIMENTOS',8,array("justification"=>"center","spacing"=>"1"));
+				    $report->pdf->ezNewPage();
+                }
+            }
+	        $report->Execute();
+        }
+        else $this->manager->information("Não há Ordens de Entrega a serem geradas.",$action_voltar);
+    }
+}
+?>

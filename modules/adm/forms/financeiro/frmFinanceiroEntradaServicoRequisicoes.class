@@ -1,0 +1,161 @@
+<?
+class frmFinanceiroEntradaServicoRequisicoes extends MForm
+{
+    protected $itemNota;
+    function __construct($objItemNota)
+    {
+		global $MIOLO, $module;
+        $this->itemNota = $objItemNota;
+        parent::__construct('Entrada e Saída de Material');
+		$this->SetClose($MIOLO->GetActionURL($module,'main'));
+        $this->EventHandler();
+    }
+    function CreateFields()
+    {
+        global $item;
+		$cf = new MCurrencyFormatter();
+        $grid = $this->manager->getUI()->getGrid('adm','gridFinanceiroEntradaServicoRequisicoes',$this->itemNota);
+        $idRequisicao = Form::getFormValue('idRequisicao');
+        $idMaterial = Form::getFormValue('idMaterial') ;
+        $this->itemNota->empenhado->retrieveAssociation('itemServExt');
+        $fields = array(
+            new MTextLabel('codigo',$this->itemNota->empenhado->itemServExt[0]->servico->codServico,'Código'),
+            //new MTextLabel('descricao',$this->itemNota->empenhado->itemreq[0]->material->descricao,'Descrição'),
+            new MTextLabel('quantidade',$cf->toDecimal($this->itemNota->quantidade),'Quantidade'),
+            //new MTextLabel('valor',$cf->formatWithSymbol($this->itemNota->valor),'Valor'),
+			$grid,
+		);
+        $this->setFields($fields);
+        $this->itemNota->retrieveAssociation('empenhado');
+        if (!$this->itemNota->isContabilizado())
+        {
+            $buttons = array(
+                new MButton('btnSaida','Dar Saída'),
+            );
+            $this->setButtons($buttons);
+        }
+        $this->defaultButton = false;
+    }
+    function btnSaida_click()
+    {
+        global $item;
+        $cf = new MCurrencyFormatter();
+        $this->itemNota->retrieveAssociation('empenhado');
+        $quantAutorizada = Form::getFormValue('quantAutorizada');
+        if (array_sum($quantAutorizada) != $this->itemNota->quantidade)
+        {
+            $this->addError('As quantidades distribuídas não conferem com a quantidade da nota.');
+            return;
+        }
+        $this->itemNota->retrieveAssociation('movimento');
+        if (!$this->itemNota->movimento)
+        {
+            $this->itemNota->empenhado->getAtributos();
+            foreach ($this->itemNota->empenhado->itemreq as $material)
+            {
+                foreach ($quantAutorizada as $key=>$quantidade)
+                {
+                    if ($material->idRequisicao == $key)
+                    {
+                        try 
+                        {
+                            if ($quantidade)
+                            {
+                                $material->beginTransaction();
+                                $material->retrieveAssociation('requisicao');
+                                $material->requisicao->getUoRequisitante();
+                                $material->requisicao->getUoExecutante();
+                                // insere lançamentos e atualiza o orcamento
+                                $this->itemNota->empenhado->retrieveAssociation('empenho');
+                                $this->itemNota->empenhado->empenho->retrieveAssociation('orcamento');
+                                if ($this->itemNota->empenhado->empenho->orcamento->ano == date('Y'))
+                                {
+                                    $lancamento = $this->manager->getBusiness('adm','lancamentoint');
+                                    $lancamento->tipoLancamento = 7;
+                                    $lancamento->valor = $quantidade * $cf->toDecimal($this->itemNota->empenhado->valorUnitario);
+                                    $lancamento->data = date("d/m/Y");                
+                                    $lancamento->ano = date("Y");
+                                    $lancamento->idUoRequisitante = $material->requisicao->idUoRequisitante;       
+                                    $lancamento->idUoExecutante = $material->requisicao->idUoExecutante;
+                                    $lancamento->idRubrica = $material->requisicao->uoRequisitante->getRubricaByTipoReq($material->requisicao->idTipoReq);
+                                    $lancamento->idRequisicao = $material->requisicao->idRequisicao;
+                                    $lancamento->setTransaction($material->getTransaction());
+                                    $lancamento->save();
+                                    $lancamento = $this->manager->getBusiness('adm','lancamentoint');
+                                    $lancamento->tipoLancamento = 5;
+                                    $lancamento->valor = $quantidade * $cf->toDecimal($this->itemNota->valor);
+                                    $lancamento->data = date("d/m/Y");                
+                                    $lancamento->ano = date("Y");
+                                    $lancamento->idUoRequisitante = $material->requisicao->idUoRequisitante;       
+                                    $lancamento->idUoExecutante = $material->requisicao->idUoExecutante;
+                                    $lancamento->idRubrica = $material->requisicao->uoRequisitante->getRubricaByTipoReq($material->requisicao->idTipoReq);
+                                    $lancamento->idRequisicao = $material->requisicao->idRequisicao;
+                                    $lancamento->setTransaction($material->getTransaction());
+                                    $lancamento->save();
+                                    $material->retrieveAssociation('licitacao');
+                                    $orcamento = $material->requisicao->uoRequisitante->getOrcamentoByRubrica($material->requisicao->getRubrica());
+                                    $orcamento->previsaoDebito -= $quantidade * $cf->toDecimal($this->itemNota->empenhado->valorUnitario);
+                                    $orcamento->debito += $quantidade * $cf->toDecimal($this->itemNota->valor);
+                                    $orcamento->setTransaction($material->getTransaction());
+                                    $orcamento->save();
+                                    $orcamento2 = $material->requisicao->uoExecutante->getOrcamentoByRubrica($material->requisicao->getRubrica());
+                                    $orcamento2->creditoExecutante += $quantidade * $cf->toDecimal($this->itemNota->valor);
+                                    $orcamento2->setTransaction($material->getTransaction());
+                                    $orcamento2->save();
+                                }
+                                if ($material->requisicao->idUoRequisitante == $this->itemNota->empenhado->empenho->idUoEntrega)
+                                {
+                                    // insere movimentos e atualiza o estoque
+                                    $estoque = $this->manager->getBusiness('adm','estoque');
+                                    $estoque->getById($this->itemNota->empenhado->empenho->idUoEntrega,$material->idMaterial);
+                                    $movimento = $this->manager->getBusiness('adm','movimento');
+                                    $movimento->idMaterial = $material->idMaterial;
+                                    $movimento->idRequisicao = $material->idRequisicao;
+                                    $movimento->tipoMovimento = 1;
+                                    $movimento->dataMovimento = date("d/m/Y");                
+                                    $movimento->quantidade = $quantidade;        
+                                    $movimento->valorTotal = $quantidade * $cf->toDecimal($this->itemNota->valor);
+                                    $movimento->idItemNota = $this->itemNota->idItemNota;
+                                    $movimento->setTransaction($material->getTransaction());
+                                    $movimento->save();
+                                    $estoque->estoque += $quantidade;
+                                    $estoque->valorTotal += $quantidade*$cf->toDecimal($this->itemNota->valor);
+                                    $estoque->setTransaction($material->getTransaction());
+                                    $estoque->save();
+                                }
+                                else
+                                {
+                                    // abre ordem entrega
+                                    $ordem = $material->requisicao->abrirOrdemEntrega($item);
+                                    $ordem->setTransaction($material->getTransaction());
+                                    $ordem->save();
+                                    // insere movimentos
+                                    $movimento = $this->manager->getBusiness('adm','movimento');
+                                    $movimento->idMaterial = $material->idMaterial;
+                                    $movimento->idRequisicao = $material->idRequisicao;
+                                    $movimento->tipoMovimento = 5;
+                                    $movimento->dataMovimento = date("d/m/Y");                
+                                    $movimento->quantidade = $quantidade;        
+                                    $movimento->valorTotal = $quantidade * $cf->toDecimal($this->itemNota->valor);
+                                    $movimento->idOrdemEntrega = $ordem->idOrdemEntrega;
+                                    $movimento->idItemNota = $this->itemNota->idItemNota;
+                                    $movimento->setTransaction($material->getTransaction());
+                                    $movimento->save();
+                                }
+                                $material->quantAutorizada += $quantidade;
+                                $material->valorReal += $quantidade * $cf->toDecimal($this->itemNota->valor);
+                                $material->status = 7;
+                                $material->save();
+                                $material->endTransaction();
+                            }
+                        }
+                        catch(Exception $e) {$this->manager->Error($e->getMessage());}
+                    }
+                }
+            }
+        }
+        $go = $this->manager->GetActionURL('adm','main:uoalmoxarifado:main',$item,array('form'=>'entradamaterial','idEmpenho'=>Form::getFormValue('idEmpenho'),'idNotaFiscal'=>$this->itemNota->idNotaFiscal));
+        $this->manager->Information('Entrada e saída de material realizada com sucesso.',$go);
+    }
+ }
+?>

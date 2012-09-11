@@ -1,0 +1,409 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmVinculoProgressaoCapacitacao extends MForm 
+{
+
+	protected $objVinculo;
+	
+
+	function __construct($objVinculo)
+	{
+		$this->objVinculo = $objVinculo;
+		parent::__construct('Progressão por Capacitação Profissional');
+		$this->EventHandler();
+	}
+	
+
+	function CreateFields()
+	{
+		global $MIOLO;
+
+		$this->objVinculo->getProvimentos();
+
+
+		$objProvimento = $this->objVinculo->GetProvimentoAtual();
+
+		$objProvimento->getCargo();
+
+		$spacer = new MSpacer('5px');
+
+		$infoCargo = new MHContainer('',
+                    array(
+						new MTextLabel('lbcargo','Cargo:'),
+                        new MTextLabel('txtIdCargo',$objProvimento->cargo->descricao,'Cargo'))
+					);
+
+        $this->setShowPostButton(false);
+
+        $objProvimento->getClasse(); 
+        $infoClasse = new MHContainer('',
+                    array(
+						new MTextLabel('lbclassificacao','Nível de Classificação:'),
+						new MTextLabel('txtIdClasse','CLASSE '.$objProvimento->classe->classe,'Classe'))
+					);
+
+		$objProvimento->classe->getReferencias();
+
+		$objReferencia = $objProvimento->classe->getReferencia($objProvimento->idReferencia); 
+
+		if ((strlen($objReferencia->nivelPadrao) > 2) && (strtoupper($objReferencia->nivelPadrao) != 'III'))
+		{
+			$subStrNivel = substr($objReferencia->nivelPadrao,'0','1');
+			$proximoNivel = $subStrNivel+1;
+			$proximoNivel = $this->toRomano($proximoNivel);
+			$nivel = $this->toRomano($subStrNivel);
+			$padrao = substr($objReferencia->nivelPadrao,'1','2');
+		}
+		else
+		{
+			$rr = $objReferencia->nivelPadrao + 1;
+			$proximoNivel = $this->toRomano($rr);
+			$nivel = $this->toRomano($objReferencia->nivelPadrao);
+		}
+       	 
+        
+       $infoRef = new MHContainer('',
+                    array(
+                        new MTextLabel('lbcapacitacao','Nível de Capacitação:'),
+                        new MTextLabel('txtIdCapacitacao',$nivel,'Nível de capacitação'),
+                    )
+                );              
+		
+		
+		$infoPadrao =  new MHContainer('',
+                    array(
+                        new MTextLabel('lbpadraovencimento','Padrão de Vencimento:'),
+                        new MTextLabel('txtIdPadrao',$padrao,'Padrão de Vencimento'),
+                    )
+                );
+                
+		$objProvimento->getAmbiente();
+		$infoAmbiente = new MHContainer('',
+                    array(
+                        new MTextLabel('lbambiente','Ambiente Organizacional:'),
+                        new MTextLabel('txtIdAmbiente',strtoupper($objProvimento->ambiente->descricao),'Ambiente Organizalcional'),
+						)
+                	);
+       
+                	
+         // PRÓXIMA PROGRESSÃO
+		try 
+		{
+			$abc = $this->objVinculo->progressaoAutomatica();
+			$classeee = $MIOLO->getBusiness('rh','classe'); 
+			$cc = $classeee->getbyid($abc->idClasse);
+			$cc->getReferencias();
+			$referencia = $cc->getReferencia($abc->idReferencia);
+		}
+		catch ( Exception $e )
+		{
+			$this->addError($e->getMessage());
+		}		
+        
+//----------------------------------------------------------------------------------------------------------------
+
+		 $infoClasseProgressao = new MHContainer('',
+                    array(
+                        new MLabel('Nível de Classificação:'),
+                        new MTextLabel('txtIdClasseProgressao','CLASSE '.$cc->classe,'Nível de Classificação')
+						)
+                	);  
+                	
+        $nivelProgressao = substr($referencia->nivelPadrao,0,1);
+
+        $padraoProgressao = substr($referencia->nivelPadrao,1,2);     	
+
+		$niveisPadroes = array('1'=>'I','2'=>'II','3'=>'III','4'=>'IV');
+
+		$infoNivelProgressao = new MHContainer('',
+					array(
+						new MLabel('Nível Capacitação:'),
+						new MTextLabel('txtIdNivelProgressao',$proximoNivel))
+					);
+				
+		$infoPadraoProgressao = new MHContainer('',
+					array(
+						new MLabel('Padrão de Vencimento:'),
+						new MTextLabel('txtIdPadraoProgressao',$padraoProgressao,''))
+					);
+                	
+        $lnk = new MLink('lnkAmbientes','Visualizar histórico de mudanças de ambiente do servidor');          $lnk ->setAction('rh','main:vinculo',$this->objVinculo->idVinculo,array("form"=>"historico"));             
+        
+        $camposProg = 
+						new MHContainer('',
+							array(
+								new MTextLabel('lblprog','Data Progressão:'),
+								new MCalendarField('dataProgressao'),
+							)
+						);
+        
+        //Campos Progressão
+        $camposProg2 = new MHContainer('', array( new MTextLabel('lblportaria','Publicação:'), new MLookupFieldValue('publicacao','','Publicação')));
+        
+        //$processo = new MHContainer('',array( new MTextLabel('lblprocesso','Processo N°:'), new MTextField('nprocesso')));
+        $obs = new MHContainer('',array( new MTextLabel('lblobserva','Obervação:'), new MMultiLineField('observacao','','Observação',25,5,40,'Máx. 500')));
+        //new MMultiLineField('obs','','Observação',25,5,40,'Máx. 500'),
+
+		$fields = array(new MBaseGroup('info','Dados Atuais',array($infoCargo,$infoClasse,$infoRef,$infoPadrao,$infoAmbiente,$lnk),'vertical','css'));
+
+		$this->setFields($fields);
+
+		$ultimaProgressao = $this->objVinculo->getProvimentoAtual();
+
+        //$a =  $this->objVinculo->getDataProgressaoPosterior($ultimaProgressao->dataInicio);
+        if($this->calculaCargaHoraria())
+		{
+			$liberaCampos = true;
+			$btn = new MButton('btnPost','Enviar');
+			$this->addField(new MBaseGroup('Progressao','Progressão',array($infoClasseProgressao,$infoNivelProgressao,$camposProg,$camposProg2,$obs),'vertical','css'));
+			$this->SetButtons($btn);
+		} 
+		else 
+		{
+			$liberaCampos = false;
+			$lbl = new MTextLabel('info','Data mínima ou carga horária insuficiente.');
+			$this->addField($lbl);
+			$this->info->setColor(red);
+			$this->info->setBold(true);
+		}
+
+	    $this->SetFieldAttr('publicacao','module','rh');
+        $this->SetFieldAttr('publicacao','item','publicacao');
+        $this->SetFieldAttr('publicacao','event','filler');
+        $this->SetFieldAttr('publicacao','related','idPublicacao,null,publicacao');
+
+		$this->lbcargo   		  ->setWidth('125');
+        $this->lbclassificacao	  ->setWidth('125');
+        $this->lbcapacitacao      ->setWidth('125');
+        $this->lbpadraovencimento ->setWidth('125');
+        $this->lbambiente         ->setWidth('125');
+        
+        if($liberaCampos)
+		{
+			$this->lblportaria->setWidth('88');
+			//$this->lblprocesso->setWidth('88');
+			$this->lblobserva->setWidth('88');
+			$this->lblprog->setWidth('88');
+        }
+        
+        $this->lbcargo->setBold(false);
+        $this->lbclassificacao->setBold(false);
+        $this->lbcapacitacao->setBold(false);
+        $this->lbpadraovencimento ->setBold(false);
+        $this->lbambiente->setBold(false);
+        
+        if($liberaCampos)
+		{
+          $this->lblportaria->setBold(false);
+          //$this->lblprocesso->setBold(false);
+          $this->lblobserva->setBold(false);
+          $this->lblprog->setBold(false);
+        }
+	}
+	
+
+	function toRomano($number)
+	{
+		$aInteiros[0] = 1;
+    	$aInteiros[1] = 4;
+    	$aInteiros[2] = 5;
+    	$aRomanos[0] = "I";
+    	$aRomanos[1] = "IV";
+    	$aRomanos[2] = "V";
+    	
+    	for ($i = 2; $i >= 0; $i--) 
+		{
+        	while ($number >= $aInteiros[$i]) 
+			{
+            	$number = $number - $aInteiros[$i];
+            	$retorno .= $aRomanos[$i];
+        	}
+    	}
+
+    	return $retorno; 
+	}
+
+	
+	function calculaCargaHoraria()
+	{
+		global $MIOLO;
+		$checa = true;
+		$query = $this->getModulos();
+		$resp = $query->result;
+		$n = $query->GetRowCount();
+		$total = 0;
+		$arMod = array();
+		$mod = $MIOLO->GetBusiness('rh','capacitacaomodulo');
+
+		for ($i=0; $i < $n; $i++)
+		{
+			$arMode[] = $mod->getById($resp[$i][2]);
+			$arHour = explode('h',$arMode[$i]->cargahoraria);
+			if(count($arHour)>1){
+				$hora = $arHour[0]*60;
+				$min = $arHour[1];
+				$total += $hora+$min;
+			}
+			else
+			{
+				$total += $arHour[0]*60;
+			}
+		}
+
+		$objProv = $this->objVinculo->GetProvimentoAtual();
+		$idclasse = $objProv->classe->idClasse;
+		$objProv->classe->getReferencias();
+		$objRef = $objProv->classe->getReferencia($objProv->idReferencia);
+          
+		if ( (strlen($objRef->nivelPadrao) > 2) && (strtoupper($objRef->nivelPadrao) != 'III') )
+		{
+			$nivel2 = substr($objRef->nivelPadrao,'0','1');
+			$padrao = substr($objRef->nivelPadrao,'1','2');
+		} 
+		else
+		{
+			$nivel2 = $objRef->nivelPadrao;
+		}
+
+		$nivel2++;
+		$db2 = $MIOLO->getDataBase('rh');
+		$sql2 = new sql('*','rh_progressaocapacitacao p');
+		$sql2->where = "p.idclasse = '{$idclasse}' and p.nivelpadrao = '{$nivel2}'";
+		$query2 = $db2->GetQuery($sql2);
+		$resp2 = $query2->result;
+          
+        if($total < ($resp2[0][3]*60)) // calcula carga horária
+		{ 
+             $checa = false;
+        }
+          
+		$date = getdate();
+		
+		$k = new Mkrono;
+
+		if($date[mon]<=9)
+		{
+			$mes = '0'.$date[mon];
+		}
+		else
+		{
+			$mes = $date[mon];
+		}
+
+		$hj = $date[mday].'/'.$mes.'/'.$date[year];
+
+		$exer = $k->operation('+',$this->objVinculo->dataExercicio,'18%M');
+
+		// verifica a data de exercicio + 18 M e data mínima desde a ultima progressao
+		if(!($k->compareDate($hj,'>=',$this->objVinculo->getDataMinimaProgressao())) || !($k->compareDate($hj,'>=',$exer)))
+		{
+			$checa = false;
+		}
+
+		$objRef = $MIOLO->getBusiness('rh','referencia');
+		$criteria = $objRef->getCriteria();
+		$criteria->addCriteria('idClasse' ,'=', "$idclasse");
+		$r = $criteria->retrieveAsQuery();
+		$va = $r->chunkResult();
+
+		if($idReferencia+100 > $va[$idclasse])
+		{
+			$checa = false;
+		}
+
+		return $checa;
+	}
+
+	
+    function btnPost_click()
+	{
+         global $MIOLO;
+         $k = new MKrono();
+         $objProvimento2 = $this->objVinculo->getProvimentoAtual();
+         $objProvimento2->getReferencia();
+         $idClasse = $objProvimento2->classe->idClasse;
+         
+         $dataProgressao = $this->GetFieldValue('dataProgressao');
+         $publicacao = $this->GetFieldValue('publicacao');
+         $idReferencia   = $objProvimento2->idReferencia;
+
+         
+         $obs = $this->GetFieldValue('observacao');
+         $idSituacao = $objProvimento2->idSituacao;
+         $idJornada = $objProvimento2->idJornada;
+         $idGrupoCargo = $objProvimento2->idGrupoCargo;
+         $idCargo = $objProvimento2->idCargo;
+         $idOcorrencia = '101';
+         $idGrupoOcorrencia = '6';
+         $idSetor = $objProvimento2->idSetor;
+         $dataFechamento = $k->operation('-',$dataProgressao,'1%D');
+         try{
+             $this->objVinculo->novoProvimento($dataProgressao,
+                                               $dataFechamento,
+                                               '6',
+                                               '101',
+                                               $idSituacao,
+                                               $publicacao,
+                                               $idJornada,
+                                               $idGrupoCargo,
+                                               $idCargo,
+                                               $idSetor,
+                                               $idClasse,
+                                               $idReferencia+100,
+                                               $obs);
+                                               
+             $query = $this->getModulos();
+             $resp = $query->result;
+             $n = $query->GetRowCount();
+
+             $mod = $MIOLO->GetBusiness('rh','capacitacaomodulo');
+             $histCapacitacao = $MIOLO->GetBusiness('rh','histcapacitacao');
+             for ($i=0; $i < $n; $i++)
+             {
+                $objHist = $histCapacitacao->getById($resp[$i][0]);
+                $objHist->beginTransaction();
+                $objHist->dataProgressao = $dataProgressao;
+                $objHist->save();
+                $objHist->endTransaction();
+             }
+             $go = $this->manager->getActionURL('rh','main:vinculo:progressao',$this->objVinculo->idVinculo);
+  	    	 $this->manager->information('Progressão efetuada com sucesso!', $go);
+             
+         } 
+		 catch (Exception $e)
+         {
+   	        $this->manager->error($e->getMessage());
+         }
+    }
+
+	
+    function getModulos()
+	{
+		global $MIOLO;
+		$id = $this->objVinculo->idFuncionario;
+		$db = $MIOLO->getDataBase('rh');
+		$sql = new sql('*','rh_histcapacitacao h');
+		$sql->where = "h.idfuncionario = '{$id}' and h.compativelcargo = 'S' and h.compativelambiente = 'S' and h.dataprogressao is null";
+		$query = $db->GetQuery($sql);
+		return $query;
+    }
+	
+}
+?>

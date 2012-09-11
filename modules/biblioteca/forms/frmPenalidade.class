@@ -1,0 +1,282 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+
+class frmPenalidade extends Form
+{
+	var $objEmprestimo;
+	var $objDevolucao;  
+	var $objUsuario;
+	var $objMulta;
+
+    function frmPenalidade()  // construtor da Classe
+    {
+		global $MIOLO,$module;
+
+		// Título do Formulário
+		$this->Form('Penalidade por Usuário');
+	
+		//Chama o CreateFileds, etc.
+		$this->EventHandler();
+
+		// Botão "enviar" não aparece
+		$this->defaultButton = false;
+		
+		// Botão 'fechar', direcionando para o handler biblioteca/main/emprestimos
+		$this->SetClose($this->manager->GetActionURL($module, 'main:emprestimos'));
+    }
+
+    function CreateFields()
+    {
+		global $MIOLO,$module;
+
+		// Campos que aparecem no formulário
+		$fields = Array (
+		   new Text('txtAviso','<b>Informe:</b>'),
+			new Text('txtCartao', '<b>> O cartão de acesso ou login para usuário pertencente à esta instituição (aluno, professor etc).</b>'),
+			new Text('txtRG', '<b>> O número do RG para usuário pertencente à comunidade, sem vínculo com esta instituição.</b>'),
+			new Spacer(1),
+			
+			array(
+				new MTextField('edtCartaoAcesso','','Cartão de Acesso',16),
+                                new MTextLabel('txtOu','&nbsp;&nbsp;&nbsp;-OU-&nbsp;&nbsp;&nbsp;','&nbsp;'),
+                                new MTextField('edtMatricula','','Login do Usuário',16),
+                                new MTextLabel('txtOu2','&nbsp;&nbsp;&nbsp;-OU-&nbsp;&nbsp;&nbsp;','&nbsp;'),
+				new LookupTextField('edtRG','','Número do RG',16),
+			     ),
+			
+			array(new TextField('edtNome','','Nome',60)),
+			new HiddenField('hidIdusuario'),
+			new HiddenField('hidLogin'),
+		);
+
+		// Insere os campos
+		$this->SetFields($fields);
+
+		// Botões que aparecem no formulário
+		$buttons = Array(
+			new FormButton('btnConsulta', 'Consulta'), //consulta o num do cartao
+			//new MButton('btnConfirmar', 'Confirmar Pagamento'),
+			new MButton('btnVoltar', 'Voltar',$MIOLO->GetActionURL($module,$self)),
+		);
+
+		//Insere os Botões
+		$this->SetButtons($buttons);
+
+		//Esconde os campos 
+		$this->SetFieldAttr('edtNome','visible', false);
+		
+		//As 4 propriedades de um lookup
+		// module = módulo usado
+		// item = A funcao que chama no arquivo classes/lookup.class
+		// event = O evento relacionado quando o usuário clica em "acao"
+		// related = Os campos retornados após a ação
+		$this->SetFieldAttr('edtRG','module','biblioteca');
+		$this->SetFieldAttr('edtRG','item','rg');
+		$this->SetFieldAttr('edtRG','event','filler');
+		$this->SetFieldAttr('edtRG','related', 'edtRG,""');
+		
+
+		//As 4 propriedades de um lookup
+		// module = módulo usado
+		// item = A funcao que chama no arquivo classes/lookup.class
+		// event = O evento relacionado quando o usuário clica em "acao"
+		// related = Os campos retornados após a ação
+		$this->SetFieldAttr('edtMatricula','module',$module);
+		$this->SetFieldAttr('edtMatricula','item','Usuario');
+		$this->SetFieldAttr('edtMatricula','event','filler');
+		$this->SetFieldAttr('edtMatricula','related','edtMatricula');
+		
+		
+		// Atributo dos botões
+		$this->SetButtonAttr('btnConsulta','visible',true);
+		$this->SetButtonAttr('btnConfirmar','visible',false);
+		$this->SetButtonAttr('btnVoltar','visible',false);
+
+		if (!($this->GetFieldValue('edtCartaoAcesso')))
+		{
+			//Definindo o foco
+			//$this->page->onLoad('document.'.$this->name.'.edtCartaoAcesso.focus();');
+			$this->page->onLoad("MIOLO_GetElementById('edtCartaoAcesso').focus();");
+		}
+	}
+
+
+
+       function btnConsulta_click()
+       { 
+   	  global $MIOLO,$module,$item,$theme;
+		
+	  // Atributo dos botões
+	  $this->SetButtonAttr('btnConsulta','visible',false);
+	  //$this->SetButtonAttr('btnConfirmar','visible',false);
+		
+ 	  if ($item)
+	  {
+ 	     // Verifica se existe um @ no item, dizendo que é usuário externo (RG)
+	     if (strpos($cartao,"@"))
+	     {
+	   	$cartao = str_replace("@","",$cartao);
+		$this->SetFieldValue('edtRG',$cartao);
+					
+	     }
+	     else 
+	     {
+		$this->SetFieldValue('edtCartaoAcesso',$cartao);	
+ 	     }		
+         }
+		
+         $cartao = $this->GetFieldValue('edtCartaoAcesso');
+         $rg = $this->GetFieldValue('edtRG');
+         $matricula = $this->GetFieldValue('edtMatricula');
+		
+         if ($cartao != null)
+         {
+	    $tipoUsuario = 'sigaept';
+	    $this->SetFieldAttr('edtRG','visible',false);
+	    $this->SetFieldAttr('txtAviso','visible',false);
+	    $this->SetFieldAttr('txtCartao','visible',false);
+	    $this->SetFieldAttr('txtOu','visible',false);
+	    $this->SetFieldAttr('txtRG','visible',false);
+	    $this->SetFieldAttr('edtMatricula','visible',false);
+	    $this->SetFieldAttr('txtOu2','visible',false);
+   	   
+	    $this->objUsuario = $MIOLO->GetBusiness($module,'usuario');
+	    $idusuario = $this->objUsuario->GetByCartao($cartao);
+	    if ($idusuario != null)
+	    {
+	       $query = $this->objUsuario->GetById($idusuario);
+       	       $nome = $query[0][1];
+               
+	    } 
+	 }
+	 elseif ($rg != null)
+	 {
+	    $tipoUsuario = 'comunidade';
+	    
+	    $this->SetFieldAttr('edtCartaoAcesso','visible',false);
+	    $this->SetFieldAttr('txtAviso','visible',false);
+	    $this->SetFieldAttr('txtCartao','visible',false);
+	    $this->SetFieldAttr('txtOu','visible',false);
+	    $this->SetFieldAttr('txtRG','visible',false);
+	    $this->SetFieldAttr('edtMatricula','visible',false);
+	    $this->SetFieldAttr('txtOu2','visible',false);
+			
+	    $this->objUsuario = $MIOLO->GetBusiness($module,'usuarioexterno');
+	    $idusuario = $this->objUsuario->GetByRG($rg);
+	    if ($idusuario != null)
+	    {
+		$query = $this->objUsuario->GetById($idusuario);
+		$nome = $query->nome;
+	    }
+			
+		
+	 }
+	 elseif ($matricula != null)
+	 {
+		
+	    $this->SetFieldAttr('edtCartaoAcesso','visible',false);
+	    $this->SetFieldAttr('txtAviso','visible',false);
+	    $this->SetFieldAttr('txtCartao','visible',false);
+	    $this->SetFieldAttr('txtRG','visible',false);
+	    $this->SetFieldAttr('txtOu2','visible',false);
+	    $this->SetFieldAttr('edtRG','visible',false);
+	    $this->SetFieldAttr('edtMatricula','visible',true);
+            $this->SetFieldAttr('txtOu','visible',false);			
+			
+	    $this->objUsuario = $MIOLO->GetBusiness($module,'usuario');
+	    $idusuario = $this->objUsuario->GetByLogin($matricula);            		
+	    $idusuario = $idusuario[0][0];
+			
+	    if ($idusuario != null)
+	    {
+		$query = $this->objUsuario->GetById($idusuario);
+		$nome = $query[0][1];
+	    }
+		
+	 }
+	 else
+	 {
+	     $MIOLO->Prompt(Prompt::Error("Por favor, informe o cartão de acesso ou o número do RG.", $MIOLO->GetActionURL($module,$action)));
+	 }
+		
+	 if ($idusuario == null)
+	 {
+	    $MIOLO->Error("Usuário não encontrado.", $MIOLO->GetActionURL($module,$self));
+            return;
+	 }
+		
+	
+	 $this->SetButtonAttr('btnVoltar','visible',true);
+
+
+	 //Instancia o objeto emprestimo.
+	 $this->objEmprestimo = $this->manager->GetBusiness( $module, 'emprestimo' );
+
+	  //Instancia o objeto devolucao.
+	 $this->objDevolucao= $this->manager->GetBusiness( $module, 'devolucao' );
+         
+	 //Verifica se o usuario é externo à instituição
+	 if( $this->objUsuario->isUsuarioInterno( $idusuario ))
+	 {
+	    //Obtém o número do cartão de acesso do usuário.
+	    $cartao = $this->objEmprestimo->GetCartaoByID( $idusuario )->result[ 0 ][ 0 ];
+	    //Data do próximo empréstimo que pode ser realizado pelo usuario
+	    $proximoEmprestimo = $this->objDevolucao->getDataPermissaoEmprestimoUI( $cartao );
+	 }
+	 else
+	 {
+	    $objUsuarioExterno = $this->manager->GetBusiness( $module, 'usuarioexterno' );
+
+            //Data do próximo empréstimo que pode ser realizado pelo usuario
+	    $proximoEmprestimo = $objUsuarioExterno->getDataPermissaoEmprestimoUI( $idusuario );
+	 }
+
+         //Instancia um objeto MKrono: manipulação de datas. 
+         $k = new MKrono(); 
+
+	 //Formata a data de Y/m/d para d/m/Y.
+	 $proximoEmprestimo = $k->InvertDate( $proximoEmprestimo );
+         
+	 //Obtém data de hoje.
+	 $dataHoje = $k->KDate( '%d/%m/%Y' );
+
+	 //Calcula quantos dias o usuário ficará com penalidade à partir da data atual.
+	 if( ( $diasPenalidade = $k->daysDiff( $dataHoje, $proximoEmprestimo ) ) < 0 )
+	      $diasPenalidade = 0; 
+
+        //cria as colunas e insere os dados na tabela
+	$tituloColunas[ 0 ] = "Data de permissão para empréstimos";
+	$tituloColunas[ 1 ] = "Dias de penalidade restantes";
+
+	$dadosTabela[ 0 ][ 0 ] = $proximoEmprestimo;
+	$dadosTabela[ 0 ][ 1 ] = $diasPenalidade;
+
+	$tabela = new TableRaw( 'Penalidades do usuário '.$nome, $dadosTabela, $tituloColunas );
+        $this->addField( $tabela );
+
+	$this->SetFieldAttr( 'edtCartaoAcesso', 'visible' , false);
+	$this->SetFieldAttr( 'edtNome', 'visible' , false);
+	$this->SetFieldAttr( 'edtMatricula', 'visible' , false);
+	$this->SetFieldAttr( 'edtRG', 'visible' , false);
+  }
+
+}
+?>

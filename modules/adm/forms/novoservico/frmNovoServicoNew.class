@@ -1,0 +1,68 @@
+<?
+class frmNovoServicoNew extends MForm
+{
+    function __construct()
+    {
+        parent::__construct('Incluir Novo Servico');
+        $this->EventHandler();
+    }
+    function CreateFields()
+    {
+        $usuario = $this->manager->getBusiness('common','usuario');
+        $usuario->getById($this->manager->GetLogin()->idkey);
+		$gestor = $this->manager->getbusiness('adm','gestor');
+		$idUsuario = $this->manager->GetLogin()->idkey;
+        $fields = array(
+            new MMultiLineField('descricao','','Descrição',500,6,50,'Máximo 500'),
+            new MSeparator('Dados para contato'),
+            new MTextField('nome',$usuario->pessoa->nome,'Nome',52),
+            new MTextField('telefone','','Telefone',12),
+            new MTextField('email',$usuario->pessoa->email,'Email',52),
+			new Selection('idUoReq','','UO',$gestor->listUoByUsuario($idUsuario)->result)
+        );
+        $this->SetFields($fields);
+        $this->nome->setReadOnly(true);
+        $validators = array(
+			new MRequiredValidator('descricao'),
+            new MPhoneValidator('telefone','','required'),
+            new MEmailValidator('email','','required'),
+		);
+		$this->SetValidators($validators);
+        $buttons = array(
+            new MButton('btnNew', 'Sugerir Servico')
+        );
+        $this->SetButtons($buttons);
+    }
+    function btnNew_click()
+    {
+        $data = $this->GetData();
+        $usuario = $this->manager->getBusiness('common','usuario');
+        $usuario->getById($this->manager->GetLogin()->idkey);
+        $servico = $this->manager->getBusiness('adm','novoservico');
+        try
+        {
+            $servico->beginTransaction();
+            $servico->setData($data);
+            $servico->setStatus(1);
+            $servico->dataPedido = date('d/m/Y');
+            $servico->setUsuario($this->manager->getLogin()->idkey);
+			$servico->ativo = "S";
+			$servico->idUoReq = Form::GetFormValue('idUoReq');
+            $servico->save();
+            if ($data->email != $usuario->pessoa->email)
+            {
+                $usuario->pessoa->setTransaction($servico->getTransaction());
+                $usuario->pessoa->email = $data->email;
+                $usuario->pessoa->save();
+            }
+            $servico->endTransaction();
+            $servico->Log(OP_INS,'Novo servico inserido ['.$servico->idNovoServico.']');
+   		    $this->manager->information("Pedido de novo serviço efetuado com sucesso.",$this->manager->getActionUrl('adm','main:novoservico:find') );
+        }
+        catch (Exception $e)
+        {
+            $this->AddError($e->GetMessage());
+        }
+     }
+ }
+?>

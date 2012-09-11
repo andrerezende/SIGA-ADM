@@ -1,0 +1,334 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/*
+   Uma imagem vale por mil palavras...
+
+   hierarquia de classes:
+
+                                  FORM
+                                    |
+                                    |
+                                 PESQUISA  (frmPesquisa.class)
+                                    |
+                                    |
+   -----------------------------------------------------------------------------
+           |                    |                    |                  |
+           |                    |                    |                  |
+    Pesquisa Simples    Pesquisa Multicampo  Percorrer indices  Pesquisa Numérica
+
+
+
+ Para configurar os campos da Pesquisa Simples, acesse etc/pesquisa.xml
+*/
+
+MIOLO::IMPORT('modules::biblioteca::forms::frmPesquisa');
+
+class frmPesquisaIndice extends frmPesquisa 
+{
+	var $objIndice;
+	var $objUnidade;
+	var $objSimples;
+	var $camposPesquisa;
+
+    function frmPesquisaIndice()  // construtor da Classe
+    {
+		global $MIOLO,$module;
+
+		// Título do Formulário
+		$this->Form('Pesquisa Percorrer Índices');
+
+		//Chama o CreateFileds, etc.
+		$this->EventHandler();
+
+		//Botão "enviar" não aparece
+		$this->defaultButton = false;
+		
+		// Botão 'fechar', direcionando para o handler biblioteca/main/
+		$this->SetClose($this->manager->GetActionURL($module, 'main'));
+	}
+
+   
+    function CreateFields()
+    {
+		global $module,$MIOLO;
+
+		$this->camposPesquisa = $this->GetCamposPesquisa();
+		
+		$this->objIndice = $MIOLO->GetBusiness($module,'pesquisaindice');
+		$this->objUnidade = $MIOLO->GetBusiness($module,'unidade');
+		$this->objSimples = $MIOLO->GetBusiness($module,'pesquisasimples');
+
+		//monta as opções na lista de unidades
+		$opU = $this->objUnidade->ListUnidade();
+		$optionsU['0'] = 'Todas';
+		foreach($opU->result as $o)
+		{
+			$optionsU[$o[0]] = $o[1];
+		}
+
+		// Campos que aparecem no formulário
+		$fields = Array (
+		    new MSelection('selConsultarPor','','Índice de'),
+   			new MTextLabel('Atenção:','As palavras não são acentuadas.', 'Atenção'),
+			new MTextField('edtConsulta','','Busca',50),
+			new MCheckBox('chkboxTermo','1','Termo Exato',true,'','Permite pesquisa na sequência digitada. Exemplo de BUSCA: Calculo integral'),
+			new MTextLabel('Dica','Em caso de pesquisa por autor, desmarque a opção de Termo Exato.','Dica'),
+			new MSeparator,
+			new MSelection('selUnidade','','Unidades'),
+		);
+
+		// Insere os campos
+		$this->setFields($fields);
+		$tipopesquisa = $this->getFormValue('tipopesquisa');
+		if($tipopesquisa)
+		{
+			$this->setFieldValue('selConsultarPor', $tipopesquisa);
+		}
+
+		// Inserindo os dados do formulário
+		$sel = $this->MontaSelection($this->camposPesquisa);
+		$selcont = count($sel);
+		$sel[$selcont] = array('Todos','Todos');
+		$this->setFieldAttr('selConsultarPor','options', $sel);
+		$this->setFieldAttr('selUnidade','options', $optionsU);
+
+		// Botões que aparecem no formulário
+		$buttons = Array(
+			new MButton('btnConsultar', 'Consultar'),
+			//new MButton('btnNovaPesq', 'Nova Pesquisa', $MIOLO->GetActionURL($module = $module, $action = $action)),
+			new MButton('btnNovaPesq', 'Nova Pesquisa'),
+		
+   		);
+
+		//Insere os Botões
+		$this->setButtons($buttons);
+		$this->setButtonAttr('btnNovaPesq','visible',false);
+
+		//Definindo o foco
+		if (!($this->GetFieldValue('edtConsulta')))
+		{
+			$this->page->onLoad("MIOLO_GetElementById('edtConsulta').focus();");
+		}
+	}
+
+
+	// pega os dados que estão no formulário   
+	function GetData()
+	{
+		$data = new FormData();
+		$data->ConsultarPor = $this->getFormValue('selConsultarPor');
+		$data->Consulta = trim($this->getFormValue('edtConsulta'));
+		$data->Termo = $this->getFormValue('chkboxTermo');
+		$data->Unidade = $this->getFormValue('selUnidade');
+		return $data;
+	}
+
+
+	function SetData($data)
+	{
+		$this->setFieldValue('selConsultarPor',$data->ConsultarPor);
+		$this->setFieldValue('edtConsulta',$data->Consulta);
+		$this->setFieldValue('chkboxTermo',$data->Termo);
+		$this->setFieldValue('selUnidade',$data->Unidade);
+	}
+
+
+	function btnConsultar_click($sender)
+	{
+		global $MIOLO, $module, $self, $theme, $action, $page;
+
+		$tipo = $this->getFormValue('tipo');
+		
+				
+		//esconde/desativa botões e campos
+		$this->setFieldAttr('selConsultarPor','readonly',true);
+		$this->setFieldAttr('edtConsulta','readonly',true);
+		$this->setFieldAttr('selUnidade','readonly',true);
+		$this->setButtonAttr('btnConsultar','visible',false);
+		$this->setFieldAttr('chkboxTermo','readonly',true);
+		
+		// mostra botao de Nova Pesquisa
+		$this->setButtonAttr('btnNovaPesq','visible',true);
+		
+
+		if ($tipo == NULL)
+		{
+			$data = $this->GetData();
+		}
+		else
+		{
+			$consultarpor = $this->getFormValue('consultarpor');
+			$consulta = $this->getFormValue('consulta');
+			$termo = $this->getFormValue('termo');
+			$unidade = $this->getFormValue('unidade');
+
+			if($termo == '1')
+			{
+				$this->chkboxTermo->setChecked(true);
+			}
+			else
+			{
+				$this->chkboxTermo->setChecked(false);
+			}
+
+			$data = new FormData();
+			$data->ConsultarPor = $consultarpor;
+			$data->Consulta = $consulta;
+			$data->Termo = $termo;
+			$data->Unidade = $unidade;
+			$this->SetData($data);
+		}
+
+		if ($data->Consulta != null)
+		{
+			$query = $this->objIndice->Listar($data, $this->camposPesquisa);
+			if ($query->result) // Monta o DataGrid	
+			{
+				/*
+				//fontsize
+				for ($i=0; $i<count($query->result); $i++){
+					$query->result[$i][0] = "<font size=3>" . $query->result[$i][0] . "</font>";
+				}
+				*/
+
+				$columns = array(
+					new MDataGridColumn("conteudo","Termo",'left',false,'80%',true,null,false,true),
+					new MDataGridColumn("cont","Qtde de Obras",'center',false,'10%',true,null,false,true)
+				);
+				
+				$href_datagrid = $MIOLO->GetActionURL($module,$self,'', Array('event'=>'btnConsultar_click'));
+				
+				$pn_page = $this->getFormValue('pn_page');
+				
+				$datagrid = new MDataGrid($query, $columns, $href_datagrid,20);
+				$datagrid->setTitle('Índice por ' . $data->ConsultarPor);
+				$datagrid->setLinkType('linkbutton');
+				$datagrid->setWidth('99%');
+
+				$href_edit = $MIOLO->GetActionURL($module, 'main:pesquisaindice', '%0%', Array('event'=>'PesquisaDetalhada','consultarpor'=>$data->ConsultarPor,'consulta'=>$data->Consulta,'termo'=>$data->Termo,'unidade'=>$data->Unidade,'tipo'=>'indice','page'=>$pn_page));
+				$datagrid->addActionText('alt','Pesquisar',$href_edit);
+				
+				$theme->ClearContent();
+				$theme->InsertContent($datagrid);
+				
+			}
+			else
+			{
+				$MIOLO->Prompt(Prompt::Error('Sua pesquisa por "' . $data->Consulta . '" não retornou nenhum resultado.<br><br>
+			Sugestões:<br><br> 
+				- Certifique-se de que todas as palavras estejam escritas corretamente.<br><br>
+				- Tente palavras-chave diferentes.<br><br>
+				- Tente palavras-chave mais genéricas.<br><br>
+				- Em caso de dúvida, consulte a pessoa responsável pelo atendimento na sua biblioteca.<br>',$MIOLO->GetActionURL($module,$action)));
+			}    
+		    
+		}
+		else
+		{
+			$MIOLO->Prompt(Prompt::Error("Por favor, preencha o campo Busca.", $MIOLO->GetActionURL($module, $action)));
+		}
+		
+	}
+	
+	function btnNovaPesq_click()
+	{
+		
+		global $MIOLO, $module, $self, $theme, $action, $page;
+		
+		$go = $this->manager->GetActionURL('biblioteca', 'main:pesquisaindice', '', Array('tipopesquisa'=>$this->getFormValue('selConsultarPor')));
+		$this->page->redirect($go);
+	}
+		
+	
+	function PesquisaDetalhada()
+	{
+		global $MIOLO, $module, $self, $theme, $action, $page;
+
+		$camposPesquisa = $this->GetCamposPesquisa();
+
+		$this->setFieldAttr('selConsultarPor','readonly',true);
+		$this->setFieldAttr('edtConsulta','readonly',true);
+		$this->setFieldAttr('selUnidade','readonly',true);
+		$this->setButtonAttr('btnConsultar','visible',false);
+		$this->setFieldAttr('chkboxTermo','readonly',true);
+
+		$filtro = $this->getFormValue('item');
+		$consultarpor = $this->getFormValue('consultarpor');
+		$consulta = $this->getFormValue('consulta');
+		$termo = $this->getFormValue('termo');
+		$unidade = $this->getFormValue('unidade');
+		$tipo = $this->getFormValue('tipo');
+		$page = $this->getFormValue('page');
+
+		$endereco = $MIOLO->GetActionURL($module, 'main:pesquisaindice', '', Array('event'=>'btnConsultar_click','consultarpor'=>$consultarpor,'consulta'=>$consulta,'termo'=>$termo,'unidade'=>$unidade,'tipo'=>$tipo,'pn_page'=>$page));
+		$this->addButton(new MButton('btnVoltar', 'Voltar', $endereco ));
+
+		$data = new FormData();
+		$data->ConsultarPor = $consultarpor;
+		$data->Consulta = $consulta;
+		$data->Termo = $termo;
+		$data->Unidade = $unidade;
+		$this->SetData($data);
+
+		if($termo == '1')
+		{
+			$this->chkboxTermo->setChecked(true);
+		}
+		else
+		{
+			$this->chkboxTermo->setChecked(false);
+		}
+
+		$data2 = new FormData();
+		$data2->busca = $filtro;
+		$data2->termo = $termo;
+		$data2->ConsultarPor_1 = $consultarpor;
+		$data2->Unidade = $unidade;
+		$data2->Genero = '0';
+		$data2->page = $page;
+		$data2->tipo = $tipo;
+		$data2->consulta = $consulta;
+
+		$query = $this->objSimples->Listar($data2,$camposPesquisa,'indice');
+
+		if ($query->result)
+		{
+			if($tipo == null)
+			{
+				$this->MontaDataGrid($this->camposPesquisa,$query,'indice',$data2);
+			}
+			else
+			{
+				$this->MontaDataGrid($this->camposPesquisa,$query,$tipo,$data2);
+			}
+		}
+		else
+		{
+			$MIOLO->Prompt(Prompt::Error('Sua pesquisa por "' . $consulta . '" não retornou nenhum resultado.<br><br>
+			Sugestões:<br><br> 
+				- Certifique-se de que todas as palavras estejam escritas corretamente.<br><br>
+				- Tente palavras-chave diferentes.<br><br>
+				- Tente palavras-chave mais genéricas.<br><br>
+				- Em caso de dúvida, consulte a pessoa responsável pelo atendimento na sua biblioteca.<br>',$MIOLO->GetActionURL($module,$action)));
+		}
+	}
+}
+?>

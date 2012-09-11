@@ -1,0 +1,119 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmFrequenciaSetor extends MForm
+{
+    private $secretaria;
+    private $k;
+    
+    function __construct()
+    {   global $MIOLO;
+        $perms = $MIOLO->getPerms();
+        $this->secretaria = $perms->isMemberOf('','RH_SECRETARIA') && !$perms->isAdmin();
+        parent::__construct('Relatório de Freqüência por Setor');
+        $this->SetClose($this->manager->GetActionURL('rh','main:relatorio:frequencia'));
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+        global $MIOLO, $action, $module, $item, $page;
+        $ui = $this->manager->getUI();
+        $provimento = $this->manager->getBusiness('rh','provimento');       
+        $query = $provimento->listSetoresLotacao();
+        $this->k = new MKrono();
+        //$grid = $ui->getGrid('rh','gridFrequeciaSetor', NULL,'relatorios');
+        $fields = array(
+            new MSelection('mes','','Mês',$this->k->months,true),
+            new MTextField('ano','','Ano','6','use 4 dígitos'),
+            new MSelection('idSetor','','Setor',$query->result,false),
+            new MSpacer('8px'),
+            //$grid,
+        );
+        $this->setFields($fields);
+        $this->setFieldAttr('idSetor','visible',!$this->secretaria);
+        $this->ano->addAttribute('maxLength','4');
+        $buttons = array(
+            //new MButton('btnGrid','Exibir na Tela'),
+            new MButton('btnReport','Gerar Relatório','PDF'),
+        );
+        $this->setButtons($buttons);
+    }
+
+    function btnReport_click()
+    {
+        $data = $this->getData();
+        if ($data->mes == NULL)
+            $erro[] = "Selecione o mês";
+        if ($data->ano == NULL)
+            $erro[] = "Selecione o ano";
+        if ($data->idSetor == NULL and !$this->secretaria)
+            $erro[] = "Selecione o setor";
+        if ($data->ano > date('Y'))
+            $erro[] = "O ano deve ser ANTERIOR ou IGUAL ao ano corrente (".date('Y').")";
+        if ( $data->ano == date('Y') )
+            if ($data->mes >= date('m'))
+                $erro[] = "O mês de referência deve ser no máximo ANTERIOR ao mês corrente (".$this->k->getMonthByNumber(date('m')).")";
+        if ( count($erro) > 0 )
+        {
+            foreach ( $erro as $e )
+                $this->addError($e);
+        }
+        else
+        {
+            try
+            {
+                $ui = $this->manager->getUi();
+                $report = $ui->getReport('rh','repFrequenciaSetor',$data);
+                $report->generate();
+            }
+            catch ( Exception $e )
+            {
+                $this->manager->error($e->getMessage);
+            }
+        }
+    }
+/*
+    function btnGrid_click()
+    {
+        $mes = $this->GetFormValue('mes');
+        $ano = $this->GetFormValue('ano');
+        $idSetor = $this->GetFormValue('idSetor');
+        if ((is_null($mes)) or (empty($mes)))
+            $erro[] = "Selecione o mês";
+        if ((is_null($ano)) or (empty($ano)))
+            $erro[] = "Selecione o ano";
+        if (is_null($idSetor) or (empty($idSetor)))
+            $erro[] = "Selecione o setor";
+        if ($ano > date('Y'))
+            $erro[] = "O ano deve ser menor ou igual ao ano corrente (".date('Y').")";
+        if ($ano == date('Y'))
+        {
+            if ($mes >= date('m'))
+                $erro[] = "O mês de referência deve ser no máximo o mês ANTERIOR a este mês (".$this->k->getMonthByNumber(date('m')).")";
+        }
+        if ( count($erro) > 0 )
+        {
+            foreach ( $erro as $e )
+                Form::addError($e);
+        }
+    }
+*/
+}
+?>

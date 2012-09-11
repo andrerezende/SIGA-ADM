@@ -1,0 +1,145 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmProadesReuniaoFatores extends MForm
+{
+    private $reuniao;
+    
+	function __construct($reuniao)
+	{
+        $this->reuniao = $reuniao; 
+        
+		parent::__construct('Fatores Dificultadores');
+		$this->EventHandler();
+	}
+    
+	function CreateFields()
+	{
+        $tabelaGeral = $this->manager->getBusiness('common','tabelageral');
+        
+        $query = $tabelaGeral->listByTabela('RH_FATORDIFICULT');
+
+        foreach($query->result as $rs)
+        {
+            $options[$rs[1]] = $rs[1];
+        }
+
+		$this->reuniao->retrieveAssociation('proades');
+		$proades = $this->reuniao->proades;
+
+        $numero = $this->reuniao->numero;
+        if ( $numero != 1 )
+        {
+            $i = $numero;
+            for ( $i = $numero; $i > 0; $i-- )
+            {
+                $arrMetas[] = ($i-1);
+            }
+        }
+        else
+        {
+            $arrMetas[] = 0;
+        }
+		$qryMetas = $proades->listMetas($arrMetas);
+
+        $fields = array(
+				new MSeparator('Aponte o fator dificultador para cada meta e clique no bot&atilde;o Enviar.'),
+                array(
+					new MSelection('idMeta','','Meta',$qryMetas->result),
+                    new MSelection('fator','','Fator Dificultador',$options),
+                ),
+                new MSeparator(),
+                new MText('','No caso de <b>OUTRO</b>, favor especificar o fator abaixo'),
+                new MTextField('outroFator','','Outro',40)
+        ); 
+        
+        $this->SetFields($fields);		
+
+        $buttons = array(
+            new MButton('btnSalvar','Enviar')
+        );
+
+        $this->setButtons($buttons);
+        $this->setButtonAccess();
+	}
+
+	function btnSalvar_click()
+	{
+		$data = $this->GetData();
+        if ( $data->fator == 'OUTRO' )
+        {
+            if ( $data->outroFator == '' )
+            {
+                $this->addError("Por favor, especifique o fator.");
+            }
+            else
+            {
+                $data->fator = $data->outroFator;
+                $data->outro = 'S';
+            }
+        }
+        if ( ! $this->hasErrors() )
+        {
+            try
+            {
+                $fator = $this->manager->getBusiness('rh','reuniaofator');
+                if ( $data->idFator )
+                {
+                    $fator->getById($data->idFator);
+                }
+                $fator->setData($data);
+                $fator->idReuniao = $this->reuniao->idReuniao;
+                $fator->save();
+                $go = $this->manager->getActionUrl('rh','main:proades:reuniao',$this->reuniao->idReuniao,array('form'=>'fatores'));
+                $this->page->redirect($go);
+            }
+            catch (Exception $e)
+            {
+                $this->AddError($e->GetMessage());
+            }
+        }
+	}
+
+    function btnExcluir_click()
+    {
+        $idFator = $this->getFormValue('idFator');
+        $fator = $this->manager->getBusiness('rh','reuniaofator');
+        $fator->getById($idFator);
+
+        try
+        {
+            $fator->delete();            
+            $go = $this->manager->getActionUrl('rh','main:proades:reuniao',$this->reuniao->idReuniao,array('form'=>'fatores'));
+            $this->page->redirect($go);
+        }
+		catch (Exception $e)
+		{
+			$this->AddError($e->GetMessage());
+		}
+    }
+    function setButtonAccess()
+    {
+        $perms = $this->manager->getPerms();
+        foreach ( $this->buttons as $button )
+        {
+            $this->setButtonAttr($button->name,'visible',$perms->checkAccess('rh_proadesexecutefase2',A_ACCESS));
+        }
+    }
+}
+?>

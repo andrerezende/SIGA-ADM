@@ -1,0 +1,136 @@
+<?
+class frmMultiplosEntrada extends MFormAjax
+{
+    protected $processo;
+    protected $perms;
+    protected $setor;
+    protected $setorAcesso;
+    public function __construct()
+    {
+        // construtor
+        global $MIOLO;
+        $this->processo  = $MIOLO->GetBusiness('protocolo','processo');
+        $this->perms = $MIOLO->getPerms();
+        $this->setor = $MIOLO->getBusiness('protocolo','setor');
+        $this->setorAcesso = $MIOLO->getBusiness('protocolo','setoracesso');
+        parent::__construct('Entrada Múltipla');
+        $this->SetClose($MIOLO->GetActionURL('protocolo','main'));
+        $this->page->addJsCode(file_get_contents(dirname(__FILE__).'/js/frmMultiplosEntrada.js'));
+        $this->eventHandler();
+    }    
+    public function CreateFields()
+    {
+//      processos afetados
+        $numProcesso = new MLookupTextField('numProcesso','','Processo:',22);
+        $numProcesso->module = 'protocolo';
+        $numProcesso->item = 'processoentrada';
+        $numProcesso->event = 'filler';
+        $numProcesso->related = 'none,numProcesso';
+        $numProcesso->filter = 'setorUsuario,numProcesso';
+        $numProcesso->addAttribute('onkeypress',"return&nbsp;setValue(this,event)");
+        $numProcessos = new MMultiTextField3( 'numProcessos', null, 'Seleção de processos',array($numProcesso), 200, true, 'horizontal' );
+        $numProcessos->fieldWidth = 200;       
+//      fields
+        $setorUsuario = ($this->perms->checkAccess('PROT_ADMIN', A_ACCESS)) ? '%' : $this->processo->getSetorUsuario();
+        $fields = array(
+            new MHiddenField('setorUsuario',$setorUsuario),
+            $numProcessos,
+        );
+        $this->SetFields($fields);
+//      buttons
+        $buttons = array(
+           new MButton('btnExecutar', 'Executar'),
+        );
+        $this->SetButtons($buttons);
+    }
+
+    public function btnExecutar_click()
+    {
+//      errors
+        if (!$numProcessos = $this->numProcessos->getCodeValue())
+        {
+            $this->addError('Você deve selecionar pelo menos um processo para dar entrada.');
+            return;
+        }
+        foreach ($numProcessos as $key => $numProcesso)
+        {
+//          get object
+            $numProcesso = $numProcesso[0];
+            $numProcesso = str_repeat('0',14-strlen($numProcesso)).$numProcesso;
+            $serie = substr($numProcesso,0,6);
+            $ano = substr($numProcesso,7,4);
+            $codigo = substr($numProcesso,12,2);
+            $$numProcesso = $this->manager->getBusiness('protocolo','processo');
+            if (!is_numeric($codigo)) $$numProcesso->getByPartNumero($ano.$serie);
+            else $$numProcesso->getByNumero($ano.$serie.$codigo);
+//          errors
+            if (!$$numProcesso->isPersistent())
+            {
+                $mensagem[] = array($numProcesso,'Número de processo inválido.');
+                continue;
+            }
+            if (!$$numProcesso->retencao->setorDestino)
+            {
+                $mensagem[] = array($numProcesso,'O processo não está disponível para entrada.');
+                continue;
+            }
+            if (!in_array($$numProcesso->retencao->setorDestino,$this->setorAcesso->selSetoresAcesso($this->processo->getSetorUsuario())) && !$this->perms->checkAccess('PROT_ADMIN', A_ACCESS))
+            {
+                $mensagem[] = array($numProcesso,'O processo não está disponível para este setor.');
+                continue;
+            }
+            switch ($$numProcesso->retencao->status)
+            {
+                case 'J':
+                    $mensagem[] = array($numProcesso,'O processo encontra-se anexado.');
+                break;
+                case 'A':
+                    $mensagem[] = array($numProcesso,'O processo encontra-se arquivado.');
+                break;
+                case 'N':
+                    $entrada[] = $numProcesso;
+                    $mensagem[] = array($numProcesso,'Entrada realizada com sucesso.');
+                    unset($numProcessos[$key]);
+                break;
+            }
+        }
+//      set and save
+        if (is_array($entrada))
+        {
+            $transaction = $$entrada[0];
+            $transaction->beginTransaction();
+            foreach ($entrada as $numProcesso)
+            {
+                $$numProcesso->setTransaction($transaction->getTransaction());
+                $$numProcesso->retencao->numAndamento++;
+                $andamento = $$numProcesso->getAndamento($$numProcesso->retencao->numAndamento);
+                $andamento->setor = $$numProcesso->retencao->setorDestino;
+                $andamento->dataEntrada = date("YmdHi");
+                $andamento->status = 'N';
+                $$numProcesso->addAndamento($andamento);
+                $$numProcesso->retencao->setData($andamento);
+                $$numProcesso->retencao->setorDestino = null;
+                $$numProcesso->retencao->dataSaida = null;
+                $$numProcesso->retencao->dataDespacho = null;
+                unset($andamento);
+                try 
+                {
+                    $$numProcesso->save();
+                    $msg = 'O processo '.$$numProcesso->numProcessoFormatado().' deu entrada no setor '.$$numProcesso->retencao->setor.' com sucesso.';
+                    $$numProcesso->Log(OP_UPD,$msg);
+                }
+                catch(Exception $e) {$this->addError($e->getMessage());}
+            }
+            $transaction->endTransaction();
+        }
+//      message
+        $titulos = array('Número','Resultado da ação&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;');
+        $dadosVerificados = new MTableRaw('',$mensagem,$titulos);
+        $dadosVerificados->setWidth('300px');
+        $groupDadosVerificados = new MBaseGroup( 'groupDadosVerificados', 'Mensagens',array($dadosVerificados),'horizontal','css');
+        $groupDadosVerificados->addAttribute('style','padding:10px');
+        $this->addField($groupDadosVerificados);
+        $this->numProcessos->setCodeValue($numProcessos);
+    }
+} 
+?>

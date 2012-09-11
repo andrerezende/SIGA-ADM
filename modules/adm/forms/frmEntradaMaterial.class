@@ -1,0 +1,207 @@
+<?
+class frmEntradaMaterial extends Form
+{
+	function __construct()
+	{   
+		parent::__construct('Entrada de Material no Almoxarifado');
+		$this->EventHandler();
+	}
+
+	Function CreateFields()
+	{
+		global $MIOLO,$module,$item,$self;
+		
+		$fields = Array(
+			new Separator('<b>Número do Empenho:</b>'),
+			new LookupTextField('idempenho','','Empenho',10,'Clique na lupa para localizar o empenho.'),
+			);
+	
+		$this->SetFields($fields);
+		
+		$this->SetFieldAttr('idempenho','module',$module);
+		$this->SetFieldAttr('idempenho','item','empenho');
+		$this->SetFieldAttr('idempenho','event','exibeItens');
+		$this->SetFieldAttr('idempenho','related','idempenho');
+
+		$buttons = Array(
+			new FormButton('btnEntrada','Somente Entrada'),
+			new FormButton('btnEntradaSaida','Entrada/Saîda'),
+			new FormButton('btnVoltar','Voltar',$MIOLO->GetActionURL($module,'sectionsAlmoxarifado')),
+		);
+
+		$this->SetButtons($buttons);
+		$this->SetButtonAttr('btnEntrada', 'visible', false);	
+		$this->SetButtonAttr('btnEntradaSaida', 'visible', false);
+	}
+
+	
+	/*------------------------------------------------
+
+	Método que mostra os itens da requisição selecionada
+	no lookup.
+
+	------------------------------------------------*/
+	function exibeItens($key='')
+	{
+		global $MIOLO,$module,$item;
+
+		$this->SetFieldAttr('idrequisicao','visible',false);
+		$this->SetButtonAttr('btnEntrada', 'visible', true);	
+		$this->SetButtonAttr('btnEntradaSaida', 'visible', true);
+
+		$idrequisicao = ($key) ? $key : $item;
+
+		$objRequisicao = $MIOLO->GetBusiness('adm','requisicao');
+		$objRequisicao->GetById($idrequisicao);
+		
+	        $objItem = $MIOLO->GetBusiness('adm','item');
+        	$qryItem = $objItem->ListItensByIdRequisicao($idrequisicao);
+		$objSetor = $MIOLO->GetBusiness('common','setor');
+		$objSetor->GetById($objRequisicao->idsetor);
+
+		$quantitem = new TextField('quantidade[%6%]','%2%','Quantidade',5);	
+		$preco = new TextField('preco[%6%]','%3%','Preço',5);
+		$empenho = new TextField('empenho[%6%]','%7%','Empenho',5);
+		$notafiscal = new TextField('notafiscal[%6%]','','Nota Fiscal',5);
+	
+		// colunas
+	        $columns = array(
+		  new DataGridControl($quantitem,'quantitem','Qtde.','center',true,'10%'),
+		  new DataGridControl($preco,'preco','Preço (R$)','center', true,'12%'),
+	          new DataGridControl($empenho,'empenho','Empenho','center',true,'10%'),
+		  new DataGridControl($notafiscal,'','Nota Fiscal','center',true,'12%'),
+		  new DataGridColumn('descricao','Descrição','left',false,'55%'),
+	          new DataGridColumn('idmaterial','Material','center',true,'1%',false)	 
+        	);
+
+		// instancia o grid
+		$href_grid = $MIOLO->GetActionURL($module,$self);
+	        $grid = new DataGrid2($qryItem, $columns, $href_grid,15,0);
+		$grid->SetIndex(8);
+		$grid->AddActionSelect();
+
+		$fields = Array(
+			new TextLabel('','Requisição n&ordm; '.$objRequisicao->idrequisicao.' feita por '.$objSetor->nomesetor.' em '.$objRequisicao->datarequisicao),
+			new Spacer('15px'),	
+			new TextLabel('','Marque os itens que deseja lançar, preencha os campos e clique em um dos botões abaixo:'),
+			$grid,
+			new Spacer('5px'),	
+			new TextLabel('','ATENÇÃO!!'),
+			new TextLabel('','Não esqueça de marcar os itens que irá lançar.'),		
+			new TextLabel('','TODOS OS CAMPOS SÃO OBRIGATÓRIOS!'),
+			new Hiddenfield('item',$idrequisicao)
+	        );    
+		
+        	$this->SetFields($fields);	
+	}
+
+
+	/*------------------------------------------------
+
+	btnEntrada_click()
+	Executa o procedimento de entrada do material no almoxarifado
+
+	------------------------------------------------*/
+	function btnEntrada_click()
+	{
+		global $MIOLO, $page,$theme, $action, $item, $module;
+
+		$login = $MIOLO->GetLogin();
+		$usuario = $MIOLO->GetBusiness('common','usuario');
+		$usuario->GetById($login->idkey);
+		$idsetor = $usuario->GetSetorProvimento();
+		$objItem = $MIOLO->GetBusiness($module,'item');
+		$sel = $page->Request('select');
+			$quantidade = $page->Request('quantidade');
+			$preco = $page->Request('preco');
+			$empenho = $page->Request('empenho');
+			$notafiscal = $page->Request('notafiscal');
+			$idrequisicao = $item;
+			$datamov = $objItem->GetCurrentDate();
+			$atend_total = true;
+			
+			//Checa se todos os campos dos registros selecionados foram preenchidos		
+			foreach($sel as $idmaterial)		
+			{
+				if (($quantidade[$idmaterial] == '') || ($preco[$idmaterial] == '') || ($empenho[$idmaterial] == '') || ($notafiscal[$idmaterial] == ''))
+					$MIOLO->Error('Todos os campos são obrigatórios');
+			}
+
+	}
+
+
+	/*------------------------------------------------
+
+	btnEntradaSaida_click()
+	Executa o procedimento de entrada/saida do material no almoxarifado
+
+	------------------------------------------------*/
+	function btnEntradaSaida_click()
+	{
+		global $MIOLO, $page,$theme, $action, $item, $module;
+
+		$login = $MIOLO->GetLogin();
+		$usuario = $MIOLO->GetBusiness('common','usuario');
+		$usuario->GetById($login->idkey);
+		$idsetor = $usuario->GetSetorProvimento();
+		$objItem = $MIOLO->GetBusiness($module,'item');
+		$action = $MIOLO->GetActionURL($module, 'sectionsAlmoxarifado', '','');
+
+		if ($sel = $page->Request('select'))
+       		{
+			$quantidade = $page->Request('quantidade');
+			$preco = $page->Request('preco');
+			$empenho = $page->Request('empenho');
+			$notafiscal = $page->Request('notafiscal');
+			$idrequisicao = $item;
+			$datamov = $objItem->GetCurrentDate();
+			$atend_total = true;
+
+			//Checa se todos os campos dos registros selecionados foram preenchidos
+			foreach($sel as $idmaterial)		
+			{
+				if (($quantidade[$idmaterial] == '') || ($preco[$idmaterial] == '') || ($empenho[$idmaterial] == '') || ($notafiscal[$idmaterial] == ''))
+					$MIOLO->Error('Todos os campos são obrigatórios',$action);
+			}
+
+			//corre o array sel com os materiais que foram selecionados para a entrada
+			foreach($sel as $idmaterial)		
+			{
+				$idmovimento = $objItem->GetNewIdMovimento();
+				$saida = true; //Será entrada e saída de material
+				$jaExiste = $objItem->TemNoEstoque($idsetor,$idmaterial);
+			
+				$quantitem = $objItem->GetQuantitem($idrequisicao,$idmaterial);
+				if ($quantidade[$idmaterial] < $quantitem)
+					$atend_total = false;
+
+				$ok_atend = $objItem->DarEntrada($idrequisicao,$idmaterial,$quantidade[$idmaterial],$preco[$idmaterial],$empenho[$idmaterial],$notafiscal[$idmaterial],$idsetor,$idmovimento,$jaExiste,$saida,$datamov);
+			}
+
+			if ($ok_atend)
+			{
+				$objRequisicao = $MIOLO->GetBusiness('adm','requisicao');
+				$objRequisicao->GetById($idrequisicao);
+
+				//Se variavel aux. é true a requisicao foi atend. totalmente, senão foi parcialmente.
+				if ($atend_total == true)
+					$status = "4";
+				else
+					$status = "3";
+						
+				if ($objRequisicao->SetStatus($status)) //Muda o status da requisição para "Atend. Parcial/Total"
+					$MIOLO->Information('Entrada/Saîda de material efetuada com sucesso.',$action);
+			}
+	       }
+	       else
+	       {
+	          $show[] = new Spacer('10px');
+	          $show[] = new Text('',"Nenhuma linha foi selecionada. Você precisa marcar os itens que deseja lançar");
+	       }
+	       $show[] = new Spacer('10px');
+	       $show[] = new LinkBack('Voltar', $action);
+	       $theme->InsertContent($show);	
+	}
+
+}
+?>

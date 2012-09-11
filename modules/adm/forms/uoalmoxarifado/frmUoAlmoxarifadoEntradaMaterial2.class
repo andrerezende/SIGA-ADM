@@ -1,0 +1,257 @@
+<?
+class frmUoAlmoxarifadoEntradaMaterial2 extends MForm
+{
+    protected $empenho;
+    function __construct($objEmpenho)
+    {
+        global $MIOLO,$page;
+        $this->empenho = $objEmpenho;
+		parent::__construct('Adicionar Nota');
+        $this->eventHandler();
+    }
+    function CreateFields()
+    {
+        global $item;
+        $fields = array(
+            new MSeparator('Dados da nota fiscal'),
+            new MTextField('notaFiscal','','Nota Fiscal',16),
+            new MCalendarField('dataNotaFiscal','','Data',10),
+            new MCurrencyField('valor','','Valor',14),
+            new MCurrencyField('desconto','','Desconto',14),
+        );
+        $this->setFields($fields);
+        $this->setButtons(
+            array(
+                new MButton('btnItens','Enviar'),
+                new MButton('btnAdicionar','Adicionar Nota'),
+                new MButton('btnAlterarValor','Alterar Valor da Nota'),
+                new MButton('btnSaida','Dar Saída'),
+            )
+        );
+        $this->setButtonAttr('btnAdicionar','visible',false);
+        $this->setButtonAttr('btnAlterarValor','visible',false);
+        $this->setButtonAttr('btnSaida','visible',false);
+    }
+    function btnItens_click()
+    {
+        $cf = new MCurrencyFormatter();
+        // Consistências
+        switch (true)
+        {
+            case (!Form::getFormValue(notaFiscal)):
+                $this->addError('O número da nota fiscal é obrigatório.');
+                return;
+            case (!Form::getFormValue(dataNotaFiscal)):
+                $this->addError('O data da nota fiscal é obrigatório.');
+                return;
+            case (round($cf->toDecimal(Form::getFormValue(valor)),2) <= 0):
+                $this->addError('O valor da nota fiscal é obrigatório.');
+                return;
+            case (round($cf->toDecimal($this->empenho->valorSaldo),2) < round($cf->toDecimal(Form::getFormValue(valor))+$cf->toDecimal(Form::getFormValue(desconto)),2)):
+                $this->addError('O valor da nota fiscal é superior ao valor empenhado');
+                return;
+            case (round($cf->toDecimal(Form::getFormValue(valor)),2) < round($cf->toDecimal($this->empenho->valorSaldo),2)):
+                $this->setTitle('Entrada Parcelada de Material');
+                break;
+        }
+        // se a nota existe --- OBS: REVER ESSA PARTE
+        $nota = $this->manager->getBusiness('adm','notafiscal');
+        $nota->getByNumero(Form::getFormValue('notaFiscal'),$this->empenho->idEmpenho);
+        if ($nota->isPersistent())
+        {
+            $this->addError('Esta nota fiscal já deu entrada para este empenho.');
+            return;
+        }
+        $this->setButtonAttr('btnItens','visible',false);
+        $this->setFieldAttr('notaFiscal','readonly',true);
+        $this->setFieldAttr('dataNotaFiscal','readonly',true);
+        $this->setFieldAttr('valor','readonly',true);
+        $this->setFieldAttr('desconto','readonly',true);
+        $grid = $this->manager->getUI()->getGrid('adm','gridUoAlmoxarifadoEntradaMaterialItens2',$this->empenho);
+        $this->addField(new MSpacer('5px'));
+        $this->addField(new MSeparator('Materiais recebidos'));
+        $this->addField($grid);
+        if (round($cf->toDecimal($this->empenho->valorSaldo),2) > round($cf->toDecimal(Form::getFormValue(valor)),2) && count($this->empenho->notaFiscal) == 0)
+        {
+            $this->addInfo('Este empenho é do tipo original, para parcela-lo é necessário uma justificativa.');
+            $this->addField(new MSpacer('5px'));
+            $this->addField(new MSeparator('Justificativa de parcelamento'));
+            $this->addField(new MMultiLineField('obs','','Justificativa',25,5,58));
+        }
+        $this->setButtonAttr('btnAdicionar','visible',true);
+        $this->setButtonAttr('btnAlterarValor','visible',true);
+        $this->setButtonAttr('btnItens','visible',false);
+    }
+    function btnAdicionar_click()
+    {
+        $cf = new MCurrencyFormatter();
+        foreach ($valorExecutado = Form::getFormValue(valorExecutado) as $idEmpenhado=>$valor)
+        {
+            foreach ($this->empenho->empenhado as $empenhado)
+            {
+                if ($empenhado->idEmpenhado == $idEmpenhado)
+                {
+                    $empenhado->getAtributos();
+                    switch (true)
+                    {
+                        case (round($cf->toDecimal($valor),2) < 0):
+                            $this->addError("O valor do item {$empenhado->item} não pode ser negativo.");
+                            $this->btnItens_click();
+                            return;
+                        case (round($cf->toDecimal($valor),2) > round($cf->toDecimal($empenhado->valorSaldo),2)):
+                            $this->addError("O valor do item {$empenhado->item} é superior ao valor empenhado.");
+                            $this->btnItens_click();
+                            return;
+                        case (round($cf->toDecimal($this->empenho->valorSaldo),2) > round($cf->toDecimal(Form::getFormValue(valor)),2) && count($this->empenho->notaFiscal) == 0 && $this->empenho->tipoEmpenho == 'OR' && !Form::getFormValue('obs')):
+                            $this->addError('A justificativa é obrigatória.');
+                            $this->btnItens_click();
+                            return;
+                        default:
+                            $valorTotal += $cf->toDecimal($valor);
+                    }
+                }
+            }
+        }
+        if (round($cf->toDecimal(Form::getFormValue('valor'))+$cf->toDecimal(Form::getFormValue('desconto')),2) != round($cf->toDecimal($valorTotal),2))
+        {
+            if (round($cf->toDecimal(Form::getFormValue('valor'))+$cf->toDecimal(Form::getFormValue('desconto')),2) != round($cf->toDecimal($this->empenho->valorSaldo),2))
+            {
+                $this->addError('A soma dos itens da nota não confere com o valor informado.');
+                $this->btnItens_click();
+                if ($cf->toDecimal(Form::getFormValue('valor')) < $cf->toDecimal($valorTotal))
+                {
+                    $this->addError('Confira o valor da nota, as quantidades entregues ou confirme o desconto calculado.');
+                    $this->setFieldValue('desconto',$cf->toDecimal($valorTotal)-$cf->toDecimal((Form::getFormValue('valor'))));
+                    $this->setFieldAttr('desconto','readonly',false);
+                }
+                return;
+            }
+        }
+        $nota = $this->manager->getBusiness('adm','notafiscal');
+        $nota->getByNumero(Form::getFormValue('notaFiscal'),$this->empenho->idEmpenho);
+        if ($nota->isPersistent())
+        {
+            $this->addError('Esta nota fiscal já deu entrada para este empenho.');
+            return;
+        }
+        try 
+        {
+            $nota->beginTransaction();
+            $nota->notaFiscal = Form::getFormValue('notaFiscal');
+            $nota->dataNotaFiscal = Form::getFormValue('dataNotaFiscal');
+            $nota->valor = $cf->toDecimal(Form::getFormValue('valor'));
+            $nota->idEmpenho = $this->empenho->idEmpenho;
+            $nota->desconto = $cf->toDecimal(Form::getFormValue('desconto'));
+            $nota->obs = Form::getFormValue('obs');
+            $nota->save();
+            $msg = "Nota fiscal  número {$nota->notaFiscal} adicionada com sucesso.";
+            $nota->Log(OP_INS,$msg);
+            foreach ($valorExecutado as $idEmpenhado=>$valor)
+            {
+                foreach ($this->empenho->empenhado as $empenhado)
+                {
+                    if ($empenhado->idEmpenhado == $idEmpenhado)
+                    {
+                        if ($cf->toDecimal($valor))
+                        {
+                            $itemNota = $this->manager->getBusiness('adm','itemnota');
+                            $itemNota->idEmpenhado = $empenhado->idEmpenhado;
+                            $itemNota->quantidade = round($cf->toDecimal($valor) / $cf->toDecimal($empenhado->valorEmp) * $cf->toDecimal($empenhado->quantidadeEmp),2);
+                            $itemNota->valor = round($cf->toDecimal($valor) / $cf->toDecimal($itemNota->quantidade),2);
+                            $itemNota->idNotaFiscal = $nota->idNotaFiscal;
+                            $itemNota->setTransaction($nota->getTransaction());
+                            $itemNota->save();
+                            $empenhado->retrieveAssociation('itemreq');
+                            unset($itemValorEmpenhado,$itemValorExecutado,$valorEmpenhadoPendente);
+                            foreach ($empenhado->itemreq as $material)
+                            {
+                                $itemValorEmpenhado = $cf->toDecimal($itemValorEmpenhado) + ($cf->toDecimal($material->quantEmpenhada) * $cf->toDecimal($material->valorReal));
+                                $itemValorExecutado = $cf->toDecimal($itemValorExecutado) + ($cf->toDecimal($material->quantAutorizada) * $cf->toDecimal($material->valorReal));
+                            }
+                            $valorEmpenhadoPendente = $cf->toDecimal($itemValorEmpenhado) - $cf->toDecimal($itemValorExecutado);
+                            if (count($empenhado->itemreq) == 1)
+                            {
+                                foreach ($empenhado->itemreq as $itemRequisicao)
+                                {
+                                    if ($cf->toDecimal($valor) > 0)
+                                    {
+                                        $itemRequisicao->retrieveAssociation('requisicao');
+                                        $itemRequisicao->requisicao->retrieveAssociation('uoRequisitante');
+                                        $itemRequisicao->requisicao->retrieveAssociation('uoExecutante');
+                                        if ($this->empenho->idUoEntrega == $itemRequisicao->requisicao->idUoRequisitante)
+                                        {
+                                            $movimento = $this->manager->getBusiness('adm','movimento');
+                                            $movimento->idMaterial = $itemRequisicao->idMaterial;
+                                            $movimento->idRequisicao = $itemRequisicao->idRequisicao;
+                                            $movimento->tipoMovimento = 1;
+                                            $movimento->dataMovimento = date("d/m/Y");                
+                                            $movimento->quantidade = $cf->toDecimal($itemNota->quantidade);        
+                                            $movimento->valorTotal = round($cf->toDecimal($itemNota->quantidade) * $cf->toDecimal($itemNota->valor),2);
+                                            $movimento->idItemNota = $itemNota->idItemNota;
+                                            $movimento->idUoAlmoxarifado = $this->empenho->idUoEntrega;
+                                            $movimento->setTransaction($nota->getTransaction());
+                                            $movimento->save();
+                                            $estoque = $this->manager->getBusiness('adm','estoque');
+                                            $estoque->getById($this->empenho->idUoEntrega,$itemRequisicao->idMaterial);
+                                            $estoque->estoque = $cf->toDecimal($estoque->estoque) + $cf->toDecimal($quantidade);
+                                            $estoque->valorTotal = $cf->toDecimal($estoque->valorTotal) + $cf->toDecimal($quantidade) * $cf->toDecimal($itemNota->valor);
+                                            $estoque->setTransaction($nota->getTransaction());
+                                            $estoque->save();
+                                        }
+                                        else
+                                        {
+                                            $ordem = $this->manager->getBusiness('adm','ordementrega');
+                                            $ordem->data = date('d/m/Y');
+                                            $ordem->numero = $ordem->getUltimoNumeroByUo($this->empenho->idUoEntrega);
+                                            $ordem->numero++;
+                                            $ordem->idUoExecutante = $this->empenho->idUoEntrega;
+                                            $ordem->impresso = 0;
+                                            $ordem->setTransaction($nota->getTransaction());
+                                            $ordem->save();
+                                            $movimento = $this->manager->getBusiness('adm','movimento');
+                                            $movimento->idMaterial = $itemRequisicao->idMaterial;
+                                            $movimento->idRequisicao = $itemRequisicao->idRequisicao;
+                                            $movimento->tipoMovimento = 5;
+                                            $movimento->dataMovimento = date("d/m/Y");                
+                                            $movimento->quantidade = $cf->toDecimal($itemNota->quantidade);        
+                                            $movimento->valorTotal = round($cf->toDecimal($itemNota->quantidade) * $cf->toDecimal($itemNota->valor),2);
+                                            $movimento->idItemNota = $itemNota->idItemNota;
+                                            $movimento->idUoAlmoxarifado = $this->empenho->idUoEntrega;
+                                            $movimento->idOrdemEntrega = $ordem->idOrdemEntrega;
+                                            $movimento->setTransaction($nota->getTransaction());
+                                            $movimento->save();
+                                        }
+                                        $itemRequisicao->quantAutorizada = $cf->toDecimal($itemRequisicao->quantAutorizada) + $cf->toDecimal($itemNota->quantidade);
+                                        $itemRequisicao->status = 7;
+                                        $itemRequisicao->setTransaction($nota->getTransaction());
+                                        $itemRequisicao->save();
+                                        $itemRequisicao->requisicao->retrieveAssociation('materialCompra');
+                                        if ($itemRequisicao->requisicao->materialCompra && $itemRequisicao->status == 7)
+                                        {
+                                            $itemRequisicao->requisicao->status = 8;
+                                            foreach ($itemRequisicao->requisicao->materialCompra as $material)
+                                            {
+                                                if ($material->idMaterial != $itemRequisicao->idMaterial && $material->status != 7) $itemRequisicao->requisicao->status = 8; 
+                                            }
+                                        }
+                                        else
+                                        {
+                                            $itemRequisicao->requisicao->status = 8;
+                                        }
+                                        $itemRequisicao->requisicao->setTransaction($nota->getTransaction());
+                                        $itemRequisicao->requisicao->save();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            $nota->endTransaction();
+            $url = $this->manager->GetActionURL('adm','main:uoalmoxarifado:main',$this->empenho->idUoEntrega,array('form'=>'entradamaterial2','idEmpenho'=>$this->empenho->idEmpenho,"idNotaFiscal"=>$nota->idNotaFiscal));
+            $this->manager->information("Nota adicionada com sucesso.",$url);
+        }
+        catch(Exception $e) {$this->manager->Error($e->getMessage());}
+    }
+ }
+?>

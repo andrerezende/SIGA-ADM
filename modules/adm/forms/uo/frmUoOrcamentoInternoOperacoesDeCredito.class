@@ -1,0 +1,111 @@
+<?
+class frmUoOrcamentoInternoOperacoesDeCredito extends Form
+{
+    
+    protected $objUo;
+	
+    function __construct($objUo)
+    {
+       $this->objUo = $objUo;
+       $this->Form('Operações de Crédito');
+       $this->EventHandler();
+    }
+
+	function CreateFields()
+    {
+        $cf = new MCurrencyFormatter();
+        $orcamento = $this->objUo->getOrcamento($this->getFormValue('idRubrica'),$this->getFormValue('ano'));
+        $saldo = $cf->formatWithSymbol($cf->toDecimal($orcamento->getSaldo()));
+//taka
+
+	$credito = $cf->formatWithSymbol($cf->toDecimal($orcamento->getCredito()));
+	$previsaodebito = $cf->formatWithSymbol($cf->toDecimal($orcamento->getprevisaoDebito()));
+//taka
+
+        $valor = new MTextField('valor','','Valor');
+        $fields = array(
+            new MHiddenField('idRubrica',$this->getFormValue('idRubrica')),
+            new MHiddenField('ano',$this->getFormValue('ano')),
+//taka 
+           
+	new MTextLabel('credito',$credito,'Crédito'),
+	new MTextLabel('previsaodebito',$previsaodebito,'Previsão de Débito'),
+
+//taka
+        new MTextLabel('saldo',$saldo,'Saldo'),    
+	new MSelection('tipoLancamento','','Operação',array('8'=>'Suplementação de Crédito','3'=>'Estorno de Crédito')),
+            $valor,
+            new MMultiLineField('obs','','Obs',200,3,50)
+        );
+        $this->SetFields($fields);
+        
+        $validators = array(
+			new MRequiredValidator('valor'),
+		);
+        $this->SetValidators($validators);
+	   
+        $buttons = array
+        (
+            new MButton('btnIncluir', 'Enviar'),
+        );
+        $this->SetButtons($buttons);
+	}
+
+    function btnIncluir_click()
+    {
+        $data = $this->getData();
+        $orcamento = $this->objUo->getOrcamento($data->idRubrica,$data->ano);
+        if (!$data->tipoLancamento) $this->addError('Você deve escolher uma operação.');
+        else
+        {
+            $cf = new MCurrencyFormatter();
+            $data->valor = $cf->toDecimal($data->valor);
+			$estorno = false;
+
+            switch ($data->tipoLancamento)
+            {
+                case 8:
+                    $orcamento->addCredito($data->valor);
+                    $msg = 'Crédito da uo '.$this->objUo->sigla.' suplementado em '.$data->valor.' reais.';
+                break;	   
+                case 3:
+                    if ($data->valor > $orcamento->getSaldo())
+                    {
+                        $erroEstorno = true;
+                    }
+                    else
+                    {
+    					$estorno = true;
+                        $orcamento->removeCredito($data->valor);
+                        $msg = 'Crédito da uo '.$this->objUo->sigla.' estornado em '.$data->valor.' reais.';
+                    }
+                break;
+            }
+
+            $orcamento->setSaldo();
+            if (($orcamento->getSaldo() < 0) && ($estorno) ) 
+                $this->addError('O saldo não pode ser negativo.');
+            else if ($erroEstorno)
+                $this->addError("O Estorno de crédito não pode ser maior do que o saldo disponível no valor de ".$cf->formatWithSymbol($cf->toDecimal($orcamento->getSaldo())).".");               
+            else
+            {
+                try 
+                {
+                    $orcamento->save();
+                    $orcamento->Log(OP_UPD,$msg);
+                    $this->objUo->addLancamento($data->tipoLancamento,$data->idRubrica,$data->valor,$data->obs);
+                    $this->setFieldValue('tipoLancamento','');
+                    $this->setFieldValue('valor','');
+                    $this->addInfo("Operação realizada com sucesso.");
+                }
+                catch(Exception $e) {$this->manager->Error($e->getMessage());}
+            }
+        }
+        $cf = new MCurrencyFormatter();
+        $orcamento = $this->objUo->getOrcamento($this->getFormValue('idRubrica'),$this->getFormValue('ano'));
+        $saldo = $cf->formatWithSymbol($cf->toDecimal($orcamento->getSaldo()));
+        $this->setFieldValue('saldo',$saldo);
+    }
+} 
+?>
+

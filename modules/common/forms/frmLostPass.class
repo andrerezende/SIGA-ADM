@@ -1,0 +1,156 @@
+<?php
+MIOLO::Import('extensions::class.phpmailer.php','PHPMailer');
+
+class frmLostPass extends MForm {
+	public $auth;
+
+	public function __construct() {
+		parent::__construct('Esqueci minha senha!');
+		$this->SetIcon($this->manager->GetUI()->GetImage('common','login.gif'));
+		$this->EventHandler();
+	}
+
+	public function CreateFields() {
+		global $MIOLO, $item;
+
+		$id = $item;
+		if ($id == '') {
+			$challenge = uniqid(rand());
+			$fields = Array(
+				new MLabel('Informe abaixo seu login. Você receberá uma mensagem no email cadastrado no SIGA, com as instruções para criar uma nova senha.','black',true),
+				new MSpacer('10px'),
+				new MTextField('uid','','Usuário',20),
+			);
+			$this->SetFields($fields);
+			$this->AddButton(new MButton('btnLost', 'Enviar'));
+		} else {
+			$challenge = uniqid(rand());
+			$fields = Array(
+				new MLabel('Informe abaixo seu login e o código recebido via email. Você receberá uma mensagem informando sua nova senha.','black',true),
+				new MSpacer('10px'),
+				new MTextField('uid','','Usuário',20),
+				new MTextField('code','','Código',25),
+				new MHiddenField('item', $id)
+			);
+			$this->SetFields($fields);
+			$this->AddButton(new MButton('btnRecovery', 'Enviar'));
+		}
+	}
+
+	public function btnLost_click() {
+		global $MIOLO;
+
+		$uid = trim($this->GetFormValue('uid'));
+		$user = $this->manager->getBusinessMAD('user');
+		$user->getByLogin($uid);
+		$email = $user->pessoa->email;
+		if ($email != '') {
+			$lost = $this->manager->getBusiness('common','lostpass');
+			$lost->code = uniqid();
+			$lost->idpass = md5($uid . $lost->code);
+			$lost->login = $uid;
+			$lost->saveRequest();
+			$this->sendMailReq($lost, $user);
+			$go = $this->manager->GetActionURL('common','login');
+			$this->manager->Information( "<b>Será enviada uma mensagem para o email [$email] com instruções para renovação da senha.</b>", $go );
+		} else {
+			$go = $this->manager->GetActionURL('common','login');
+			$this->manager->Error( '<b>Não há email cadastrado para este usuário.</b>', $go );
+		}
+	}
+
+	public function btnRecovery_click() {
+		global $MIOLO, $item;
+
+		$id = $item;
+		$uid = trim($this->GetFormValue('uid'));
+		$code = trim($this->GetFormValue('code'));
+		$lost = $this->manager->getBusiness('common','lostpass', $id);
+		$user = $this->manager->getBusinessMAD('user');
+
+		if ((trim(strtolower($lost->login)) == trim(strtolower($uid))) && (trim($lost->code) == $code)) {
+			$user->getByLogin($uid);
+			$pass = substr(uniqid(),6);
+			$user->updatePasswordMD5(md5($pass));
+			$lost->saveResponse();
+			$this->sendMailResp($lost, $pass);
+			$go = $this->manager->GetActionURL('common','login');
+			$this->manager->Information( '<b>Será enviada uma mensagem para seu email com a nova senha.</b>', $go );
+		} else {
+			$go = $this->manager->GetActionURL('common','lostpass');
+			$this->manager->Error( '<b>Os dados não conferem. Por favor, solicite uma nova senha.</b>', $go );
+		}
+	}
+
+	public function SendMailReq($lost, $user) {
+		$email = $user->pessoa->email;
+		$mail = new PHPMailer();
+		$mail->IsSMTP(); // telling the class to use SMTP
+		$mail->Host = "smtp.ifbaiano.edu.br"; // SMTP server
+		$mail->From = 'sigaadm@ifbaiano.edu.br';
+		$mail->FromName = 'SIGA - Sistema Integrado de Gestão Acadêmica';
+		$mail->Subject = "[SIGA] Solicitação de Senha";
+		$mail->WordWrap = 150;
+		// $url = $this->manager->GetActionURL('common','lostpass',$lost->idpass);
+		$url = $this->manager->getConf('home.url') . "/lostpass.php?item=". $lost->idpass;
+		$body =
+<<< HERE
+O sistema SIGA-ADM recebeu uma solicitação de senha relacionada a este email, com os seguintes dados:
+
+email: {$email}
+login: {$lost->login}
+nome:  {$user->nome}
+
+A solicitação foi feita em [{$lost->ts}] a partir da máquina [{$lost->ipaddress}].
+
+Caso a solicitação não tenha sido feita por você, simplesmente ignore esta mensagem. Caso você realmente tenha esquecido sua senha clique no link abaixo e informe o código a seguir:
+
+código: {$lost->code}
+
+{$url}
+
+Atenciosamente,
+SIGA - Sistema Integrado de Gestão Acadêmica
+sigaadm@ifbaiano.edu.br
+
+HERE;
+		$mail->Body = $body;
+		$mail->AddAddress($email);
+		$mail->Send();
+    }
+
+    public function SendMailResp($lost, $pass) {
+		$user = $this->manager->getBusinessMAD('user');
+		$user->getByLogin(strtolower(trim($lost->login)));
+		$email = $user->pessoa->email;
+		$mail = new PHPMailer();
+		$mail->IsSMTP(); // telling the class to use SMTP
+		$mail->Host = "smtp.ifbaiano.edu.br"; // SMTP server
+		$mail->From = 'sigaadm@ifbaiano.edu.br';
+		$mail->FromName = 'SIGA - Sistema Integrado de Gestão Acadêmica';
+		$mail->Subject = "[SIGA] Renovação de Senha";
+		$mail->WordWrap = 150;
+		// $url = $this->manager->GetActionURL('common','lostpass',$lost->idpass, NULL, NULL, true);
+		$body =
+<<< HERE
+O sistema SIGA-ADM recebeu a confirmação para renovação da senha relacionada a este email, com os seguintes dados:
+
+email: {$email}
+login: {$lost->login}
+nome:  {$user->nome}
+
+A confirmação foi feita em [{$lost->tsresp}] a partir da máquina [{$lost->ipaddressresp}].
+
+A nova senha é: {$pass}
+
+Atenciosamente,
+SIGA - Sistema Integrado de Gestão Acadêmica
+sigaadm@ifbaiano.edu.br
+
+HERE;
+		$mail->Body = $body;
+		$mail->AddAddress($email);
+		$mail->Send();
+    }
+}
+?>

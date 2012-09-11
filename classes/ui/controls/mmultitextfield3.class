@@ -1,0 +1,208 @@
+<?php
+class MMultiTextField3 extends MMultiTextField2
+{
+
+    function __construct($name = '', $value = null, $label = '', $fields = '', $width = 200, $buttons = false, $layout = 'vertical', $hint = '')
+    {
+        parent::__construct($name, $value, $label, $fields, $width, $buttons, $layout, $hint);
+        $this->page->AddScript('m_multitext2.js');
+        $this->page->AddScript('m_multitext3.js');
+    }
+
+    function GetCodeValue()
+    {
+        $r = array
+            (
+            );
+
+        $value = $this->value;
+
+        if (is_array($value))
+        {
+            for ($i = 0; $i < count($value); $i++)
+            {
+                $s = substr($value[$i], 1, strlen(trim($value[$i])) - 2);
+                $a = explode('] [', $s);
+
+                if (is_array($a))
+                {
+                    for ($j = 0; $j < count($a); $j++)
+                    {
+                        if ($this->fields[$j] instanceof MSelection)
+                        {
+                            $r[$i][$j] = array_search($a[$j], $this->fields[$j]->options);
+                        }
+                        else
+                        {
+                            $r[$i][$j] = $a[$j];
+                        }
+                    }
+                }
+            }
+        }
+
+        $this->codevalue = $r;
+        return $this->codevalue;
+    }
+
+    function SetCodeValue($value)
+    {
+        $this->codevalue = $value;
+        $r = array
+            (
+            );
+
+        if (is_array($value))
+        {
+            foreach ($value as $i=>$v)
+            {
+                $a = $value[$i];
+
+                if (is_array($a)) // varios valores => varios fields
+                {
+                    for ($j = 0; $j < count($a); $j++)
+                    {
+                        if ($this->fields[$j] instanceof MSelection)
+                        {
+                            $r[$i] .= '[' . $this->fields[$j]->GetOption($value[$i][$j]) . '] ';
+                        }
+                        else
+                        {
+                            $r[$i] .= '[' . $value[$i][$j] . '] ';
+                        }
+                    }
+                }
+                else // valor unico => apenas um field (na posicao 0)
+                {
+                    if ($this->fields[$i] instanceof MSelection)
+                    {
+                        $r[$i] .= '[' . $this->fields[$i]->GetOption($value[$i]) . '] ';
+                    }
+                    else
+                    {
+                        $r[$i] .= '[' . $value[$i] . '] ';
+                    }
+                }
+            }
+        }
+
+        $this->value = $r;
+    }
+
+    function GenerateInner()
+    {
+        $numFields = count($this->fields);
+
+        $this->page->OnSubmit("miolo.multiTextField3.onSubmit('{$this->form->name}','{$this->name}')");
+
+        // fields
+        $fields = '';
+        $n = 1;
+        $ref = '';
+
+        foreach ($this->fields as $f)
+        {
+            $ref .= ($ref ? ',' : '') . $f->GetName();
+            $f->form = $this->form;
+            $f->SetLabel(htmlspecialchars($f->label)); 
+            $f->formMode = 2;
+            if ($f->size == '') $f->_AddStyle('width', "{$this->colWidth}px");
+            $fields[] = $f;
+            $n++;
+        }
+
+        // select
+        $labelS = $this->info . "&nbsp;";
+        $content = array
+            (
+            );
+
+        if (is_array($this->value))
+        {
+            foreach ($this->value as $v)
+            {
+                $multiValue = '';
+
+                if (is_array($v))
+                    foreach ($v as $v2)
+                        $multiValue .= "[" . $v2 . "] ";
+                else
+                    $multiValue = $v;
+
+                $content[] = new MOption('', $multiValue, $multiValue);
+            }
+        }
+
+        $field = new MMultiSelection("{$this->name}[]", array(),$labelS,$content,'','', $this->numRows);
+        $field->_AddStyle('width', "{$this->colWidth}px");
+        $field->AddAttribute('onKeyDown', "return miolo.multiTextField3.onKeyDown(this,this.form,'{$this->name}',event,$numFields);");
+        $field->AddAttribute('onChange', "miolo.multiTextField3.onSelect(this.form,'{$this->name}', '{$ref}')");
+        $field->SetClass('select', false);
+        $field->formMode = 2; 
+        $select = $field;
+
+        // buttons
+
+        $disposition = ($this->layout == 'horizontal') ? 'vertical' : 'horizontal';
+        $button[] = new MButton("{$this->name}_add", 'Adicionar',
+                                "miolo.multiTextField3.add(this.form, '{$this->name}','{$ref}')");
+        $button[] = new MButton("{$this->name}_modify", 'Modificar',
+                                "miolo.multiTextField3.modify(this.form,'{$this->name}','{$ref}')");
+        $button[] = new MButton("{$this->name}_remove", 'Remover',
+                                "miolo.multiTextField3.remove(this.form,'{$this->name}','{$ref}')");
+
+        if ($this->shownav)
+        {
+            $button[] = new MButton("{$this->name}_up", '/\\',
+                                    "miolo.multiTextField3.moveUp(this.form,'{$this->name}','{$ref}')");
+            $button[] = new MButton("{$this->name}_down", '\\/',
+                                    "miolo.multiTextField3.moveDown(this.form,'{$this->name}','{$ref}')");
+        }
+
+        foreach ($button as $b)
+            $b->SetClass('button');
+
+        $buttons = new MContainer('', $button, $disposition);
+
+        $commentIn = $this->painter->Comment('START OF Field MultiTextField3');
+        $commentOut = $this->painter->Comment('END OF Field MultiTextField3');
+
+        // layout
+
+        $t = array();
+        $cFields = new MContainer('', $fields, 'vertical');
+        $cFields->AddBoxStyle('width', "{$this->fieldWidth}px");
+        if ($this->layout == 'vertical')
+        {
+            $t[] = $select;
+            $t[] = $cFields;
+            $t[] = $buttons;
+            $group = new MBaseGroup('', $this->label, $t, 'vertical', 'css');
+        }
+        elseif ($this->layout == 'vertical2')
+        {
+            $t[] = $cFields;
+            $t[] = $buttons;
+            $t[] = $select;
+            $group = new MBaseGroup('', $this->label, $t, 'vertical', 'css');
+        }
+        elseif ($this->layout == 'horizontal')
+        {
+            $t[] = new MDiv('', $cFields, 'fieldPosH');
+            $t[] = new MDiv('', array(new MDiv('', '&nbsp;', 'label'), $buttons), 'buttonPosH');
+            $t[] = new MDiv('', $select, 'selectPosH');
+            $group = new MBaseGroup('', $this->label, $t, 'horizontal', 'css');
+        }
+
+        $div = new MDiv('', $group, 'm-multitext-field');
+        $this->inner = array
+            (
+            $commentIn,
+            $div,
+            $commentOut
+            );
+
+        return $this->inner;
+    }
+}
+?>

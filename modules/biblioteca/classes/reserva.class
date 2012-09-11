@@ -1,0 +1,340 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+class BusinessBibliotecaReserva extends Business
+{     
+	function BusinessBibliotecaReserva($data = null)
+	{
+		$this->Business('sigaept', $data);
+	}
+   
+   
+	function ListReservasAtendidas($idusuario)
+	{
+		//$sql = new sql('r.idreserva, e.numerodotombo, o.titulo, o.autor, ' . $this->_db->TimestampToChar('r.datahoradareserva') . ' as datahoradareserva, ' . $this->_db->TimestampToChar('r.datahoraentrada') . ' as datahoraentrada, ' . $this->_db->TimestampToChar('r.datahoralimite') . ' as datahoralimite', 'bt_reserva r, bt_obra o, bt_exemplar e, bt_situacao s', "(r.idusuario = $idusuario) and (r.idexemplar = e.idexemplar) and (e.idobra=o.idobra) and (r.idsituacao = s.idsituacao) and (s.mnemonico = 'ATENDIDA')", 'r.idreserva');
+
+                //* * >>> Inseri a tabela Autor para Pesquisar o Nome do Autor   25/04/2009
+                                $sql = new sql("r.idreserva, e.numerodotombo, o.titulo,a.sobrenome || ',' || a.prenome as autor, " . $this->_db->TimestampToChar('r.datahoradareserva') . ' as datahoradareserva, ' . $this->_db->TimestampToChar('r.datahoraentrada') . ' as datahoraentrada, ' . $this->_db->TimestampToChar('r.datahoralimite') . ' as datahoralimite', 'bt_reserva r, bt_obra o, bt_autor a, bt_exemplar e, bt_situacao s', "(r.idusuario = $idusuario) and (r.idexemplar = e.idexemplar) and (e.idobra=o.idobra) AND (o.idautor = a.idautor) and (r.idsituacao = s.idsituacao) and (s.mnemonico = 'ATENDIDA')", 'r.idreserva');
+      		
+      $query = $this->Query($sql);	
+		return $query;
+
+	}
+
+	function ListReservasSolicitadas($idusuario)
+	{
+	//	$sql = new sql('r.idreserva, e.numerodotombo, o.titulo, o.autor, ' . $this->_db->TimestampToChar('r.datahoradareserva') . ' as datahoradareserva, s.descricao, r.idexemplar','bt_reserva r, bt_obra o, bt_exemplar e, bt_situacao s', "(r.idusuario = $idusuario) and (r.idexemplar = e.idexemplar) and (e.idobra=o.idobra) and (r.idsituacao = s.idsituacao) and (s.mnemonico = 'SOLICITADA')", 'r.idreserva');
+        
+             // >>> Inseri a tabela Autor para Pesquisar o Nome do Autor   25/04/2009
+                        $sql = new sql("r.idreserva, e.numerodotombo, o.titulo,a.sobrenome || ',' || a.prenome as autor, " . $this->_db->TimestampToChar('r.datahoradareserva') . ' as datahoradareserva, s.descricao, r.idexemplar','bt_reserva r, bt_obra o, bt_autor a,bt_exemplar e, bt_situacao s', "(r.idusuario = $idusuario) and (r.idexemplar = e.idexemplar) and (e.idobra=o.idobra) and  (o.idautor = a.idautor) and (r.idsituacao = s.idsituacao) and (s.mnemonico = 'SOLICITADA')", 'r.idreserva');
+      	
+		$query = $this->Query($sql);
+
+		for ($i=0; $i<count($query->result); $i++){
+			$idexemplar = $query->result[$i][6];
+			$idreserva = $query->result[$i][0];
+
+			$sql2 = new sql('count(idreserva)','bt_reserva r, bt_situacao s', "(r.idexemplar = $idexemplar) and (r.idsituacao = s.idsituacao) and (s.mnemonico = 'SOLICITADA') and (r.idreserva < $idreserva)");
+	
+			$query2 = $this->Query($sql2);
+
+			$query->result[$i][5] = $query2->result[0][0] + 1;
+		}
+		
+		return $query;
+
+	}
+
+	function ListReservaEsperaUsuario($idusuario)
+	{
+		$sql = new sql('r.idreserva, e.numerodotombo, o.titulo, ' . $this->_db->TimestampToChar('r.datahoradareserva') . ' as datahoradareserva, r.idsituacao', 'bt_reserva r, bt_obra o, bt_exemplar e, bt_situacao s', "(r.idusuario = ?) and (r.idexemplar = e.idexemplar) and (e.idobra = o.idobra) and (r.idsituacao = s.idsituacao) and (s.mnemonico = 'SOLICITADA')", 'r.idreserva');
+
+		$query = $this->Query($sql,$idusuario);
+		
+		return $query;
+	}
+
+	function ListReservaEsperaExemplar($tombo)
+	{
+		$sql = new sql('r.idreserva, u.login, p.nome, p.telefone, p.celular, ' . $this->_db->TimestampToChar('r.datahoradareserva') . ' as datahoradareserva, r.idsituacao', 'bt_reserva r, bt_exemplar e, bt_situacao s, cm_usuario u, cm_pessoa p', "(e.numerodotombo = ?) and (e.idexemplar = r.idexemplar) and (r.idsituacao = s.idsituacao) and (s.mnemonico = 'SOLICITADA') and (r.idusuario = u.idusuario) and (u.idpessoa = p.idpessoa)", 'r.idreserva');
+
+		$query = $this->Query($sql,$tombo);
+		return $query;
+	}
+
+	function ListReservaAtendidaUsuario($idusuario)
+	{
+		$sql = new sql('r.idreserva, e.numerodotombo, o.titulo, ' . $this->_db->TimestampToChar('r.datahoradareserva') . ' as datahoradareserva,' . $this->_db->TimestampToChar('r.datahoraentrada') . ' as datahoraentrada,' . $this->_db->TimestampToChar('r.datahoralimite') . ' as datahoralimite, r.idsituacao', 'bt_reserva r, bt_obra o, bt_exemplar e, bt_situacao s', "(r.idusuario = ?) and (r.idexemplar = e.idexemplar) and (e.idobra = o.idobra) and (r.idsituacao = s.idsituacao) and (s.mnemonico = 'ATENDIDA')", 'r.idreserva');
+
+		$query = $this->Query($sql,$idusuario);
+		
+		return $query;
+	}
+
+	function ListReservaAtendidaExemplar($tombo)
+	{
+		$sql = new sql('r.idreserva, u.login, p.nome, p.telefone, p.celular, ' . $this->_db->TimestampToChar('r.datahoradareserva') . ' as datahoradareserva,' . $this->_db->TimestampToChar('r.datahoraentrada') . ' as datahoraentrada,' . $this->_db->TimestampToChar('r.datahoralimite') . ' as datahoralimite, r.idsituacao', 'bt_reserva r, bt_exemplar e, bt_situacao s, cm_usuario u, cm_pessoa p', "(e.numerodotombo = ?) and (e.idexemplar = r.idexemplar) and (r.idsituacao = s.idsituacao) and (s.mnemonico = 'ATENDIDA') and (r.idusuario = u.idusuario) and (u.idpessoa = p.idpessoa)", 'r.idreserva');
+
+		$query = $this->Query($sql,$tombo);
+
+		return $query;
+	}
+
+	function ListReservaAtendidaBiblioteca($idunidade)
+	{
+		$sql = new sql('c.login, p.nome, e.numerodotombo, o.titulo, ' . $this->_db->TimestampToChar('r.datahoradareserva') . ' as datahoradareserva,' . $this->_db->TimestampToChar('r.datahoraentrada') . ' as datahoraentrada,' . $this->_db->TimestampToChar('r.datahoralimite') . ' as datahoralimite, r.idsituacao, r.idreserva', 'bt_reserva r, bt_obra o, bt_exemplar e, bt_situacao s, bt_unidade u, cm_usuario c, cm_pessoa p', "(r.idexemplar = e.idexemplar) and (e.idunidade = u.idunidade) and (u.idunidade = ?) and (e.idobra = o.idobra) and (r.idsituacao = s.idsituacao) and (s.mnemonico = 'ATENDIDA') and (r.idusuario = c.idusuario) and (c.idpessoa = p.idpessoa)", 'p.nome');
+
+		$query = $this->Query($sql,$idunidade);
+
+		return $query;
+	}
+
+	function Cancela($item)
+	{
+		// obtem o idsituacao equivalente a cancelada
+		$sit_sql = new msql('idsituacao','bt_situacao','mnemonico = ?');
+		$id = $this->Query($sit_sql,'CANCELADA');
+
+		$sql = new msql('idsituacao, datahoradasituacao','bt_reserva','idreserva = ?');
+		
+		// values é um array com cada campo do primeiro parametro do sql mais os 
+		// parâmetros do where 
+		$values = array($id->result[0][0],$this->_db->CharToTimestamp(date("d/m/Y H:i:s")),$item);
+
+		$ok = $this->Execute($sql->Update($values));
+        $this->Log(OP_UPD,"reserva $item cancelada pelo usuario");
+		return $ok;
+
+	}
+
+	function SQLCancela($item)
+	{
+		// obtem o idsituacao equivalente a cancelada
+		$sit_sql = new msql('idsituacao','bt_situacao','mnemonico = ?');
+		$id = $this->Query($sit_sql,'CANCELADA');
+
+		$sql = new msql('idsituacao, datahoradasituacao','bt_reserva','idreserva = ?');
+		
+		// values é um array com cada campo do primeiro parametro do sql mais os 
+		// parâmetros do where 
+		$values = array($id->result[0][0],$this->_db->CharToTimestamp(date("d/m/Y H:i:s")),$item);
+
+		return $sql->Update($values);
+
+	}
+
+	function GetByCodigo($idreserva)
+	{
+		$sql = new sql('r.idreserva, u.login, ' . $this->_db->TimestampToChar('r.datahoradareserva') . ' as datahoradareserva, ' . $this->_db->TimestampToChar('r.datahoradasituacao') . ' as datahoradasituacao, ' . $this->_db->TimestampToChar('r.datahoraentrada') . ' as datahoraentrada, ' . $this->_db->TimestampToChar('r.datahoralimite') . ' as datahoralimite, r.idsituacao, p.nome, s.mnemonico', 'bt_reserva r, cm_usuario u, cm_pessoa p, bt_situacao s', '(idreserva = ?) and (r.idusuario = u.idusuario) and (u.idpessoa = p.idpessoa) and (r.idsituacao = s.idsituacao)');
+
+		$query = $this->Query($sql,$idreserva);
+		return $query->result[0];
+
+	}
+
+	function Update($data, $situacao)
+	{
+
+		$sql = new sql('idreserva, datahoradareserva, datahoradasituacao, datahoraentrada, datahoralimite, idsituacao', 'bt_reserva', 'idreserva = ?');
+
+		if ($situacao=='espera')
+			$values = array($data->idreserva, $this->_db->CharToTimestamp($data->datahoradareserva), $this->_db->CharToTimestamp($data->datahoradasituacao), $data->datahoraentrada, $data->datahoralimite, $data->idsituacao, $data->idreserva);
+		else
+			$values = array($data->idreserva, $this->_db->CharToTimestamp($data->datahoradareserva), $this->_db->CharToTimestamp($data->datahoradasituacao), $this->_db->CharToTimestamp($data->datahoraentrada), $this->_db->CharToTimestamp($data->datahoralimite), $data->idsituacao, $data->idreserva);
+
+		$ok = $this->Execute($sql->Update($values));
+		return $ok;
+
+	}
+
+	function ListReservaAtrasada($data){
+
+		$sql = new sql('r.idreserva, r.idusuario', 'bt_reserva r, bt_situacao s', "(r.datahoralimite < ?) and (r.idsituacao = s.idsituacao) and ((s.mnemonico = 'ATENDIDA') or (s.mnemonico = 'COMUNICADA'))", 'r.idreserva');
+		$query = $this->Query($sql,$this->_db->CharToDate($data));
+		return $query->result;
+	}
+
+	function GetTomboByIdConfirmada($id){
+
+		$sql = new sql('e.numerodotombo', 'bt_reserva r, bt_exemplar e', "(r.idreserva = ?) and (r.idexemplar = e.idexemplar)");
+		$query = $this->Query($sql,$id);
+
+		return $query->result[0][0];
+	}
+
+	function GetSituacaoById($id){
+
+		$sql = new sql('idsituacao', 'bt_reserva', "(idreserva = ?)");
+		$query = $this->Query($sql,$id);
+
+		return $query->result[0][0];
+	}
+
+	function GetProximaReserva($id,$tombo){
+		
+		$sql = new sql('r.idreserva, r.idusuario', 'bt_reserva r, bt_exemplar e, bt_situacao s', "(r.idreserva > ?) and (r.idexemplar = e.idexemplar) and (e.numerodotombo = ?) and (r.idsituacao = s.idsituacao) and (s.mnemonico = 'SOLICITADA') and ((r.foiconfirmada = 0) or (r.foiconfirmada is null))", 'r.idreserva');
+		
+		$query = $this->Query($sql,array($id,$tombo));
+		
+		return $query->result[0];
+	}
+
+	function CalculaData($dias){
+		global $MIOLO;
+		$objFeriado = $MIOLO->GetBusiness('common','feriado');
+
+		$DiaUtil = false;
+		$i = 0;
+
+		while (! $DiaUtil){
+			$DiaUtil = true;
+
+			$dia = date('d');
+			$mes = date('m');
+			$ano = date('Y');
+			$hora = date('H');
+			$min = date('i');
+			$seg = date('s');
+
+			$data = mktime($hora,$min,$seg,$mes,$dia+$dias+$i,$ano);
+			$DataLimite = date('D Y-m-d 22:30:00',$data);
+			$DiaSemana = substr($DataLimite,0,-20);
+
+			$fdia = date('d',$data);
+			$fmes = date('m',$data);
+			$fano = date('Y',$data);
+			$fhora = date('H',$data);
+			$fmin = date('i',$data);
+			$fseg = date('s',$data);
+
+			//Verifica se a reserva vai cair em um sabado, domingo ou feriado
+			if (($DiaSemana == 'Sat') or ($DiaSemana == 'Sáb') or ($DiaSemana == 'Sun') or ($DiaSemana == 'Dom') or ($objFeriado->feriado($fdia.'/'.$fmes.'/'.$fano))){
+				$DiaUtil = false;
+			}
+
+			$i++;
+		}
+		$DataHoraLimite = date('d/m/Y 22:30:00',$data);
+		return $DataHoraLimite;
+	}	
+
+	function RetiraReserva($id, $vencida){
+		$sql = new sql('idreserva, datahoradasituacao, idsituacao', 'bt_reserva', 'idreserva = ?');
+		$values = array($id, $this->_db->CharToTimestamp(date("d/m/Y H:i:s")), $vencida, $id);
+		$ok = $this->Execute($sql->Update($values));
+		return $ok;
+	}
+	
+	function getIdExemplarFromIdReserva($idreserva)
+	{
+		$sql = new sql('idexemplar', 'bt_reserva', 'idreserva = ?');
+		$query = $this->Query($sql,$idreserva);
+		return $query;
+	}
+
+	function ConfirmaReserva($id, $atendida, $datalimite)
+	{global $MIOLO,$module;
+		
+		
+		$this->BeginTransaction();
+		
+		
+			$sql = new sql('datahoradasituacao, datahoraentrada, datahoralimite, foiconfirmada, idsituacao', 'bt_reserva', 'idreserva = ?');
+			$values = array($this->_db->CharToTimestamp(date("d/m/Y H:i:s")), $this->_db->CharToTimestamp(date("d/m/Y H:i:s")), $this->_db->CharToTimestamp($datalimite), 0, $atendida, $id);
+			$ok = $this->Execute($sql->Update($values));
+
+			$idexemplar = $this->getIdExemplarFromIdReserva($id)->result[0][0];
+						
+			// Altera o idsituacao do exemplar!
+        	$sql = new sql('idestado','bt_exemplar','idexemplar=?');
+            $objEstado=$MIOLO->GetBusiness($module,'estado'); 
+       	    $idestado = $objEstado->GetIdByMnemonico("RESERVADO");
+            $ok = $this->Execute($sql->Update(array($idestado,$idexemplar)));
+            
+			//
+			// LOG ;)
+			//
+			//$log = $MIOLO->GetBusiness($module,'log'); 
+			//$sqlog = $log->Gravar("RESERVAWEB",$id);	
+			//$this->Execute($sqlog->Insert());
+						
+		$this->EndTransaction();						
+		
+		
+		return $ok;
+	}
+
+	function SQLConfirmarReserva($id, $atendida, $datalimite)
+	{
+		$sql = new sql('datahoradasituacao, datahoraentrada, datahoralimite, foiconfirmada, idsituacao', 'bt_reserva', 'idreserva = ?');
+		$values = array($this->_db->CharToTimestamp(date("d/m/Y H:i:s")), $this->_db->CharToTimestamp(date("d/m/Y H:i:s")), $this->_db->CharToTimestamp($datalimite), 0, $atendida, $id);
+		return $sql->Update($values);
+	}
+
+	function ConfirmarReserva($id, $atendida, $datalimite)
+	{
+		$sql = new sql('datahoradasituacao, datahoraentrada, datahoralimite, foiconfirmada, idsituacao', 'bt_reserva', 'idreserva = ?');
+		$values = array($this->_db->CharToTimestamp(date("d/m/Y H:i:s")), $this->_db->CharToTimestamp(date("d/m/Y H:i:s")), $this->_db->CharToTimestamp($datalimite), 0, $atendida, $id);
+		$ok = $this->Execute($sql->Update($values));
+		return $ok;
+	}
+	function RelatorioReservasPorPeriodo($dataIni, $dataFim)
+	{
+		
+		$sql = new sql('u.descricao as Unidade, count(e.idreserva) as Reservas', 'bt_unidade u, bt_reserva e, bt_exemplar x', '(e.datahoradareserva >= '.substr($this->_db->CharToTimestamp($dataIni),1).') and (e.datahoradareserva <= '.substr($this->_db->CharToTimestamp($dataFim),1).') and e.idexemplar = x.idexemplar and x.idunidade = u.idunidade','u.descricao', 'u.descricao');		
+		$query = $this->Query($sql);
+		return $query; 
+	}
+	function GetQtdeReservasRegra($idusuario,$idregracirculacao)
+	{
+		$sql = new sql('count(r.idreserva)','bt_reserva r,bt_exemplar x','r.idsituacao <= 4 and r.idusuario = ? and x.idregracirculacao = ? and r.idexemplar = x.idexemplar');
+        return $this->Query($sql,array($idusuario,$idregracirculacao));
+	}
+	
+	//método para o envio de e-mails(frmEnviaEmail) para usuários com reservas atendidas
+	function SelectUsuariosComReservasAtendidas()
+	{
+		global $MIOLO, $module;
+		$sql = new sql ("distinct (p.nome), p.email", "cm_pessoa p, cm_usuario u, bt_reserva res", "p.email is not null and p.idpessoa = u.idpessoa and u.idusuario = res.idusuario and res.idsituacao='2'");
+		$query = $this->Query($sql);
+		return $query;
+	}
+	//método que muda para comunicada a situação de todas a reservas que forem atendidas e comunicadas
+	function mudaParaComunicada(){
+	
+		
+		$sql = new sql('idsituacao', 'bt_reserva', 'idsituacao=?');
+
+			$values = array( 3, 2);
+
+		$ok = $this->Execute($sql->Update($values));
+		return $ok;
+		
+		
+	}
+	
+}
+?>

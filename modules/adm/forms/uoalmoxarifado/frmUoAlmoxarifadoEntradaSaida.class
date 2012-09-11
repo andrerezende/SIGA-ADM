@@ -1,0 +1,125 @@
+<?
+class frmUoAlmoxarifadoEntradaSaida extends Form
+{
+    protected $uoalmoxarifado;
+
+    function __construct($objUO)
+    {
+        $this->uoalmoxarifado = $objUO;
+		parent::__construct('Entrada e Saída de Material');
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+		$fields = array(
+			//new MTextField('idRequisicao','','Requisição',5,'Ex: 390'),
+			//new MHiddenField('idUoReq'),
+			//new MLookupTextField('lkpUo','','Uo Requisitante',40),
+			new MHiddenField('idMaterial','','Idmaterial'),
+			new MLookupTextField('lkpMaterial','','Material',40),
+			new MTextField('quantidade','','Quantidade',10,'Ex: 1000'),
+			new MCurrencyField('valorTotal','','Valor',10,'Ex: 45,00'),
+        );
+		
+        $this->SetFields($fields);
+                
+        $this->SetFieldAttr('lkpMaterial','module','adm');
+        $this->SetFieldAttr('lkpMaterial','item','material');
+        $this->SetFieldAttr('lkpMaterial','event','filler');
+        $this->SetFieldAttr('lkpMaterial','related','idMaterial,lkpMaterial');
+
+        /*
+        $this->SetFieldAttr('lkpUo','module','adm');
+        $this->SetFieldAttr('lkpUo','item','uo');
+        $this->SetFieldAttr('lkpUo','event','filler');
+        $this->SetFieldAttr('lkpUo','related','idUoReq,lkpUo');
+        */
+
+		$validators = array(
+            //new MRequiredValidator('idRequisicao'),
+			new MRequiredValidator('idMaterial'),
+			//new MRequiredValidator('idUoReq'),
+			new MRequiredValidator('estoque'),
+			new MRequiredValidator('valorTotal'),
+		);
+		$this->SetValidators($validators);
+		
+		$buttons = array(
+        	new FormButton('btnPost', 'Gravar'),
+            );
+		$this->SetButtons($buttons);
+
+    }
+
+    function btnPost_click()
+    {
+        $data = $this->getData();
+        $cf = new MCurrencyFormatter();
+        $data->valorTotal = $cf->toDecimal($data->valorTotal);
+        
+        // nova requisicao de compra
+        /*
+        $requisicao = $this->manager->GetBusiness('adm','requisicao');
+        $requisicao->dataHora = date("d/m/Y H:i:s");
+        $requisicao->idTipoReq = 7;
+        $requisicao->status = 'E';
+        $requisicao->idUoRequisitante = $data->idUoReq; 
+        $requisicao->idUoExecutante = 108;
+        $requisicao->idUsuarioRequisitante = $login->idkey;
+        try
+        {
+            $requisicao->save();
+            $requisicao->Log(OP_INS,"Requisição inserida com sucesso.");
+        }
+        catch (Exception $e)
+        {
+            $this->addError($e->getMessage());
+        }
+        */
+        
+        // inclui material de compra
+        /*
+        $material = $this->manager->getBusiness('adm','itemreq');
+        $material->idMaterial = $data->idMaterial;
+        $material->quantPedida = $data->quantPedida;
+        $material->precoEstimado = $data->valorTotal;
+        $material->descricao = $data->descricao;
+        $requisicao->addItem($material);
+        try
+        {
+            $requisicao->save();
+            $requisicao->Log(OP_INS,"Requisição atualizada com sucesso.");
+        }
+        catch (Exception $e)
+        {
+            $this->addError($e->getMessage());
+        }
+        */
+
+        // movimento de entrada
+        $today = getDate();
+        $movimento = $this->manager->getBusiness('adm','movimento');
+        $movimento->idMaterial = $data->idMaterial;
+        $movimento->tipoMovimento = 5;
+        $movimento->dataMovimento = $today['mday']."/".$today['mon']."/".$today['year'];
+        $movimento->quantidade = $data->quantidade;        
+        $movimento->valorTotal = $data->valorTotal;
+        //$movimento->idRequisicao = $requisicao->idRequisicao;
+        try
+        {
+            $movimento->save();
+            $movimento->Log(OP_INS,"Movimento lançado com sucesso.");
+        }
+        catch (Exception $e)
+        {
+            $this->addError($e->getMessage());
+        }
+
+        $url = $this->manager->GetActionURL('adm','main:uoalmoxarifado',$this->uoalmoxarifado->idUo);
+        $this->manager->information("Entrada e saída de material realizada com sucesso.",$url);
+        //$this->manager->information("Entrada e saída de material realizada com sucesso. Requisicao de compras número ".$requisicao->idRequisicao.".",$url);
+    }
+ }
+
+?>

@@ -1,0 +1,128 @@
+<?
+class frmProcessoDecisao extends MFormAjax
+{
+	protected $processo;
+	protected $perms;
+	protected $setor;
+	protected $setoracesso;
+	protected $session;
+	function __construct($objProcesso)
+	{
+		//      construct
+		global $MIOLO;
+		$this->processo = $objProcesso;
+		$this->setor  = $MIOLO->GetBusiness('protocolo','setor');
+		$this->setoracesso = $MIOLO->getBusiness('protocolo','setoracesso');
+		$this->perms  = $MIOLO->getPerms();
+		$this->session = $MIOLO->session;
+		parent::__construct('Decidir processo');
+		$this->SetClose($MIOLO->GetActionURL('protocolo','main'));
+		$this->page->addJsCode(file_get_contents(dirname(__FILE__).'/js/frmProcessoDecisao.js'));
+		$this->eventHandler();
+	}
+
+
+	function CreateFields()
+	{
+		/* IFRO - Controle de segurança de acesso */
+		$setores = ($this->perms->checkAccess('PROT_ADMIN', A_ACCESS)) ? $this->setor->selAll() : $this->setoracesso->selSetoresAcesso($this->processo->getSetorUsuario());
+		if (
+			$this->processo->retencao->setor
+			&& in_array($this->processo->retencao->setor,$setores) 
+			&& $this->processo->retencao->status == 'N' 
+		   )
+		{
+			if ($this->perms->checkAccess('PROT_ADMIN', A_ACCESS))
+			{
+				$url = $this->manager->getActionUrl('protocolo','ajaxhandler');
+				$destinoExterno  = new MCheckBox( 'destinoExterno','value','&nbsp;',false, _M('externo') );
+				$destinoExterno->addAttribute("onchange","doTextDestino('$url');");
+			}
+			
+			//      get andamento
+			$andamento = $this->processo->getAndamento($this->processo->retencao->numAndamento);
+			//      decisão do processo
+			$setorDestino = new MComboBox('setorDestino',$this->session->getValue('sSetorDestino'),'Setor de Destino (opcional):',$this->setor->selAll(),'','',15);
+			$setorDestino->addAttribute("onkeyup","toUpperCase('setorDestino')");
+			$setorDestino->addAttribute('style','text-transform:uppercase');
+			$decisao = new MMultiLineField('decisao',$this->session->getValue('sDecisao'),'Decisão:',1000,5,88);
+			$decisao = new MMultiLineField('decisao',$andamento->decisao,'Decisão:',1000,5,88);
+			$autor = new MTextField('autor',$andamento->autor,'Autor:',40);
+			$autor->addAttribute('maxlength','40');
+			$clearSaida = ($this->session->IsRegistered('sSetorDestino') && $this->session->IsRegistered('sDecisao') && $this->session->IsRegistered('sAutor')) ? new MButton('limparSaida','Limpar',"javascript:doLimparSaida()") : null;
+			$groupDecisao = new MBaseGroup('groupDecisao', 'Decisão do processo',array($setorDestino,$destinoExterno,$decisao,$autor,$clearSaida),'horizontal','css');
+			$groupDecisao->addAttribute('style','padding:10px');
+
+			//      fields
+			$fields = array(
+				array($groupDecisao,),
+			);
+			$this->SetFields($fields);
+
+			//      required fields
+			$validators = array(
+				new MRequiredValidator('decisao'),
+				new MRequiredValidator('autor'),
+			);
+			$this->SetValidators($validators);
+
+			//      buttons
+			$buttons = array(
+				new MButton('btnEnviar', 'Decidir')
+			);
+			$this->SetButtons($buttons);
+
+		}else{
+			$msg = 'Este usuário não tem permissão para acessar este Processo/Protocolo';
+			$this->manager->Information($msg,$this->manager->GetActionURL('protocolo','main:processos',$this->processo->numProcesso));
+		}
+	}
+
+	public function btnEnviar_click()
+	{
+		/* IFRO - Controle de segurança de acesso */
+		$setores = ($this->perms->checkAccess('PROT_ADMIN', A_ACCESS)) ? $this->setor->selAll() : $this->setoracesso->selSetoresAcesso($this->processo->getSetorUsuario());
+		if (
+			$this->processo->retencao->setor
+			&& in_array($this->processo->retencao->setor,$setores) 
+			&& $this->processo->retencao->status == 'N' 
+		  )
+		{
+			//      data
+			$data = $this->getData();
+			if ((trim($data->autor) == null))  
+			{
+				$msg = 'Foram encontrados espaços em branco no campo AUTOR e a operação foi cancelada';          
+				$this->manager->Information($msg,$this->manager->GetActionURL('protocolo','main:processos',$this->processo->numProcesso));	
+			}
+			elseif ((trim($data->decisao) == null))
+			{
+				$msg = 'Foram encontrados espaços em branco no campo DECISÃO e a operação foi cancelada';          
+				$this->manager->Information($msg,$this->manager->GetActionURL('protocolo','main:processos',$this->processo->numProcesso));	     
+			}else{
+				$data->dataDespacho = date("YmdHi");
+				$data->dataSaida = date("YmdHi");        
+			//      set and save
+				try 
+				{
+					$this->processo->beginTransaction();
+					$andamento = $this->processo->getAndamento($this->processo->retencao->numAndamento);
+					$andamento->setData($data);
+					$this->processo->addAndamento($andamento);
+					$this->processo->retencao->setData($andamento);
+					$this->processo->save();
+					$msg = 'A decisão do processo '.$this->processo->numProcessoFormatado().' foi alterada com sucesso.';
+					$this->processo->Log(OP_UPD,$msg);
+					$this->processo->endTransaction();
+					$this->manager->Information($msg,$this->manager->GetActionURL('protocolo','main:processos',$this->processo->numProcesso));
+				}
+				catch(Exception $e) {$this->addError($e->getMessage());}
+			}
+		}else{
+			$msg = 'Este usuário não tem permissão para acessar este Processo/Protocolo';
+			$this->manager->Information($msg,$this->manager->GetActionURL('protocolo','main:processos',$this->processo->numProcesso));
+		}
+	}
+
+}
+?>

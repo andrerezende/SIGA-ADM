@@ -1,0 +1,226 @@
+<?
+class frmLicitacoes extends Form
+{
+	function __construct()	
+	{
+		parent::__construct('Montar Licitação');
+		$this->EventHandler();
+	}
+
+	function CreateFields()
+	{
+		global $MIOLO, $module, $action;
+        
+		//$objLicitacao = $MIOLO->GetBusiness('adm','licitacao');
+		//$idLicitacao = $objLicitacao->GetNewId();
+
+		$fields = Array(
+	        //new TextField('numero',$idLicitacao,'Número',10,'Número da Licitação.'),
+			new calendarfield('dataAbertura','','Data Abertura','10','Informe a data de abertura da licitação'),
+			new HiddenField('criaLicitacao',true)
+			);
+	
+		$this->SetFields($fields);
+		$this->SetFieldAttr('numero','readonly',true);
+
+		$buttons = Array(
+			new FormButton('btnPost','Adicionar Itens'),
+			new FormButton('btnGrava','Criar novo ítem'),
+			new FormButton('btnFinaliza','Finalizar'),
+			new FormButton('btnVoltar','Voltar',$MIOLO->GetActionURL('adm','sectionsCompras'))
+		);
+		$this->SetButtons($buttons);
+		$this->SetButtonAttr('btnGrava', 'visible', false);	
+		$this->SetButtonAttr('btnFinaliza', 'visible', false);
+	}
+
+	
+	/*------------------------------------------------
+
+	btnPost_click()
+
+	------------------------------------------------*/
+	function btnPost_click()
+	{
+		global $MIOLO,$module,$action, $item;
+
+		$this->SetFieldAttr('numero', 'visible', false);
+		$this->SetFieldAttr('dataAbertura', 'visible', false);
+
+		$this->SetButtonAttr('btnGrava', 'visible', true);	
+		$this->SetButtonAttr('btnFinaliza', 'visible', true);
+		$this->SetButtonAttr('btnPost', 'visible', false);
+	
+		// Se existe $item então a licitação está já foi criada antes
+		// Senão a licitação está sendo criada agora
+
+		//var_dump($item);
+
+		if ($item)
+			$idLicitacao = $item;
+		else
+		{
+			//$numero = $this->GetFieldValue('numero');		
+			$dataAbertura = $this->GetFieldValue('dataAbertura');	
+			$data = new FormData();
+			$objLicitacao = $MIOLO->GetBusiness('adm','licitacao');
+			//$numero = $objLicitacao->GetNewId();
+
+            // Se o valor contido em criaLicitacao é true então uma nova
+			// licitação deve ser criada
+			$criaLicitacao = $this->GetFieldValue('criaLicitacao');
+			if ($criaLicitacao)
+			{	
+        		$objLicitacao->dataAbertura = $dataAbertura;
+    			$objLicitacao->dataCriacao = date('d/m/Y');
+                try
+                {
+                    $objLicitacao->save();
+                    $objLicitacao->Log(OP_INS,"Licitação criada com sucesso.");
+        	        //$this->AddInfo('Licitação criada com sucesso.');	   
+
+                }
+                catch (Exception $e)
+                {
+                    $this->addError($e->getMessage());
+                }
+            }
+		}
+		
+		// instancia o objeto
+		$objItem = $MIOLO->GetBusiness('adm','itemreq');
+		
+		// cria o datagrid
+		$query = $objItem->ListItensAtendidosByCosup();
+		$columns = array(
+			new DataGridColumn('descricao','Material','left','','40%'),
+			new DataGridColumn('idrequisicao','Req.','center','','10%'),
+			new DataGridColumn('quantpedida','Ped.','center','','5%'),
+			new DataGridColumn('quantautorizada','Lib.','center','','5%'),
+			new DataGridColumn('valor','Valor','center','','10%'),
+			new DataGridColumn('descreq','Descrição','left','','30%'),	
+			new DataGridColumn('iditemreq','IdItemreq','center',true,'1%',false)
+		);
+
+		$datagrid = new DataGrid2($query,$columns,$action,20);
+		$datagrid->SetIndex(8);
+		$datagrid->AddActionSelect();
+		$datagrid->SetTitle('Licitação n&ordm; '.$objLicitacao->idLicitacao.' com data de abertura em '.$dataAbertura);
+
+		$this->AddField($datagrid);
+		$this->AddField(new Separator('<b>ATENÇÃO:</b>'));
+		$this->AddField(new Text('','- Apenas itens sem descrição podem ser agrupados em um ítem de licitação.'));
+		$this->AddField(new Text('','- Um ítem com descrição deve ser ÚNICO em um ítem de licitação.'));
+		$this->AddField(new Text('','- Após criar todos os itens, clique em <b>Finalizar Licitação</b>'));
+		$this->AddField(new Text('','- Selecione os itens que deseja incluir e clique em <b>Criar Item de Licitação</b>'));
+		$this->AddField(new HiddenField('item',$objLicitacao->idLicitacao)); 
+	   	$this->defaultButton = false;	
+	}
+
+	/*------------------------------------------------
+
+	btnGrava_click()
+	
+	Transforma os itens de requisição selecionados 
+	em um item de licitacao
+
+	------------------------------------------------*/
+	function btnGrava_click()	
+	{
+		global $MIOLO, $module,$item, $page, $theme, $action;
+		
+		$idLicitacao = $this->GetFormValue('item');	
+	
+		// Se algum item do datagrid foi selecionado
+		if ($sel = $page->Request('select'))
+   		{
+			//Testa se todos os materiais selecionados são iguais
+			foreach ($sel as $rs)
+			{
+				$idItemReq = explode("_",$rs);
+				$idMaterialAtual = $idItemReq[0];
+				if (($idMaterialAnterior != NULL) && ($idMaterialAtual != $idMaterialAnterior))
+				{
+					$action = $MIOLO->GetActionURL('adm','licitacoes','',Array('event'=>'btnPost_click','item'=>$idLicitacao));
+					$MIOLO->Error('Todos os itens selecionados precisam ser do mesmo material',$action);
+					$erro = true;
+			
+				}					
+				$idMaterialAnterior = $idMaterialAtual;
+			}
+
+			if (!$erro)
+			{
+				// Cria um novo item de licitação
+				$objLicitacao = $MIOLO->GetBusiness('adm','licitacao');
+				$objItemLicitacao = $MIOLO->GetBusiness('adm','itemlicitacao');
+                $itemLicitacao = $objItemLicitacao->GetNewItemLicitacao($idLicitacao);	
+
+				//Instancia o objeto para a classe de item de requisicao
+				$objItem = $MIOLO->GetBusiness('adm','itemreq');
+				$ok = true;
+        
+                $objItemLicitacao->idLicitacao = $idLicitacao;
+                $objItemLicitacao->item = $itemLicitacao;
+                $objItemLicitacao->save();
+                
+				if ($ok)
+				{
+					// Corre o array com os itens selecionados
+					foreach ($sel as $rs)
+					{
+						$idItemReq = explode("_",$rs);
+						$idmaterial = $idItemReq[0];
+						$idrequisicao = $idItemReq[1];
+						
+						//Muda o status da requisicao para "Em Licitação"					
+						$objRequisicao = $MIOLO->GetBusiness('adm','requisicao');
+						$objRequisicao->GetById($idrequisicao);
+						$objRequisicao->setStatus(9);
+						
+						if (!$objItem->SetIdLicitacaoItem($idrequisicao,$idmaterial,$idLicitacao,$itemLicitacao))
+							$ok = false;
+					}
+				}
+				else
+					$ok = false;			
+        
+				if ($ok)
+				{
+					$action = $MIOLO->GetActionURL('adm','licitacoes','',Array('event'=>'btnPost_click','item'=>$idLicitacao));
+					$MIOLO->Information('Item de Licitação número: '.$itemLicitacao.' criado com sucesso.',$action);
+				}
+			}
+	       }
+	       else
+	       {
+			$show[] = new Spacer('10px');
+			$show[] = new Text('',"Nenhuma linha foi selecionada. Você precisa marcar os itens que deseja lançar");
+	       }
+	       $show[] = new Spacer('10px');
+	       $show[] = new LinkBack('Voltar', $action);
+	       $theme->InsertContent($show);	
+	}
+
+	/*------------------------------------------------
+
+	btnFinaliza_click()
+	
+	Finaliza a Licitação corrente
+
+	------------------------------------------------*/
+	function btnFinaliza_click()	
+	{
+		global $MIOLO, $module,$item, $page, $theme, $action;
+	
+		$objLicitacao = $MIOLO->GetBusiness('adm','licitacao');
+		$objLicitacao->GetById($item);
+		if ($objLicitacao->SetStatus("1"))
+		{	
+			$action = $MIOLO->GetActionURL('adm', 'sectionsCompras', '','');
+			$MIOLO->Information('Licitação concluida com sucesso.',$action);
+		}
+	}
+
+}
+?>

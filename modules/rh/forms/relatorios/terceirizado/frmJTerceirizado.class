@@ -1,0 +1,279 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmJTerceirizado extends MForm
+{
+    function __construct()
+    {
+		parent::__construct('Terceirizados');
+        $this->EventHandler();
+	}
+
+
+	function createFields()
+	{
+		$abrangencia = array (
+			'1'=>'ATIVOS',
+			'2'=>'EXCLUÍDOS',
+			'3'=>'ATIVOS E EXCLUÍDOS'
+		);
+
+	/*
+
+		$objJornada = $this->manager->GetBusiness('rh','jornada');
+		$query = $objJornada->listAll();
+		$jornadas = $query->chunkResult();
+		asort($jornadas);
+
+		$objFuncao = $this->manager->GetBusiness('rh','funcaoterceirizado');
+		$query = $objFuncao->listAll();
+		$funcoes = $query->chunkResult();
+		sort($funcoes);
+
+		$tabelaGeral = $this->manager->GetBusiness('common','tabelageral');
+		$query1 = $tabelaGeral->ListIten1Item2FromTabela('RH_ESCOLARIDADE');
+		$escolaridade = $query1->result;
+		$query2 = $tabelaGeral->ListIten1Item2FromTabela('RH_TITULACAO');
+		$titulacao = $query2->result;
+		$arrEscolaridades = array_merge($escolaridade,$titulacao);
+
+	*/
+
+		$fields = array(
+			new MSelection('abrangencia','','Abrangência',$abrangencia,false),
+            new MHiddenField('idinstituicao'),
+			new MLookupFieldValue('instituicao','','Instituição',70),
+			new MHiddenField('idlocaltrabalho'),
+			new MLookupFieldValue('lkpLocal','','Local Trabalho',60,''),
+			new MLookupFieldValue('lkpSetor','','Setor',50,''),
+            new MHiddenField('idsetor'),
+            new MText('texto', 'Relatórios por período (com Data Início e/ou Data Fim) só poderão ser gerados usando abrangência de Ativos.', 'red', true),
+            new MCalendarField('dataInicio','','Data Início'),
+            new MCalendarField('dataFim','','Data Fim'),
+
+            /*
+            new MSelection('idJornada','','Jornada',$jornadas),
+            new MSelection('idFuncao','','Função',$funcoes),
+        	new MSelection('escolaridade','','Escolaridade',$arrEscolaridades),
+        	*/
+		);
+        $this->SetFields($fields);
+
+        //$this->SetFieldAttr('lkpSetor','readonly','true');
+
+        $this->SetFieldAttr('lkpSetor','module','common');
+   	 	$this->SetFieldAttr('lkpSetor','item','setor');
+  	 	$this->SetFieldAttr('lkpSetor','event','filler');
+    	$this->SetFieldAttr('lkpSetor','related','idsetor,null,lkpSetor');
+
+        //$this->SetFieldAttr('lkpLocalTrabalho','readonly','true');
+
+		$this->SetFieldAttr('lkpLocal','module','rh');
+   	 	$this->SetFieldAttr('lkpLocal','item','local');
+  	 	$this->SetFieldAttr('lkpLocal','event','filler');
+    	$this->SetFieldAttr('lkpLocal','related','idlocaltrabalho,lkpLocal,null,null'); 
+
+        $this->SetFieldAttr('instituicao','module','common');
+        $this->SetFieldAttr('instituicao','item','instituicao');
+        $this->SetFieldAttr('instituicao','event','filler');
+        $this->SetFieldAttr('instituicao','related','idinstituicao,null,instituicao');
+
+		$buttons = Array
+		(
+			new FormButton('btnPost','Enviar','PDF')
+		);
+		$this->SetButtons($buttons);
+
+	}
+
+
+    function btnPost_click()
+    {
+    	$k = new MKrono();
+	    $abr = $this->GetFormValue('abrangencia');
+        $inst = $this->GetFormValue('idinstituicao');
+        $setor = $this->GetFormValue('idsetor');
+		$local = $this->GetFormValue('idlocaltrabalho');
+        $dataInicio = $this->GetFormValue('dataInicio');
+        $dataFim = $this->GetFormValue('dataFim');
+
+
+/*
+        $jor = $this->GetFormValue('idJornada');
+        $func = $this->GetFormValue('idFuncao');
+        $escol = $this->GetFormValue('escolaridade');
+*/
+/*
+        if ( is_null($abr) or empty($abr) )
+        {
+            $erro[] = "Selecione a abrangência";
+        }
+
+        if (( is_null($inst) or empty($inst) ) and ( is_null($setor) or empty($setor) ) )
+        {
+            $erro[] = "Ao menos uma opção (Setor e/ou Instituição) deve ser escolhida, além da abrangência.";
+        }
+*/      //Erro Datas
+        if ( !(is_null($dataInicio) or empty($dataInicio)) and !(is_null($dataFim) or empty($dataFim)) )
+        {
+	        if ($k->CompareDate($dataInicio,'>',$dataFim))
+	        {
+	            $erro[] = "A Data Início não pode ser MAIOR que a Data Fim.";
+	        }
+	        
+        }
+        
+        //Erro relatório/período
+    	if (!($abr == '1') and (!(is_null($dataInicio) or empty($dataInicio)) or !(is_null($dataFim) or empty($dataFim))) )
+        {
+            $erro[] = "Relatórios por período de tempo devem ter abrangência de Ativos.";
+        }
+                
+        if ( count($erro) > 0 )
+        {
+            foreach ( $erro as $e )
+            {
+                $this->addError($e);
+            }
+        }
+        
+                //Erro Excluidos - Ativos Excluidos     	
+        else
+        {
+
+        	$campos = "cm_pessoa.nome as nome,
+        				upper(cm_instituicao.nome) as instituicao,
+        				TO_CHAR(rh_provterceirizado.datainicio,'DD/MM/YYYY') as datainicio,
+        				TO_CHAR(rh_provterceirizado.datafim,'DD/MM/YYYY') as datafim,
+        				rh_localterceirizado.nome as local,
+						rh_localterceirizado.nome as setor,
+        				substr(rh_jornada.descricao,0,2) || ' HS' as jornada,
+        				rh_funcaoterceirizado.descricao as funcao,
+        				rh_ocorrenciaterceirizado.descricao as ocorrencia";
+
+        	$tableas = "cm_pessoa,
+        				cm_instituicao,
+        				rh_terceirizado,
+        				rh_provterceirizado,
+    					rh_jornada,
+						cm_setor,
+    					rh_funcaoterceirizado,
+    					rh_ocorrenciaterceirizado,
+						rh_localterceirizado";
+
+        	$condicoes = "(rh_terceirizado.idpessoa = cm_pessoa.idpessoa) and
+        				(rh_provterceirizado.idinstituicao = cm_instituicao.idinstituicao ) and
+        				(rh_terceirizado.idterceirizado=rh_provterceirizado.idterceirizado) and
+						(rh_provterceirizado.idlocalterceirizado=rh_localterceirizado.idlocalterceirizado) and
+						(rh_localterceirizado.idsetor = cm_setor.idsetor) and
+        				(rh_provterceirizado.idjornada=rh_jornada.idjornada) and
+        				(rh_provterceirizado.idfuncaoterceirizado=rh_funcaoterceirizado.idfuncaoterceirizado) and
+        				(rh_provterceirizado.idocorrenciaterceirizado=rh_ocorrenciaterceirizado.idocorrenciaterceirizado) ";
+        	
+        	//Verifica condições de filtragem sem data
+
+            //Ativos - Filtragem sem data início e data fim
+        	if ( ($abr == '1') and (is_null($dataInicio) or empty($dataInicio)) and (is_null($dataFim) or empty($dataFim))) 
+        	{               
+                $condicoes .=
+                " and (rh_provterceirizado.datainicio=(select max(rh_provterceirizado.datainicio) from rh_provterceirizado where (rh_provterceirizado.idterceirizado = rh_terceirizado.idterceirizado))) and (rh_provterceirizado.datafim IS NULL)";
+        	}
+
+        	if ( ($abr == '2' ) and (is_null($dataInicio) or empty($dataInicio)) and (is_null($dataFim) or empty($dataFim)))  // excluídos
+        	{
+                $condicoes .=
+                 "AND (rh_provterceirizado.datainicio =
+                  (SELECT MAX(rh_provterceirizado.datainicio)
+                   FROM rh_provterceirizado
+                   WHERE(rh_provterceirizado.idterceirizado = rh_terceirizado.idterceirizado)))
+                   AND(rh_provterceirizado.datafim IS NOT NULL)
+                   AND(rh_provterceirizado.idocorrenciaterceirizado = '6') ";
+        	}
+        	
+        	if ( ($abr == '3' ) and (is_null($dataInicio) or empty($dataInicio)) and (is_null($dataFim) or empty($dataFim)))  // ativos e excluídos
+        	{
+                $condicoes .=
+                 "AND (rh_provterceirizado.datainicio =
+                  (SELECT MAX(rh_provterceirizado.datainicio)
+                   FROM rh_provterceirizado
+                   WHERE(rh_provterceirizado.idterceirizado = rh_terceirizado.idterceirizado))) ";
+        	}
+        	
+        	
+            //Verifica condições de filtragem por data
+            
+            //Ativos - Filtragem com data início e data fim
+        	if (($abr == '1') and !(is_null($dataInicio) or empty($dataInicio)) and !(is_null($dataFim) or empty($dataFim)))
+        	{
+        		$di = $k->InvertDate($dataInicio);
+        		$df = $k->InvertDate($dataFim);
+        		//$condicoes .= "and ( TO_CHAR(RH_PROVTERCEIRIZADO.DATAINICIO,'YYYY/MM/DD') >= '$di' ) ";
+                $condicoes .= "and (rh_provterceirizado.datainicio=(select max(rh_provterceirizado.datainicio) from rh_provterceirizado where ((rh_provterceirizado.idterceirizado = rh_terceirizado.idterceirizado) and (((TO_CHAR(RH_PROVTERCEIRIZADO.DATAINICIO,'YYYY/MM/DD') <= '$df') and (TO_CHAR(RH_PROVTERCEIRIZADO.DATAFIM,'YYYY/MM/DD') >= '$di')) or ((TO_CHAR(RH_PROVTERCEIRIZADO.DATAINICIO,'YYYY/MM/DD') <= '$df') and (RH_PROVTERCEIRIZADO.DATAFIM is null))) ))) ";
+        	}
+        	
+            //Ativos - Filtragem com data início
+        	if (($abr == '1') and !(is_null($dataInicio) or empty($dataInicio)) and (is_null($dataFim) or empty($dataFim)))
+        	{
+        		$di = $k->InvertDate($dataInicio);
+                $condicoes .= "and (rh_provterceirizado.datainicio=(select max(rh_provterceirizado.datainicio) from rh_provterceirizado where ((rh_provterceirizado.idterceirizado = rh_terceirizado.idterceirizado) and ((TO_CHAR(RH_PROVTERCEIRIZADO.DATAFIM,'YYYY/MM/DD') >= '$di') or (RH_PROVTERCEIRIZADO.DATAFIM is null)) ))) ";
+        	}
+        	
+        	//Ativos - Filtragem com data fim
+        	if (($abr == '1') and (is_null($dataInicio) or empty($dataInicio)) and !(is_null($dataFim) or empty($dataFim)))
+        	{
+        		$df = $k->InvertDate($dataFim);
+                $condicoes .= "and (rh_provterceirizado.datainicio=(select min(rh_provterceirizado.datainicio) from rh_provterceirizado where ((rh_provterceirizado.idterceirizado = rh_terceirizado.idterceirizado) and (TO_CHAR(RH_PROVTERCEIRIZADO.DATAINICIO,'YYYY/MM/DD') <= '$df')) )) ";
+        	}
+        
+      
+        	//filtra instituicao
+        	if ( !(is_null($inst) or empty($inst)) )
+        	{
+        		$condicoes .= "and ( rh_provterceirizado.idinstituicao = $inst ) ";
+        	}
+            
+        	//filtra setor
+			if ( !(is_null($setor) or empty($setor)) )
+        	{
+        		$condicoes .= "and ( rh_localterceirizado.idsetor = $setor ) ";
+        	}
+        	
+        	//filtra local de trabalho
+			if ( !(is_null($local) or empty($local)) )
+        	{
+        		$condicoes .= "and ( rh_localterceirizado.idlocalterceirizado = $local ) ";
+        	}
+        	
+        	$ordenacao = "cm_pessoa.nome, rh_provterceirizado.datainicio DESC";
+
+        	$sql = "SELECT ". $campos ." FROM " . $tableas . " WHERE " . $condicoes . " ORDER BY " . $ordenacao;
+
+        	$report = new MJasperReport('ufjf');
+
+        	$parameters['str_SUBREPORT_DIR'] = $this->manager->getConf('home.modules') . "/common/reports/";
+	        $parameters['str_SQL'] =  $sql;
+        	
+			//var_dump($sql);
+			$report->Execute('rh','RH_Terceirizado',$parameters);
+
+        }
+
+    }
+}
+?>

@@ -1,0 +1,157 @@
+<?
+class frmCadastroBolsa extends Form
+{
+	var $objBolsa;
+
+	function frmCadastroBolsa()
+  	{   
+		global $MIOLO, $module, $self, $page, $ui;
+
+		$this->objBolsa = $MIOLO->GetBusiness('adm','cadastrobolsa');
+		$this->Form('Cadastro de Bolsas');
+    	$this->EventHandler();
+	}
+	
+	function CreateFields()
+	{
+		
+		global $MIOLO,$module,$perms,$action;
+ 	   
+		$fields = Array(
+  			new HiddenField('key',''),
+  			new Text('DescText','Para pesquisar utilize a lupa'), 
+  			new TextLabel('txtIdBolsa','', 'Id'),
+  			new HiddenField('hidIdBolsa','','',3),       
+  			new LookupTextField('lkpDescricao','','Descrição',30),
+			new Selection('selAcumulavel','','Acumulavel'),
+			new Selection('selPaga','','Paga'),
+		);
+  
+		$this->SetFields($fields);
+    	$this->DescText->SetColor('blue');
+	    $this->SetFieldAttr('lkpDescricao','module','adm');
+    	$this->SetFieldAttr('lkpDescricao','item','cadbolsa');
+	    $this->SetFieldAttr('lkpDescricao','event', 'btnEdit:click');
+	   	$this->SetFieldAttr('lkpDescricao','related', 'hidIdBolsa,lkpDescricao');
+
+		$buttons = Array(
+	  		new FormButton('btnPost','Enviar'),
+			new FormButton('btnNew','Novo',$action),
+	  		new FormButton('btnDelete','Excluir')
+	  	);
+  
+  		$this->SetButtons($buttons);
+  		$this->SetButtonAttr('btnDelete','visible',false);
+		$this->SetButtonAttr('btnNew','visible',false);
+
+  		$validators = array(new RequiredValidator('lkpDescricao'));
+  		$this->SetValidators($validators);
+		$this->SetClose($MIOLO->GetActionURL($module,'main:sispag'));
+ 	}
+
+	function GetData()
+	{
+		$data = new FormData();
+		$data->idbolsa = strtoupper($this->GetFieldValue('key'));
+		$data->descricao = strtoupper($this->GetFieldValue('lkpDescricao'));
+		$data->acumulavel = ($this->GetFormValue('selAcumulavel')) ? 'S' : 'N';
+		$data->paga = ($this->GetFormValue('selPaga')) ? 'S' : 'N';
+		return $data;
+	}
+
+	function SetData($data)
+	{
+		$this->SetFieldValue('key',$data->idbolsa);
+    	$this->SetFieldValue('txtIdBolsa', $data->idbolsa);
+    	$this->SetFieldValue('lkpDescricao', $data->descricao);
+		$this->SetFieldValue('selAcumulavel',($data->acumulavel == 'S') ? 1 : 0);
+		$this->SetFieldValue('selPaga',($data->paga == 'S') ? 1 : 0);
+	}
+
+	function btnNew_click()
+ 	{
+		$this->SetData();
+	}
+
+	function btnPost_click()
+	{
+		global $MIOLO, $module, $self, $action;
+    
+		$objBolsa = $this->objBolsa;
+		
+	    if ( $objBolsa )
+		{			
+		    $objBolsa->SetData($this->GetData());
+	
+	        $is_update = ($this->GetFieldValue('key')!='');
+		    if ( $is_update )
+			{
+				$ok = $objBolsa->Update();
+		    }
+		    else
+			{	
+				$ok = $objBolsa->Insert();
+			}
+    	    if ( $ok ){
+		  	    $MIOLO->Information('Bolsa de Estágio atualizada com sucesso.', $this->page->action );
+		        return true;
+		    }
+		    $this->AddError($objBolsa->GetErrors());
+	    }
+	}
+
+	function btnEdit_click($sender=null,$key='')
+	{
+		global $MIOLO, $module, $item, $self, $action;
+
+        $item = ($key != '') ? $key : $item;		
+        $objBolsa = &$this->objBolsa;
+		
+		if ($objBolsa)
+		{
+            $this->SetData($objBolsa->GetById($item));
+            $this->SetFieldAttr('txtIdBolsa','visible',true);
+            $this->SetFieldAttr('lkpDescricao','readonly',false);
+            $this->SetFieldAttr('selAcumulavel','readonly',false);
+            $this->SetButtonAttr('btnDelete','visible',true);
+            $this->SetButtonAttr('btnNew','visible',true);
+            $this->SetButtonAttr('btnNew','label','Cancelar');
+            $this->SetButtonAttr('btnPost','label','Alterar');
+            $this->AddError( $objBolsa->GetErrors() );
+        }
+	}
+
+	function btnDelete_click()
+	{
+		global $MIOLO, $module, $item, $self, $action;
+
+        $idbolsa = isset($item) ? $item : $this->GetFieldValue('key'); // $item (get) ou $this->key (post)
+        $MIOLO->Assert( isset($idbolsa), 'Bolsa não foi informada!', $action);
+        $objBolsa = &$this->objBolsa;
+        $objBolsa->GetById($idbolsa);
+        $conf = $this->GetFormValue('conf');
+
+	    if ( $conf == 'sim')
+	    {
+            if ( $objBolsa->Delete() )
+            {
+                $MIOLO->Prompt(Prompt::Information("Bolsa de Estágio [$objBolsa->descricao] excluída com sucesso.",$MIOLO->GetActionURL($module,$self)));
+            }
+            else
+            {
+                $MIOLO->Prompt(Prompt::Information( $objBolsa->GetErrors(),$action));
+            }
+	    }
+	    elseif ( $conf == 'nao')
+        {
+	        $MIOLO->Prompt(Prompt::Information('Exclusão cancelada.',$action));
+        }
+	    else
+	    {
+		    $action_sim = $MIOLO->GetActionURL($module,$self,$idbolsa, array('event'=>'btnDelete:click','conf'=>'sim'));
+		    $action_nao = $MIOLO->GetActionURL($module,$self,$idbolsa, array('event'=>'btnDelete:click','conf'=>'nao'));
+	        $MIOLO->Prompt(Prompt::Question("Confirma a exclusão da Bolsa de Estágio [$objBolsa->descricao]?",$action_sim, $action_nao));
+	    }
+	}
+}
+?>

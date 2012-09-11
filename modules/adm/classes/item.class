@@ -1,0 +1,463 @@
+<?
+class BusinessAdmItem extends Business
+{
+	var $idrequisicao;
+	var $idmaterial;
+	var $descricao;
+	var $status;
+	var $idlicitacao;
+	var $item;
+	var $quantpedida;
+	var $quantentregue;
+	var $precoestimado;
+	var $idorcamento;
+
+	var $fmtDateToStr; // formato das datas
+	var $fmtStrToDate; // formato das datas	
+	
+	function BusinessAdmItem($data = null)
+	{
+		$this->GetDatabase('sigaept');
+	        $this->fmtStrToDate =  "TO_DATE(?,'DD/MM/YYYY')";
+
+		if ($data)
+		{
+			$this->SetData($data);
+		}		
+	}
+	
+	function SetAdicionais($data)
+	{
+		$this->idptr = $data->idptr;
+		$this->idfonte = $data->idfonte;
+		$this->idrubrica = $data->idrubrica;
+		$vetor = explode('_',$data->hidId);
+		$this->idrequisicao = $vetor[0];
+		$this->idmaterial = $vetor[1];
+	}
+	
+	
+	
+	function SetData($data)
+	{
+		$this->idrequisicao = $data->idrequisicao;
+		$this->idmaterial = $data->idmaterial;
+		$this->descricao = $data->descricao;
+		$this->status = $data->status;
+		$this->idlicitacao = $data->idlicitacao;
+		$this->item = $data->item;
+		$this->quantpedida = $data->quantpedida;
+		$this->quantentregue = $data->quantentregue;
+		$this->precoestimado = $data->precoestimado;
+		$this->idorcamento = $data->idorcamento;
+	}
+
+	function Insert()
+	{
+		$sql = new sql();
+		$sql->SetColumns('
+			idrequisicao,
+			idmaterial,
+			descricao,
+			status,
+			quantpedida,
+			precoestimado
+		');
+		$sql->SetTables('ad_itemreq');
+		$values= array(
+			$this->idrequisicao, 
+			$this->idmaterial,
+			$this->descricao,
+            $this->status,
+			$this->quantpedida,
+			$this->precoestimado,
+		);
+		$ok = @$this->Execute($sql->Insert($values));
+		return $ok;
+	}
+	function TestMaterial($idrequisicao,$idmaterial)
+	{
+		$sql = new sql();
+		$sql->SetColumns('
+			quantpedida	
+		');
+		$sql->SetTables(
+			'ad_itemreq'
+		);
+		$sql->SetWhere('idrequisicao = ?');
+		$sql->SetWhereAnd('idmaterial = ?');
+		$args = array(
+			$idrequisicao,
+			$idmaterial
+		);
+		$query = $this->Query($sql,$args);
+		if (!$query->eof()) return true;
+		else return false;
+	}
+
+	function ListItensByIdRequisicao($idrequisicao)
+	{	
+		$sql = new sql('i.idmaterial,m.descricao,i.quantpedida,i.precoestimado,e.valortotal,e.estoque,m.idmaterial,i.idorcamento,i.idptr,i.idrubrica,i.idrequisicao,r.idsetoralmox,m.unidade','ad_itemreq i, ad_material m, ad_estoque e, ad_requisicao r','e.idmaterial = i.idmaterial and i.idmaterial = m.idmaterial and i.idrequisicao = r.idrequisicao and i.idrequisicao = ?','i.idrequisicao');
+		
+		$query = $this->ObjQuery($sql->Select($idrequisicao));
+
+		return $query;
+	}
+
+        function ListItensByIdRequisicao2($idrequisicao)
+        {
+                $sql = new sql('i.idrequisicao,m.descricao,i.quantpedida,e.estoque, i.precoestimado,i.idorcamento,i.idmaterial,r.idsetoralmox,e.valortotal','ad_itemreq i, ad_material m, ad_estoque e, ad_requisicao r','e.idmaterial = i.idmaterial and i.idmaterial = m.idmaterial and i.idrequisicao = r.idrequisicao and i.idrequisicao = ?','i.idrequisicao');
+
+                $query = $this->ObjQuery($sql->Select($idrequisicao));
+                return $query;
+        }
+	
+
+	/*-------------------------------------
+	
+	Método DarBaixa($idmaterial,$quantidade,$idrequisicao,$idmovimento,$quantbaixa,$idalmoxarifado,$valortotal)
+	
+	Dá baixa no estoque no item de requisicao
+	- Atualiza o estoque e o valor total na tabela ad_estoque
+	- Insere um registro de saída na tabela ad_movimento
+	- Atualiza a data de atendimento na tabela ad_requisicao
+	- Atualiza o campo quantentregue do respectivo registro na tabela itemreq com a quantidade entregue
+
+	---------------------------------------*/	
+	function DarBaixa($idmaterial,$quantidade,$idrequisicao,$idmovimento,$quantbaixa,$idalmoxarifado,$valortotal)
+	{
+		//Atualiza o estoque do produto tirando a quantidade que será atendida
+		$sql = new sql('estoque,valortotal','ad_estoque','idmaterial = ? and idsetor = ?');
+		$aux = $valortotal - (($valortotal/($quantidade+$quantbaixa))*$quantbaixa);
+		$values = array($quantidade,$aux,$idmaterial,$idalmoxarifado);
+		$ok = $this->Execute($sql->Update($values));
+	      	if ($ok) { $this->Log(OP_UPD,"tabela estoque quantidade:$quantidade, valortotal:$aux, idmaterial:$idmaterial, idalmoxarifado:$idalmoxarifado"); }
+
+	       	//Insere na ad_movimento o registro relativo à retirada do material
+		$sql2 = new sql('idmovimento,tipomovimento,quantidade,datamov,idrequisicao,idmaterial,valortotal','ad_movimento');
+		$datamov = date("d/m/Y");
+		$datamov = ($datamov) ? ":".str_replace('?',"'$datamov'", $this->fmtStrToDate) : "";
+		$values2 = array($idmovimento,'3',$quantbaixa,$datamov,$idrequisicao,$idmaterial,$valortotal-$aux);
+		$ok2 = $this->Execute($sql2->Insert($values2));
+	      	if ($ok2) { $this->Log(OP_INS,"Tabela movimento - idmovimento:$idmovimento, tipomovimento:3, quantidade:$quantbaixa, datamov:$datamov, idrequisicao:$idrequisicao, idmaterial:$idmaterial, valortotal:$valortotal-$aux"); }
+
+		//Atualiza a data de atendimento no registro correspondente da tabela ad_requisicao
+		$sql3 = new sql('dataatendimento','ad_requisicao','idrequisicao = ?');
+		$values3 = array($datamov,$idrequisicao);
+		$ok3 = $this->Execute($sql3->Update($values3));
+		if ($ok3) { $this->Log(OP_UPD,"tabela ad_requisicao - idrequisicao:$idrequisicao, datamov:$datamov"); }
+
+		//Atualiza o campo quantentregue do respectivo registro na tabela itemreq com a quantidade entregue
+		$sql4 = new sql('quantentregue','ad_itemreq','idrequisicao = ? and idmaterial = ?');
+		$values4 = array($quantbaixa,$idrequisicao,$idmaterial);
+		$ok4 = $this->Execute($sql4->Update($values4));
+
+		if ($ok && $ok2 && $ok3 && $ok4)
+		        return true;
+		else
+			return false;
+	}
+
+
+	/*-------------------------------------
+	
+	Método DarEntrada($idrequisicao,$idmaterial,$quantidade,$precoestimado,$idorcamento,$notafiscal,$idsetor,$idmovimento,$jaExiste,$saida,$datamov)
+	
+	Dá entrada no estoque no item de requisicao
+	- Insere ou atualiza o estoque e o valor total na tabela ad_estoque
+	- Insere um registro de entrada ou entrada/saída na tabela ad_movimento
+	- Atualiza a data de atendimento na tabela ad_requisicao
+	- Atualiza o campo quantentregue do respectivo registro na tabela itemreq com a quantidade entregue
+
+	---------------------------------------*/	
+	function DarEntrada($idrequisicao,$idmaterial,$quantidade,$precoestimado,$idorcamento,$notafiscal,$idsetor,$idmovimento,$jaExiste,$saida,$datamov)
+	{
+		// saida traz true se o tipo de movimento é "Entrada/Saída" ou false se for só entrada
+		if ($saida == true)
+			$tipomovimento = '5';
+		else
+			$tipomovimento = '1';
+	
+		//O Estoque só é alterado se o tipo de movimento for entrada
+		if ($tipomovimento == '1')
+		{
+			// jaExiste traz true se o material já existe no estoque ou false se não existe	
+			//Se o material já existe em estoque adiciona a quantidade, senão insere um novo registro		
+			if ($jaExiste == true) 
+			{
+				//Atualiza o estoque dando entrada no material que foi fornecido
+				$sql = new sql('estoque,valortotal','ad_estoque','idmaterial = ? and idsetor = ?');
+				$values = array(":estoque+$quantidade",":valortotal+$quantidade*$precoestimado",$idmaterial,$idsetor);
+
+				$ok = $this->Execute($sql->Update($values));
+			}
+			else
+			{
+				//Insere um registro na tabela ad_estoque referente ao material que está entrando
+				$sql = new sql('idmaterial,idsetor,estoque,valortotal','ad_estoque');
+				$values = array($idmaterial,$idsetor,$quantidade,$quantidade*$precoestimado);
+				$ok = $this->Execute($sql->Insert($values));	
+			}
+                        
+			if ($ok)
+				$this->Log(OP_UPD,"tabela estoque quantidade:$quantidade, valortotal:$quantidade*$precoestimado, idmaterial:$idmaterial, idsetor:$idsetor");
+		}
+		else $ok = true;			
+	
+		//Insere um registro na tabela de movimento
+		$sql2 = new sql('idmovimento,tipomovimento,quantidade,valortotal,datamov,idrequisicao,idmaterial','ad_movimento');
+		$values2 = array($idmovimento,$tipomovimento,$quantidade,$quantidade*$precoestimado,$datamov,$idrequisicao,$idmaterial);
+		$ok2 = $this->Execute($sql2->Insert($values2));
+	
+	      	if ($ok2) { $this->Log(OP_INS,"Tabela movimento - idmovimento:$idmovimento, tipomovimento:$tipomovimento, quantidade:$quantidade, datamov:$datamov, idrequisicao:$idrequisicao, idmaterial:$idmaterial, valortotal:$quantidade*$precoestimado"); }
+
+		//Atualiza a data de atendimento no registro correspondente da tabela ad_requisicao
+		$sql3 = new sql('dataatendimento','ad_requisicao','idrequisicao = ?');
+		$values3 = array($datamov,$idrequisicao);
+		$ok3 = $this->Execute($sql3->Update($values3));
+
+		if ($ok3) { $this->Log(OP_UPD,"tabela ad_requisicao - idrequisicao:$idrequisicao, datamov:$datamov"); }
+
+		//Atualiza o campo quantentregue do respectivo registro na tabela itemreq com a quantidade entregue
+		$sql4 = new sql('quantentregue','ad_itemreq','idrequisicao = ? and idmaterial = ?');
+		$values4 = array($quantidade,$idrequisicao,$idmaterial);
+		$ok4 = $this->Execute($sql4->Update($values4));
+
+
+		// Se todas as querys foram feitas com sucesso, retorna true, senão false;
+		if ($ok && $ok2 && $ok3 && $ok4)
+		        return true;
+		else
+			return false;
+	}
+
+	function GetNewIdMovimento()
+	{
+		return $this->_db->GetNewId('seq_ad_movimento');
+	}
+
+	/* ---------------------------------------
+
+	Método TemNoEstoque()
+
+	Retorna true se o material(idmaterial) informado existe
+	no almoxaridado (idsetor) informado
+
+	----------------------------------------*/
+	function TemNoEstoque($idsetor,$idmaterial)
+	{
+		$sql = new sql();
+		$sql->SetColumns('estoque');
+		$sql->SetTables('ad_estoque');
+		$sql->SetWhere('idsetor = ?');
+		$sql->SetWhereAnd('idmaterial = ?');
+		$args = array($idsetor,$idmaterial);
+		$query = $this->Query($sql,$args);
+		if (!$query->eof()) 
+			return true;
+		else 
+			return false;
+	}
+
+	/* ---------------------------------------
+
+	Método GetCurrentDate()
+
+	----------------------------------------*/
+	function GetCurrentDate()
+	{
+		$date = date("d/m/Y");
+		$date = ($date) ? ":".str_replace('?',"'$date'", $this->fmtStrToDate) : "";
+		return $date;
+	}
+
+
+	/* ---------------------------------------
+
+	Método GetQuantitem()
+
+	Retorna a quantidade do material que foi pedido na requisicao passada
+
+	@params idrequisicao
+	@params idmaterial
+
+	----------------------------------------*/
+	function GetQuantitem($idrequisicao,$idmaterial)
+	{
+		$sql = new sql();
+		$sql->SetColumns('quantpedida');
+		$sql->SetTables('ad_itemreq');
+		$sql->SetWhere('idrequisicao = ? and idmaterial = ?');
+		$args = array($idrequisicao,$idmaterial);
+		$query = $this->ObjQuery($sql->Select($args));
+		return $query->fields('quantpedida');	
+	}
+	
+	function InsertAdicionais($entregador)
+    {
+	  global $MIOLO, $item;
+	  $sql = new sql('idptr, idfonte, idrubrica','ad_itemreq','');
+	  $a = 'idrequisicao = ';
+	  $a .= $this->idrequisicao;
+	  $b = 'idmaterial = ';
+	  $b .= $this->idmaterial;
+      $sql->SetWhere($a);
+	  $sql->SetWhereAnd($b);
+	  $values = array
+        (
+           $this->idptr, 
+	       $this->idfonte,
+		   $this->idrubrica,	
+	    );
+	  $ok = $this->Execute($sql->Update($values));
+	  var_dump($sql->command);
+	  return $ok;
+   	}
+
+	/**********************************************
+	
+	Método ListItensAtendidosByCosup()
+	
+	Retorna todos os itens das requisições atendidas
+	(status 3 ou 4) pela COSUP (tiporequisição = 2)
+
+	***********************************************/
+	function ListItensAtendidosByCosup()
+	{	
+		$sql = new sql("i.idmaterial, m.descricao, r.numero, i.quantpedida, i.quantentregue, ((i.precoestimado/i.quantpedida)*i.quantentregue) as valor, m.idsubelemento, m.idelemento, i.idmaterial||'_'||r.idrequisicao, i.descricao as descreq","ad_itemreq i, ad_material m, ad_requisicao r","m.idmaterial = i.idmaterial and i.idrequisicao = r.idrequisicao");
+		$sql->SetWhereAnd("r.tiporequisicao = '2'");
+		$sql->SetWhereAnd("((r.status = '3') OR (r.status = '4') OR (r.status = '8'))");
+		$sql->SetWhereAnd("i.status = '0'");
+		$sql->SetOrderBy('m.idelemento');
+		$sql->SetOrderBy('m.idsubelemento');
+		$sql->SetOrderBy('m.idmaterial');
+
+		$query = $this->ObjQuery($sql->Select());
+
+
+		return $query;
+	}
+
+	/* ---------------------------------------
+
+	Método SetIdLicitacao($idlicitacao)
+
+	----------------------------------------*/
+	function SetIdLicitacaoItem($idrequisicao,$idmaterial,$idlicitacao,$item)
+	{
+		$status = 1;
+		$sql = new sql();
+		$sql->SetColumns('
+			status,
+			idlicitacao,
+			item
+		');
+		$sql->SetTables('
+			ad_itemreq
+		');
+		$sql->SetWhere('idrequisicao = ? and idmaterial = ?');
+		$values = array(
+			$status,
+			$idlicitacao,
+			$item,
+			$idrequisicao,
+			$idmaterial
+		);
+		$ok = $this->Execute($sql->Update($values));
+		//var_dump($sql->Update($values));
+
+		return $ok;
+	}
+
+	function ListItensByIdRequisicaoExterna($idrequisicao)
+	{	
+		$sql = new sql('i.idrequisicao,m.descricao,i.quantpedida,i.precoestimado, i.idorcamento,i.idmaterial,r.idsetoralmox','ad_itemreq i, ad_material m, ad_requisicao r','i.idmaterial = m.idmaterial and i.idrequisicao = r.idrequisicao and i.idrequisicao = ?','i.idrequisicao');
+		
+		$query = $this->ObjQuery($sql->Select($idrequisicao));
+		return $query;
+	}
+
+	/*-------------------------------------
+	
+	Método SetOrdenador
+
+	---------------------------------------*/	
+	function  SetOrdenador($idrequisicao,$quantentregue,$idorcamento) 
+	{
+		//Atualiza o estoque dando entrada no material que foi fornecido
+		$sql = new sql('quantentregue,idorcamento','ad_itemreq','idrequisicao = ?');
+		$values = array($quantentregue,$idorcamento,$idrequisicao);
+		$ok = $this->Execute($sql->Update($values));
+		return $ok;
+	}
+
+	/**********************************************
+	
+	Método ListItensSemDescricaoByLicitacao($idLicitacao,$idParticipante)
+	
+	Lista todos os itens de requisicao sem descricao 
+	com o idLicitacao informado
+
+	***********************************************/
+	function ListItensSemDescricaoByLicitacao($idLicitacao,$idParticipante)
+	{	
+		$sql = new sql("m.descricao as material, sum(i.quantentregue), i.descricao, i.item, ml.preco","ad_itemreq i, ad_material m, ad_mapalicitacao ml","m.idmaterial = i.idmaterial and i.idlicitacao = ml.idlicitacao and ml.item = i.item");
+		$sql->SetWhereAnd("i.descricao IS NULL");	
+		$sql->SetWhereAnd("i.idlicitacao = ?");
+		$sql->SetWhereAnd("ml.idparticipante = ?");
+		$sql->SetGroupBy("i.item,m.descricao,i.descricao,ml.preco");
+
+		$args = array($idLicitacao,$idParticipante);
+		$query = $this->Query($sql,$args);
+		return $query;
+	}
+
+	/**********************************************
+	
+	Método ListItensComDescricaoByLicitacao($idLicitacao,$idParticipante)
+	
+	Lista todos os itens de requisicao com descricao 
+	com o idLicitacao informado
+
+	***********************************************/
+	function ListItensComDescricaoByLicitacao($idLicitacao,$idParticipante)
+	{	
+		$sql = new sql("m.descricao as material, i.quantentregue, i.descricao,i.item, ml.preco","ad_itemreq i, ad_material m, ad_mapalicitacao ml","m.idmaterial = i.idmaterial and i.idlicitacao = ml.idlicitacao and ml.item = i.item");
+		$sql->SetWhereAnd("i.descricao IS NOT NULL");	
+		$sql->SetWhereAnd("i.idlicitacao = ?");
+		$sql->SetWhereAnd("ml.idparticipante = ?");
+
+		$args = array($idLicitacao,$idParticipante);
+		$query = $this->Query($sql,$args);
+		return $query;
+	}
+
+	/*
+	Gevã Schaefer Pereira Martins - 12/11/2004
+	*/
+
+	function ListItensRepRequisicao($requisicao)
+	{
+	   $sql = new sql('i.idmaterial,m.descricao,i.quantpedida,m.unidade,i.precoestimado','ad_itemreq i, ad_material m','i.idmaterial = m.idmaterial and i.idrequisicao = ?');
+	   $query = $this->Query($sql,$requisicao);
+       return $query;
+	}
+	
+	function ListByLicitacao($id)
+	{
+		$sql = new sql();
+		$sql->SetColumns('distinct(idmaterial)');
+		$sql->SetTables('ad_itemreq');
+		$sql->SetWhere('idlicitacao = ?');
+		$query = $this->ObjQuery($sql->Select($id));
+       	return $query->result;
+	}
+
+	function GetByIdItemOrdenador($requisicao)
+	{
+	   $sql = new sql('i.idmaterial,m.descricao as descricaomaterial,i.quantpedida,m.unidade,i.precoestimado,i.descricao,i.idorcamento','ad_itemreq i, ad_material m','i.idmaterial = m.idmaterial and i.idrequisicao = ?');
+	   $query = $this->Query($sql,$requisicao);
+       return $query->result;
+	}
+}
+?>

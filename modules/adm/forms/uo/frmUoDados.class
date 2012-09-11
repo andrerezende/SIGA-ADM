@@ -1,0 +1,103 @@
+<?
+class frmUoDados extends Form
+{
+
+	protected $objUo;
+
+    function __construct($objUo)
+    {
+		$this->objUo = $objUo;
+        $this->Form('Dados da Unidade Orçamentária');
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+       global $MIOLO;
+
+       $tabelaGeral = $this->manager->getBusiness('common','tabelageral');
+	   $query = $tabelaGeral->listByTabela('AD_TIPOUO');
+
+		$fields = array(
+            new MTextField('sigla','','Sigla','30','Máx. 30 caracteres'),
+            new MTextField('nome','','Nome','50','Máx. 50 caracteres'),
+			new MSelection('tipo','','Tipo',$query->result),
+			new MTextField('documentoRef','','Documento'),
+			new MLookupTextField('lkpUsuario','','Usuário Gestor',50),
+			new MLookupTextField('lkpSetor','','Setor',50),
+			new MHiddenField('idUsuarioGestor','','Id usuario'),
+			new MHiddenField('idSetor','','Id setor'),
+			new MSelection('saldoPublico',$this->objUo->saldoPublico,'Saldo Público', array('1' => 'SIM', 'N' => 'NAO')),
+			new MSelection('ativo',$this->objUo->ativo,'Ativa', array('S' => 'SIM', 'N' => 'NAO'))
+        );
+
+        $this->SetFields($fields);
+
+	   $this->SetFieldAttr('lkpUsuario','module','common');
+	   $this->SetFieldAttr('lkpUsuario','item','usuario');
+	   $this->SetFieldAttr('lkpUsuario','event','filler');
+	   $this->SetFieldAttr('lkpUsuario','related','idUsuarioGestor,NULL,NULL,NULL,NULL,NULL,lkpUsuario');
+
+	   $this->SetFieldAttr('lkpSetor','module','common');
+	   $this->SetFieldAttr('lkpSetor','item','setor');
+	   $this->SetFieldAttr('lkpSetor','event','filler');
+	   $this->SetFieldAttr('lkpSetor','related','idSetor,NULL,lkpSetor');
+
+
+		$buttons = array(
+        	new FormButton('btnSalvar', 'Salvar')
+            );
+		$this->SetButtons($buttons);
+
+		$validators = array(
+			new RequiredValidator('sigla'),
+			new RequiredValidator('nome'),
+		);
+		$this->SetValidators($validators);
+		$this->SetData();
+
+    }
+
+	function SetData()
+	{
+		$data = $this->objUo;
+		$this->SetFieldValue('sigla',$data->sigla);
+		$this->SetFieldValue('nome',$data->nome);
+		$this->SetFieldValue('documentoRef',$data->documentoRef);
+		$this->SetFieldValue('tipo',$data->tipo);
+		$this->SetFieldValue('idUsuarioGestor',$data->idUsuarioGestor);
+		$this->SetFieldValue('idSetor',$data->idSetor);
+		$this->SetFieldValue('saldoPublico',$data->saldoPublico);
+
+		$usuario = $this->manager->GetBusiness('common','usuario');
+		$pessoa = $this->manager->GetBusiness('common','pessoa');
+		if ( $data->idSetor )
+		{
+			$setor = $this->manager->GetBusiness('common','setor');
+			$setor->GetById($data->idSetor);
+			$this->SetFieldValue('lkpSetor',$setor->nome);
+		}
+
+		$usuario->GetById($data->idUsuarioGestor);
+		$pessoa->GetById($usuario->idPessoa);
+
+		$this->SetFieldValue('lkpUsuario',$pessoa->nome);
+	}
+
+	public function btnSalvar_click()
+	{
+		$this->objUo->SetData($this->GetData());
+		try
+		{
+			$this->objUo->save();
+			$this->objUo->Log(OP_UPD,"Dados de UO modificado");
+			$go = $this->manager->GetActionURL('adm','main:uo',$this->objUo->idUo);
+			$this->manager->Information('Unidade Orçamentária alterada com sucesso.', $go);
+		}
+		catch (Exception $e)
+		{
+			$this->addError($e->getMessage());
+		}
+	}
+ }
+?>

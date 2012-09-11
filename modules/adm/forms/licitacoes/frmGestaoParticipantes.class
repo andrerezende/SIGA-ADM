@@ -1,0 +1,205 @@
+<?
+class frmGestaoParticipantes extends Form
+{
+    protected $objLicitacao;
+    
+	/*----------------------------------------
+	Construtor()
+	Instancia um objeto requisição,	nomeio o formulário e ativa os eventos.
+	----------------------------------------*/
+	function __construct($objLicitacao)	
+	{
+        $this->objLicitacao = $objLicitacao;
+		parent::__construct('Adicionar Participantes');
+		$this->EventHandler();
+	}
+	/*----------------------------------------
+	Método CreateFields()
+	Renderiza o estrutura inicial do formulário.
+	----------------------------------------*/
+	function CreateFields()
+	{
+		// var globais
+		global $MIOLO,$module,$self;
+        
+		// instancia licitacao 
+		//$licitacao = $MIOLO->GetBusiness($module,'licitacao');
+		//$idLicitacao = $this->GetFormValue('idLicitacao');
+		//if ($idLicitacao) $licitacao->GetById($idLicitacao);
+        
+		// campos
+
+        /*
+        $fields = Array(
+    		new HiddenField('idLicitacao',$licitacao->idLicitacao),
+    		new LookupTextField('lkpLicitacao','','Número',15),
+    		new TextLabel('dataLicitacao','Licitação número '.$licitacao->idLicitacao.' - Abertura em '.$licitacao->dataAbertura),
+    		new HiddenField('status',1),
+		);
+		$this->SetFields($fields);
+   		$this->defaultButton = false;
+		$this->SetFieldAttr('lkpLicitacao','module',$module);
+		$this->SetFieldAttr('lkpLicitacao','item','Licitacao');
+		$this->SetFieldAttr('lkpLicitacao','event','btnSelecionarLicitacao:click');
+		$this->SetFieldAttr('lkpLicitacao','filter',array('status','lkpLicitacao'));
+		$this->SetFieldAttr('dataLicitacao','visible',false);
+
+		$this->SetFieldAttr('lkpLicitacao','visible',false);
+		$this->SetFieldAttr('dataLicitacao','visible',true);
+        */
+		$this->CreateLookupField();
+
+		$buttons = Array(
+			new FormButton('btnListarParticipantes','Listar Participantes'),
+			new FormButton('btnCancelar','Cancelar',$MIOLO->GetActionUrl($module,$self)),
+			new FormButton('btnFinalizar','Finalizar cadastro de participantes'),
+	   	);
+		$this->SetButtons($buttons);
+		//$this->SetButtonAttr('btnListarParticipantes','visible',false);
+		$this->SetButtonAttr('btnCancelar','visible',false);        
+		$this->SetButtonAttr('btnFinalizar','visible',false);
+	}
+	/*----------------------------------------
+	Método CreateFields()
+	Renderiza o estrutura inicial do formulário.
+	----------------------------------------*/
+	function btnSelecionarLicitacao_click($sender='',$key="")
+	{
+		global $MIOLO,$module,$item;
+        $item = ($key != '') ? $key : $item;
+        //TODO Arrumar esse problema do item
+        
+		$this->SetTitle('Confirmar Licitação');
+		$licitacao = $MIOLO->GetBusiness('adm','licitacao');
+		$licitacao->getById($item);
+
+		$this->SetFieldAttr('lkpLicitacao','visible',false);
+		$this->SetFieldAttr('dataLicitacao','visible',true);
+		$this->setfieldvalue('idLicitacao',$licitacao->idLicitacao);
+		$this->setfieldvalue('dataLicitacao','licitação número '.$licitacao->idLicitacao.' - abertura em '.$licitacao->dataAbertura);
+
+		$itens = $licitacao->GetItensByLicitacaoParaInserirParticipante($item);
+		if ($itens)
+		{
+			$this->AddField(new TableRaw('',$itens,array('Lista de Materiais','Quantidade')));
+		}
+		$this->SetButtonAttr('btnListarParticipantes','visible',true);
+		$this->SetButtonAttr('btnCancelar','visible',true);
+
+	}
+	/*----------------------------------------
+	Método CreateFields()
+	Renderiza o estrutura inicial do formulário.
+	----------------------------------------*/
+	function CreateLookupField()
+	{
+		global $module;
+		$this->AddField(new Spacer('6px'));
+//		$this->AddField(new TextLabel('new','Novo Fornecedor'));
+//		$this->AddField(new Separator());
+		$this->AddField(new LookupTextField('lkpFornecedor','','Fornecedor',40));
+		$this->SetFieldAttr('lkpFornecedor','module',$module);
+		$this->SetFieldAttr('lkpFornecedor','item','Fornecedor');
+		$this->SetFieldAttr('lkpFornecedor','event','btnInserirParticipante:click');
+	}
+	/*----------------------------------------
+	Método CreateFields()
+	Renderiza o estrutura inicial do formulário.
+	----------------------------------------*/
+	function CreateDatagrid()
+	{
+		global $MIOLO,$module,$self;
+		$licitacao = $MIOLO->GetBusiness($module,'licitacao');
+		$licitacao->GetById($this->GetFormValue('idLicitacao'));
+		$participante = $MIOLO->GetBusiness($module,'participante');
+		$query = $participante->GetParticipanteByLicitacao($this->objLicitacao->idLicitacao);
+		$columns = array(
+			new DataGridColumn('idparticipante','IdMaterial','','','',false),
+			new DataGridColumn('nome','Nome','','','60%'),
+			new DataGridColumn('municipio','Cidade','','','40%'),
+		);
+		$datagrid = new DataGrid2($query,$columns,$action);
+		$this->AddField($datagrid);
+		$href_del = $MIOLO->GetActionURL('adm','main:licitacoes','%0%',array('form'=>'participantes','event'=>'btnApagarParticipante:click'));
+		$datagrid->AddActionDelete($href_del);
+		if ($query->result) $this->SetButtonAttr('btnFinalizar','visible',true);
+	}
+	/*----------------------------------------
+	Método CreateFields()
+	Renderiza o estrutura inicial do formulário.
+	----------------------------------------*/
+	function btnListarParticipantes_click()
+	{
+		global $MIOLO,$module;
+		$this->SetTitle('Participantes da Licitação');
+		$this->SetFieldAttr('lkpLicitacao','visible',false);
+		$this->SetFieldAttr('dataLicitacao','visible',true);
+		$this->CreateDatagrid();
+		//$this->CreateLookupField();
+	}
+	/*----------------------------------------
+	Método CreateFields()
+	Renderiza o estrutura inicial do formulário.
+	----------------------------------------*/
+	function btnInserirParticipante_click($sender='',$key="")
+	{
+		global $MIOLO,$module;
+        $item = ($key != '') ? $key : $item;
+        $idLicitacao = $this->objLicitacao->idLicitacao;
+		$participante = $MIOLO->GetBusiness($module,'participante');
+
+		$existe = $participante->checkParticipante($item,$idLicitacao);
+		if (!$existe)
+		{
+			$data = new FormData();
+			$data->idfornecedor = $item;
+			$data->idLicitacao = $idLicitacao;
+			$participante->SetData($data);
+			$participante->Insert();
+		}
+		$this->btnListarParticipantes_click();
+	}
+	/*----------------------------------------
+	Método CreateFields()
+	Renderiza o estrutura inicial do formulário.
+	----------------------------------------*/
+	function btnApagarParticipante_click($sender='',$key="")
+	{
+		global $MIOLO,$module,$item;
+        $item = ($key != '') ? $key : $item;
+		$participante = $MIOLO->GetBusiness($module,'participante');
+		$participante->GetById($item);
+		$participante->Delete();
+		$this->btnListarParticipantes_click();
+	}
+	/*----------------------------------------
+	Método CreateFields()
+	Renderiza o estrutura inicial do formulário.
+	----------------------------------------*/
+	function btnFinalizar_click()
+	{
+		global $MIOLO,$module;
+		$idLicitacao = $this->objLicitacao->idLicitacao;
+		$potencial = $MIOLO->GetBusiness('adm','potencial');
+		$item = $MIOLO->GetBusiness('adm','itemreq');
+		$itens = $item->ListByLicitacao($idLicitacao);
+		$participante = $MIOLO->GetBusiness('adm','participante');
+		$participantes = $participante->ListByLicitacao($idLicitacao);
+		foreach ($participantes as $p)
+		{
+			foreach ($itens as $i)
+			{
+				$data = new FormData();
+				$data->idmaterial = $i[0];
+				$data->idfornecedor = $p[0];
+				$potencial->SetData($data);
+				$potencial->Insert();
+			}
+		}
+		$licitacao = $MIOLO->GetBusiness($module,'licitacao');
+		$licitacao->GetById($idLicitacao);
+		$licitacao->SetStatus(2);
+		$MIOLO->Information('Participantes relacionados com sucesso!',$MIOLO->GetActionUrl($module,'main:sectionsCompras'));
+	}
+}
+?>

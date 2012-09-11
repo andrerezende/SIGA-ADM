@@ -1,0 +1,163 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmDependenteDependencia extends MForm
+{
+	var $dependemcia;
+	
+    function __construct($objDependencia)
+    {
+        $this->dependencia = $objDependencia;
+	    $this->Form('Dependência');
+        $this->EventHandler();
+	}
+
+    function CreateFields()	
+	{ 
+       global $MIOLO, $action;
+		
+	   $tabelaGeral = $MIOLO->GetBusiness('common','tabelageral');
+	   $query = $tabelaGeral->ListByTabela('RH_TIPODEPENDENCIA');
+       $mt_fields = array(
+           new Selection('selTipoDependencia','','Tipo',$query->chunkResult()),
+           new CalendarField('edtDataInicioDependencia','','Data Início',10),
+           new CalendarField('edtDataFimDependencia','','Data Fim',10)
+        );
+       $fields = Array(
+           new MTextField('nomeDependente','','Dependente',60),
+		   new MHiddenField('hidIdPessoa',$dependente->idPessoa),
+           new MSeparator(),
+           new MSelection('selIdParentesco','','pARENTESCO'),
+           new MMultiTextField3('mtfDependencia','','Dependências',$mt_fields,200,true,'horizontal')
+       );
+  	   $this->SetFields($fields);
+
+        $this->setFieldAttr('nomeDependente','readonly',true);
+
+       $this->SetData();
+       $buttons = Array(
+           new FormButton('btnPost', 'Enviar'),
+           new FormButton('btnExcluir', 'Excluir'),
+
+	   );
+	   $this->SetButtons($buttons);
+	   
+	   $validators = array(
+		new RequiredValidator('mtfDependencia')
+		);
+		$this->SetValidators($validators);
+		
+		$this->SetFieldAttr('btnExcluir','visible',$this->dependente->isPersistent());
+		
+		if ($this->dependente->isPersistent())		
+			 $this->SetButtonAttr('btnPost','label','Alterar');
+
+	   $query = $tabelaGeral->ListByTabela('RH_PARENTESCO');
+	   $this->SetFieldAttr('selIdParentesco','options',$query->chunkResult()); 
+	}
+
+	
+	function SetData()  
+	{
+	   $this->dependente->retrieveAssociation('dependencias');
+	   if ($this->dependente->isPersistent())
+       $d = $this->dependente->GetDependencias();
+	   $this->SetFieldValue('hidIdPessoa', $this->dependente->idPessoa);
+	   $this->SetFieldValue('nomeDependente', $this->dependente->pessoa->nome);
+       $this->SetFieldValue('selIdParentesco', $this->dependente->parentesco);
+       $this->mtfDependencia->SetCodeValue($d);
+    }
+
+	function GetData()  
+	{
+        $data = new FormData();
+		$data->idPessoa = $this->GetFieldValue('hidIdPessoa');
+		$data->parentesco    = $this->GetFieldValue('selIdParentesco');
+        $data->dependencias  = $this->mtfDependencia->GetCodeValue();
+		return $data;
+	}
+
+    function btnPost_click()
+    {
+	    global $MIOLO, $module, $self, $action;
+
+         $this->dependente->SetData($this->GetData());
+         $ok1 = $this->dependente->VerifyDependencias();
+         $ok2 = $this->dependente->getIdPessoa();
+         
+         if (($ok1) && ($ok2))
+         {
+         	try 
+	     	{
+	            $this->dependente->save();
+				$go = $MIOLO->GetActionURL('rh','main:funcionario',$this->dependente->idFuncionario, array('form'=>'dependentes'));
+	            $MIOLO->Information('Dados de Dependência atualizados com sucesso.', $go );
+			
+         	}
+         	catch (Exception $e)
+         	{
+             	$this->AddError($this->dependente->GetErrors());
+         	}
+
+         }
+         else 
+         {
+         	 if (!($ok2))$MIOLO->Information('O dependente não pode ser deixado em branco!', $go );
+         	 if (!($ok1))$MIOLO->Information('O data inicio da dependencia não pode ser deixada em branco!', $go );
+         	
+         	 
+         }
+         	
+	}
+
+	
+	function btnExcluir_click()
+	{
+		global $MIOLO, $module, $self,$action;
+
+ 	$action_sim = $MIOLO->GetActionURL($module,$self,$this->dependente->idFuncionario,array('form'=>'dependentes','conf'=>'sim','id'=>$this->dependente->idDependente,'event'=>'btnExcluir:click'));
+
+	$action_nao = $MIOLO->GetActionURL($module,$self,$this->dependente->idFuncionario,array('form'=>'dependentes','conf'=>'nao','id'=>$this->dependente->idDependente));
+
+	$conf = $this->GetFormValue('conf');
+
+	if ($conf == 'sim')
+	{
+		try
+		{
+			$this->dependente->delete();
+
+			$MIOLO->Information('Dependente excluído com sucesso',$MIOLO->GetActionURL('rh','main:funcionario',$this->dependente->idFuncionario, array('form'=>'dependentes')));
+		
+		}
+		catch ( Exception $e )
+		{
+			$this->manager->error("Informe o seguinte erro à equipe do CGCO: ".$e->getMessage());
+		}
+	}
+	else
+	{
+		   $MIOLO->Question("Tem certeza que deseja excluir o seguinte dependente ".$this->dependente->pessoa->nome." ?",$action_sim,$action_nao);
+	}
+}
+
+
+
+}
+?>

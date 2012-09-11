@@ -1,0 +1,447 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmFerias extends MForm
+{
+
+	public $mesReferencia;
+	public $anoReferencia;
+	
+	function __construct()
+    {
+        parent::__construct('Geração do arquivo prog-ferias.txt');
+        $this->SetClose($this->manager->GetActionURL('rh', 'main:integracaosiape:exportacao'));
+        $this->EventHandler();
+    }
+
+
+    function CreateFields()
+    {
+        $ui = $this->manager->getUI();
+        $k = new MKrono();
+
+        $fields = array
+        (
+            new MSelection('selMes', '', 'Mês', $k->months, true),
+        	new MTextField('txtAno', '', 'Ano', 5, 'use 4 dígitos'),
+        	array (
+	       		new MTextLabel('txtDownload','Arquivo para Download:'), 
+        		),
+       		new MLinkButton('lnkDownload','prog-ferias.txt'),
+       		array (
+        		new MTextLabel('txtMd5','Código para certificação (MD5):'), 
+        		),
+       		new MTextLabel('md5s','','','green',false),
+        );
+        $this->SetFields($fields);
+
+        $this->txtAno->AddAttribute('maxlength','4');
+        $this->setfieldattr('md5s','visible',false);
+        $this->setfieldattr('lnkDownload','visible',false);
+		$this->setfieldattr('txtDownload','visible',false);
+		$this->setfieldattr('txtMd5','visible',false);
+        
+        $buttons = array(
+            new MButton('btnSIAPE', 'Gerar Arquivo'),
+        );
+        $this->SetButtons($buttons);
+    }
+    
+    
+    function BtnSIAPE_click()
+    {
+        $selMes = $this->GetFormValue('selMes');
+        $txtAno = $this->GetFormValue('txtAno');
+
+        if ( is_null($selMes) or empty($selMes) )
+        {
+            $erro[] = "Selecione o mês";
+        }
+        if ( is_null($txtAno) or empty($txtAno) )
+        {
+            $erro[] = "Especifique o ano";
+        }
+        // TO DO: caso de uso para geração de arquivo com data futura.
+        if ( count($erro) > 0 )
+        {
+            foreach ( $erro as $e )
+            {
+                $this->addError($e);
+            }
+        }
+        else
+        {
+            // HEADER ---------------------------------------------------------------------------------------------------------
+            $TIPO_DO_REGISTRO_0 = 0; // header = 0
+            $ORGAO_SIAPE = str_pad("26237",5,"0",STR_PAD_LEFT);
+            $CONSTANTE_1 = str_repeat("0",9); // 9 POSIÇÕES BRANCOS
+            $PROCESSAMENTO_MES = str_pad($selMes,2,"0",STR_PAD_LEFT);
+            $PAGAMENTO_MES = str_pad($selMes-1,2,"0",STR_PAD_LEFT);
+            $PROCESSAMENTO_ANO = str_pad($txtAno,4,"20",STR_PAD_LEFT);
+            $CONSTANTE_2 = str_pad("UFJF",10," ",STR_PAD_RIGHT);
+            $CONSTANTE_3 = str_repeat(" ",32); //32 POSIÇÕES BRANCOS
+            $NOME_ARQUIVO = "prog-ferias";
+            $FILLER_1 = str_repeat(" ",6); // 6 POSIÇÕES BRANCOS
+            $FILLER_2 = str_repeat(" ",240); // 240 POSIÇÕES BRANCOS
+            $HEADER = $TIPO_DO_REGISTRO_0.
+                        $ORGAO_SIAPE.
+                        $CONSTANTE_1.
+                        $PAGAMENTO_MES.
+                        $PROCESSAMENTO_ANO.
+                        $CONSTANTE_2.
+                        $CONSTANTE_3.
+                        $NOME_ARQUIVO.
+                        $FILLER_1.
+                        $FILLER_2;
+            // HEADER ---------------------------------------------------------------------------------------------------------
+
+
+            // REGISTROS ---------------------------------------------------------------------------------------------------------
+            $objFerias = $this->manager->GetBusiness('rh','ferias');
+            $query = $objFerias->listSIAPE($selMes,$txtAno);
+            //$query = $objFerias->ListFerias($selMes,$txtAno,true);
+            $totalRegistrosTipo1 = count($query->result);
+
+
+            $TIPO_DO_REGISTRO_1 = 1;
+            $FILLER_1 = str_repeat(" ",4); // 4 POSIÇÕES BRANCOS
+            $JUSTIFICATIVA = str_repeat(" ",240); // 240 POSIÇÕES BRANCOS
+
+            $REGISTROS = "";
+            $contadorDeRegistros = 0;
+            
+            while ( ! $query->eof() )
+            {
+            	$contadorDeRegistros++;
+                $matricula = $query->fields('idVinculo');
+
+                $MATRICULA_SIAPE = str_pad($query->fields('idVinculo'),7,"0",STR_PAD_LEFT);
+                $DV_MATRICULA_SIAPE = $query->fields('dvIdVinculo');
+                $COMANDO = "4";
+
+                list($dia,$mes,$ano) = explode("/",$query->fields('dataInicio'));
+                $EXERCICIO_FERIAS = str_pad($ano,4,"0",STR_PAD_LEFT);
+                $DIA_INICIO_1 = str_pad($dia,2,"0",STR_PAD_LEFT);
+                $MES_INICIO_1 = str_pad($mes,2,"0",STR_PAD_LEFT);
+                $ANO_INICIO_1 = str_pad($ano,4,"0",STR_PAD_LEFT);
+
+                list($dia,$mes,$ano) = explode("/",$query->fields('dataFim'));
+                $DIA_FIM_1 = str_pad($dia,2,"0",STR_PAD_LEFT);
+                $MES_FIM_1 = str_pad($mes,2,"0",STR_PAD_LEFT);
+                $ANO_FIM_1 = str_pad($ano,4,"0",STR_PAD_LEFT);
+
+                $abonoPecuniario = $query->fields('abono');
+                if ( (is_null($abonoPecuniario)) or (empty($abonoPecuniario)) )
+                {
+                    $abonoPecuniario = " ";
+                }
+                $ABONO_PECUNIARIO_1 = $abonoPecuniario;
+
+                $adiantFerias = $query->fields('adiantamentoSalario');
+                if ( (is_null($adiantFerias)) or (empty($adiantFerias)) )
+                {
+                    $adiantFerias = " ";
+                }
+                $ADIANTAMENTO_FERIAS_1 = $adiantFerias;
+
+                $adiantGratif = $query->fields('adiantamento13');
+                if ( is_null($adiantGratif) or empty($adiantGratif) )
+                    $adiantGratif = " ";
+                $ADIANTAMENTO_GRATIFICACAO_NATALINA_1 = $adiantGratif;
+
+                // caso a matricula apareca mais de uma vez na query fazer os passos seguntes!
+				
+                
+                $query->moveNext();
+                if ( !$query->eof() )
+                {
+                    if ( $matricula == $query->fields('idVinculo') )
+                    {
+                        //var_dump("Passei no primeiro!");
+                        list($dia,$mes,$ano) = explode("/",$query->fields('dataInicio'));
+                        $EXERCICIO_FERIAS = str_pad($ano,4,"0",STR_PAD_LEFT);
+                        $DIA_INICIO_2 = str_pad($dia,2,"0",STR_PAD_LEFT);
+                        $MES_INICIO_2 = str_pad($mes,2,"0",STR_PAD_LEFT);
+                        $ANO_INICIO_2 = str_pad($ano,4,"0",STR_PAD_LEFT);
+                        list($dia,$mes,$ano) = explode("/",$query->fields('dataFim'));
+                        $DIA_FIM_2 = str_pad($dia,2,"0",STR_PAD_LEFT);
+                        $MES_FIM_2 = str_pad($mes,2,"0",STR_PAD_LEFT);
+                        $ANO_FIM_2 = str_pad($ano,4,"0",STR_PAD_LEFT);
+                        $abonoPecuniario = $query->fields('abono');
+                        if ( ( is_null($abonoPecuniario) ) or ( empty($abonoPecuniario) ) )
+                        {
+                            $abonoPecuniario = " ";
+                        }
+                        $ABONO_PECUNIARIO_2 = $abonoPecuniario;
+                        $adiantFerias = $query->fields('adiantamentoSalario');
+                        if ( ( is_null($adiantFerias) ) or ( empty($adiantFerias) ) )
+                        {
+                            $adiantFerias = " ";
+                        }
+                        $ADIANTAMENTO_FERIAS_2 = $adiantFerias;
+                        $adiantGratif = $query->fields('adiantamento13');
+                        if ( ( is_null($adiantGratif) ) or ( empty($adiantGratif) ) )
+                        {
+                            $adiantGratif = " ";
+                        }
+                        $ADIANTAMENTO_GRATIFICACAO_NATALINA_2 = $adiantGratif;
+
+                        $query->moveNext();
+                        if ( ! $query->eof() )
+                        {
+                            if ( $matricula == $query->fields('idVinculo') )
+                            {
+                                list($dia,$mes,$ano) = explode("/",$query->fields('dataInicio'));
+                                $EXERCICIO_FERIAS = str_pad($ano,4,"0",STR_PAD_LEFT);
+                                $DIA_INICIO_3 = str_pad($dia,2,"0",STR_PAD_LEFT);
+                                $MES_INICIO_3 = str_pad($mes,2,"0",STR_PAD_LEFT);
+                                $ANO_INICIO_3 = str_pad($ano,4,"0",STR_PAD_LEFT);
+                                list($dia,$mes,$ano) = explode("/",$query->fields('dataFim'));
+                                $DIA_FIM_3 = str_pad($dia,2,"0",STR_PAD_LEFT);
+                                $MES_FIM_3 = str_pad($mes,2,"0",STR_PAD_LEFT);
+                                $ANO_FIM_3 = str_pad($ano,4,"0",STR_PAD_LEFT);
+                                $abonoPecuniario = $query->fields('abono');
+                                if ( is_null($abonoPecuniario) or empty($abonoPecuniario) )
+                                {
+                                    $abonoPecuniario = " ";
+                                }
+                                $ABONO_PECUNIARIO_3 = $abonoPecuniario;
+                                $adiantFerias = $query->fields('adiantamentoSalario');
+                                if ( ( is_null($adiantFerias) ) or ( empty($adiantFerias) ) )
+                                {
+                                    $adiantFerias = " ";
+                                }
+                                $ADIANTAMENTO_FERIAS_3 = $adiantFerias;
+                                $adiantGratif = $query->fields('adiantamento13');
+                                if ( ( is_null($adiantGratif) ) or ( empty($adiantGratif) ) )
+                                {
+                                    $adiantGratif = " ";
+                                }
+                                $ADIANTAMENTO_GRATIFICACAO_NATALINA_3 = $adiantGratif;
+                            }
+                            else
+                            {
+                                $query->movePrev();
+                                $DIA_INICIO_3 = str_repeat("0",2);
+                                $MES_INICIO_3 = str_repeat("0",2);
+                                $ANO_INICIO_3 = str_repeat("0",4);
+                                $DIA_FIM_3 = str_repeat("0",2);
+                                $MES_FIM_3 = str_repeat("0",2);
+                                $ANO_FIM_3 = str_repeat("0",4);
+                                $ABONO_PECUNIARIO_3 = " ";
+                                $ADIANTAMENTO_FERIAS_3 = " ";
+                                $ADIANTAMENTO_GRATIFICACAO_NATALINA_3 = " ";
+                            }
+                        }
+                        else
+                        {
+                            $DIA_INICIO_3 = str_repeat("0",2);
+                            $MES_INICIO_3 = str_repeat("0",2);
+                            $ANO_INICIO_3 = str_repeat("0",4);
+                            $DIA_FIM_3 = str_repeat("0",2);
+                            $MES_FIM_3 = str_repeat("0",2);
+                            $ANO_FIM_3 = str_repeat("0",4);
+                            $ABONO_PECUNIARIO_3 = " ";
+                            $ADIANTAMENTO_FERIAS_3 = " ";
+                            $ADIANTAMENTO_GRATIFICACAO_NATALINA_3 = " ";
+                        }
+                    }
+                    else
+                    {
+                        $query->movePrev();
+                        //caso contrario, todo mundo zerado!
+                        $DIA_INICIO_2 = str_repeat("0",2);
+                        $MES_INICIO_2 = str_repeat("0",2);
+                        $ANO_INICIO_2 = str_repeat("0",4);
+
+                        $DIA_FIM_2 = str_repeat("0",2);
+                        $MES_FIM_2 = str_repeat("0",2);
+                        $ANO_FIM_2 = str_repeat("0",4);
+
+                        $ABONO_PECUNIARIO_2 = " ";
+                        $ADIANTAMENTO_FERIAS_2 = " ";
+                        $ADIANTAMENTO_GRATIFICACAO_NATALINA_2 = " ";
+
+                        $DIA_INICIO_3 = str_repeat("0",2);
+                        $MES_INICIO_3 = str_repeat("0",2);
+                        $ANO_INICIO_3 = str_repeat("0",4);
+
+                        $DIA_FIM_3 = str_repeat("0",2);
+                        $MES_FIM_3 = str_repeat("0",2);
+                        $ANO_FIM_3 = str_repeat("0",4);
+
+                        $ABONO_PECUNIARIO_3 = " ";
+                        $ADIANTAMENTO_FERIAS_3 = " ";
+                        $ADIANTAMENTO_GRATIFICACAO_NATALINA_3 = " ";
+                    }
+                }
+                else
+                {
+                    $DIA_INICIO_2 = str_repeat("0",2);
+                    $MES_INICIO_2 = str_repeat("0",2);
+                    $ANO_INICIO_2 = str_repeat("0",4);
+
+                    $DIA_FIM_2 = str_repeat("0",2);
+                    $MES_FIM_2 = str_repeat("0",2);
+                    $ANO_FIM_2 = str_repeat("0",4);
+
+                    $ABONO_PECUNIARIO_2 = " ";
+                    $ADIANTAMENTO_FERIAS_2 = " ";
+                    $ADIANTAMENTO_GRATIFICACAO_NATALINA_2 = " ";
+
+                    $DIA_INICIO_3 = str_repeat("0",2);
+                    $MES_INICIO_3 = str_repeat("0",2);
+                    $ANO_INICIO_3 = str_repeat("0",4);
+
+                    $DIA_FIM_3 = str_repeat("0",2);
+                    $MES_FIM_3 = str_repeat("0",2);
+                    $ANO_FIM_3 = str_repeat("0",4);
+                }
+                $REGISTROS .=   $TIPO_DO_REGISTRO_1.
+                                $ORGAO_SIAPE.
+                                $MATRICULA_SIAPE.
+                                $DV_MATRICULA_SIAPE.
+                                $COMANDO.
+                                $EXERCICIO_FERIAS.
+                                $DIA_INICIO_1.
+                                $MES_INICIO_1.
+                                $ANO_INICIO_1.
+                                $DIA_FIM_1.
+                                $MES_FIM_1.
+                                $ANO_FIM_1.
+                                $ABONO_PECUNIARIO_1.
+                                $ADIANTAMENTO_FERIAS_1.
+                                $ADIANTAMENTO_GRATIFICACAO_NATALINA_1.
+                                $DIA_INICIO_2.
+                                $MES_INICIO_2.
+                                $ANO_INICIO_2.
+                                $DIA_FIM_2.
+                                $MES_FIM_2.
+                                $ANO_FIM_2.
+                                $ABONO_PECUNIARIO_2.
+                                $ADIANTAMENTO_FERIAS_2.
+                                $ADIANTAMENTO_GRATIFICACAO_NATALINA_2.
+                                $DIA_INICIO_3.
+                                $MES_INICIO_3.
+                                $ANO_INICIO_3.
+                                $DIA_FIM_3.
+                                $MES_FIM_3.
+                                $ANO_FIM_3.
+                                $ABONO_PECUNIARIO_3.
+                                $ADIANTAMENTO_FERIAS_3.
+                                $ADIANTAMENTO_GRATIFICACAO_NATALINA_3.
+                                $FILLER_1.
+                                $JUSTIFICATIVA.
+                                "\n";
+                $query->moveNext();
+            }
+            // REGISTROS ---------------------------------------------------------------------------------------------------------
+
+
+            // TRAILLER ---------------------------------------------------------------------------------------------------------
+            $TIPO_DO_REGISTRO_9 = 9;
+            $CONSTANTE_1 = str_repeat("9",9); // 9 POSIÇÕES BRANCOS
+            $totalCampos = strlen($REGISTROS);
+            $totalRegistros = $contadorDeRegistros;//$totalCampos/320;
+            $QUANTIDADE_REGISTROS = str_pad($totalRegistros,7,"0",STR_PAD_LEFT);
+            $FILLER_1 = str_repeat(" ",58); // 58 POSIÇÕES BRANCOS
+            $FILLER_2 = str_repeat(" ",240); // 240 POSIÇÕES BRANCOS
+            $TRAILLER = $TIPO_DO_REGISTRO_9.
+                        $ORGAO_SIAPE.
+                        $CONSTANTE_1.
+                        $QUANTIDADE_REGISTROS.
+                        $FILLER_1.
+                        $FILLER_2;
+            // TRAILLER ---------------------------------------------------------------------------------------------------------
+
+
+            $PROG_FERIAS = $HEADER."\n".$REGISTROS.$TRAILLER;
+
+            //if ( is_int(((strlen($REGISTROS))/320) ))
+            //{
+                $file = fopen($this->manager->getConf('home.modules') . "/rh/files/integracaosiape/exportacao/ferias/prog-ferias_{$PROCESSAMENTO_MES}_{$PROCESSAMENTO_ANO}.txt","w+");
+                fwrite($file,$PROG_FERIAS);
+                fclose($file);
+                
+                $hashmd5 = hash_file("md5", $this->manager->getConf('home.modules') . "/rh/files/integracaosiape/exportacao/ferias/prog-ferias_{$PROCESSAMENTO_MES}_{$PROCESSAMENTO_ANO}.txt");
+                
+            	$arquivoTabela = $this->manager->getBusiness('common','arquivo');
+            	$tamanhoArquivo = strlen($PROG_FERIAS);
+            	
+            	$arquivoTabela = $arquivoTabela->GetByMD5($hashmd5);
+            	
+            	//var_dump($arquivoTabela->isPersistent());
+            	
+            	if ( !$arquivoTabela->isPersistent() )
+            	{
+	           		$arquivoTabela->md5 = $hashmd5;
+	            	$arquivoTabela->nome = "prog-ferias";
+					$arquivoTabela->caminho = $this->manager->getConf('home.modules') . "/rh/files/integracaosiape/exportacao/ferias/";
+					$arquivoTabela->tipoMime = "text/plain";
+					$arquivoTabela->tamanho = $tamanhoArquivo;
+					$arquivoTabela->mesReferencia = $PROCESSAMENTO_MES;
+					$arquivoTabela->anoReferencia = $PROCESSAMENTO_ANO;
+					$arquivoTabela->dataGravacao = date("d/m/Y");
+	            	$arquivoTabela->idUsuario = $login->idkey;
+	            	$arquivoTabela->processado = "1";
+	            	$arquivoTabela->dataProcessamento = date("d/m/Y");
+	            	$arquivoTabela->scriptProcessamento = "frmFerias.class";
+	            	$arquivoTabela->caminhoScript = $this->manager->getConf('home.modules') . "/rh/forms/integracaosiape/exportacao/ferias/";
+	            	$arquivoTabela->Save();
+            	}                
+                exec("gzip -f9 " . $this->manager->getConf('home.modules') . "/rh/files/integracaosiape/exportacao/ferias/prog-ferias_{$PROCESSAMENTO_MES}_{$PROCESSAMENTO_ANO}.txt");
+
+                $this->SetFieldAttr('selMes','visible',false);
+                $this->SetFieldAttr('txtAno','visible',false);
+				$this->setfieldattr('txtDownload','visible',true);
+				$this->setfieldattr('txtMd5','visible',true);
+                $this->SetFieldAttr('lnkDownload','visible',true);
+                $this->SetFieldAttr('md5s','value',$hashmd5);
+                $this->SetFieldAttr('md5s','visible',true);
+                
+               $this->SetButtonAttr('btnSIAPE','visible',false);
+
+               $newFields = array(
+               		new MHiddenField('txtAnoN',$PROCESSAMENTO_ANO),
+               		new MHiddenField('txtMesN',$PROCESSAMENTO_MES),
+               );
+               
+               $this->AddFields($newFields);
+                
+                $info = "Arquivo gerado com sucesso!<br>Baixe o arquivo no link abaixo.";
+				$this->addInfo($info);
+            //}
+            //else
+            //{
+                //$e = "Erro ao gerar arquivo!";
+                //$this->addError($e);
+            //}
+       }
+    }
+    
+    
+    function lnkDownload_click()
+    {
+    	
+        $txtMes = $this->GetFormValue('txtMesN');
+        $txtAno = $this->GetFormValue('txtAnoN');
+    	$this->manager->SaveFile("rh","prog-ferias_{$txtMes}_{$txtAno}.txt.gz","files/integracaosiape/exportacao/ferias/");
+    }
+ }
+?>

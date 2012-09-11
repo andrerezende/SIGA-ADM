@@ -1,0 +1,157 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class BusinessRhVaga extends MBusiness
+{
+    var $numeroVaga;     // NUMBER(7)
+    var $idGrupoCargo;   // NUMBER(3)
+    var $idCargo;        // NUMBER(3)
+    var $dataInicio;	 // DATE
+    var $dataFim;		 // DATE
+    var $origem;		 // NUMBER(2)
+	var $idSetor;		 // NUMBER(4)
+
+    var $cargo;
+    var $ocupacaoVagas;
+	var $setor;
+
+	function __construct($data=null)
+	{
+		parent::__construct('common',$data);
+	}
+
+    function OnCreate($data)
+    {
+        if (empty($data))
+        {
+//            $this->initialize();
+        }
+        else
+        {
+            $this->GetById($data);
+        }
+    }
+
+	function SetData($data)
+	{
+		$this->numeroVaga   = $data->numeroVaga;
+		$this->idGrupoCargo = $data->idGrupoCargo;
+		$this->idCargo      = $data->idCargo;
+		$this->dataInicio	= $data->dataInicio;
+		$this->dataFim 		= $data->dataFim;
+		$this->origem		= $data->origem;
+		$this->idSetor		= $data->idSetor;
+	}
+
+	function GetById($id)
+	{
+		$this->numeroVaga = $id;
+		$this->retrieve();
+		return $this;
+	}
+
+	function ListByNumeroVagaOrDescricaoCargo($cond)
+	{
+        $criteria =  $this->getCriteria();
+        $cc = new CriteriaCondition();
+        $cc->addCriteria($criteria->getCriteria('numeroVaga','LIKE',"$cond"));
+        $cc->addOrCriteria($criteria->getCriteria('cargo.descricao','LIKE',"$cond"));
+        $criteria->addCriteria($cc);
+        $criteria->addColumnAttribute('numeroVaga');
+        $criteria->addColumnAttribute('cargo.descricao');
+        $criteria->addColumnAttribute('dataFim','situacao');
+        $query = $criteria->retrieveAsQuery();
+        $total = count($query->result);
+        for($cont = 0; $cont < $total; $cont++)
+        {
+        	if($query->result[$cont][2] == NULL) $query->result[$cont][2] = 'ATIVA';
+        	else $query->result[$cont][2] = 'FINALIZADA';
+        }
+        return $query;
+	}
+
+	function ListAllByNumeroVagaOrDescricaoCargo()
+	{
+        $criteria =  $this->getCriteria();
+        $cc = new CriteriaCondition();
+        $cc->addCriteria($criteria->getCriteria('numeroVaga','LIKE',"'%'"));
+        $cc->addOrCriteria($criteria->getCriteria('cargo.descricao','LIKE',"'%'"));
+        $criteria->addCriteria($cc);
+        $criteria->addColumnAttribute('numeroVaga');
+        $criteria->addColumnAttribute('cargo.descricao');
+		return $criteria->retrieveAsQuery()->result;
+    
+	}
+
+    function listByGrupoCargoAndCargo($idGrupoCargo,$idCargo)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('numeroVaga');
+        $criteria->addCriteria('idGrupoCargo','=',$idGrupoCargo);
+        $criteria->addCriteria('idCargo','=',"'$idCargo'");
+
+        $ocupacaoVaga = $this->_miolo->getBusiness('rh','ocupacaovaga');
+        $criteriaOcupacao = $ocupacaoVaga->getCriteria();
+        $criteriaOcupacao->addColumnAttribute('numeroVaga');
+
+        $criteria->addCriteria('numeroVaga','not in',$criteriaOcupacao);
+        $query = $criteria->retrieveAsQuery();
+
+        //criteria para ocupacao vaga
+
+        $criteriaOcupacao2 = $ocupacaoVaga->getCriteria();
+        $criteriaOcupacao2->addColumnAttribute('numeroVaga');
+        $criteriaOcupacao2->addCriteria('dataFim','is not','null');
+        $criteriaOcupacao2->addCriteria('vaga.idGrupoCargo','=',$idGrupoCargo);
+        $criteriaOcupacao2->addCriteria('vaga.idCargo','=',"'$idCargo'");
+
+        $query2 = $criteriaOcupacao2->retrieveAsQuery();
+
+        if ( $query->result && $query2->result )
+        {
+            $query->result = array_merge($query->result,$query2->result);
+        }
+        if ( !$query->result && $query2->result )
+        {
+            $query->result = $query2->result;
+        }
+        return $query;
+    }
+
+    function isOcupada()
+    {
+        $this->retrieveAssociation('ocupacaoVagas');
+        if ( $this->ocupacaoVagas != NULL )
+        {
+            if ( is_array($this->ocupacaoVagas) )
+            {
+                foreach ( $this->ocupacaoVagas as $o )
+                {
+                    if ( ! $o->dataFim )
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+}
+?>

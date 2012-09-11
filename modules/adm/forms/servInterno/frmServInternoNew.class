@@ -1,0 +1,104 @@
+<?
+class frmServInternoNew extends Form
+{
+	protected $servInterno;
+
+	function __construct($servInterno)
+	{
+		global $MIOLO;
+		if ($servInterno) $this->servInterno = $servInterno;
+		else $this->servInterno = $MIOLO->getBusiness('adm','tiposervint');
+		$this->Form('Incluir Novo Tipo de Serviço Interno');
+		$this->EventHandler();
+	}
+
+	function CreateFields()
+	{
+		$fields = array
+		(
+			new MTextField('descricao','','Descrição','30','Máx. 30 caracteres'),
+			new MHiddenField('idUoPrestadora'),
+			new MLookupTextField('lkpUo','','Uo Prestadora',50),
+			new MHiddenField('idRubrica'),
+			new MLookupTextField('lkpRubrica','','Rubrica',50),
+		);
+
+		$this->SetFields($fields);
+
+		$this->SetFieldAttr('lkpUo','module','adm');
+		$this->SetFieldAttr('lkpUo','item','uo');
+		$this->SetFieldAttr('lkpUo','event','filler');
+		$this->SetFieldAttr('lkpUo','related','idUoPrestadora,lkpUo');
+
+		$this->SetFieldAttr('lkpRubrica','module','adm');
+		$this->SetFieldAttr('lkpRubrica','item','rubrica');
+		$this->SetFieldAttr('lkpRubrica','event','filler');
+		$this->SetFieldAttr('lkpRubrica','related','idRubrica,lkpRubrica');
+
+		$buttons = array(
+			new FormButton('btnNew', 'Cadastrar Tipo de Serviço Interno')
+		);
+		$this->SetButtons($buttons);
+
+		$validators = array
+		(
+			new RequiredValidator('descricao'),
+			new RequiredValidator('idUo'),
+			new RequiredValidator('idRubrica'),
+		);
+		$this->SetValidators($validators);
+
+		if ($this->servInterno->isPersistent())
+		{
+			$this->servInterno->retrieveAssociation('uo');
+			$this->servInterno->retrieveAssociation('rubrica');
+			$this->setFieldValue('descricao',$this->servInterno->descricao);
+			$this->setFieldValue('idUoPrestadora',$this->servInterno->idUoPrestadora);
+			$this->setFieldValue('lkpUo',$this->servInterno->uo->nome);
+			$this->setFieldValue('idRubrica',$this->servInterno->idRubrica);
+			$this->setFieldValue('lkpRubrica',$this->servInterno->rubrica->descricao);
+			$this->setButtonAttr('btnNew','label','Alterar Tipo de Serviço Interno');
+		}
+	}
+
+	function btnNew_click()
+	{
+		$data = $this->GetData();
+		$this->servInterno->SetData($data);
+
+		$this->servInterno->descricao = strtoupper($this->servInterno->descricao);
+
+		if(strlen(trim(Form::GetFormValue('descricao')))<4)
+		{
+			$this->AddError('Descreva o serviço interno.');
+		}
+		elseif(Form::GetFormValue('idUoPrestadora') == '')
+		{
+			$this->AddError('Selecione a Unidade Orçamentária Prestadora deste serviço.');
+		}
+		else
+		{
+			try
+			{
+				$go = $this->manager->GetActionURL('adm','servInterno:find',$servInterno->idTipoServInt);
+				if ($this->servInterno->isPersistent())
+				{
+					$this->servInterno->save();
+					$this->servInterno->Log(OP_UPD,"Novo tipo de serviço interno alterado");
+					$this->manager->Information('Tipo de serviço interno alterado com sucesso.',$go);
+				}
+				else
+				{
+					$this->servInterno->save();
+					$this->servInterno->Log(OP_INS,"Novo tipo de serviço interno criado");
+					$this->manager->Information('Tipo de serviço interno criado com sucesso.',$go);
+				}
+			}
+			catch (Exception $e)
+			{
+				$this->addError($e->getMessage());
+			}
+		}
+	}
+}
+?>

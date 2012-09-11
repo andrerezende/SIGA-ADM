@@ -1,0 +1,267 @@
+<?php
+    class repNotaProcessoEmpenhoServico extends PDFReport
+    {
+        var $img;
+        var $timestamp;
+		var $objEmpenho;
+
+        function __construct($objEmpenho)
+        {
+            global $MIOLO, $module, $page, $context, $self, $action, $perms;
+			parent::__construct(NULL, NULL, 55);
+            $ui = $MIOLO->GetUI();
+			$this->img = $ui->GetImageSrc('logonet.png',$module);
+	        $this->pdf->ezSetMargins(100, 70,50, 30);
+			$this->timestamp = date('d/m/Y G:i');
+			$this->objEmpenho=$objEmpenho;
+			//NÃO TROCAR A ORDEM DE CHAMADA DESTAS FUNÇÕES
+			$this->GeneratePageHeader($objEmpenho);
+			$this->GeneratePageFooter();
+			$this->generateData();
+		    $this->GenerateReportFooter();
+		}
+        function GeneratePageHeader($objEmpenho)
+        {
+			$this->objEmpenho = $objEmpenho;
+			$this->objEmpenho->retrieveAssociation('empenhoRef');
+			$x0 = $this->pdf->left-5;
+			$x1 = $this->pdf->right-5;
+			$h = $this->pdf->getFontHeight(12);
+			$header = $this->pdf->openObject();
+			$this->pdf->saveState();
+$alturaCabecalho = $x0 + 58;
+
+
+		$x00=$this->pdf->left;
+		$hh = $this->pdf->getFontHeight(12);
+		$this->pdf->addText($x00, 800, 12, $this->manager->getConf('instituicao.sigla')." - ".$this->manager->getConf('instituicao.nome'));
+		$this->pdf->addText($x00, 800 - $hh, 12, $this->manager->getConf('theme.system'));
+
+
+
+/*
+			$this->pdf->addPngFromFile($this->img, $x0, 770, 50, 50);
+			
+			$this->pdf->addText($alturaCabecalho, 800, 12, 'UFJF - Universidade Federal de Juiz de Fora');
+			$this->pdf->addText($alturaCabecalho, 800 - $h, 12, 'CGCO - Centro de Gestão do Conhecimento Organizacional');
+			$this->pdf->addText($alturaCabecalho, 800 - $h - $h, 12, 'SIGA - Sistema Integrado de Gestão Acadêmica');
+*/
+
+
+			$this->pdf->addText($alturaCabecalho, 800 - $h - $h- $h, 12, '');
+			$this->pdf->SetStrokeColor(0, 0, 0);
+			$y = 800 - $h - $h- $h;
+			
+			$this->pdf->line($x0, $y, $x1, $y);
+
+			if ($this->objEmpenho->empenhoRef){
+				$this->pdf->addText($x0, $y - 13,12,
+					'<b>Emissão</b>: '.$this->objEmpenho->dataEmpenho.
+					'      <b>Número</b>: '.$this->objEmpenho->numero.
+					'      <b>Número Referência</b>: '.$this->objEmpenho->empenhoRef->numero);
+			}else{
+				$this->pdf->addText($x0 + 20, $y - 13,12,
+					'<b>Emissão</b>: '.$this->objEmpenho->dataEmpenho.
+					'       <b>Número</b>: '.$this->objEmpenho->numero);
+			}
+			//$this->pdf->addText($x0, $y - 13, 12, "Relatório de Itens Patrimoniais por Empenho: $this->empenho");
+			$this->pdf->line($x0, $y - 15, $x1, $y - 15);
+			$this->pdf->restoreState();
+			$this->pdf->closeObject();
+			$this->pdf->addObject($header, 'all');
+			$this->pdf->ezSetDy(+15);
+	
+        }
+
+        function GenerateReportFooter()
+        {
+          	$x0 = $this->pdf->left;
+			$x1 = $this->pdf->right;
+			$footer = $this->pdf->openObject();
+			$this->pdf->saveState();
+			$this->pdf->SetStrokeColor(0, 0, 0);
+			$this->pdf->line($x0+50, 60, $x0+200, 60);
+			$this->pdf->line($x0+300, 60, $x0+450, 60);
+			$this->pdf->addText($x0+50, 50, 9, 'Jucilene Melandre da Silva');
+			$this->pdf->addText($x0+300, 50, 9, 'Edite Dutra Lima');
+			$this->pdf->addText($x0+50, 40, 9, 'Coord. Exec. Suporte Financeiro');
+			$this->pdf->addText($x0+300, 40, 9, 'Gerente de Execução Orçamentária');
+			$this->pdf->restoreState();
+			$this->pdf->closeObject();
+			$this->pdf->addObject($footer, 'add');
+        }
+		function GeneratePageFooter()
+        {
+          	$x0 = $this->pdf->left;
+			$x1 = $this->pdf->right;
+			$footer = $this->pdf->openObject();
+			$this->pdf->saveState();
+			$this->pdf->SetStrokeColor(0, 0, 0);
+			$this->pdf->line($x0, 28, $x1, 28);
+			$this->pdf->addText($x1-125, 19, 9, $this->timestamp . ' - CGCO/DSI');
+			$this->pdf->ezStartPageNumbers($x0, 19, 9, 'right', 'Página: {PAGENUM} de {TOTALPAGENUM}');
+			$this->pdf->restoreState();
+			$this->pdf->closeObject();
+			$this->pdf->addObject($footer, 'all');
+        }
+		
+		function generateData(){
+			global $MIOLO, $module, $page, $context, $self, $action, $perms;
+			$tabelaGeral  = $MIOLO->GetBusiness('common','tabelageral');
+			$opModalidadeEmpenho = $tabelaGeral->ListByTabela('ad_modalidadeemp');
+			$opTipoEmpenho = $tabelaGeral->ListByTabela('ad_tipoempenho');
+			$this->objEmpenho->retrieveAssociation('processo');
+			$this->objEmpenho->retrieveAssociation('empenhado');
+			$this->objEmpenho->retrieveAssociation('fornecedor');
+			$this->objEmpenho->retrieveAssociation('empenhoRef');
+			$this->objEmpenho->empenhado[0]->retrieveAssociation('licitacao');
+			$this->objEmpenho->empenhado[0]->licitacao->retrieveAssociation('modalidade');
+			$this->objEmpenho->fornecedor->retrieveAssociation('instituicao');
+			$this->objEmpenho->fornecedor->instituicao->retrieveAssociation('municipio');
+			$this->objEmpenho->fornecedor->instituicao->municipio[0]->retrieveAssociation('uf');
+			$this->objEmpenho->retrieveAssociation('orcamento');
+			$this->objEmpenho->orcamento->retrieveAssociation('ptr');
+			$this->objEmpenho->orcamento->retrieveAssociation('rubrica');
+			$this->objEmpenho->orcamento->retrieveAssociation('fonte');
+			$this->objEmpenho->empenhado[0]->licitacao->retrieveAssociation('processo');
+			$this->objEmpenho->empenhado[0]->licitacao->retrieveAssociation('itens');
+			$this->objEmpenho->empenhado[0]->licitacao->itens[0]->retrieveAssociation('itemreq');
+			if(!is_null($this->objEmpenho->empenhado[0]->licitacao->itens[0]->itemreq[0])){//material
+				$this->objEmpenho->empenhado[0]->licitacao->itens[0]->itemreq[0]->retrieveAssociation('material');
+				$this->objEmpenho->empenhado[0]->licitacao->itens[0]->itemreq[0]->material->retrieveAssociation('elemento');
+				$this->objEmpenho->empenhado[0]->licitacao->itens[0]->itemreq[0]->material->retrieveAssociation('subelemento'); 
+			}else{//serviço
+				$this->objEmpenho->empenhado[0]->licitacao->itens[0]->retrieveAssociation('itemreq');
+			}
+
+			$this->objEmpenho->empenhado[0]->licitacao->retrieveAssociation('mapa');
+
+			foreach ($this->objEmpenho->empenhado as $itemEmpenhado){
+				$valorParcial = str_replace(',','.',$itemEmpenhado->valorEmp);
+				$valor =$valorParcial + $valor;
+			}			
+			$options['textCol'] = array(0,0,0);
+			$options['shaded'] = 0;
+			$options['showLines'] = 0;
+			$options['fontSize'] = 12;
+			$options['maxWidth'] = 480;
+			$options['xPos'] = 'left';
+			$options['xOrientation'] = 'right';
+			$cols = array('');
+			$dataRel[] = array('<b>Espécie</b>: Empenho de despesa');
+			$dataRel[] = array('<b>Emitente</b>: 153061/15228 - Universidade Federal de Juiz de Fora');
+			$dataRel[] = array('<b>CGC</b>: 21195755/0001 -69  '.'  <b>TEL</b>: (032) 3229-3948, 3949, 3950, 3955, 3952, 3953');
+			$dataRel[] = array('<b>Endereço</b>: Campus Universitário,  s/n.,  Bairro Martelos');
+			$dataRel[] = array('<b>Município</b>: Juiz de Fora  '.'  <b>UF</b>: Minas Gerais  '.'  <b>CEP</b>: 36036-900');
+			$dataRel[] = array('');
+			$dataRel[] = array('<b>Credor</b>: '.$this->objEmpenho->fornecedor->instituicao->cgc.' - '.$this->objEmpenho->fornecedor->instituicao->nome);
+			$dataRel[] = array('<b>Endereço:</b> '.$this->objEmpenho->fornecedor->instituicao->rua);
+			//$dataRel[] = array('<b>TEL</b>: '.$this->objEmpenho->fornecedor->instituicao->telefone);
+			$dataRel[] = array('<b>Município</b>: '.$this->objEmpenho->fornecedor->instituicao->municipio[0]->municipio.
+				'  <b>UF</b>: '.$this->objEmpenho->fornecedor->instituicao->municipio[0]->uf->UF.
+				'  <b>CEP</b>: '.$this->objEmpenho->fornecedor->instituicao->cep.
+				'  <b>TEL</b>: '.$this->objEmpenho->fornecedor->instituicao->telefone);
+			$dataRel[] = array('');
+			$dataRel[] = array('<b>Observação/Finalidade</b>: '.$this->objEmpenho->obs);
+			$classificacao = $this->objEmpenho->orcamento->ptr->esfera.
+				' '.$this->objEmpenho->orcamento->ptr->uorcamento.
+				' '.$this->objEmpenho->orcamento->ptr->progTrab.
+				' '.$this->objEmpenho->orcamento->ptr->idPtr.
+				' '.$this->objEmpenho->orcamento->fonte->idFonte.
+				' '.$this->objEmpenho->orcamento->rubrica->idRubrica;
+			$dataRel[] = array('<b>Class</b>: '.$classificacao);
+			$dataRel[] = array('<b>Tipo do empenho</b>: '.$opModalidadeEmpenho->result[$this->objEmpenho->modalidadeEmp][1]
+			.'    <b>Modalidade da licitação</b>: '.$this->objEmpenho->empenhado[0]->licitacao->modalidade->descricao);
+			if ($this->objEmpenho->empenhado[0]->licitacao->processo){
+				//$numPro = $this->objEmpenho->processo->numProcessoFormatado();
+				$numProLicitacao = $this->objEmpenho->empenhado[0]->licitacao->processo->numProcessoFormatado();
+			}else{
+				$numProLicitacao = '-';
+				//$numPro = '-';
+			}
+			$dataRel[] = array('<b>Licitação</b>: '.$this->objEmpenho->empenhado[0]->licitacao->numero.'    <b>Processo Licitatário</b>: '.$numProLicitacao);
+			$dataRel[] = array('<b>Amparo</b>: Lei 8666    <b>Inciso</b>: 02');
+			$dataRel[] = array('<b>Origem do Material</b>: '.$this->objEmpenho->empenhado[0]->licitacao->mapa[0]->importado);
+			//$this->objEmpenho->empenhado[0]->licitacao->
+			$dataRel[] = array('<b>Referência da dispensa</b>: ART.24/02 Lei 8666/933');
+					$dataRel[] = array('<b>Elemento:</b> '.
+				$this->objEmpenho->empenhado[0]->licitacao->itens[0]->itemreq[0]->material->elemento->idElemento.
+				' - '.$this->objEmpenho->empenhado[0]->licitacao->itens[0]->itemreq[0]->material->elemento->descricao.'        <b>Subelemento:</b> '.
+				$this->objEmpenho->empenhado[0]->licitacao->itens[0]->itemreq[0]->material->subelemento->idSubElemento.' - '.			$this->objEmpenho->empenhado[0]->licitacao->itens[0]->itemreq[0]->material->subelemento->descricao);
+			$dataRel[] = array('');
+			$cf = new MCurrencyFormatter();
+			$valorFormatado = $cf->formatWithSymbol( $cf->toDecimal($valor));
+			$dataRel[] = array('<b>Valor do empenho</b>: '.$valorFormatado.' - '.$this->extenso($valor,'1',"alta"));
+			//$dataRel[] = array('<b>Valor do empenho</b>: '.$valorFormatado.' - '.strtoupper($this->extenso($valor)));//trocar extenso por $cf->writeAmount($valor)
+			$dataRel[] = array('<b>Especificação do material ou serviço:</b>');
+			$this->pdf->ezTable($dataRel,$cols,'',$options);
+			$optionsItens['textCol'] = array(0,0,0);
+			$optionsItens['shaded'] = 1;
+			$optionsItens['showLines'] = 1;
+			$optionsItens['fontSize'] = 12;
+			$optionsItens['maxWidth'] = 480;
+			$optionsItens['xPos'] = 'left';
+			$optionsItens['xOrientation'] = 'right';
+			$colsItens = array('<b>Item</b>','<b>Material/Serviço</b>','<b>Quantidade</b>','<b>Valor</b>');
+			$i=0;
+			foreach ($this->objEmpenho->empenhado as $itemEmpenhado){
+				$i+=1;
+				$itemEmpenhado->retrieveAssociation('itemreq');
+				$descricao = strtoupper($itemEmpenhado->itemreq[0]->material->descricao);
+				$dataRelItens[] = array($i,trim($descricao),$itemEmpenhado->quantidadeEmp, 
+				$cf->formatWithSymbol($cf->toDecimal($itemEmpenhado->valorEmp)));
+			}
+
+			$dataRelItens[] = array('','','','Total: '.$valorFormatado);
+			$this->pdf->ezTable($dataRelItens,$colsItens,'',$optionsItens);
+		}
+
+		function extenso($valor=0,$tipo=0,$caixa="alta") {
+		$valor = strval($valor);
+	    $valor = str_replace(",",".",$valor);
+
+		if($tipo==1){
+			$singular = array("centavo", "real", "mil", "milhão", "bilhão", "trilhão", "quatrilhão");
+		    $plural = array("centavos", "reais", "mil", "milhões", "bilhões", "trilhões","quatrilhões");
+		}else{
+			$pos   = strpos($valor,".");
+		    $valor = substr($valor,0,$pos);
+		    $singular = array("", "", "mil", "milhão", "bilhão", "trilhão", "quatrilhão");
+		    $plural = array("", "", "mil", "milhões", "bilhões", "trilhões","quatrilhões");
+		}
+		$c = array("", "cem", "duzentos", "trezentos", "quatrocentos","quinhentos", "seiscentos", "setecentos", "oitocentos", "novecentos");
+	    $d = array("", "dez", "vinte", "trinta", "quarenta", "cinquenta","sessenta", "setenta", "oitenta", "noventa");
+	    $d10 = array("dez", "onze", "doze", "treze", "quatorze", "quinze","dezesseis", "dezesete", "dezoito", "dezenove");
+		$u = array("", "um", "dois", "três", "quatro", "cinco", "seis","sete", "oito", "nove");
+		$z=0;
+		$valor = number_format($valor, 2, ".", ".");
+	    $inteiro = explode(".", $valor);
+		for($i=0;$i<count($inteiro);$i++)
+			for($ii=strlen($inteiro[$i]);$ii<3;$ii++)
+				$inteiro[$i] = "0".$inteiro[$i];
+		$fim = count($inteiro) - ($inteiro[count($inteiro)-1] > 0 ? 1 : 2);
+	    for ($i=0;$i<count($inteiro);$i++) {
+		    $valor = $inteiro[$i];
+			$rc = (($valor > 100) && ($valor < 200)) ? "cento" : $c[$valor[0]];
+	        $rd = ($valor[1] < 2) ? "" : $d[$valor[1]];
+		    $ru = ($valor > 0) ? (($valor[1] == 1) ? $d10[$valor[2]] : $u[$valor[2]]) : "";
+	        $r = $rc.(($rc && ($rd || $ru)) ? " e " : "").$rd.(($rd && $ru) ? " e " : "").$ru;
+	        $t = count($inteiro)-1-$i;
+		    $r .= $r ? " ".($valor > 1 ? $plural[$t] : $singular[$t]) : "";
+			if ($valor == "000")$z++; elseif ($z > 0) $z--;
+		    if (($t==1) && ($z>0) && ($inteiro[0] > 0)) $r .= (($z>1) ? " de " : "").$plural[$t];
+			if ($r) $rt = $rt . ((($i > 0) && ($i <= $fim) &&($inteiro[0] > 0) && ($z < 1)) ? ( ($i < $fim) ? " e " : " e ") : " ") . $r;
+		}    
+	    if($caixa=="alta"){
+			$rt = strtoupper($rt);
+	    }
+		$maiusculas = array("�","�","�","�","�","�","�","�","�","�","�","�");
+	    $minusculas = array("�","�","�","�","�","�","�","�","�","�","�","�");
+		for($i=0;$i<count($maiusculas);$i++){
+            $rt = ereg_replace($minusculas[$i],$maiusculas[$i],$rt);    
+		}     
+    
+	    return $rt;                      
+    }
+    }
+?>

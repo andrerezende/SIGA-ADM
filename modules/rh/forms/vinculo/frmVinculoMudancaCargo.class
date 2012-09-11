@@ -1,0 +1,155 @@
+<?
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmVinculoMudancaCargo extends Form
+{
+	protected $objVinculo;
+    protected $provimento;
+    protected $grupoOcorrencia;
+    protected $ocorrencia;
+    protected $today;
+
+    function __construct($objVinculo)
+    {
+        global $MIOLO;
+        
+        $this->today = date('d/m/Y');
+		$this->objVinculo = $objVinculo;
+        $this->grupoOcorrencia = $MIOLO->getBusiness('rh','grupoocorrencia',6);
+        
+        parent::__construct('Mudança de Cargo');
+        $this->eventHandler();
+    }
+
+    function CreateFields()
+    {
+        $jornada = $this->manager->getBusiness('rh','jornada');
+        $prov=$this->objVinculo->provimentos;
+        if (($prov[0]->dataFim) && ( $prov[0]->dataFim != "01/01/0001" ))
+        {
+           $this->manager->error("Servidor não possui provimento em aberto!",$this->manager->getActionUrl('rh','main:vinculo',$this->objVinculo->idVinculo,array('form'=>'dadosFuncionais')));
+         
+        } 
+
+        $this->provimento = $this->objVinculo->getProvimentoAtual();
+      
+        if ( $this->grupoOcorrencia->verificaOcorrenciaSituacao(2,$this->provimento->idSituacao) )
+        {
+            $this->grupoOcorrencia->getOcorrencias();
+            $this->ocorrencia = $this->grupoOcorrencia->getOcorrencia(2);
+            $grupoCargo = $this->manager->getBusiness('rh','grupocargo');
+            $cargos = $grupoCargo->listWithVagas(); 
+            $fields = array(
+                array(
+                    new MLabel('Grupo de Ocorrência: '),
+                    new MLabel($this->grupoOcorrencia->descricao)
+                ),
+                array(
+                    new MLabel('Ocorrência: '),
+                    new MLabel($this->ocorrencia->descricao)
+                ),
+                array(
+                	new MSelection('idGrupoCargo','','Grupo Cargo',$cargos->result),
+                    new MTextField('cargo','','Cargo',30),
+                    new MLookupField('lkpCargo','&nbsp;','&nbsp;'),
+                ),
+	    		new MHiddenField('idPublicacao'),
+                new MHiddenField('idCargo'),
+                new MCalendarField('dataInicio',$this->today,'Data de Início'),
+		    	new MLookupFieldValue('numero','','Publicação'),
+            );
+
+            $this->setFields($fields);
+            
+	   	    $this->SetFieldAttr('numero','module','rh');
+    		$this->SetFieldAttr('numero','item','publicacao');
+	    	$this->SetFieldAttr('numero','event','filler');
+	    	$this->SetFieldAttr('numero','related','idPublicacao,null,numero');
+
+    	    $this->SetFieldAttr('lkpCargo','module','rh');
+        	$this->SetFieldAttr('lkpCargo','item','cargo');
+        	$this->SetFieldAttr('lkpCargo','event','filler');
+    	    $this->SetFieldAttr('lkpCargo','related','idCargo,cargo');
+        	$this->SetFieldAttr('lkpCargo','filter','idGrupoCargo,cargo');
+    
+            $this->setFieldAttr('cargo','readonly',true);
+        
+            $buttons = array(
+                new MButton('btnPost')
+            );
+
+            $this->setButtons($buttons);
+        }
+        else
+        {
+            $this->addInfo("Situação funcional do servidor é incompatível com a ocorrência de Mudança de Cargo");
+            $this->defaultButton = FALSE;
+        }
+    }
+
+    function btnPost_click()
+    {
+        $data = $this->getData();
+        if ( ! $data->idCargo )
+        {   
+            $erro[] = "Utilize a lupa para informar um cargo válido.";
+        }
+        if ( ! $data->idPublicacao )
+        {   
+            $erro[] = "Utilize a lupa para informar uma publicação válida.";
+        }
+        if ( $data->dataInicio )
+        {
+            $k = new MKrono();
+            if ( $k->compareDate($data->dataInicio,'>',$this->today) )
+            {
+                $erro[] = "A data de início não pode ser posterior a atual.";
+            }
+        }
+        else
+        {
+            $erro[] = "Informe a data de início.";
+        }
+
+        if ( count($erro) > 0 )
+        {
+            foreach ( $erro as $e )
+            {
+                $this->addError($e);
+            }
+        }
+        else
+        {
+            try
+            {
+                $this->objVinculo->mudancaCargo($data->idGrupoCargo,$data->idCargo,$data->dataInicio,$data->idPublicacao);
+                $this->manager->information("Mudança de cargo realizada com sucesso!",$this->manager->getActionUrl('rh','main:vinculo',$this->objVinculo->idVinculo,array('form'=>'dadosFuncionais')));
+            }
+            catch ( Exception $e )
+            {
+                $this->addError($e->getMessage());
+            }
+
+        }
+
+        
+    }
+
+ }
+?>

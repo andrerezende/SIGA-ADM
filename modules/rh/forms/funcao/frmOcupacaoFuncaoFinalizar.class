@@ -1,0 +1,140 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+$MIOLO->Uses('ui/controls/lkppublicacao.class','rh');
+
+/*
+Tareas: 1) em ^A->ajustaDataFimOcupacao e em ^F: colocada datafim no Titular colocar também no Substituto
+
+alternativa usada:  testando 'A função já tem um substituto' e 
+'data de finalização não pode ser antes do fim da substituição existente'
+*/
+
+class frmOcupacaoFuncaoFinalizar extends MForm
+{
+    protected $objocupacaofuncao, $k;
+
+    function __construct($objocupacaofuncao)
+    {
+        $this->objocupacaofuncao = $objocupacaofuncao;
+        parent::__construct('Finalização de Ocupação de Função');
+        $this->k = new Mkrono();
+        $this->EventHandler();
+    } // __construct
+
+
+    function CreateFields()
+    {
+        global $MIOLO, $module;
+
+        $fields[] = new MCalendarField('datafim','','Término','10');
+        $fields[] = new MSpacer(1);
+
+        lkppublicacao($fields,'idpublicacaofim','Publicação');
+
+        $this->SetFields($fields);
+
+        $validators[] = new MRequiredValidator('datafim');
+        $validators[] = new MRequiredValidator('idpublicacaofim','Publicação');
+
+        $this->SetValidators($validators);
+
+        $buttons = array( new MButton('btnSalvar', 'Salvar Finalização') );
+        $this->SetButtons($buttons);
+        $this->SetBackgroundColor('#FFF');
+    } // CreateFields
+
+
+    function Verifica($data)
+    {
+        $dataidpublicacaofim = $this->GetFieldValue('dataidpublicacaofim'); //campo não editável, que não é recuperado em GetData()
+
+        $erros = $this->objocupacaofuncao->VerificaTermino($data->datainicio        ,   //gravada anteriormente e alterada
+                                                           $data->datafim           ,   //gravada anteriormente e alterada
+                                                           $data->idpublicacaoinicio,   //gravada anteriormente e alterada
+                                                           $data->idpublicacaofim   );  //gravada anteriormente e alterada
+        
+        
+        //não pode já haver uma substituição para a função
+          $substituicao = $this->objocupacaofuncao->getTitularSubstituto($this->objocupacaofuncao->idfuncao,  //função
+                                                                       false,                         //ocupação aberta/QUALQUER
+                                                                       false);                        //ocupante titular/SUBSTITUTO
+
+        if ($substituicao)
+        {
+            //data de término da substituição em aberto e não o mesmo ocupante
+            if ( (! $substituicao[1]) and ($substituicao[0] <> $this->objocupacaofuncao->idvinculo) )
+            {
+                $erros[] = 'A função já tem um substituto atualmente, vínculo: ' . $substituicao[0];
+            }
+            if ( $this->k->compareDate($data->datafim, '<', $substituicao[1]) )
+            {
+                $erros[] = 'A data de finalização não pode ser antes do fim da substituição existente';
+            }
+        }
+
+        if ( count($erros) > 0 )
+        {
+            foreach ( $erros as $e )
+            {
+                $this->addError($e);
+            }
+            return false;
+        }
+
+        return TRUE;
+    } // Verifica
+
+
+    function btnSalvar_click()
+    {
+        global $MIOLO, $module;
+        $data = $this->GetData();                   //recupera somente os editáveis
+        if (! $this->Verifica($data))
+        {
+            RETURN;
+        }
+
+        $this->objocupacaofuncao->SetData($data);
+
+        $this->objocupacaofuncao->BeginTransaction();
+        TRY
+        {
+            $this->objocupacaofuncao->save();
+
+            $msg = ' Ocupação finalizada, vínculo: '  . $this->objocupacaofuncao->idvinculo
+                   . '  Data de término: '            . $this->objocupacaofuncao->datafim;
+            $this->objocupacaofuncao->Log(OP_UPD,       $this->objocupacaofuncao->idocupacaofuncao
+                                      . ' idfuncao: ' . $this->objocupacaofuncao->idfuncao
+                                      . '  datafim: ' . $this->objocupacaofuncao->datafim . $msg);
+            $this->objocupacaofuncao->EndTransaction();
+
+            $go = $this->manager->GetActionURL
+                  ($module,'main:vinculo', $this->objocupacaofuncao->idvinculo,array('form'=>'funcao'));
+            $this->manager->Information($msg,$go);
+        }
+        CATCH (Exception $e)
+        {
+            $this->AddError($e->GetMessage());
+        }
+    } // btnSalvar_click
+
+
+}
+?>

@@ -1,0 +1,170 @@
+<?
+class FrmTabelaGeral extends Form
+{
+	var $listURL;
+    var $objTabelaGeral;
+
+	function FrmTabelaGeral()
+    {   global $MIOLO, $module, $page, $context, $self;
+
+        $this->listURL = $MIOLO->GetActionURL($module,$self,'',Array('event'=>'btnList:click') );
+        $this->objTabelaGeral = $MIOLO->GetBusiness($module,'tabelageral');
+		$this->Form('Tabela Geral');
+	    $this->EventHandler();
+	}
+
+    function CreateFields()
+	{  global $MIOLO, $action;
+
+       $fields = Array(
+           new HiddenField('key',''),
+           array(
+  		     new LookupTextField('lkpTabela','','Tabela',20)
+           ),
+           array(
+             new TextField('edtItem1','','Item',20),
+             new TextField('edtItem2','','Valor',20),
+             new TextField('edtItem3','','Obs',40)
+           )
+       );
+	   $this->SetFields($fields);
+
+	   $this->SetFieldAttr('lkpTabela','module','common');
+	   $this->SetFieldAttr('lkpTabela','item','TabelaGeral');
+	   $this->SetFieldAttr('lkpTabela','event', 'filler');
+	   $this->SetFieldAttr('lkpTabela','related', 'lkpTabela');
+       $buttons = Array(
+           new FormButton('btnPost', 'Enviar'),
+		   new FormButton('btnNew', 'Novo', $action),
+           new FormButton('btnDelete', 'Excluir'),
+	       new FormButton('btnList', 'Relação', $this->listURL)
+       );
+	   $this->SetButtons($buttons);
+	   $this->AddValidator(new RequiredValidator('lkpTabela'));
+	   $this->AddValidator(new RequiredValidator('edtItem1'));
+	}
+
+	function GetData()  // nome dos formfields != business fields
+	{
+        $data = new FormData();
+		$data->idtabelageral = $this->GetFieldValue('key');
+		$data->tabela = $this->GetFieldValue('lkpTabela');
+		$data->item1 = $this->GetFieldValue('edtItem1');
+		$data->item2 = $this->GetFieldValue('edtItem2');
+		$data->item3 = $this->GetFieldValue('edtItem3');
+        return $data;
+	}
+
+	function SetData($data)
+	{
+		$this->SetFieldValue('key', $data->idtabelageral);
+		$this->SetFieldValue('lkpTabela', $data->tabela);
+		$this->SetFieldValue('edtItem1', $data->item1);
+		$this->SetFieldValue('edtItem2', $data->item2);
+		$this->SetFieldValue('edtItem3', $data->item3);
+	}
+
+	function btnPost_click()
+	{
+		global $MIOLO, $module, $self, $action;
+        $objTabelaGeral = &$this->objTabelaGeral;
+	    if ( $objTabelaGeral )
+		{
+			$objTabelaGeral->SetData($this->GetData());
+			$is_update = ($this->GetFieldValue('key') != '');
+		    if ( $is_update )
+			{
+				  $ok = $objTabelaGeral->Update();
+            }
+		    else
+			{
+				  $ok = $objTabelaGeral->Insert();
+            }
+            if ( $ok )
+            {
+                $MIOLO->Information('Tabela Geral atualizada com sucesso.', $action );
+                return true;
+            }
+            $this->AddError($objTabelaGeral->GetErrors());
+	    }
+	}
+
+	function btnList_click()
+	{   
+		global $MIOLO, $module, $self, $theme, $action, $page;
+
+        $objTabelaGeral = &$this->objTabelaGeral;
+        $sql = $objTabelaGeral->sqlAllFields();
+        $columns = array(
+           new DataGridColumn('idTabelaGeral','Id','right', true, '5%',true),
+           new DataGridColumn('tabela','Tabela','left', true, '10%',true, null, true,true),
+           new DataGridColumn('item1','Item','left',true, '50%',true, null, true,true),
+           new DataGridColumn('item2','Valor','left', true, '10%',true),
+           new DataGridColumn('item3','Obs','left', true, '20%',true)
+        );
+		$href_datagrid = $MIOLO->GetActionURL($module,$self,'', Array('event'=>'btnList_click'));
+        $page->action = $href_datagrid;
+        $query = $objTabelaGeral->Query($sql);
+        $datagrid = new DataGrid2($query, $columns, $href_datagrid,20);
+        $datagrid->SetTitle('Tabela Geral');
+        $datagrid->SetLinkType('linkbutton');
+	    $datagrid->AddActionUpdate($MIOLO->GetActionURL($module,$self,'%0%',Array('event'=>'btnEdit:click')));
+	    $datagrid->AddActionDelete($MIOLO->GetActionURL($module,$self,'%0%',Array('event'=>'btnDelete:click')));
+        $datagrid->HeaderLink('new', 'Novo Registro',
+                  $MIOLO->GetActionURL($module,$self,'',Array('event'=>'btnInsert:click')));
+		$theme->InsertContent($datagrid);
+	}
+
+	function btnEdit_click($key='')
+	{   
+		global $MIOLO, $module, $item, $self, $action;
+        $item = ($key != '') ? $key : $item;		
+        $objTabelaGeral = &$this->objTabelaGeral;
+		if ($objTabelaGeral)
+        {
+		   $this->SetData($objTabelaGeral->GetById($item));
+		   $this->SetButtonAttr('btnNew','label','Cancelar');
+	       $this->AddError( $objTabelaGeral->GetErrors() );
+        }
+	}
+
+	function btnNew_click()
+	{
+       $this->SetData();
+	}
+
+	function btnDelete_click()
+	{   
+		global $MIOLO, $module, $item, $self, $action;
+
+        $idTabelaGeral = isset($item) ? $item : $this->GetFieldValue('key'); // $item (get) ou $this->key (post)
+        $MIOLO->Assert( isset($idTabelaGeral), 'Tabela não foi informada!', $action);
+        $objTabelaGeral = &$this->objTabelaGeral->GetById($idTabelaGeral);
+        $conf = $this->GetFormValue('conf');
+	    if ( $conf == 'sim')
+	    {
+            if ( $objTabelaGeral->Delete() )
+	        {
+			   $MIOLO->Prompt(Prompt::Information("Item [$objTabelaGeral->tabela:$objTabelaGeral->item1] excluído com sucesso.",$this->listURL));
+	        }
+	        else
+	        {
+		       $MIOLO->Prompt(Prompt::Information( $objTabelaGeral->GetErrors(),$action));
+            }
+	    }
+	    elseif ( $conf == 'nao')
+        {
+	       $MIOLO->Prompt(Prompt::Information('Exclusão cancelada.',$this->listURL));
+        }
+	    else
+	    {
+		    $action_sim = $MIOLO->GetActionURL($module,$self,$idTabelaGeral, array('event'=>'btnDelete:click','conf'=>'sim'));
+		    $action_nao = $MIOLO->GetActionURL($module,$self,$idTabelaGeral, array('event'=>'btnDelete:click','conf'=>'nao'));
+	        $MIOLO->Prompt(Prompt::Question("Confirma a exclusão do Item [$objTabelaGeral->tabela:$objTabelaGeral->item1] ?", 
+				$action_sim, $action_nao));
+	    }
+	}
+
+}
+
+?>

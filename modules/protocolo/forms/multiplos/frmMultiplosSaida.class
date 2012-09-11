@@ -1,0 +1,136 @@
+<?
+class frmMultiplosSaida extends MForm
+{
+    protected $processo;
+    protected $perms;
+    protected $setor;
+    protected $setorAcesso;
+    public function __construct()
+    {
+//      construct
+        global $MIOLO;
+        $this->processo  = $MIOLO->GetBusiness('protocolo','processo');
+        $this->perms = $MIOLO->getPerms();
+        $this->setor = $MIOLO->getBusiness('protocolo','setor');
+        $this->setorAcesso = $MIOLO->getBusiness('protocolo','setoracesso');
+        parent::__construct('Saida Múltipla');
+        $this->SetClose($MIOLO->GetActionURL('protocolo','main'));
+        $this->page->addJsCode(file_get_contents(dirname(__FILE__).'/js/frmMultiplosSaida.js'));
+        $this->EventHandler();
+    }    
+    public function CreateFields()
+    {
+//      setor de destino 
+        $setorDestino = new MComboBox('setoresDestino','','Setor:',$this->setor->selAll(),'','',15);
+        $setorDestino->addAttribute('maxlength','15');
+        $setorDestino->addAttribute("onkeyup","toUpperCase(this)");
+        $setorDestino->addAttribute('style','text-transform:uppercase');
+//      numero de processo
+        $numProcesso = new MLookupTextField('numProcesso','','Processo:',20);
+        $numProcesso->module = 'protocolo';
+        $numProcesso->item = 'processosaida';
+        $numProcesso->event = 'filler';
+        $numProcesso->related = 'none,numProcesso';
+        $numProcesso->filter = 'setorUsuario,numProcesso';
+        $numProcesso->addAttribute('onkeypress',"return&nbsp;setValue(this,event)");
+//      lista de processos
+        $listaProcessos = new MMultiTextField3('listaProcessos', null, 'Seleção de processos',array($setorDestino,$numProcesso), 200, true, 'horizontal' );
+        $listaProcessos->fieldWidth = 200;       
+//      fields
+        $setorUsuario = ($this->perms->checkAccess('PROT_ADMIN', A_ACCESS)) ? '%' : $this->processo->getSetorUsuario();
+        $fields = array(
+            new MHiddenField('setorUsuario',$setorUsuario),
+            $listaProcessos,
+        );
+        $this->SetFields($fields);
+//      buttons
+        $buttons = array(
+           new MButton('btnExecutar', 'Executar'),
+        );
+        $this->SetButtons($buttons);
+    }
+    public function btnExecutar_click()
+    {
+        $data = $this->getData();
+        if (!$listaProcessos = $this->listaProcessos->getCodeValue())
+        {
+            $this->addError('Você precisa selecionar pelo menos um processo.');
+            return;
+        }
+        foreach ($listaProcessos as $key => $value)
+        {
+            if ($numProcesso = str_repeat('0',14-strlen($value[1])).$value[1])
+            {
+                if ($setor = $value[0])
+                {
+                    $serie = substr($numProcesso,0,6);
+                    $ano = substr($numProcesso,7,4);
+                    $codigo = substr($numProcesso,12,2);
+                    (is_numeric($codigo)) ? $this->processo->getByNumero($ano.$serie.$codigo) : $this->processo->getByPartNumero($ano.$serie);
+                    if ($this->processo->isPersistent())
+                    {
+                        if (in_array($setor,$this->setor->selAll()))
+                        {
+			if (($this->processo->retencao->setor == $data->setorUsuario) || ($this->perms->checkAccess('PROT_ADMIN', A_ACCESS)) )
+                            {
+                                switch ($this->processo->retencao->status)
+                                {
+                                    case 'J':
+                                        $mensagem[] = array($this->processo->numProcessoFormatado(),'Processo anexado.');
+                                    break;
+                                    case 'A':
+                                        $mensagem[] = array($this->processo->numProcessoFormatado(),'Processo arquivado.');
+                                    break;
+                                    case 'N':
+                                        $mensagem[] = array($this->processo->numProcessoFormatado(),'Saída realizada.');
+                                        try
+                                        {
+                                            $this->processo->beginTransaction();
+                                            $andamento = $this->processo->getAndamento($this->processo->retencao->numAndamento);
+                                            $andamento->setorDestino = $setor;
+                                            $andamento->dataSaida = date("YmdHi");
+                                            $this->processo->addAndamento($andamento);
+                                            $this->processo->retencao->setData($andamento);
+                                            $this->processo->save();
+                                            $this->processo->endTransaction();
+                                            $this->processo->Log(OP_UPD,'O processo '.$this->processo->numProcessoFormatado().' deu entrada no setor '.$this->processo->retencao->setor.' com sucesso.');
+                                            unset($listaProcessos[$key]);
+                                        }
+                                        catch(Exception $e) {$this->addError($e->getMessage());}
+                                    break;
+                                }
+                            }
+                            else
+                            {
+                                $mensagem[] = array($this->processo->numProcessoFormatado(),'Você não tem acesso a este setor');
+                            }
+                        }
+                        else
+                        {
+                            $mensagem[] = array($this->processo->numProcessoFormatado(),'Setor inválido');
+                        }
+                    }
+                    else
+                    {
+                        $mensagem[] = array($numProcesso,'Número de processo inválido');
+                    }
+                }
+                else
+                {
+                    $mensagem[] = array($numProcesso,'Setor inexistente');
+                }
+            }
+            else
+            {
+                $mensagem[] = array($numProcesso,'Número de processo inexistente');
+            }
+        }
+        $dadosVerificados = new MTableRaw('',$mensagem,array('Número','Mensagem'));
+        $dadosVerificados->setWidth('300px');
+        $groupDadosVerificados = new MBaseGroup( 'groupDadosVerificados', 'Mensagens',array($dadosVerificados),'horizontal','css');
+        $groupDadosVerificados->addAttribute('style','padding:10px');
+        $this->addField($groupDadosVerificados);
+        $this->listaProcessos->setCodeValue($listaProcessos);
+    } 
+}
+?>

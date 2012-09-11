@@ -1,0 +1,402 @@
+<?
+/**
+/**
+ * Formulário para relatório de execução financeira
+ * 
+ */
+class frmRepExecucaoFinanceira extends Form
+{
+	var $objUO;
+
+	function __construct()
+    {
+		global $MIOLO;
+        $this->Form('Relatório de Execução Financeira');
+		$this->SetClose($this->manager->GetActionURL('adm','main:relatorios'));
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+		global $MIOLO, $module;
+
+		$this->objUO = $MIOLO->GetBusiness($module,'uo');
+		$opt = $this->objUO->listUosOrdemNome();
+		$options['0'] = 'TODAS';
+		foreach($opt->result as $o)
+		{
+			$options[$o[0]] = $o[1];
+		}
+
+		$fields = array(
+			new Selection('selUO','','UO',$options),
+			new CalendarField('calDataInicial','','Data Inicial'),
+			new CalendarField('calDataFinal','','Data Final'),
+		);
+
+       	$this->SetFields($fields);
+
+		$button = array(
+			new FormButton('btnRelatorio','Gerar Relatório','PDF'),
+//			new FormButton('btnGerarCSV', 'Gerar Planilha')
+		);
+       	$this->SetButtons($button);
+		$this->defaultButton = false;
+	}
+
+
+	function btnRelatorio_click()
+	{
+	        global $MIOLO;
+
+	        $inicio = $this->getFieldValue('calDataInicial');
+               	$final = $this->getFieldValue('calDataFinal');
+	        $idUO = $this->getFieldValue('selUO');
+
+		if($idUO == "")
+		{
+		    $MIOLO->Error('A UO não foi selecionada.');
+		}
+ 
+	        if($inicio == "" || $final == "")
+		{
+		    $MIOLO->Error('Você deve inserir as datas inicial e final.');
+		    return;
+		}
+		
+		$inicio = substr($inicio,6,4).'/'.substr($inicio,3,2).'/'.substr($inicio,0,2);
+		$final = substr($final,6,4).'/'.substr($final,3,2).'/'.substr($final,0,2);
+
+		$report = new MJasperReport('sigaept');	
+ 		$parameters['pURL'] = $MIOLO->GetConf('home.url');
+        	$parameters['SUBREPORT_DIR'] = $MIOLO->GetConf('home.modules').'/common/reports/';
+	        $parameters['pTitulo'] = "EXECUCAO FINANCEIRA";
+        	$parameters['int_pConsulta'] = $MIOLO->login->idkey;
+        	$parameters['DATAINICIAL'] = $inicio;
+        	$parameters['DATAFINAL'] = $final;
+                $parameters['SUBREPORT_FINANCEIRO'] = $MIOLO->GetConf('home.modules').'/adm/reports/';
+	        $parameters['IDUO'] = $idUO;
+
+
+           	if( $parameters[ int_IDUO ] == 0 ){
+
+		$report->Execute('adm', 'ExecucaoFinanceiraGeralTodas', $parameters);
+                }else{
+                $report->Execute('adm', 'ExecucaoFinanceiraGeral', $parameters);
+                }
+         }	
+
+	function btnGerarCSV_click()
+    {   global $MIOLO, $module, $item;
+		$UO = Form::GetFormValue('selUO');
+		$dataInicial = Form::GetFormValue('calDataInicial');
+		$dataFinal = Form::GetFormValue('calDataFinal');
+		$ano = substr($this->dataFinal,6,4);
+		$objOrcamentoInterno = $MIOLO->GetBusiness($module,'orcamentointerno');
+		$objUO = $MIOLO->GetBusiness($module,'uo');
+		$objTipoReq = $MIOLO->GetBusiness($module,'tiporeq');
+		$objRequisicao = $MIOLO->GetBusiness($module,'requisicao');
+
+		//montagem da árvore de UOs, Rubricas e Tipos de Requisicao
+		$uos = $objUO->listNomesUos();
+		$numUos = $uos->GetRowCount();
+		$tree = array();
+		$uos->moveFirst();
+		for ($i = 0; $i < $numUos; $i++)
+		{
+			$rowUo = $uos->getRowValues();
+			$rubricas = $objOrcamentoInterno->GetRubricasByUo($rowUo[0],$ano);
+			$numRubricas = $rubricas->GetRowCount();
+			$rubricas->moveFirst();
+			$tree[$rowUo[1]] = array();
+			for ($j = 0; $j < $numRubricas; $j++)
+			{
+				$rub = $rubricas->getRowValues();
+				$tipos = $objTipoReq->GetTiposByUoRubrica($rowUo[0], $rub[1], $dataInicial, $dataFinal);
+				$numTipos = count($tipos);
+//				if($rowUo[0]==118)
+//				{
+//					var_dump($rub[1]);
+//					var_dump($numTipos);
+//				}
+				for ($k = 0; $k < $numTipos; $k++)
+				{
+					$tree[$rowUo[1]][$rub[1]][] = $tipos[$k][0];
+				}
+				$rubricas->moveNext();
+			}
+			$uos->moveNext();
+		}
+		
+
+//var_dump($tree);
+		// simula multiplos niveis de quebra
+		//var_dump($tree);
+		foreach ($tree as $nome=>$rubricas) // level 1
+           {
+			$idUo = $objUO->GetByNome($nome);
+			if ( ($UO == $idUo) or ($UO == '0') )
+			{
+				$nomeOK = false;
+                $soma11 = 0;
+                $soma12 = 0;
+                ;
+                
+                foreach ($rubricas as $rubrica=>$tipos) // level 2
+                {
+                	foreach ( $tipos as $t )
+                	{
+                		$aux[$t] = $t;
+                	}
+                	foreach( $aux as $a )
+                	{
+                		$aux2[] = $a;
+                	}
+                	$tipos = $aux2;
+                	                	
+					$rubricaOK = false;
+					$soma21 = 0;
+                    $soma22 = 0;
+                    //
+                    foreach ($tipos as $tipo) // level 3
+                    {
+						$tipoOK = false;
+						//var_dump($tipo);
+						// tipos de requisições que aparecem no relatório
+						if (($tipo == 'HOTEL') or ($tipo == 'PASSAGEM') or ($tipo == 'RESTAURANTE') or ($tipo == 'VEICULO') or ($tipo == 'DIARIA'))
+						{
+							if ($tipo == 'HOTEL')
+							{
+								$itemreq = 'ad_itemreqhotel';	//tabela ad_itemreq...
+								$empresa = 'ad_hotel';			//tabela ad_...
+								$idEmpresaI = 'idHotelPref';	//campo da tabela ad_itemreq...
+								$idEmpresaE = 'idHotel';		//campo da tabela ad_...
+							}
+							if ($tipo == 'PASSAGEM')
+							{
+								$itemreq = 'ad_itemreqpassagem';
+								$empresa = 'ad_empresapassagem';
+								$idEmpresaI = 'idEmpresaPassagem';
+								$idEmpresaE = 'idEmpresaPassagem';
+							}
+							if ($tipo == 'RESTAURANTE')
+							{
+								$itemreq = 'ad_itemreqrestaurante';
+								$empresa = 'ad_restaurante';
+								$idEmpresaI = 'idRestaurantePref';
+								$idEmpresaE = 'idRestaurante';
+							}
+							if ($tipo == 'VEICULO')
+							{
+								$itemreq = 'ad_itemreqveiculo';
+								$empresa = null;
+								$idEmpresaI = null;
+								$idEmpresaE = null;
+							}
+							if ($tipo == 'DIARIA')
+							{
+								$itemreq = 'ad_itemreqdiaria';
+								$empresa = null;
+								$idEmpresaI = null;
+								$idEmpresaE = null;
+							}
+
+							// dados relativos às requisições do tipo e da rubrica corrente
+							$query = $objRequisicao->repExecucaoFinanceira($itemreq, $empresa, $idEmpresaI, $idEmpresaE, $idUo, $rubrica, $dataInicial, $dataFinal, $tipo);
+
+							$r = count($query); // numero de linhas da rubrica corrente
+							if($r > 0)
+							{
+								$tipoOK = true;
+								$rubricaOK = true;
+								$nomeOK = true;
+							}
+
+			                $soma31 = 0;
+				            $soma32 = 0;
+                            $dataRel[] = array($nome,$rubrica,'','','','','','');
+				            for ($l = 0; $l < $r; $l++) // data
+		                    {
+						        if ($tipoAnterior != $tipo)
+						        {
+						        	if($tipoAnterior)
+						        	{
+								        $somaPrevisao = number_format($somaPrevisao,2,',','.');
+								        $somaReal = number_format($somaReal,2,',','.');
+						        		$dataRel[] = array('','','','','SUBTOTAL:',$somaPrevisao,$somaReal);
+						        	}
+						        	$somaPrevisao = 0;
+						        	$somaReal = 0;
+						        		
+						        	$dataRel[] = array('','','','','','','');
+						        	$dataRel[] = array($tipo,'','','','','','');
+						        	$dataRel[] = array('','','','','','','');
+						       		$dataRel[] = array('REQ.','DATA','BENEFICIÁRIO','EMPRESA','Nº FATURA','PREVISÃO','VALOR REAL');							        	
+						        }
+						        		                    	
+								if(($tipo == 'DIARIA') or ($tipo == 'VEICULO'))
+								{
+									//verificações relativas ao status da requisicao
+									if(($query[$l][5] == '4') or ($query[$l][5] == '7') or ($query[$l][5] == '9') or ($query[$l][5] == 'C') or ($query[$l][5] == 'D'))
+									{
+										($query[$l][4] = 0);
+									}
+									if($query[$l][5] == 'E')
+									{
+										($query[$l][3] = 0);
+									}
+
+						            $soma31 += floatval(str_replace(',','.',$query[$l][3]));
+					                $soma32 += floatval(str_replace(',','.',$query[$l][4]));
+
+									$data[] = array
+					                (
+										$nome,
+						                $rubrica,
+					                    $tipo,
+						                $query[$l][0], //requisição
+							            $query[$l][1], //datareq
+								        $query[$l][2], //beneficiario
+									    ' ',	//empresa
+                                        ' ',    //nota fiscal
+										'R$ ' . number_format(str_replace(',','.',$query[$l][3]),2,',','.'), //previsao
+										'R$ ' . number_format(str_replace(',','.',$query[$l][4]),2,',','.'), //valor real
+							        );        
+
+							        
+							        $dataRel[] = array
+					                (
+										//$nome,
+						                //$rubrica,
+					                    //$tipo,
+						                $query[$l][0], //requisição
+							            $query[$l][1], //datareq
+								        $query[$l][2], //beneficiario
+									    ' ',	//empresa
+                                        ' ',    //nota fiscal
+										'R$ ' . number_format(str_replace(',','.',$query[$l][3]),2,',','.'), //previsao
+										'R$ ' . number_format(str_replace(',','.',$query[$l][4]),2,',','.'), //valor real	
+							        );
+							        $somaPrevisao += str_replace(',','.',$query[$l][3]);
+							        $somaReal += str_replace(',','.',$query[$l][4]);
+								}								
+								else
+								{
+									//verificações relativas ao status da requisicao
+									if(($query[$l][7] == '4') or ($query[$l][7] == '7') or ($query[$l][7] == '9') or ($query[$l][7] == 'C') or ($query[$l][7] == 'D'))
+									{
+										($query[$l][6] = 0);
+									}
+									if($query[$l][7] == 'E')
+									{
+										($query[$l][5] = 0);
+									}
+
+									//Somatorio do Valor Real
+					                $soma32 += $query[$l][6];
+					                
+					                if ($query[$l][4] != '')
+					              	{
+					                	$previsaoDebito = NULL;
+                                    }
+                                    else 
+                                    {
+										// Somatorio do Valor Estimado
+										$soma31 += $query[$l][5];
+                                    	$previsaoDebito = number_format(str_replace(',','.',$query[$l][5]),2,',','.');
+                                    }
+                                    
+                                    
+									$data[] = array
+					                (					                		
+										$nome,
+						                $rubrica,
+					                    $tipo,
+						                $query[$l][0],	//requisição
+							            $query[$l][1],	//datareq
+								        $query[$l][2],	//beneficiario
+									    $query[$l][3],	//empresa
+									    $query[$l][4],	//nota fiscal
+										'R$ ' . $previsaoDebito,	//previsao
+										'R$ ' . number_format(str_replace(',','.',$query[$l][6]),2,',','.'),	//valor real
+							        );
+							        $dataRel[] = array
+					                (
+										//$nome,
+						                //$rubrica,
+					                    //$tipo,
+						                $query[$l][0], //requisição
+							            $query[$l][1], //datareq
+								        $query[$l][2], //beneficiario
+										$query[$l][3],	//empresa								        
+									    $query[$l][4],	//nota fiscal
+										'R$ ' . $previsaoDebito,	//previsao
+										'R$ ' . number_format(str_replace(',','.',$query[$l][6]),2,',','.'),	//valor real
+							        );
+							        //$somaPrevisao += str_replace(',','.',$query[$l][3]);
+							        //$somaReal += str_replace(',','.',$query[$l][4]);
+							        $somaPrevisao += str_replace(',','.',$previsaoDebito);
+							        $somaReal += str_replace(',','.',$query[$l][6]);
+								}
+								$tipoAnterior = $tipo;
+			                }
+			              
+
+							if ($tipoOK)
+							{
+								$summary3[] = array(array(
+									"<b>Subtotal:</b>",
+									"<b>R$ " . number_format(str_replace(',','.',$soma31),2,',','') . "</b>",
+									"<b>R$ " . number_format(str_replace(',','.',$soma32),2,',','') . "</b>"
+								));
+							}
+							$soma21 += $soma31;
+							$soma22 += $soma32;
+						}
+					}
+					if ($rubricaOK)
+					{
+						$inicio = substr($dataInicial, 6, 4);
+						$fim = substr($dataFinal, 6, 4);
+						$orcamento = $objOrcamentoInterno->getSaldoRubricaIntervalo($idUo, $rubrica, $inicio, $fim);
+						$dotacao = $orcamento[0];
+						$saldo = $dotacao - $soma21 - $soma22;
+	                    $summary2[] = array(array(
+							"<b>Subtotal da Rubrica:</b>", 
+							"<b>Dotação: R$ " . number_format(str_replace(',','.',$dotacao),2,',','') . "  </b>",	
+							"<b>Previsão: R$ " . number_format(str_replace(',','.',$soma21),2,',','') . "</b>", 
+							"<b>Valor Real: R$ " . number_format(str_replace(',','.',$soma22),2,',','') . "</b>",
+							"<b>Saldo: R$ " . number_format(str_replace(',','.',$saldo),2,',','') . "</b>"
+						));
+					}
+                    $soma11 += $soma21;
+                    $soma12 += $soma22;
+                }
+				
+				if ($nomeOK)
+				{
+					$inicio = substr($dataInicial, 6, 4);
+					$fim = substr($dataFinal, 6, 4);
+					$orcamento = $objOrcamentoInterno->getSaldoUOIntervalo($idUo, $inicio, $fim);
+					$dotacao = $orcamento[0];
+					$saldo = $dotacao - $soma11 - $soma12;
+					$summary1[] = array(array(
+						"<b>TOTAL UO</b>", 
+						"<b>Dotação: R$ " . number_format(str_replace(',','.',$dotacao),2,',','') . "  </b>",
+						"<b>Previsão: R$ " . number_format(str_replace(',','.',$soma11),2,',','') . "</b>", 
+						"<b>Valor Real: R$ " . number_format(str_replace(',','.',$soma12),2,',','') . "</b>",
+						"<b>Saldo: R$ " . number_format(str_replace(',','.',$saldo),2,',','') . "</b>"
+					));
+				}
+			}
+		}
+		MIOLO::Import('extensions::mcsvdump');
+		$consulta = new Mcsvdump();	    
+	    //$consulta->result = $resultAux;
+		$consulta->dump($dataRel,'teste');
+		exit;    	
+        
+    }
+
+}
+?>

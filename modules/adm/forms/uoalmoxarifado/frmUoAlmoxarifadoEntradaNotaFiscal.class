@@ -1,0 +1,344 @@
+<?php
+
+class frmUoAlmoxarifadoEntradaNotaFiscal extends Form {
+    
+    protected $objEstoque;    
+    
+    function __construct($objEstoque)
+    {
+        $this->objEstoque = $objEstoque;	
+		$this->Form('Dados da Nota');
+		//$this->page->addJsCode(file_get_contents(dirname(__FILE__) . '/../../ui/js/mask.js'));
+                $this->page->addJsCode(file_get_contents(dirname(__FILE__) . '/../../ui/js/maskMoney.js'));
+                $this->page->addJsCode(file_get_contents(dirname(__FILE__) . '/../../ui/js/mask.js'));
+		$this->EventHandler();
+    }
+        
+    public function CreateFields() {
+        
+        
+
+		$fields = array(
+                        new MSpacer(1),			
+                        new MSelection('extraOrcamentario', 'N', 'Extra Orçamentário', array('N' => 'Não', 'S' => 'Sim')),
+			new MCalendarField('datamov', date('d/m/Y'), 'Data de Entrada', 8),
+                        new MCalendarField('datanotafiscal', null, 'Data de Nota Fiscal', 8),	
+                        new MTextField('notaFiscal', '', 'Nota Fiscal', 20),								
+                        new MTextField('numeroEmpenho', '', 'Empenho', 15),
+			new LookupTextField('lkpFornecedor', '', 'Fornecedor', 40, null, null, null, 'adm', 'fornecedor'),
+			new HiddenField('idFornecedor', '', 'idFornecedor'),			
+                        new MSpacer(1),
+		);
+
+		$this->SetFields($fields);
+
+		$this->SetFieldAttr('lkpFornecedor', 'related', 'idFornecedor,lkpFornecedor');
+                
+                $this->notaFiscal->addAttribute('maxlength',16);
+                $this->numeroEmpenho->addAttribute('maxlength',12);
+
+                $this->datamov->addAttribute('onKeyUp', 'makeMask(this, \'##/##/####\');');
+                $this->datamov->addAttribute('onBlur', 'makeMask(this, \'##/##/####\');');
+                $this->datanotafiscal->addAttribute('onKeyUp', 'makeMask(this, \'##/##/####\');');
+                $this->datanotafiscal->addAttribute('onBlur', 'makeMask(this, \'##/##/####\');');
+                
+                
+
+		$buttons = array(
+			new FormButton('btnPost', 'Enviar'),
+		);
+		
+                $this->SetButtons($buttons);
+	}
+        
+        public function btnPost_click() {           
+            global $item, $MIOLO, $page;
+            
+            //esvazia a variavel arrayalmox para não pegar 'lixo'.
+            $MIOLO->session->setValue('arrayalmox', '');
+            
+            //pega os dados do formulario.
+            $data = $this->getData();                      
+            
+            $objuo = $MIOLO->GetBusiness('adm', 'uo', $item);  
+            
+            //formata data para se poder fazer a comparacao.
+            $datamovFormat = substr($data->datamov, 6, 4).'/'. substr($data->datamov, 3, 2).'/'.substr($data->datamov, 0, 2);
+            
+            //teste para saber se a data é superior a data de bloqueio de almoxarifado.
+            if (strtotime($objuo->dataBloqueio) >= strtotime($datamovFormat)){
+                        $dataFormatada = substr($objuo->dataBloqueio, 8, 2).'/'. substr($objuo->dataBloqueio, 5, 2).'/'.substr($objuo->dataBloqueio, 0, 4);
+                        $this->AddError('Entradas bloqueadas para datas anteriores à '.$dataFormatada.'.');
+            } else {
+                        //monta field com os dados da nota (todos readonly).
+                        $fields = array(
+                                    new MSpacer(1),			
+                                    new MTextField('extraOrcamentario2', $data->extraOrcamentario, 'Extra Orçamentário', 8,'',NULL,True),
+                                    new MTextField('datamov', $data->datamov, 'Data de Entrada', 8,'',NULL,True),								
+                                    new MTextField('datanotafiscal2', $data->datanotafiscal, 'Data de Nota Fiscal', 8,'',NULL,True),	
+                                    new MTextField('notaFiscal2', $data->notaFiscal, 'Nota Fiscal', 20,'',NULL,True),								
+                                    new MTextField('numeroEmpenho2', $data->numeroEmpenho, 'Empenho', 15,'',NULL,True),
+                                    new MTextField('lkpFornecedor2', $data->lkpFornecedor, 'Fornecedor', 40,'',NULL,True),
+                                    new HiddenField('idFornecedor2', $data->idFornecedor, 'idFornecedor'),			
+                                    new MSpacer(1),
+                        );                      
+
+                        $this->SetFields($fields);
+
+                        $this->SetFieldAttr('lkpFornecedor', 'related', 'idFornecedor,lkpFornecedor');
+                        
+                        //Field com os dados a ser preenchido do material.
+                        $this->AddField(new MBox('Dados do Material'));
+                        $this->AddField(new MHiddenField('idmaterial', '', 'Idmaterial'));
+                        $this->AddField(new MLookupTextField('lkpMaterial', '', 'Material', 50, NULL, NULL, NULL, 'adm', 'material2'));
+                        $this->AddField(new MTextField('estoque', '', 'Quantidade Total', 10, 'Ex: 1000'));
+                        $this->AddField(new MTextField('valorTotal', '', 'Valor Total', 10, 'Ex: 45,00'));            
+                        $this->AddField(array(new Mbutton('adc', 'Adicionar'), new Mbutton('canc', 'Cancelar'), new Mbutton('mat', 'Incluir Novo Material')));
+                        
+                        //numero da uo passado por sessão para se ter acesso no lookup.
+                        $MIOLO->session->setValue('uo', $item);
+                        $this->SetFieldAttr('lkpMaterial', 'module', 'adm');
+                        $this->SetFieldAttr('lkpMaterial', 'item', 'material2');                
+                        $this->SetFieldAttr('lkpMaterial', 'event', 'filler');
+                        $this->SetFieldAttr('lkpMaterial', 'related', 'idmaterial,lkpMaterial');                  
+                        $teste = $MIOLO->GetActionURL('adm','main:uoalmoxarifado',$this->objUoAlmoxarifado->idUo,array('form'=>'estoqueinicial','id'=>'new'));
+                        
+                        $this->estoque->addAttribute('maxlength',7);
+                        
+                        //máscara no valortotal.
+                        $this->valorTotal->addAttribute('onKeyUp', 'amf2005_BecameCurrency(this,15)');
+                        $this->valorTotal->addAttribute('onBlur', 'amf2005_BecameCurrency(this,15)');
+                        
+                        $this->setButtonAttr('btnPost', 'visible', FALSE); 
+            }          
+                
+        }
+        
+        public function adc_click() {     
+            global $item, $MIOLO;
+            $data = $this->getData();  
+            
+            $idmaterial = Form::GetFormValue('idmaterial');
+            $quantPedida = Form::GetFormValue('estoque');
+            $valorTotal = Form::GetFormValue('valorTotal');                     
+                      
+            $fields = array(
+                        new MSpacer(1),			
+                        new MTextField('extraOrcamentario2', $data->extraOrcamentario, 'Extra Orçamentário', 8,'',NULL,True),
+                        new MTextField('datamov2', $data->datamov, 'Data de Entrada', 8,'',NULL,True),								
+                        new MTextField('datanotafiscal2', $data->datanotafiscal, 'Data de Nota Fiscal', 8,'',NULL,True),	
+                        new MTextField('notaFiscal2', $data->notaFiscal, 'Nota Fiscal', 20,'',NULL,True),								
+                        new MTextField('numeroEmpenho2', $data->numeroEmpenho, 'Empenho', 15,'',NULL,True),
+                        new MTextField('lkpFornecedor2', $data->lkpFornecedor, 'Fornecedor', 40,'',NULL,True),
+                        new HiddenField('idFornecedor2', $data->idFornecedor, 'idFornecedor'),			
+                        new MSpacer(1),
+            );                      
+
+            $this->SetFields($fields);           
+
+            $grid = $this->manager->GetUI()->GetGrid('adm','gridUoAlmoxarifadoEntradaMaterialNota', $this->objEstoque);                    
+            
+            if ($MIOLO->session->getValue('arrayalmox')) $finalizar = new Mbutton('fim', 'Finalizar');
+            
+            $this->AddField(new MBox('Dados do Material'));            
+            $this->AddField(new MHiddenField('idmaterial', '', 'Idmaterial'));
+            $this->AddField(new MLookupTextField('lkpMaterial', '', 'Material', 50, NULL, NULL, NULL, 'adm', 'material2'));
+            $this->AddField(new MTextField('estoque', '', 'Quantidade Total', 10, 'Ex: 1000'));
+            $this->AddField(new MTextField('valorTotal', '', 'Valor Total', 10, 'Ex: 45,00'));            
+            $this->AddField(array(new Mbutton('adc', 'Adicionar'), $finalizar, new Mbutton('canc', 'Cancelar'), new Mbutton('mat', 'Incluir Novo Material')));
+            $this->AddField(new MSpacer(1));            
+            
+            $this->AddField($grid);
+
+            $MIOLO->session->setValue('uo', $item);
+            $this->SetFieldAttr('lkpMaterial', 'module', 'adm');
+            $this->SetFieldAttr('lkpMaterial', 'item', 'material2');                
+            $this->SetFieldAttr('lkpMaterial', 'event', 'filler');
+            $this->SetFieldAttr('lkpMaterial', 'related', 'idmaterial,lkpMaterial');
+            
+            $this->estoque->addAttribute('maxlength',7);
+            
+            $this->valorTotal->addAttribute('onKeyUp', 'amf2005_BecameCurrency(this,15)');
+            $this->valorTotal->addAttribute('onBlur', 'amf2005_BecameCurrency(this,15)');
+
+            $this->setButtonAttr('btnPost', 'visible', FALSE);               
+
+            $data = $this->getData();     
+
+
+            $this->setFieldValue('lkpMaterial', '');
+            $this->setFieldValue('estoque', '');
+            $this->setFieldValue('valorTotal', '');
+            
+            if(!$idmaterial) {
+              $this->AddError('Por favor escolha um material.');
+            } 
+            if (!$quantPedida) {
+                $this->AddError('Por favor digite uma quantidade.');
+            } elseif (!is_numeric($quantPedida)) {
+                $this->AddError('A quantidade deve ser numérica.');
+            }    
+            if (!$valorTotal) {
+                $this->AddError('Por favor digite o valor total.');                      
+            } 
+        }
+        
+         public function fim_click() { 
+             global $item, $MIOLO, $module;
+             
+             $data = $this->getData2();
+             $cf = new MCurrencyFormatter();  
+             $matriz = $MIOLO->session->getValue('arrayalmox');
+             $go = $MIOLO->GetActionURL('adm','main:uoalmoxarifado', $item);
+             
+             try {             
+                for($i=0;$i<count($matriz);$i++) {                    
+
+                    $id = $matriz[$i][0];
+                    $quantPedida = $matriz[$i][1];
+                    $valorTotal = $matriz[$i][2];       
+                    //var_dump($id);var_dump($quantPedida);var_dump($valorTotal);exit;
+                    
+                    $valorTotal = str_replace(array('.', ','), array('', '.'), $valorTotal);
+
+                    $objEstoque = $MIOLO->GetBusiness($module, 'estoque'); 
+                    
+                    $objEstoque->getById($item, $id);
+                    $objEstoque->estoque = $quantPedida + $objEstoque->estoque;
+                    $objEstoque->valorTotal = $cf->toDecimal($valorTotal) + $cf->toDecimal($objEstoque->valorTotal); 
+                    
+                    $dataHora = split('/', $data->datamov);
+                    $dataHora = mktime(null, null, null, $dataHora[1], $dataHora[0], $dataHora[2]);
+                    $objEstoque->save();
+                    // Adiciona o movimento na AD_MOVIMENTO
+                    $objMovimento = $MIOLO->GetBusiness($module, 'movimento');                        
+                    $objMovimento->tipoMovimento = "1";
+                    $objMovimento->idUoAlmoxarifado = $item;
+                    $objMovimento->dataMovimento = date('d/m/Y', $dataHora);
+                    $objMovimento->quantidade = $quantPedida;
+                    $objMovimento->valorTotal = $cf->toDecimal($valorTotal);
+                    $objMovimento->idMaterial = $id;                         
+                    $objMovimento->idFornecedor = $data->idFornecedor;
+                    $objMovimento->datanotafiscal = $data->datanotafiscal;
+
+                    $quantidade = 0;
+                    $precoMedio = 0;                     
+                     
+                    $valorUnitarioQuantidade = $objMovimento->getLastValorUnitarioQuantidadeTotal($id, $item);                      
+
+                    if($valorUnitarioQuantidade){
+                        $valor += ($cf->toDecimal($valorUnitarioQuantidade[0])*$cf->toDecimal($valorUnitarioQuantidade[1]));
+                        $valor += $valorTotal;
+                        $quantidade += $valorUnitarioQuantidade[1];
+                        $quantidade += $quantPedida;
+                    }else {
+                        $valor = $objMovimento->valorTotal;                                    
+                        $quantidade = $objMovimento->quantidade;  
+                    }
+                    
+                    $precoMedio = $valor/$quantidade;
+                    $precoMedio = explode(".", $precoMedio);
+                    $precoMedio = $precoMedio[0].".".substr($precoMedio[1],  0, 2);  
+
+                    $objMovimento->notafiscal = $data->notaFiscal;
+                    $objMovimento->empenho = $data->numeroEmpenho;
+                    $objMovimento->cnpj = $data->cnpj;
+                    $objMovimento->extraOrcamentario = $data->extraOrcamentario;
+                    $objMovimento->valorunitario = $precoMedio;                        
+                    $objMovimento->quantidadetotal = $quantidade;
+                    $objMovimento->datahora = date('Y-m-d H:i:s');
+                    $objMovimento->save();
+
+                    //Se a entrada for retroativa corrige a tabela de movimento
+                    if (date('d/m/Y') > $objMovimento->dataMovimento) {                            
+                        $objMovimento2 = $MIOLO->GetBusiness($module, 'movimento');  
+                        $objMovimento2->corrigeTudo($objMovimento->idMaterial, $item);
+                    }    
+                }
+                $this->manager->Information('Materiais atualizados com sucesso.', $go);             
+             } catch (Exception $e) {
+                            $this->AddError('Não foi possível realizar a operação. Motivo: ' . $e->getMessage());
+             }
+             $MIOLO->session->setValue('arrayalmox', NULL);
+         }
+         
+         public function mat_click() {
+             global $MIOLO, $item, $page;
+             $data = $this->getData();  
+            
+            $idmaterial = Form::GetFormValue('idmaterial');
+            $quantPedida = Form::GetFormValue('estoque');
+            $valorTotal = Form::GetFormValue('valorTotal');                     
+                      
+            $fields = array(
+                        new MSpacer(1),			
+                        new MTextField('extraOrcamentario2', $data->extraOrcamentario, 'Extra Orçamentário', 8,'',NULL,True),
+                        new MTextField('datamov2', $data->datamov, 'Data de Entrada', 8,'',NULL,True),								
+                        new MTextField('datanotafiscal2', $data->datanotafiscal, 'Data de Nota Fiscal', 8,'',NULL,True),	
+                        new MTextField('notaFiscal2', $data->notaFiscal, 'Nota Fiscal', 20,'',NULL,True),								
+                        new MTextField('numeroEmpenho2', $data->numeroEmpenho, 'Empenho', 15,'',NULL,True),
+                        new MTextField('lkpFornecedor2', $data->lkpFornecedor, 'Fornecedor', 40,'',NULL,True),
+                        new HiddenField('idFornecedor2', $data->idFornecedor, 'idFornecedor'),			
+                        new MSpacer(1),
+            );                      
+
+            $this->SetFields($fields);           
+
+            $grid2 = $this->manager->GetUI()->GetGrid('adm','gridUoAlmoxarifadoEntradaMaterialNota2', $this->objEstoque);                    
+            
+            if ($MIOLO->session->getValue('arrayalmox')) $finalizar = new Mbutton('fim', 'Finalizar');
+            
+            $this->AddField(new MBox('Dados do Material'));
+            $this->AddField(new MHiddenField('idmaterial', '', 'Idmaterial'));
+            $this->AddField(new MHiddenField('iduo', $item));
+            $this->AddField(new MLookupTextField('lkpMaterial', '', 'Material', 50, NULL, NULL, NULL, 'adm', 'material2'));
+            $this->AddField(new MTextField('estoque', '', 'Quantidade Total', 10, 'Ex: 1000'));
+            $this->AddField(new MTextField('valorTotal', '', 'Valor Total', 10, 'Ex: 45,00'));            
+            $this->AddField(array(new Mbutton('adc', 'Adicionar'), $finalizar, new Mbutton('canc', 'Cancelar'), new Mbutton('mat', 'Incluir Novo Material')));
+            $this->AddField(new MSpacer(1));
+
+            $this->setFieldValue('idmaterial', '');
+            $this->setFieldValue('lkpMaterial', '');
+            $this->setFieldValue('estoque', '');
+            $this->setFieldValue('valorTotal', '');
+             
+            $this->AddField($grid2);
+
+            $MIOLO->session->setValue('uo', $item);
+            $this->SetFieldAttr('lkpMaterial', 'module', 'adm');
+            $this->SetFieldAttr('lkpMaterial', 'item', 'material2');                
+            $this->SetFieldAttr('lkpMaterial', 'event', 'filler');
+            $this->SetFieldAttr('lkpMaterial', 'filter', 'iduo');
+            $this->SetFieldAttr('lkpMaterial', 'related', 'idmaterial,lkpMaterial');
+            
+            $this->estoque->addAttribute('maxlength',7);
+            
+            $this->valorTotal->addAttribute('onKeyUp', 'amf2005_BecameCurrency(this,15)');
+            $this->valorTotal->addAttribute('onBlur', 'amf2005_BecameCurrency(this,15)');
+
+            $this->setButtonAttr('btnPost', 'visible', FALSE);               
+
+            $this->page->AddJsCode('window.open("http://'.$_SERVER['HTTP_HOST'].'/index.php?module=adm&action=main:uoalmoxarifado&item='.$item.'&form=estoqueinicial&id=new");');  
+         }
+         
+         public function canc_click() {
+             global $MIOLO, $item;
+             
+             $MIOLO->session->setValue('arrayalmox', NULL);
+             $go = $MIOLO->GetActionURL('adm','main:uoalmoxarifado', $item, array('form'=>'entradanotafiscal'));
+             $this->page->Redirect($go);
+         }
+         
+         public function getData2() {             
+             $data->extraOrcamentario = Form::GetFormValue('extraOrcamentario2');
+             $data->datamov = Form::GetFormValue('datamov2');
+             $data->datanotafiscal = Form::GetFormValue('datanotafiscal2');
+             $data->notaFiscal = Form::GetFormValue('notaFiscal2');
+             $data->numeroEmpenho = Form::GetFormValue('numeroEmpenho2');
+             $data->lkpFornecedor = Form::GetFormValue('lkpFornecedor2');
+             $data->idFornecedor = Form::GetFormValue('idFornecedor2');
+             return $data;
+         }
+}
+
+?>

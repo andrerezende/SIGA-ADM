@@ -1,0 +1,157 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+?>
+<?php
+/**
+* @package SIGA
+* @subpackage Biblioteca
+* @author SETEC/MEC
+*/
+
+MIOLO::IMPORT('modules::biblioteca::classes::pesquisa');
+
+class BusinessBibliotecaPesquisaIndice extends Pesquisa
+{
+	function BusinessBibliotecaPesquisaIndice($data = null)
+	{
+	  $this->Business('sigaept', $data);
+	}
+
+
+	function Listar($data, $camposPesquisa)
+	{
+		global $MIOLO, $module, $perms;
+		
+
+		// verifica se o usuário escolheu termo exato
+		if ($data->Termo)
+		{
+
+
+			$termos[0] = strtoupper($this->RetirarCaracteresEspeciais($data->Consulta));
+			$busca = strtoupper($data->Consulta);
+
+			if ($busca != $termos[0])
+			{
+				$termos2[0] = $busca;
+			}
+		}
+		else
+		{
+
+			$termos = explode(" ", strtoupper($this->RetirarCaracteresEspeciais($data->Consulta)));
+			$termos = $this->RetirarVazios($termos);
+
+			$busca = explode(" ", strtoupper($data->Consulta));
+			$busca = $this->RetirarVazios($busca);
+
+			if ($busca != $termos)
+			{
+				$termos2 = $busca;
+			}
+		}
+
+		$conteudo = "((";
+
+		foreach($termos as $termo)
+		{
+			$termo = addslashes($termo);
+
+			$conteudo .= "(upper(m.conteudo) LIKE '%$termo%') AND ";
+		}
+		$conteudo = substr($conteudo, 0, -5);
+
+		if ($termos2)
+		{
+			foreach($termos2 as $termo2)
+			{
+				$termo2 = addslashes($termo2);
+
+				$conteudo2 .= "(upper(m.conteudo) LIKE '%$termo2%') AND ";
+			}
+			$conteudo2 = substr($conteudo2, 0, -5);
+			$conteudo = $conteudo . ') OR (' . $conteudo2;
+		}
+
+		$campos = $this->GetCamposByTitulo($data->ConsultarPor,$camposPesquisa);
+		foreach ($campos as $campo_subcampo)	
+		{
+			$inBusca .= (($inBusca != '') ? ',' : '(') . '(' . $campo_subcampo[0] . ',' . "'" . $campo_subcampo[1] . "')";  
+		}
+		$inBusca .= (($inBusca != '') ? ')' : '');
+		$where = "(m.idetiqueta,m.subcampo) IN $inBusca AND $conteudo))";
+/*		if ($conteudo=='')
+		{
+			$where = "(m.idetiqueta,m.subcampo) IN $inBusca";
+		}
+		else
+		{
+			$where = "(m.idetiqueta,m.subcampo) IN $inBusca AND $conteudo))";
+		}
+*/
+
+/*
+		if (trim($data->Consulta) != '')
+		{
+   			$termo = strtoupper($this->RetirarCaracteresEspeciais($data->Consulta));
+
+			$campos = $this->GetCamposByTitulo($data->ConsultarPor,$camposPesquisa);
+			foreach ($campos as $campo_subcampo)
+			{
+	            $inBusca .= (($inBusca != '') ? ',' : '(') . '(' . $campo_subcampo[0] . ',' . "'" . $campo_subcampo[1] . "')";  
+			}
+	        $inBusca .= (($inBusca != '') ? ')' : '');
+
+			$termo = addslashes($termo);
+			//se usuario tiver perfil de BIB_PRECATALOGACAO, não haverá restrições. Se não tiver, só retornam obras com campo 852 (classificação, idetiqueta 189) preenchido.
+			if($perms->CheckAccess('BIB_PRECATALOGACAO',A_ACCESS,false))
+			{
+				$where = "(((m.idetiqueta,m.subcampo) IN $inBusca) AND (upper(m.conteudo) LIKE '%$termo%'))";
+			}
+			else
+			{
+				$where = "(((m.idetiqueta,m.subcampo) IN $inBusca) AND (upper(m.conteudo) LIKE '%$termo%')) AND m.idobra in (SELECT distinct idobra FROM bt_material WHERE idetiqueta = 189 and subcampo='a')";
+			}
+		}
+*/
+		//filtro para unidade
+		$from = 'bt_material m';
+		if ($data->Unidade > 0)
+		{
+			$where .= " AND (m.idobra = e.idobra) AND (e.idunidade = $data->Unidade)";
+			$from .= ', bt_exemplar e';
+		}
+
+		//se usuario tiver perfil de BIB_PRECATALOGACAO, não haverá restrições. Se não tiver, só retornam obras com campo 852 (classificação, idetiqueta 189) preenchido.
+		if($perms->CheckAccess('BIB_PRECATALOGACAO',A_ACCESS,false))
+		{
+		}
+		else
+		{
+			$where .= " AND m.idobra in (SELECT distinct idobra FROM bt_material WHERE idetiqueta = 189 and subcampo='a')";
+		}
+
+		$sql = new sql('distinct(m.conteudo), count(distinct m.idobra) as cont', $from, $where, 'm.conteudo', 'm.conteudo');
+
+		$query = $this->Query($sql) ;
+
+		return $query;
+	}	
+}
+?>

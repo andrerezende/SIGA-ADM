@@ -1,0 +1,200 @@
+<?php
+class MLookupField extends MTextField
+{
+    var $action;
+    var $related;
+    var $module;
+    var $item;
+    var $info;
+    var $autocomplete=false;
+    var $event;
+    var $filter;
+    var $baseModule;
+    var $lookup_name;
+    var $lookupType;
+
+    function __construct($name='',$value='',$label='',$hint='', 
+                 $related='',$module='',$item='', $event='filler', $filter='')
+    {   
+        parent::__construct($name,$value,$label,0,$hint);
+        $page = $this->page;
+        $page->AddScript('m_lookup.js');
+        $baseModule = MUtil::NVL($this->manager->GetConf("mad.module"),"admin");
+        $event = MUtil::NVL($event,'filler');
+        $this->setContext($baseModule,$module,$item,$event,$related,$filter);
+        $this->lookupType = 'window';  
+        $page = $this->page;
+        $form = ($this->form == NULL) ? $page->name : $this->form->name;
+        $this->lookup_name = $lookup_name = "lookup_{$form}_{$this->name}";
+    }
+    
+    function setContext($baseModule='admin',$module='admin',$item='',$event='',$related='',$filter='')
+    {
+        $this->baseModule = $baseModule;
+        $this->module  = $module;
+        $this->item    = $item;
+        $this->event = $event;
+        $this->related = $related;
+        $this->filter  = MUtil::NVL($filter,$this->filter);
+    }
+
+	function GetModuleItem()
+    {
+        return $this->module . '.' . $this->item;
+    }
+    
+    function SetModuleItem($module, $item)
+    {
+        $this->module = $module;
+        $this->item = $item;
+    }
+
+   function GenerateInner()
+   {
+        $this->label = '&nbsp;';
+        
+        $base = $this->baseModule;
+        $related = is_array($this->related) ? $this->related : array(str_replace(' ','',$this->related));
+        $filter = is_array($this->filter) ? $this->filter : array($this->filter);
+        $lookup_name = $this->lookup_name;
+        
+        $attr = $this->GetAttributes();
+//        $content[] = new MSpan('','&nbsp;');
+        $button = new MButtonFind("javascript:{$this->lookup_name}.open();");
+	    $button->setId('b_' . $this->getId());
+        $content[] = $button->Generate();
+        $html =  $this->painter->GenerateToString($content);
+        $related = implode(',',$related);
+        $filter = implode(',',$filter);
+        $jsCode =
+<<< HERE
+        {$this->lookup_name}.setContext({
+             name    : '{$lookup_name}',
+             module  : '{$this->module}',
+             item    : '{$this->item}',
+             related : '{$related}',
+             filter  : '{$filter}',
+             form    : miolo.getForm(),
+             field   : '{$this->name}',
+             event   : '{$this->event}',
+             type    : '{$this->lookupType}'
+        }, '{$base}');
+HERE;
+        $this->page->onLoad($jsCode);
+        $this->page->addJsCode("{$this->lookup_name} = new Miolo.lookup();"); 
+        $this->inner = $this->GenerateLabel() . $html;        
+   }
+}
+
+class MLookupTextField extends MLookupField
+{
+    var $autocomplete;
+    
+    function __construct($name='',$value='',$label='', 
+                 $size=10,$hint='',$validator=null,$related='',
+	             $module='',$item='', $event='filler', $filter='', $autocomplete=true)
+    {   
+        $filter = MUtil::NVL($filter,$name);
+        parent::__construct($name,$value,$label,$hint,$related, $module, $item, $event, $filter); //$validator);
+        $this->size = $size;
+        $this->autocomplete = $autocomplete ? true : false;
+        $this->validator = is_string($validator) ? 
+                               Validator::MASKValidator($validator) : $validator;
+    }
+    
+   function GenerateInner()
+   {
+      $field = new MTextField($this->name,$this->value,$this->label,$this->size,$this->hint, $this->validator);
+//      $field->setAttribute('onChange',"MIOLO_AutoComplete({$this->lookup_name},'$this->baseModule')");
+      $field->SetClass('m-text-field'); 
+      $field->showLabel = $this->showLabel;
+      $field->formMode = $this->formMode;
+      $field->AddBoxStyle('float','left');
+      $field->setAttributes($this->attributes()); 
+	  if ( $this->readonly )
+      {
+          $field->SetClass('m-readonly');
+          $field->AddAttribute('readonly');
+      }
+      $html = $field->Generate();
+      parent::GenerateInner();
+      $htmlInner = $this->GetInner();
+      $this->inner = $html . ( $this->readonly  ? '' : $htmlInner) ;        
+   }
+
+}
+
+class MLookupFieldValue extends MLookupField
+{
+	function __construct($name='',$value='',$label='', 
+                 $size=10,$hint='',$validator=null,$related='',
+	             $module='',$item='', $event='', $filter='', $autocomplete=false)
+    {   
+        parent::__construct($name,$value,$label,$hint,$validator);
+        $this->size = $size;
+        $this->filter = $this->name;
+        $this->validator = is_string($validator) ? 
+                               Validator::MASKValidator($validator) : $validator;
+    }
+    
+   function GenerateInner()
+   {
+      parent::GenerateInner();
+      $htmlInner = $this->GetInner();
+      $field = new MTextField($this->name,$this->value,$this->label,$this->size,$this->hint, $this->validator);
+      $field->SetClass('m-text-field'); 
+      $field->showLabel = $this->showLabel;
+      $field->formMode = $this->formMode;
+//      $field->AddBoxStyle('float','left');
+      $field->SetClass('m-readonly');
+      $field->AddAttribute('readonly');
+      $html = $field->Generate();
+      $this->inner = ( $this->readonly  ? '' : $htmlInner) . $html;        
+   }
+
+}
+
+class MDialogLookup extends MLookupTextField
+{
+
+	function __construct($name='',$value='',$label='', 
+                 $size=10,$hint='',$validator=null,$related='',
+	             $module='',$item='', $event='', $filter='', $autocomplete=false)
+    {   
+        parent::__construct($name,$value,$label,$size,$hint,$validator,$related,$module,$item, $event,$filter,$autocomplete);
+        $this->lookupType = 'dialog';
+        $this->page->addScript('x/x_core.js');
+        $this->page->addScript('x/x_dom.js');
+        $this->page->addScript('x/x_event.js');
+        $this->page->addScript('x/x_drag.js');
+        $this->page->addScript('cpaint/cpaint2.inc.js');
+        $this->page->addScript('m_dialog.js');
+        $this->page->addScript('m_iframe.js');
+        $this->page->AddStyle('m_forms.css'); 
+    }
+}
+
+class MLiveLookup extends MLookupTextField
+{
+
+	function __construct($name='',$value='',$label='', 
+                 $size=10,$hint='',$validator=null,$related='',
+	             $module='',$item='', $event='', $filter='', $autocomplete=false)
+    {   
+        parent::__construct($name,$value,$label,$size,$hint,$validator,$related,$module,$item, $event,$filter,$autocomplete);
+        $this->lookupType = 'livelookup';
+        $this->page->AddScript('x/x_core.js');
+        $this->page->AddScript('m_ricolivegrid.js');
+    }
+    
+   function GenerateInner()
+   {
+      parent::generateInner();
+      $htmlInner = $this->GetInner();
+      $container = new MDiv($this->getId().'_container','','m-livelookup-container');
+      $html = $container->generate();
+      $this->inner = $htmlInner . $html;        
+   }
+}
+
+?>

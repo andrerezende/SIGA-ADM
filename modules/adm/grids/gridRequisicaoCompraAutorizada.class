@@ -1,0 +1,67 @@
+<?
+/**
+ * Grid Uo
+ * Grid para listar os materiais da requisição de almoxarifado
+ * @package br.org.miolo.ufjf.adm.grids
+ */
+/**
+ * Use Module Control
+ */
+
+class gridRequisicaoCompraAutorizada extends ObjectGrid
+{
+    protected $objRequisicao;
+    function __construct($requisicao)
+    {
+        global $MIOLO;
+        $this->objRequisicao = $requisicao;
+        $tg = $MIOLO->getBusiness('common','tabelageral');
+        $result = $tg->listByTabela('AD_STATUSITEMREQ','item1');
+        foreach ($result->result as $s) $status[$s[0]] = $s[1];
+        $columns = array(
+            new ObjectGridColumn('quantPedida','QP','center','','5%'),
+            new ObjectGridColumn('quantAutorizada','QA','center','','5%'),
+            new ObjectGridColumn('idMaterial','IdMaterial','','','',false),
+            new ObjectGridColumn('material->unidade','Und','center','','5%'),
+            new ObjectGridColumn('elemento','Elemento','','','8%'),
+            new ObjectGridColumn('material->codmaterial','Código','','','8%'),
+            new ObjectGridColumn('material->descricao','Material','','','50%'),
+            new ObjectGridColumn('status','Situação','center','','10%',true,$status),
+            new ObjectGridColumn('precoEstimado','V.E.U.','center','','8%'),
+            new ObjectGridColumn('valorReal','V.R.U.','center','','9%'),
+        );
+		$href_grid = $MIOLO->GetActionURL('adm','main:requisicoes',$this->objRequisicao->idRequisicao,array('form'=>'item','tipoReq'=>$this->objRequisicao->idTipoReq));
+        $cf = new MCurrencyFormatter();
+        $this->objRequisicao->retrieveAssociation('materialCompra');
+        if ($this->objRequisicao->materialCompra)
+        {
+            foreach ($this->objRequisicao->materialCompra as $material)
+            {
+                $material->retrieveAssociation('material');
+                $material->elemento = $material->material->idelemento.'.'.$material->material->idsubelemento;
+                $material->precoEstimado = $cf->formatWithSymbol($cf->toDecimal($material->precoEstimado));
+                $material->valorReal = $cf->formatWithSymbol($cf->toDecimal($material->valorReal));
+            }
+        }
+        parent::__construct($this->objRequisicao->materialCompra,$columns,$href_grid,0);
+        $this->SetLinkType('hyperlink');
+        $this->SetTitle('Lista de materiais requisitados');
+        $this->SetClose(null);
+    }
+    function GenerateFooter()
+    {
+        global $MIOLO;
+        $cf = new MCurrencyFormatter();
+        if ($this->objRequisicao->materialCompra)
+        {
+            foreach ($this->objRequisicao->materialCompra as $material)
+            {
+                $total = $cf->toDecimal($total) + $cf->toDecimal($material->quantAutorizada)*$cf->toDecimal($material->valorReal);
+            }
+        }
+        $footer[] = new MTextTable('legenda', array(array("<b>LEGENDA: V.E.U.:</b> Valor Estimado Unitário - <b>V.R.U.:</b> Valor Total Unitário</b>")));
+        $footer[] = new MTextTable('total', array(array("<b>VALOR TOTAL ENTREGUE</b>","<span style=float:right><b>{$cf->formatWithSymbol($cf->toDecimal($total))}&nbsp;</b></span>")));
+        return $footer;
+    }
+}
+

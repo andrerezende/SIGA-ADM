@@ -1,0 +1,221 @@
+<?
+class frmRequisicaoCompraNew extends Form
+{
+	protected $objRequisicao;
+	function __construct($objRequisicao)
+	{
+		$this->objRequisicao = $objRequisicao;
+		$this->Form('Incluir material');
+		$this->EventHandler();
+	}
+
+	function CreateFields()
+	{
+		$this->AddField(new MHiddenField('form',$this->getFormValue('form')));
+		$this->AddField(new MHiddenField('idMaterial',''));
+		$this->AddField(array(new MMultiLineField('desccatmat','','Código ou Descrição do Material','',3,70),new MLookupField('lkpMaterialConsumo','&npsp;','&nbsp;')));
+		//$this->addField(new MLink('sugere','',$this->manager->getActionURL('adm','main:requisicoes',$this->objRequisicao->idRequisicao,array('form'=>'sugere')),'Desejo solicitar a inclusão de um novo material'));
+		$this->AddField(array(new MTextField('quantPedida','','Quantidade',9),new MTextField('unidade',$material->material->unidade,'Un',10),new MCurrencyField('precoEstimado','','Valor Unitário',14),new MCurrencyField('valorTotalPedido','','Valor Total',14)));
+		//$this->AddField(array(new MMultiLineField('descricao','','Descrição detalhada do Material',500,3,70)));
+		$this->SetFieldAttr('unidade','readonly',true);
+		$this->SetFieldAttr('precoEstimado','readonly',true);
+		$this->setFieldAttr('valorTotalPedido','visible',false);
+		$this->SetFieldAttr('lkpMaterialConsumo','module','adm');
+		$this->SetFieldAttr('lkpMaterialConsumo','item','materialConsumo');
+		$this->SetFieldAttr('lkpMaterialConsumo','event','filler');
+		$this->SetFieldAttr('lkpMaterialConsumo','filter','desccatmat');
+		$this->SetFieldAttr('lkpMaterialConsumo','related','idMaterial,desccatmat,codMaterial,unidade,precoEstimado');
+		$this->AddButton(new MButton('btnConfirmarSolicitar', 'Enviar'));
+		$material = $this->objRequisicao->getMaterialCompra($this->getFormValue('idMaterial'));
+
+		$this->addValidator(new MRequiredValidator('quantPedida'));
+
+		if ($material->isPersistent())
+		{
+			$this->setTitle('Alteração dos dados do material');
+			$this->setData($material);
+			$this->AddButton(new MButton('btnConfirmarApagar', 'Apagar'));
+			$this->setFieldAttr('sugere','visible',false);
+		}
+		$this->AddButton(new MButton('btnSair','Voltar',$this->manager->GetActionURL('adm','main:requisicoes',$this->objRequisicao->idRequisicao,array('form'=>'item'))));
+	}
+
+	function btnVoltar_click()
+	{
+		$data = $this->getData();
+		$this->setData($data);
+	}
+
+	function setData($data)
+	{
+		$this->setFieldValue('idMaterial',$data->idMaterial);
+		$this->setFieldValue('quantPedida',$data->quantPedida);
+		//$this->setFieldValue('precoEstimado',$data->precoEstimado);
+		$this->setFieldValue('valorTotalPedido',$data->valorTotalPedido);
+		//$this->setFieldValue('descricao',$data->descricao);
+
+		if ($data->precoEstimado) 
+			$this->setFieldValue('precoEstimado',$data->precoEstimado);
+		else 
+			$this->setFieldValue('precoEstimado',$data->material->precoEstimado); 
+
+		if ($data->unidade)
+			$this->setFieldValue('unidade',$data->unidade);
+		else
+			$this->setFieldValue('unidade',$data->material->unidade);
+
+		if ($data->desccatmat)
+			$this->setFieldValue('desccatmat',$data->desccatmat);
+		else
+			$this->setFieldValue('desccatmat',$data->material->descricao);
+	}
+
+	function readOnly()
+	{
+		$this->setFieldAttr('lkpMaterialConsumo','visible',false);
+		$this->setFieldAttr('quantPedida','readonly',true);
+		$this->setFieldAttr('precoEstimado','readonly',true);
+		$this->setFieldAttr('valorTotalPedido','readonly',true);
+		$this->setFieldAttr('desccatmat','readonly',true);
+		//$this->setFieldAttr('descricao','readonly',true);
+	}
+
+	function btnConfirmarApagar_click()
+	{
+		$msg = 'Deseja apagar este material?';
+		$url = $this->manager->GetActionURL('adm','main:requisicoes',$this->objRequisicao->idRequisicao,array('form'=>'novo','idMaterial'=>$this->getFormValue('idMaterial')));
+		$eventYes = "btnApagar:click";
+		$this->manager->Question($msg, $url, $url, $eventYes, $eventNo);
+	}
+
+	function btnApagar_click()
+	{
+		$material = $this->objRequisicao->getMaterialCompra($this->getFormValue('idMaterial'));
+		try
+		{
+			$material->delete();
+			$idRequisicao = $this->objRequisicao->idRequisicao;
+			$url = $this->manager->GetActionURL('adm','main:requisicoes',$idRequisicao,array('form'=>'item','tipoReq'=>$this->objRequisicao->idTipoReq));
+			$this->page->redirect($url);
+		}
+		catch (Exception $e)
+		{
+			$this->addError($e->getMessage());
+		}
+
+	}
+
+	function btnConfirmarSolicitar_click()
+	{
+
+		if( Form::GetFormValue('quantPedida') <= 0 )
+		{
+			$this->AddError('A quantidade não pode ser menor ou igual a zero.');
+		}
+		else
+		{
+			$cf = new MCurrencyFormatter();
+			$data = $this->getData();
+			$material = $this->manager->getBusiness('adm','material');
+			$material->getById($data->idMaterial);
+			$itens = $this->objRequisicao->getMaterialCompra();
+			if (is_array($itens))
+			{
+				$imaterial = $this->manager->getBusiness('adm','material');
+				foreach ($itens as $item)
+				{
+					$imaterial->getById($item->idMaterial);
+					if ($material->idelemento != $imaterial->idelemento )//|| $material->idsubelemento != $imaterial->idsubelemento)
+					{
+						$this->addError('Este material não possui o mesmo elemento que os demais.') ;
+						return;
+					}
+				}
+			}
+
+			if ($item->idMaterial == $data->idMaterial)
+			{
+				$this->setTitle('Confirmar alteração de dados do material');
+				$this->AddInfo('Este material já consta em sua lista de materiais. Clicando em CONFIRMAR você estará alterando os dados do material.');
+				$this->setButtonAttr('btnConfirmarApagar','visible',false);
+			}
+			else
+			{
+				$this->setTitle('Confirmar inclusão de material');
+			}
+
+			$historico = $material->getHistorico($this->objRequisicao->idUoRequisitante);
+
+			if ($historico)
+			{
+				$tg = $this->manager->getBusiness('common','tabelageral');
+				$result = $tg->listByTabela('AD_STATUSITEMREQ','item1');
+				foreach ($result->result as $s)
+					$st[$s[0]] = $s[1];
+
+				foreach ($historico as $key=>$value)
+				{
+					$historico[$key][2] = $st[$value[2]];
+					$historico[$key][3] = ($historico[$key][3]) ? $cf->toDecimal($historico[$key][3]) : 0;
+					$historico[$key][4] = ($historico[$key][4]) ? $cf->toDecimal($historico[$key][4]) : 0;
+					$historico[$key][5] = $cf->toDecimal($historico[$key][3]) - $cf->toDecimal($historico[$key][4]);
+					$historico[$key][3] = "<span style=float:right>{$historico[$key][3]}</span>";
+					$historico[$key][4] = "<span style=float:right>{$historico[$key][4]}</span>";
+					$historico[$key][5] = "<span style=float:right>{$historico[$key][5]}</span>";
+				}
+				$colTitle = array('Data','Requisição','Situação','Qtd Pedida','Qtd Entregue','Saldo a Entregar');  
+				$this->addField(new MTableRaw('Histórico de pedidos pendentes para este material',$historico,$colTitle));
+			}
+
+			$cf = new MCurrencyFormatter();
+			$data->valorTotalPedido = round($cf->toDecimal($data->quantPedida) * $cf->toDecimal($data->precoEstimado),2);
+			$this->setData($data);
+			$this->setFieldAttr('valorTotalPedido','visible',true);
+			$this->readOnly();
+			$this->setButtonAttr('btnConfirmarSolicitar','visible',false);
+			$this->setButtonAttr('btnSair','visible',false);
+			$this->AddButton(new MButton('btnSolicitar', 'Confirmar'));
+			$this->AddButton(new MButton('btnVoltar', 'Voltar'));
+			$this->setFieldAttr('sugere','visible',false);
+		}
+	}
+
+	function btnSolicitar_click()
+	{
+		$cf = new MCurrencyFormatter();
+		$data = $this->getData();
+		$data->precoEstimado = $cf->toDecimal($data->precoEstimado);
+		//if ($data->quantPedida*$data->precoEstimado <= 0)
+		if ( $data->precoEstimado <= 0)
+		{
+			$this->AddInfo('O valor unitário se encontra vazio, seria interessante <br>preencher !');
+		}
+
+		$this->setFieldAttr('valorTotalPedido','visible',true);
+		$material = $this->objRequisicao->getMaterialCompra($data->idMaterial);
+		$material->setData($data);
+		$material->setStatus('0');
+
+		try
+		{
+			$material->save();
+			$idRequisicao = $this->objRequisicao->idRequisicao;
+			$this->objRequisicao->Log(OP_INS,"Requisicão de compra número ".$idRequisicao." solicitada com sucesso.");
+			$url = $this->manager->GetActionURL('adm','main:requisicoes',$idRequisicao,array('form'=>'item','tipoReq'=>$this->objRequisicao->idTipoReq));
+			$this->page->redirect($url);
+		}
+		catch (Exception $e)
+		{
+			$this->addError($e->getMessage());
+		}
+	}
+
+	function btnVisualizar_click()
+	{
+		$this->setTitle('Dados do material');
+		$this->readOnly();
+		$this->setButtonAttr('btnConfirmarSolicitar','visible',false);
+		$this->setButtonAttr('btnConfirmarApagar','visible',false);
+	}
+}
+?>

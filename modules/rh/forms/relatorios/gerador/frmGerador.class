@@ -1,0 +1,537 @@
+<?php
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+class frmGerador extends MForm
+{
+
+    function __construct()
+    {
+        parent::__construct('Gerador de Relatório');
+        $this->SetClose($this->manager->GetActionURL('rh','main:relatorios'));
+        $this->EventHandler();
+    }
+
+
+    function CreateFields()
+    {
+		global $module;
+
+		$k = new MKrono();
+		$login = $this->manager->GetLogin();
+		
+		$a = $this->manager->GetBusiness('common','arquivo');
+		//var_dump($login->id, $this->manager->GetLogin()->idkey);
+		$arrQueries = $a->listQueriesByOwner($this->manager->GetLogin()->idkey)->chunkResult();
+
+		// CAMPOS
+		$c = $this->manager->GetBusiness('common','camporelat');
+
+		$query = $c->ListaCamposByTabelaWithDescription("RH_TIPO1");
+		$a1 = $query->chunkResult();
+
+		$query = $c->ListaCamposByTabelaWithDescription("RH_TIPO2");
+		$a2 = $query->chunkResult();
+
+		$selections = array(
+			$s1 = new MSelection('selRH_TIPO1','','Dados pessoais',$a1),
+			$s2 = new MSelection('selRH_TIPO2','','Dados funcionais',$a2),
+		);
+
+//		$lixo = array_slice($s1,0,1);
+//		$lixo = array_slice($s1,0,1);
+
+		// WHERE
+		$arrOperadores = array(
+			' = ' =>'Igual',
+			' != '=>'Diferente',
+			' > ' =>'Maior',
+			' < ' =>'Menor',
+			' >= '=>'Maior Igual',
+			' <= '=>'Menor Igual',
+			' LIKE '=>'Contém'
+		);
+
+		$arrGeral = array_merge($a1,$a2);
+		$fieldsCondicoes = array(
+              new MSelection('operando1','','Operando',$arrGeral),
+              new MSelection('operadores','','Operador',$arrOperadores),
+              new MTextField('operando2','','Texto de comparação',90),
+        );
+
+		$fieldsCampos = array(
+              new MSelection('campo1','','Escolha o campo e adicione na lista abaixo',$arrGeral),
+              $tamanho = new MTextField('tamanho','','Tamanho (em caracteres) do Campo. Use um número inteiro.',120),
+        );
+
+		$tipos = array('PDF'=>'PDF','TXT'=>'TXT','CSV'=>'CSV','HTML'=>'HTML','ODT'=>'ODT','XLS'=>'XLS','RTF'=>'RTF');
+
+
+
+        $objtipo0 = $this->manager->GetBusiness($module,'tipo0');
+        $result = $objtipo0->listaUltimos();
+
+		$fields = array(
+			array (
+					new MSelection('consulta','','Consultas Salvas',$arrQueries),
+			),
+			new MText('txt','NÃO USE CARACTERES ESPECIAIS COMO Ç E ACENTOS!','RED','TURE'),
+			new MText('txt0','Atenção: campos com * são de preenchimento obrigatório.'),
+			new MText('txt1','Especifique o Ano e o Mês de referência para o relatório:'),
+			//new MText('txt2','O arquivo espelho de servidores deve ter sido carregado para o mês/ano informado.'),
+			new MSelection('anomes',$result[0],'* Ano/Mês-Registros',$result,true),
+  			//$anoRef = new MTextField('ano','2007','* Ano/Mês',5,'Ex.: 2008'),
+			//new MSelection('fileType','PDF','Formato do relatório',$tipos,false,'Padrão: PDF'),
+  			$titulo = new MTextField('titulo','Meu Relatório','Título do Relatório',40,'Max. 254'),
+
+			new MSeparator(),
+			new MText('txt2','ATENÇÃO: Somente os grupos 1 e 2 podem ser combinados.','black',true),
+			new MSeparator(),
+			// tipo 0
+			new MText('txt3','<u>Grupo 1: Servidores Efetivos:</u>'),
+			$radioa  = new MRadioButton('radio','v0','',false,_M('Servidores Efetivos Ativos')),
+			$radiob = new MRadioButton('radio','v1','',false,_M('Servidores Efetivos Aposentados')),
+			$radioc = new MRadioButton('radio','v2','',false,_M('Servidores Efetivos Instituidores de Pensão')),
+			$radiod = new MRadioButton('radio','','',false,_M('Nenhuma das Opções Acima')),
+			new MSeparator(),
+  			// tipo 1
+			new MText('txt4','<u>Grupo 2: Categoria:</u>'),
+			$radio1a = new MRadioButton('radio1','v0','',false,_M('Técnicos-Administrativos')),
+			$radio1b = new MRadioButton('radio1','v1','',false,_M('Docentes Magistério Superiror')),
+			$radio1c = new MRadioButton('radio1','v2','',false,_M('Docentes 1 e 2 Graus')),
+			$radio1d = new MRadioButton('radio1','v3','',false,_M('Docentes Magistério Superiror + Docentes 1 e 2 Graus')),
+			$radio1e = new MRadioButton('radio1','','',false,_M('Nenhuma das Opções Acima')),
+			new MSeparator(),
+			// tipo 2
+			new MText('txt5','<u>Grupo 3: Professores Substitutos e visitantes:</u>'),
+			$radio2a = new MRadioButton('radio2','v0','',false,_M('Substitutos Magistério Superior')),
+			$radio2b = new MRadioButton('radio2','v1','',false,_M('Visitantes Magistério Superior')),
+			$radio2c = new MRadioButton('radio2','v2','',false,_M('Substitutos Magistério de 1 e 2 Graus')),
+			$radio2d = new MRadioButton('radio2','','',false,_M('Nenhuma das Opções Acima')),
+			new MSeparator(),
+			// tipo 3
+			new MText('txt6','<u>Grupo 4: Médicos Residentes:</u>'),
+			$radio3a = new MRadioButton('radio3','v0','',false,_M('Médicos Residentes')),
+			$radio3b = new MRadioButton('radio3','','',false,_M('Nenhuma das Opções Acima')),
+			new MSeparator(),
+			// (Caso marque esta opção, os campos serão desconsiderados. Somente as condições e ordenação estarão valendo.)
+			new MText('txt3','<u>Saídas:</u>'),
+			//$radio0a = new MRadioButton('radio0','v0','',false,_M('Saída em texto para impressão de etiquetas em impressoras matriciais.')),
+			$radio0b = new MRadioButton('radio0','','',true,_M("Saída em CSV (para Excel). Definas os 'Campos' abaixo.")),
+			new MSeparator(),
+			//new MMultiTextField4('mtfCampos',null,'* Campos: ',$fieldsCampos,620,true,'vertical'),
+			new MMultiSelectionField('msfCampos',null,'Campos: (obrigatório em casos de saída para Excel)',$selections,620,true,'Campos selecionados','vertical'),
+			new MText('exp','Exemplo de condição: NOME Contém \'CARLOS%\'  e/ou SEXO Igual \'M\'. Use como coringa o símbolo % (porcento).'),
+            new MMultiTextField4('mtf4Condicoes',null,'Condições: ',$fieldsCondicoes,620,true,'vertical2'),
+			new MMultiSelectionField('msfOrdenacao',null,'Ordenação: ',$selections,620,true,'Campos selecionados','vertical'),
+			new MCheckBox('salvar','sim','',false,'Salvar Pesquisa'),
+		);
+		$this->SetFields($fields);
+
+		$titulo->addAttribute('maxlength',254);
+		$tamanho->addAttribute('maxlength',3);
+		//$this->SetFieldAttr('operando1','options', $arrGeral);
+        //$this->mtf4Condicoes->setListTitle(array('Operando','Operador','Condição'));
+
+		$buttons = Array
+		(
+			//new FormButton('btnTeste','Testar'),
+			new FormButton('btnPost','Enviar'),
+			new FormButton('btnExecuteQuery','Executar Consulta Salva'),
+			new FormButton('btnBack','Voltar'),
+		);
+		$this->SetButtons($buttons);
+    }
+
+    
+	function btnExecuteQuery_click()
+	{
+		$this->btnPost_click(null,true);
+	}
+
+
+	function btnBack_click()
+    {
+		global $page;
+		$go = $this->manager->GetActionURL('rh','main:relatorios');
+		$page->Redirect($go);
+	}
+
+	
+	function btnPost_click($sender=null,$executar=false)
+    {   
+		// RESGATANDO O TIPO DO RELATORIO
+		$tipoDeArquivo = 'CSV';//$this->getFieldValue('fileType');
+
+		// RESGATANDO INFORMACOES DO FORMULARIO
+		//$arrCampos    = $this->mtfCampos->GetCodeValue();
+		$arrCampos    = $this->msfCampos->GetCodeValue();
+		$arrCondicoes = $this->mtf4Condicoes->GetCodeValue();
+		$arrOrdenacao = $this->msfOrdenacao->GetCodeValue();
+		/*
+		$arrHeads = $this->mtfCampos->GetValue();
+		// PREPARANDO CABECALHO
+		if ( is_array($arrHeads) )
+		{
+			$HEAD = "";
+			foreach ( $arrHeads as $h )
+			{
+				$arrExplode = explode("] [",$h);
+				$HEAD .= str_pad( substr($arrExplode[0],1,strlen($arrExplode[0])-1).";",$arrExplode[1]," " );
+			}
+			$HEAD = substr($HEAD,0,-1);
+			//var_dump($HEAD);
+		}
+		*/
+		$arrHeads = $this->msfCampos->GetValue();
+		//var_dump($arrHeads);
+		if ( is_array($arrHeads) )
+		{
+			$HEAD = "";
+			foreach ( $arrHeads as $h )
+			{
+				$pieces = explode(" - ", $h);
+				$HEAD .= $this->strSemAcentos($pieces[0]).";";
+			}
+			$HEAD = substr($HEAD,0,-1);
+		}
+		//var_dump($HEAD);
+/*
+		// PREPARANDO CONSULTA
+		if ( is_array($arrCampos) )
+		{
+			$campos = "";
+			//$HEAD = "";
+			foreach ( $arrCampos as $v )
+			{
+				if ( empty($v[1]) )
+				{
+					$v[1] = 25;
+				}
+				$campos .= $v[0]."||';'||";
+				//$pos = strpos($v, '.'); //posicao do ponto
+				//$campos .= "SUBSTR(TRIM(UPPER(". $v[0].")),1,". $v[1].")||' '||";
+				//$HEAD .= substr($v, $pos+1, strlen($v)) . " ";
+			}
+			$campos = substr($campos,0,-7);
+			//$HEAD = substr($HEAD,0,-1);
+		}
+*/
+		// PREPARANDO CONSULTA
+		if ( is_array($arrCampos) )
+		{
+			$campos = "";
+			foreach ( $arrCampos as $v )
+			{
+				$campos .= "trim(upper(".$v."))||';'||";
+			}
+			$campos = substr($campos,0,-7);
+		}
+
+		if ( is_array($arrCondicoes) )
+		{
+			$condicoesUsuario = "";
+			foreach ( $arrCondicoes as $cond )
+			{
+				if ( is_array($cond) )
+				{
+					$minhaCondicao = "";
+					foreach ($cond as $c)
+					{
+						$minhaCondicao .= strtoupper($c);
+					}
+				}
+				$condicoesUsuario .= strtoupper($minhaCondicao) . " AND ";
+			}
+			$condicoesUsuario = strtoupper(substr($condicoesUsuario,0,-5));
+			$condicoesUsuario = strtoupper($condicoesUsuario);
+		}
+
+		if ( is_array($arrOrdenacao) )
+		{
+			$ordenacao = "";
+			foreach ( $arrOrdenacao as $v )
+			{
+				$ordenacao .= $v . ", ";
+			}
+			$ordenacao = substr($ordenacao,0,-2);
+		}
+
+		$tipo0 = $this->GetFormValue('radio0'); // etiqueta
+		$tipo  = $this->GetFormValue('radio');
+		$tipo1 = $this->GetFormValue('radio1');
+		$tipo2 = $this->GetFormValue('radio2');
+		$tipo3 = $this->GetFormValue('radio3');
+
+		$condicoesEspeciais = "";
+
+		// TIPOS DE SERVIDORES EFETIVOS
+		if ($tipo)
+		{
+			switch ( $tipo )
+			{
+				// SERVIDORES EFETIVOS ATIVOS
+				case 'v0' :
+					$condicoesEspeciais .= "(RH_TIPO2.cod_situacao = '01' OR 
+											 RH_TIPO2.cod_situacao = '08' OR 
+											 RH_TIPO2.cod_situacao = '09' OR 
+											 RH_TIPO2.cod_situacao = '20') AND 
+											(RH_TIPO2.EXCLUS_GRUPO != '02')";
+					break;
+
+				// SERVIDORES EFETIVOS APOSENTADOS
+				case 'v1' :
+					$condicoesEspeciais .= "(RH_TIPO2.cod_situacao = '02' AND 
+											( RH_TIPO2.EXCLUS_GRUPO != '02'	)";
+					break;
+
+
+				// SERVIDORES EFETIVOS INSTITUIDORES DE PENSÃO
+				case 'v2' :
+					$condicoesEspeciais .= "(RH_TIPO2.cod_situacao = '15' AND 
+											( RH_TIPO2.EXCLUS_GRUPO != '01'	)";
+					break;
+
+			}
+		}
+
+		// DETALHAMENTO POR CATEGORIA
+		if ($tipo1)
+		{
+			if ($tipo)
+			{
+				$condicoesEspeciais .= " AND ";
+			}
+			switch ( $tipo1 )
+			{
+				// TÉCNICOS-ADMINISTRATIVOS
+				case 'v0' :
+					$condicoesEspeciais .= "(RH_TIPO2.CARGO_GRUPO != '060' AND RH_TIPO2.CARGO_GRUPO != '702')";
+					break;
+
+				// DOCENTES MAGISTÉRIO SUPERIOR
+				case 'v1' :
+					$condicoesEspeciais .= "(RH_TIPO2.CARGO_GRUPO = '060' AND RH_TIPO2.CARGO_NOME = '001')";
+					break;
+
+
+				// DOCENTES 1 E 2 GRAUS
+				case 'v2' :
+					$condicoesEspeciais .= "((RH_TIPO2.CARGO_GRUPO = '060' AND RH_TIPO2.CARGO_NOME = '011') OR (RH_TIPO2.CARGO_GRUPO = '702' AND RH_TIPO2.CARGO_NOME = '001'))";
+					break;
+
+				// DOCENTES MAGISTÉRIO SUPERIOR	+ DOCENTES 1 E 2 GRAUS
+				case 'v3' :
+					$condicoesEspeciais .= "(RH_TIPO2.CARGO_GRUPO = '060' OR RH_TIPO2.CARGO_GRUPO = '702')";
+					break;
+			}
+		}
+
+
+		// PROFESSORES SUBSTITUTOS E VISITANTES
+		if ($tipo2)
+		{
+			$condicoesEspeciais = "(RH_TIPO2.cod_situacao = '12' AND RH_TIPO2.CARGO_GRUPO = '060' AND RH_TIPO2.EXCLUS_GRUPO != '02'	) AND ";
+			switch ( $tipo2 )
+			{
+				// TÉCNICOS-ADMINISTRATIVOS
+				case 'v0' :
+					$condicoesEspeciais .= "(RH_TIPO2.CARGO_NOME = '001')";
+					break;
+				// SERVIDORES EFETIVOS APOSENTADOS
+				case 'v1' :
+					$condicoesEspeciais .= "(RH_TIPO2.CARGO_NOME = '003')";
+					break;
+				// SERVIDORES EFETIVOS INSTITUIDORES DE PENSÃO
+				case 'v2' :
+					$condicoesEspeciais .= "(RH_TIPO2.CARGO_NOME = '012')";
+					break;
+			}
+		}
+
+		// MÉDICOS RESIDENTES
+		if ($tipo3)
+		{
+			$condicoesEspeciais = "(RH_TIPO2.cod_situacao ='05' AND RH_TIPO2.EXCLUS_GRUPO !='02')";
+		}
+		
+		$tabelas = "RH_TIPO1, RH_TIPO2";
+
+		//$anoMes = $this->GetFormValue('ano') . $this->GetFormValue('mes');
+		//var_dump(substr($this->GetFormValue('anomes'),0,4),substr($this->GetFormValue('anomes'),4,6),"----",$anoMes);
+		$anoMes = substr($this->GetFormValue('anomes'),0,4).substr($this->GetFormValue('anomes'),4,6);
+
+		$condicaoPreDefinida = "(RH_TIPO1.siape=RH_TIPO2.siape) AND (RH_TIPO1.anomes=RH_TIPO2.anomes) AND (RH_TIPO1.anomes='$anoMes')";
+
+		if ($tipo0)
+		{
+			$campos = "";
+			//$campos = " rh_tipo1.nome_servidor as NOME,NVL(rh_tipo1.end_logradouro,' ') as ENDERECO,NVL(rh_tipo1.end_numero,' ') as NUMERO,NVL(rh_tipo1.end_complemento,' ') as COMPLEMENT,NVL(rh_tipo1.end_bairro,' ') as BAIRRO,NVL(rh_tipo1.end_municipio,' ') as MUNICIPIO,NVL(rh_tipo1.end_uf,' ') as UF,NVL(SUBSTR(rh_tipo1.end_cep,1,5),' ') || '-' || NVL(SUBSTR(rh_tipo1.end_cep,-3),' ') as CEP";
+			//$campos = " rh_tipo1.nome_servidor as NOME, rh_tipo1.end_logradouro as ENDERECO, rh_tipo1.end_numero as NUMERO, rh_tipo1.end_complemento as COMPLEMENT, rh_tipo1.end_bairro as BAIRRO, rh_tipo1.end_municipio as MUNICIPIO, rh_tipo1.end_uf as UF, rh_tipo1.end_cep as CEP";
+			$campos = " rh_tipo1.nome_servidor as NOME,NVL(rh_tipo1.end_logradouro,' ') as ENDERECO,NVL(rh_tipo1.end_numero,' ') as NUMERO,NVL(rh_tipo1.end_complemento,' ') as COMPLEMENT,NVL(rh_tipo1.end_bairro,' ') as BAIRRO,NVL(rh_tipo1.end_municipio,' ') as MUNICIPIO,NVL(rh_tipo1.end_uf,' ') as UF, NVL(rh_tipo1.end_cep,' ') as CEP";
+			$HEAD = " ";
+		}
+		else
+		{
+			$campos .= " AS linha";
+		}
+
+		$sql = "SELECT " . $campos . " FROM ". $tabelas . " WHERE " . $condicaoPreDefinida;
+
+
+
+		//var_dump($sql);
+	
+		if ($tipo or $tipo1 or $tipo2 or $tipo3)
+		{
+			$sql .=  " AND " . $condicoesEspeciais;
+		}
+		
+		if ($condicoesUsuario)
+		{
+			$sql .=  " AND " . $condicoesUsuario;
+		}
+
+		if ( $ordenacao )
+		{
+			$sql .=  " ORDER BY " . $ordenacao;
+		}
+
+		$report = new MJasperReport('ufjf');
+		$parameters['str_SUBREPORT_DIR'] = $this->manager->getConf('home.modules')."/common/reports/";
+
+		if ($executar)
+		{
+			$arquivo = $this->manager->getBusiness('common','arquivo',$this->GetFormValue('consulta'));
+			$sql = $arquivo->downloadFile(true);
+		}
+
+		$parameters['str_SQL'] = $sql;
+
+		//var_dump($sql);
+		//var_dump($HEAD);
+
+		if ( 'sim' == $this->GetFormValue('salvar') )
+		{
+			//$arquivo = $this->manager->getBusiness('common','arquivo',$this->GetFormValue('consulta'));
+  		    //var_dump($arquivo->downloadFile(true));
+			$this->SalvarQuery($sql);
+		}
+		else 
+		{
+			if ($tipo0)
+			{
+				// EXECUTANDO O RELATORIO JASPER PARA -- ETIQUETAS --
+				$parameters['str_TITULO'] = "NOTITLE";
+				$parameters['str_CAMPOS'] = "NOHEAD";
+				//var_dump($parameters);
+				$report->Execute('rh','RH_EtiquetaTXT_SIAPE',$parameters,null,'TXT',true);
+			}
+			else
+			{
+				//var_dump(! is_array($arrHeads) and !$executar);
+				if ( ! is_array($arrHeads) and !$executar )
+				{
+					$erro[] = "É nescessário informar um ou mais 'Campos'.";
+				}
+
+				/*if ( is_array($arrCondicoes) )
+				{
+					foreach ( $arrCondicoes as $c )
+					{
+						if ( empty($c) )
+						{
+							$erro[] = "A opção 'Selecione', não deve ser usada.";
+							break;
+						}
+					}				
+				}*/
+
+				if ( is_array($erro) )
+				{
+					foreach ( $erro as $e )
+					{
+						$this->addError($e);
+					}
+				}
+				else
+				{
+					// EXECUTANDO O RELATORIO JASPER PARA -- CSV --
+					$parameters['str_TITULO'] = $this->strSemAcentos($this->GetFormValue('titulo'));
+					$parameters['str_CAMPOS'] = $HEAD;
+					//var_dump($parameters);
+					$report->Execute('rh','gerador/RH_Gerador_CSV',$parameters,null,$tipoDeArquivo,true);
+				}
+			}
+		}
+    }
+
+
+    function btnTeste_click()
+    {
+		//var_dump($this->GetFormValue('radio'));
+		//$value = $this->msfCampos->GetCodeValue();
+		//$value = $this->mtfCampos->GetCodeValue();
+		//echo "<pre>"; var_dump ( $value ); echo "</pre>";
+		//$this->AddField(new MTableRaw('Valores dos Campos',$value));
+
+		$value = $this->mtf4Condicoes->GetCodeValue();
+		$this->AddField(new MTableRaw('Valores das Condições',$value));
+
+		$value = $this->msfOrdenacao->GetCodeValue();
+		$this->AddField(new MTableRaw('Valores das Ordenações',$value));
+    }
+
+
+    function SalvarQuery($sql)
+    {
+		$arquivo = $this->manager->getBusiness('common','arquivo');
+
+		$_FILES['SQL']['type'] = '185';
+		$_FILES['SQL']['tmp_name'] = $this->strSemEspaco($this->strSemAcentos($this->GetFormValue('titulo')));//pegar nome do relatorio
+		$_FILES['SQL']['name'] = $this->strSemAcentos($this->GetFormValue('titulo')).".SQL";//nome do relatorio
+		$_FILES['SQL']['size'] = strlen($sql);//tamanho da string sql (em bytes);
+		$_FILES['SQL']['sql'] = $sql;
+
+		$arrParam = array();
+
+		$arquivo->saveFile('SQL','',$_FILES);
+
+	}
+
+
+	function strSemEspaco($texto="")
+	{
+		return str_replace(" ","",$texto);
+	}
+
+
+	function strSemAcentos($texto="")
+	{   
+		$texto = strtolower($texto);
+		$texto = ereg_replace("[#áàâãª]","a",$texto);		   
+		$texto = ereg_replace("[¿éèêë]","e",$texto);
+		$texto = ereg_replace("[íïîì]","i",$texto);
+		$texto = ereg_replace("[±òóöôõº]","o",$texto);	
+		$texto = ereg_replace("[úùûü]","u",$texto);
+		$texto = ereg_replace("[ç]","c",$texto);
+		$texto = strtoupper($texto);
+		return $texto;
+	}
+}
+?>

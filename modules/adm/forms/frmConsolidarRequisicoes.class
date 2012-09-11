@@ -1,0 +1,119 @@
+<?
+class frmConsolidarRequisicoes extends Form
+{
+	var $listURL;
+
+	function __construct()
+	{   
+		parent::__construct('Consolidar Requisições Atendidas');
+		$this->EventHandler();
+	}
+
+	Function CreateFields()
+	{
+		global $MIOLO,$module,$item,$self;
+	
+		$objRequisicao = $MIOLO->GetBusiness('adm','requisicao');
+		$data_aux = $objRequisicao->GetDataAtendimentoDaMaisAntigaRequisicaoNaoConsolidada();
+	
+		$fields = Array(
+			new Separator('<b>Serão consolidadas todas as requisições atendidas na data informada:</b>'),
+			new CalendarField('dataAtendimento',$data_aux,'Data das requisições',10,'Informe a data a ser consolidada.'),
+			);
+	
+		$this->SetFields($fields);
+		
+		$buttons = Array(
+			new FormButton('btnPost','Consolidar'),
+		);
+
+		$this->SetButtons($buttons);
+	}
+	
+	/*------------------------------------------------
+
+	btnPost_click()
+	Consolida as requisições atendidas na data informada
+
+	------------------------------------------------*/
+	function btnPost_click()
+	{
+		global $MIOLO,$module,$self;
+		
+		// identifica o idsetor (almoxarifado) do operador
+		$login = $MIOLO->GetLogin();
+		$usuario = $MIOLO->GetBusiness('common','usuario');
+		$usuario->GetById($login->idkey);
+		$idsetoralmox = $usuario->GetSetorProvimento();
+		
+		$dataAtendimento = $this->GetFormValue('dataAtendimento');
+		$objRequisicao = $MIOLO->GetBusiness('adm','requisicao');
+	
+		// Busca todas as requisições atendidas na data informada
+		$queryRequisicao = $objRequisicao->ListAtendidasBySetorEDataAtendimento($idsetoralmox,$dataAtendimento);
+		$ok = true;
+		
+		foreach($queryRequisicao->result as $rs)
+		{			
+			$idrequisicao = $rs[0];
+			$idsetor = $rs[1];
+			
+			if ($setorAnterior != $idsetor)
+			{
+				// Gera uma nova ordem de entrega
+				$idordement = $objRequisicao->GetNewIdOrdemEntrega();
+				$numeroOrdem = $objRequisicao->GetNewNumeroOrdem($idsetoralmox);
+				$objRequisicao->CreateOrdemEntrega($idordement,$idsetoralmox,$numeroOrdem);
+			}
+			
+			if ($objRequisicao->AtualizaOrdemEntrega($idrequisicao,$idordement))
+			{
+				//Muda o status da requisição pra "Consolidada"
+				$objRequisicao->GetById($idrequisicao);
+				if (!$objRequisicao->SetStatus("7"))
+					$ok = false;
+			}
+			$setorAnterior = $idsetor;
+		}
+
+		$action = $MIOLO->GetActionURL($module, $self,'sectionsAlmoxarifado','');
+		if ($ok)
+		{
+			$MIOLO->Information('As requisições atendidas no dia '.$dataAtendimento.' foram consolidadas com sucesso. Clique OK para imprimir as ordens de entrega',$action);
+		}
+		else
+			$MIOLO->Error('Houve um erro na consolidação das requisições. Tente novamente');
+	}
+
+	function btnReport_click()
+	{
+		global $MIOLO, $module, $page, $context, $self, $action, $perms, $theme, $item;
+	
+		// identifica o idsetor (almoxarifado) do operador
+		$login = $MIOLO->GetLogin();
+		$usuario = $MIOLO->GetBusiness('common','usuario');
+		$usuario->GetById($login->idkey);
+		$idsetoralmox = $usuario->GetSetorProvimento();
+		
+		//Quebra a variável item num array com as ordens de entrega criadas
+		$ordensCriadas = explode("-",$item);
+		array_pop($ordensCriadas);
+		
+		foreach ($ordensCriadas as $rs)
+		{
+			$ordensCriadas2[] = array($rs);
+		}
+		
+		$this->listURL = $MIOLO->GetActionURL($module,$self);
+                $columns = array(
+			   new GridColumn('NÃºmero','center',true,'80%',true)
+                );
+                $grid = new Grid($ordensCriadas2, $columns, $this->listURL,15,0);
+
+                $grid->SetTitle('Relação de Ordens de Entrega criadas nesta consolidação');
+	 	$href_edit = $MIOLO->GetActionURL($module,'main:repOrdemEntrega','5', array('event'=>'btnGerarRelatorio:click'));
+                $grid->AddActionText('alt','Imprimir',$href_edit);
+		$theme->SetContent($grid);
+	}
+}
+?>

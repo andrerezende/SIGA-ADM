@@ -1,0 +1,83 @@
+<?
+class frmLicitacaoCancelar extends form
+{
+	protected $licitacao;
+
+	function __construct($licitacao)
+	{
+		$this->licitacao = $licitacao;
+		$this->Form('Editar Licitação');
+		$this->EventHandler();
+	}
+
+	function CreateFields()
+	{        
+		global $MIOLO, $page;
+
+		$cancela = $this->getFormValue('cancela');
+
+		if (!$cancela)
+		{
+			$action_sim = $this->manager->getActionURL('adm','main:licitacoes',$this->licitacao->idLicitacao,array("form"=>"cancelar","event"=>"btnCancelar_click","cancela"=>"true"));
+			$action_nao = $this->manager->getActionURL('adm','main:licitacoes',$this->licitacao->idLicitacao);
+			$this->manager->Question($mensagem."Deseja cancelar esta licitação?",$action_sim, $action_nao);
+		}
+	}
+
+	public function btnCancelar_click()
+	{
+		$data = $this->GetData();
+		$cancelaProcesso = $this->getFormValue('cancelaProcesso');
+
+		//Diferente para serviço, material ou livro
+		// Alterado para executar em consumo e permanente
+		if ($this->licitacao->idTipoLicitacao == '1' or $this->licitacao->idTipoLicitacao == '4')
+			$itemReq = $this->manager->getBusiness('adm','itemreq');
+
+		if ($this->licitacao->idTipoLicitacao == '2')
+			$itemReq = $this->manager->getBusiness('adm','itemservext');
+
+		if ($this->licitacao->idTipoLicitacao == '3')
+			$itemReq = $this->manager->getBusiness('adm','itemreqbib');
+
+		$processo  = $this->manager->GetBusiness('protocolo','processo',$this->licitacao->numProcesso);
+
+		try
+		{
+			if ($cancelaProcesso == '')
+			{
+				$itemReq->setStatusByLicitacao($this->licitacao->idLicitacao,'all','0'); //todos os itens
+				$this->licitacao->alteraStatus('6');
+				$this->licitacao->deleteItemDoMapa("all"); //remove todos os itens desta licitação
+				$this->licitacao->save();
+
+				$action = $this->manager->getActionURL('adm','main:licitacoes',$this->licitacao->idLicitacao,'');
+				//$this->manager->Information('Licitação cancelada com sucesso.',$action);
+				$this->licitacao->Log(OP_UPD,"Licitacao ".$this->licitacao->idLicitacao.". Cancelada com sucesso. Status: ".$this->licitacao->status.".");
+				$actionNo = $this->manager->GetActionURL('adm','main:licitacoes',$this->licitacao->idLicitacao,Array('event'=>'btnCancelar_click','form'=>'cancelar','cancelaProcesso'=>'NAO'));
+				$actionYes = $this->manager->GetActionURL('adm','main:licitacoes',$this->licitacao->idLicitacao,Array('event'=>'btnCancelar_click','form'=>'cancelar','cancelaProcesso'=>'SIM'));
+				$this->manager->question('Licitação cancelada com sucesso. Clique SIM para cancelar o processo ou NÃO para arquivá-lo.',$actionYes,$actionNo);
+			}
+			elseif ($cancelaProcesso == 'SIM')
+			{
+				//Cancela o processo
+				$this->licitacao->setNumProcesso();
+				$this->licitacao->save();
+				$processo->delete();
+				$go = $this->manager->GetActionURL('adm','main:listarLicitacoes');
+				$this->page->Redirect($go);            
+			}
+			else
+			{
+				//redireciona pra tela de arquivar processo
+				$go = $this->manager->GetActionURL('protocolo','main:processos',$this->licitacao->numProcesso,array('form'=>'arquivar'));
+				$this->page->Redirect($go);
+			}
+		}
+		catch (Exception $e)
+		{
+			$this->addError($e->getMessage());
+		}
+	}
+}
+?>

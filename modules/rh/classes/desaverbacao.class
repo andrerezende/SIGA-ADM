@@ -1,0 +1,89 @@
+<?PHP
+/* Copyright 2006, 2007, 2008, 2009, 2010 do SETEC/MEC
+ *
+ * Este arquivo é parte do programa SigaEPT
+ *
+ * O SigaEPT é um software livre;  você pode redistribuí-lo e/ou modificá-lo dentro dos
+ * termos da Licença Pública Geral GNU como publicada pela fundação do software livre (FSF);
+ * na versão 2 da Licença.
+ *
+ * Este programa é distribuído na esperança que possa ser útil, mas SEM NENHUMA GARANTIA; sem
+ * uma garantia implícita de ADEQUAÇÃO a qualquer MERCADO ou APLICAÇÃO EM PARTICULAR. Veja Licença
+ * Pública Geral GNU/GPL em português para maiores detalhes.
+ *
+ * Você deve ter recebido uma cópia da Licença Pública Geral GNU, sob o título “LICENCA.txt”,
+ * junto com este programa, se não, acesse o portal do Software Público Brasileiro no endereço
+ * www.softwarepublico.gov.br ou escreva para Fundação do Software Livre (FSF) Inc.,51 Franklin
+ * St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
+
+class BusinessRhDesaverbacao extends MBusiness
+{
+    public $idDesaverbacao;
+	public $processo;
+	public $dataInicio;
+	public $dataFim;
+	public $totalDias;
+	public $data;
+	public $motivo;
+    public $idAverbacao;
+
+    public $averbacao;
+    public $k;
+
+
+    function __construct($data=null)
+	{
+        $this->k = new MKrono();
+		parent::__construct('sigaept',$data);
+	}
+
+
+    //soma os dias das possíveis desaverbações de uma dada averbação
+    function sumDesaverbacoesbyAverbacao($idAverbacao)
+    {
+        $criteria = $this->getCriteria();
+        $criteria->addColumnAttribute('desaverbacoes.totalDias');
+        $criteria->addCriteria('desaverbacoes.idAverbacao','=',$idAverbacao);
+        $result = $criteria->retrieveAsQuery()->result;
+
+        if ($result)
+        {
+            foreach ($result as $desaverbacao)
+            {
+                $return = $return + $desaverbacao[0];
+            }
+        }
+
+        return $return;
+    } // sumDesaverbacoesbyAverbacao
+
+
+    function getDaysDiff()
+    {
+        return $this->k->daysDiff($this->dataInicio,$this->dataFim);
+    }
+
+
+    function save()
+    {
+        if ( ! $this->isPersistent() )
+            $this->averbacao->desaverba($this->totalDias);
+        parent::save();
+    }
+
+
+    function delete()
+    {
+    	$this->retrieveAssociation('averbacao');
+        $this->beginTransaction();
+        $this->averbacao->averba($this->totalDias);
+        parent::delete();
+        $this->log(OP_DEL," id desaverbacao ".$this->idDesaverbacao." id averbacao: ".$this->idAverbacao." total dias: ".$this->totalDias );
+        $this->endTransaction();
+    }
+
+
+}
+?>
