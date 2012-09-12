@@ -1,0 +1,29 @@
+<?php
+require_once 'classes/Relatorio.php';
+
+class RmaSubelemento extends Relatorio {
+
+	public function geraRelatorio($params = array()) {
+		return $this->dataSource->execute("
+SELECT
+    DISTINCT(SUB.IDELEMENTO, SUB.IDSUBELEMENTO, SUB.DESCRICAO),
+    MAT.IDMATERIAL,
+    MAT.DESCRICAO,
+    SUM(EST.VALORTOTAL)
+FROM
+    AD_ESTOQUE EST
+    INNER JOIN AD_MATERIAL MAT ON EST.IDMATERIAL = MAT.IDMATERIAL
+    INNER JOIN AD_SUBELEMENTO SUB ON MAT.IDSUBELEMENTO = SUB.IDSUBELEMENTO
+WHERE
+    EST.IDUO = '9'
+    AND SUB.IDELEMENTO = 339030
+    AND SUB.IDSUBELEMENTO = 1
+GROUP BY
+    MAT.IDMATERIAL,
+    MAT.DESCRICAO,
+    SUB.IDELEMENTO,
+    SUB.IDSUBELEMENTO,
+    SUB.DESCRICAO");
+	}
+
+}
