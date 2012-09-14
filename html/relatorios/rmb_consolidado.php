@@ -7,7 +7,7 @@ require_once '../../html/relatorios2/model/DAO/Conexao.php';
 require_once 'classes/DataHelper.php';
 require_once 'classes/dompdf/dompdf_config.inc.php';
 require_once 'classes/RmbConsolidado.php';
-include_once '/relatorios2/controller/UtilitariosSiga.php';
+include_once '../../hmtl/relatorios2/controller/UtilitariosSiga.php';
 
 $dataHelper = new DataHelper();
 
