@@ -44,7 +44,7 @@ $url = $baseURL . '/relatorios2/PRINT_PDF/print_pdf.php?input_file=' . rawurlenc
 
 $arraySize = count($rows);
 
-$titulo = "LISTA DE CONTA CONTABIL";
+$titulo = "LISTA DE CONTAS CONTÁBEIS";
 
 
 if (!$rows) {
@@ -117,18 +117,18 @@ if (!$rows) {
             <div id="conteudo">
 
                 <?php require_once '../statics/cabecalho.php'; ?>
-                <div id="menu">
+<!--                <div id="menu">
                     <a onclick="javascript:history.go(-1);">Voltar&nbsp&nbsp&nbsp&nbsp&nbsp</a><br/>
-                    <a href="<?php echo $url; ?>">Imprimir Relatório <img src="../statics/img/action_print.gif" alt="Imprimir Relatório" /></a>
-                </div>
+                    <a href="<?php // echo $url; ?>">Imprimir Relatório <img src="../statics/img/action_print.gif" alt="Imprimir Relatório" /></a>
+                </div>-->
                 <div id="menu"><br/></div>
                 <table cellpadding="0" cellspacing="0" border="0" class="display" id="tabela" style="width: 100%;">
                     <thead> 
                         <tr>                                
                             <th class="valores">Código</th>  
                             <th class="descricao">Descrição</th>
-                            <th class="valores">Anos Vida Util</th>
-                            <th class="valores">Valor Residual</th>                                    
+                            <th class="valores">Vida Útil (Anos)</th>
+                            <th class="valores">Valor Residual (%)</th>                                    
                         </tr>
                     </thead> 
                     <tbody>

@@ -137,10 +137,10 @@ if (!$rows) {
             <div id="conteudo">
 
                 <?php require_once '../statics/cabecalho.php'; ?>
-                <div id="menu">
+<!--                <div id="menu">
                     <a onclick="javascript:history.go(-1);">Voltar&nbsp&nbsp&nbsp&nbsp&nbsp</a><br/>
-                    <a href="<?php echo $url; ?>">Imprimir Relatório <img src="../statics/img/action_print.gif" alt="Imprimir Relatório" /></a>
-                </div>
+                    <a href="<?php // echo $url; ?>">Imprimir Relatório <img src="../statics/img/action_print.gif" alt="Imprimir Relatório" /></a>
+                </div>-->
                 <div id="menu"><br/></div>
                 <table cellpadding="0" cellspacing="0" border="0" class="display" id="tabela" style="width: 100%;">
                     <thead> 
@@ -150,7 +150,7 @@ if (!$rows) {
                             <th class="valores">Data Ateste</th>
                             <th class="descricao">Descrição</th>
                             <th class="valores">Quant.</th>                                    
-                            <th class="valores">Valor Residual</th>                                    
+                            <th class="valores">Valor</th>                                    
                         </tr>
                     </thead> 
                     <tbody>

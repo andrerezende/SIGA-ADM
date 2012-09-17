@@ -81,7 +81,7 @@ $url = $baseURL . '/relatorios2/PRINT_PDF/print_pdf.php?input_file=' . rawurlenc
   <?
   } else { */
 $arraySize = count($rows);
-$titulo = "RELATORIO DE BAIXAS DE " . $datainicio . " A " . $datafim;
+$titulo = "RELATORIO DE BAIXAS POR INSTITUIÇÃO"."<BR/>INSTITUIÇÕES: ". $instituicoes . "<BR/>A PARTIR DE ". $datainicio . " ATÉ " . $_GET['datafim'];
 ?>
 
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
@@ -144,10 +144,10 @@ $titulo = "RELATORIO DE BAIXAS DE " . $datainicio . " A " . $datafim;
             <div id="conteudo">
 
                 <?php require_once '../statics/cabecalho_1.php'; ?>
-                <div id="menu">
+<!--                <div id="menu">
                     <a onclick="javascript:history.go(-1);">Voltar&nbsp&nbsp&nbsp&nbsp&nbsp</a><br/>
-                    <a href="<?php echo $url; ?>">Imprimir Relatório <img src="../statics/img/action_print.gif" alt="Imprimir Relatório" /></a>
-                </div>
+                    <a href="<?php // echo $url; ?>">Imprimir Relatório <img src="../statics/img/action_print.gif" alt="Imprimir Relatório" /></a>
+                </div>-->
                 <div id="menu"><br/></div>
                 <table cellpadding="0" cellspacing="0" border="0" class="display" id="tabela" style="width: 100%">
                     <thead> 

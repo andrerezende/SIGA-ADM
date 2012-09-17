@@ -99,7 +99,7 @@ $arraySize = count($rows);
   } else { */
 $arraySize = count($rows);
 for ($i = 0; $i < count($rows); $i++) {
-    $titulo = ("RELATÓRIO DE AQUISIÇÕES DO SETOR " . $rows[$i]['siglasetor'] . "NO PERÍODO DE " . $datainicio . " A " . $datafim);
+    $titulo = ("RELATÓRIO DE AQUISIÇÕES POR SETOR " ."<BR/>SETOR= " .$rows[$i]['siglasetor'] . "<BR/>NO PERÍODO DE " . $datainicio . " ATÉ " . $datafim);
 }
 ?>
 
@@ -145,6 +145,7 @@ for ($i = 0; $i < count($rows); $i++) {
                     "sPaginationType": "full_numbers",
                     "aaSorting": [],                                        
                     "aoColumnDefs": [  //{ "bSortable": false, "aTargets": [ 4 ] } ,
+                        {  "sType": "currency", "aTargets": [ 0 ]},
                         {  "sType": "currency", "aTargets": [ 4 ]},
                         {  "sType": "formatted-num", "aTargets": [ 2 ]},
                         {  "sType": "formatted-num", "aTargets": [ 3 ]}                                                         
@@ -162,10 +163,10 @@ for ($i = 0; $i < count($rows); $i++) {
         <div id="conteudo">
 
 <?php require_once '../statics/cabecalho.php'; ?>
-            <div id="menu">
+<!--            <div id="menu">
                 <a onclick="javascript:history.go(-1);">Voltar&nbsp&nbsp&nbsp&nbsp&nbsp</a><br/>
-                <a href="<?php echo $url; ?>">Imprimir Relatório <img src="../statics/img/action_print.gif" alt="Imprimir Relatório" /></a>
-            </div>
+                <a href="<?php // echo $url; ?>">Imprimir Relatório <img src="../statics/img/action_print.gif" alt="Imprimir Relatório" /></a>
+            </div>-->
             <div id="menu"><br/></div>
             <table  cellpadding="0" cellspacing="0" border="0" class="display" id="tabela" style="width: 100%;">
                 <thead> 

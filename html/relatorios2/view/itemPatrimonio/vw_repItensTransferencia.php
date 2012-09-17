@@ -8,17 +8,17 @@ require_once '../../controller/DataHelper.php';
 
 
 
-$tombo=$_GET['tombo'];
-$setorOrigem=$_GET['setororigem'];
-$setorDestino=$_GET['setordestino'];
+$tombo = $_GET['tombo'];
+$setorOrigem = $_GET['setororigem'];
+$setorDestino = $_GET['setordestino'];
 
-$datainicio=$_GET['datainicio'];
-$datafim=$_GET['datafim'];
+$datainicio = $_GET['datainicio'];
+$datafim = $_GET['datafim'];
 
 $instOrigem = $_GET['instOrigem'];
 $instDestino = $_GET['instDestino'];
 
-$sql="
+$sql = "
 	
 	select TO_CHAR(m.data,'DD/MM/YYYY') as data,
 	m.data as i,
@@ -38,86 +38,114 @@ $sql="
  ";
 
 
-if($tombo || $setorOrigem  || $setorDestino || $datainicio || $datafim || $instOrigem || $instDestino){
-	if ($tombo) {
-		$sql.=" AND i.iditempatrimonio=$tombo";
-	}
-	if ($setorOrigem) {
-		$sql.=" AND m.idsetororigem=$setorOrigem";
-	}
-	if ($setorDestino) {
-		$sql.=" AND m.idsetordestino=$setorDestino" ;
-	}
-	if ($datainicio) {
-		$sql.=" AND m.data >="."'".$datainicio."'" ;
-	}
-	if ($datafim) {
-		$sql.=" AND m.data <="."'".$datafim."'" ;
-	}
-        if ($instOrigem) {
-		$sql.=" AND s1.idinstituicao ="."'".$instOrigem."       '" ;
-	}
-        if ($instDestino) {
-		$sql.=" AND s2.idinstituicao ="."'".$instDestino."       '" ;
-	}
-
+if ($tombo || $setorOrigem || $setorDestino || $datainicio || $datafim || $instOrigem || $instDestino) {
+    if ($tombo) {
+        $sql.=" AND i.iditempatrimonio=$tombo";
+    }
+    if ($setorOrigem) {
+        $sql.=" AND m.idsetororigem=$setorOrigem";
+    }
+    if ($setorDestino) {
+        $sql.=" AND m.idsetordestino=$setorDestino";
+    }
+    if ($datainicio) {
+        $sql.=" AND m.data >=" . "'" . $datainicio . "'";
+    }
+    if ($datafim) {
+        $sql.=" AND m.data <=" . "'" . $datafim . "'";
+    }
+    if ($instOrigem) {
+        $sql.=" AND s1.idinstituicao =" . "'" . $instOrigem . "       '";
+    }
+    if ($instDestino) {
+        $sql.=" AND s2.idinstituicao =" . "'" . $instDestino . "       '";
+    }
 }
 
 $sql.=" order by 2 DESC ,3 ";
 
 
-try{
-$db=Conexao::getInstance()->getDB();
+try {
+    $db = Conexao::getInstance()->getDB();
 
-$preparedStatment = $db->prepare($sql);
-
-
-$preparedStatment->execute();
+    $preparedStatment = $db->prepare($sql);
 
 
- $rows = $preparedStatment->fetchAll(PDO::FETCH_ASSOC);
- //var_dump($rows);exit;
- //--------------------------------------------------setor Origem-------------------
-
- $db=Conexao::getInstance()->getDB();
-
- $sql2="select siglasetor from cm_setor where idsetor=$setorOrigem";
+    $preparedStatment->execute();
 
 
+    $rows = $preparedStatment->fetchAll(PDO::FETCH_ASSOC);
+    //var_dump($rows);exit;
+    //--------------------------------------------------setor Origem-------------------
 
-$preparedStatment = $db->prepare($sql2);
+    $db = Conexao::getInstance()->getDB();
 
-
-$preparedStatment->execute();
-
-
- $setorOrigem = $preparedStatment->fetchAll(PDO::FETCH_ASSOC);
-
- //------------------------------------------Setor Destino -------------------------------------------------
+    $sql2 = "select siglasetor from cm_setor where idsetor=$setorOrigem";
+    
 
 
-$db=Conexao::getInstance()->getDB();
-
- $sql3="select siglasetor from cm_setor where idsetor=$setorDestino";
-
-$preparedStatment = $db->prepare($sql3);
+    $preparedStatment = $db->prepare($sql2);
+    
+    $preparedStatment->execute();
 
 
-$preparedStatment->execute();
+    $setorOrigem = $preparedStatment->fetchAll(PDO::FETCH_ASSOC);
+    
+    
+    $db = Conexao::getInstance()->getDB();
+
+    $sql3 = "select instituicao from cm_instituicao where idinstituicao=$instOrigem";
 
 
- $setorDestino = $preparedStatment->fetchAll(PDO::FETCH_ASSOC);
 
- //-------------------------------------------------------------------------------------------------------------
- Conexao::getInstance()->disconnect();
+    $preparedStatment = $db->prepare($sql3);
 
-} catch(Exception $e) {
-	$e->getMessage();
+
+    $preparedStatment->execute();
+
+
+    $instOrigem = $preparedStatment->fetchAll(PDO::FETCH_ASSOC);
+
+    //------------------------------------------Setor Destino -------------------------------------------------
+
+
+    $db = Conexao::getInstance()->getDB();
+
+    $sql4 = "select siglasetor from cm_setor where idsetor=$setorDestino";
+    
+    $preparedStatment = $db->prepare($sql4);
+    
+
+
+    $preparedStatment->execute();
+
+
+    $setorDestino = $preparedStatment->fetchAll(PDO::FETCH_ASSOC);
+    
+    
+    $db = Conexao::getInstance()->getDB();
+
+    
+    $sql5 = "select instituicao from cm_instituicao where idinstituicao=$instDestino";
+    
+    $preparedStatment = $db->prepare($sql5);
+
+
+    $preparedStatment->execute();
+
+
+    
+    $instDestino = $preparedStatment->fetchAll(PDO::FETCH_ASSOC);
+
+    //-------------------------------------------------------------------------------------------------------------
+    Conexao::getInstance()->disconnect();
+} catch (Exception $e) {
+    $e->getMessage();
 }
 
 
 
- $dataHelper = new DataHelper();
+$dataHelper = new DataHelper();
 
 $baseURL = 'http://' . $_SERVER['HTTP_HOST'];
 //$css = $baseURL.'/relatorios2/view/statics/css/estilo.css';
@@ -132,52 +160,56 @@ $js3 = $baseURL . '/relatorios2/view/statics/js/formatted-currency-asc.js';
 $tmpFile = tempnam('/tmp', 'pdf_');
 
 // Url utilizada no link de impressão do relatório. ( mandando o html )
-$url = $baseURL.'/relatorios2/PRINT_PDF/print_pdf.php?input_file=' . rawurlencode($tmpFile);
+$url = $baseURL . '/relatorios2/PRINT_PDF/print_pdf.php?input_file=' . rawurlencode($tmpFile);
 
 
 
 //echo $dnotafiscal = $_GET['notafiscal'];
-
-
-
 //die("$mesRelatorio // $idInstituicao // $instituicao // $idVidaUtil");
-
-
-
 //print_r($itens);exit;
 
 
 
-/*if(!$itens) {
-    ?>
-    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-    <script>
-        alert("Não encontrado.");
-        history.go(-1);
-    </script>
-    <?
-} else {*/
-    $arraySize = count($rows);
-	
-    $titulo = "Relatório de Transferência de Itens Patrimoniais ";
+/* if(!$itens) {
+  ?>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <script>
+  alert("Não encontrado.");
+  history.go(-1);
+  </script>
+  <?
+  } else { */
+$arraySize = count($rows);
 
-	$titulo = "Relatório de Transferência de Itens Patrimoniais ";
-if($tombo || $setorOrigem || $setorDestino || $datainicio || $datafim){
-$filtro="Filtros: ";
+$titulo = "RELATÓRIO DE TRANSFERÊNCIA DE ITENS PATRIMONIAIS" . "<br/ TOMBO: >" . $tombo .
+        "<BR/>INSTITUTO DE ORIGEM: " . $instOrigem[0]['instituicao'] . "<br/>INSTITUTO DE DESTINO: " . $instDestino[0]['instituicao'] .
+        "<br/>SETOR DE ORIGEM: " . $setorOrigem[0]['siglasetor'] . " | SETOR DE DESTINO: " . $setorDestino[0]['siglasetor'];
+
+//	$titulo = "Relatório de Transferência de Itens Patrimoniais ";
+if ($tombo || $setorOrigem || $setorDestino || $datainicio || $datafim) {
+    $filtro = "Filtros: ";
 }
-if($tombo) {$filtrotombo="<br/>Tombo:&nbsp ".$tombo." ";}
-if($setorOrigem){$filtrosetorOrigem="<br/>Setor de Origem:&nbsp ".$setorOrigem[0]['siglasetor']." ";}
-if($setorDestino){$filtrosetorDestino="<br/>Setor de Destino:&nbsp".$setorDestino[0]['siglasetor']." ";}
+if ($tombo) {
+    $filtrotombo = "<br/>Tombo:&nbsp " . $tombo . " ";
+}
+if ($setorOrigem) {
+    $filtrosetorOrigem = "<br/>Setor de Origem:&nbsp " . $setorOrigem[0]['siglasetor'] . " ";
+}
+if ($setorDestino) {
+    $filtrosetorDestino = "<br/>Setor de Destino:&nbsp" . $setorDestino[0]['siglasetor'] . " ";
+}
 
-if($datainicio){$filtrodatainicio="<br/>A partir de :&nbsp".$datainicio." ";}
-if($datafim){$filtrodatafim="<br/>Até:&nbsp".$datafim." ";}
+if ($datainicio) {
+    $filtrodatainicio = "<br/>A partir de :&nbsp" . $datainicio . " ";
+}
+if ($datafim) {
+    $filtrodatafim = "<br/>Até:&nbsp" . $datafim . " ";
+}
+?>
 
-
-    ?>
-
-    <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
     "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
-    <html>
+<html>
     <head>
         <meta http-equiv="content-type" content="text/html;charset=UTF-8" />
 
@@ -216,9 +248,9 @@ if($datafim){$filtrodatafim="<br/>Até:&nbsp".$datafim." ";}
                     "sPaginationType": "full_numbers",
                     "aaSorting": [],                                        
                     "aoColumnDefs": [  //{ "bSortable": false, "aTargets": [ 4 ] } ,
-                       {  "sType": "date-uk", "aTargets": [ 0 ]},
-                       {  "sType": "currency", "aTargets": [  ]},
-                       {  "sType": "formatted-num", "aTargets": [  ]},
+                        {  "sType": "date-uk", "aTargets": [ 0 ]},
+                        {  "sType": "currency", "aTargets": [  ]},
+                        {  "sType": "formatted-num", "aTargets": [  ]},
                         //                                                         {  "sType": "formatted-num", "aTargets": [  ]}                                                         
                     ]
                          
@@ -230,14 +262,14 @@ if($datafim){$filtrodatafim="<br/>Até:&nbsp".$datafim." ";}
     </head>
     <body align="center">
 
-<?php //ob_start();     ?>
+        <?php //ob_start();     ?>
         <div id="conteudo">
 
-<?php require_once '../statics/cabecalho.php'; ?>
-            <div id="menu">
+            <?php require_once '../statics/cabecalho.php'; ?>
+<!--            <div id="menu">
                 <a onclick="javascript:history.go(-1);">Voltar&nbsp&nbsp&nbsp&nbsp&nbsp</a><br/>
-                <a href="<?php echo $url; ?>">Imprimir Relatório <img src="../statics/img/action_print.gif" alt="Imprimir Relatório" /></a>
-            </div>
+                <a href="<?php // echo $url; ?>">Imprimir Relatório <img src="../statics/img/action_print.gif" alt="Imprimir Relatório" /></a>
+            </div>-->
             <div id="menu"><br/></div>
             <table cellpadding="0" cellspacing="0" border="0" class="display" id="tabela" style="width: 100%">
                 <thead> 
@@ -251,11 +283,11 @@ if($datafim){$filtrodatafim="<br/>Até:&nbsp".$datafim." ";}
                     </tr>
                 </thead> 
                 <tbody>
-<?php
-$saldoTotal = 0;
-for ($i = 0; $i < count($rows); $i++) {
-    $saldoTotal += $rows[$i]['valor'];
-    ?>                              
+                    <?php
+                    $saldoTotal = 0;
+                    for ($i = 0; $i < count($rows); $i++) {
+                        $saldoTotal += $rows[$i]['valor'];
+                        ?>                              
                         <tr>                                     
                             <td class="valores" style="text-align: center;"><?php echo $rows[$i]['data']; ?></td>
                             <td class="valores" style="text-align: center;"><?php echo $rows[$i]['tombo']; ?></td>
@@ -263,10 +295,10 @@ for ($i = 0; $i < count($rows); $i++) {
                             <td class="valores" style="text-align: center;"><?php echo $rows[$i]['origem']; ?></td>
                             <td class="valores" style="text-align: center;"><?php echo $rows[$i]['destino']; ?></td>
                             <td class="valores" style="text-align: center;"><?php echo $rows[$i]['login']; ?></td>
-                         </tr>                            
-    <?php
-}
-?>
+                        </tr>                            
+                        <?php
+                    }
+                    ?>
                     <tfoot style="background-color: #D1CFD0;">                                    
                         <td class="valores" style="text-align: center;">--</td>
                         <td class="valores" style="text-align: center;">--</td>
@@ -280,8 +312,8 @@ for ($i = 0; $i < count($rows); $i++) {
         </div>
     </body>
 </html>
-	
-    <?php file_put_contents($tmpFile, ob_get_contents());?>
+
+<?php file_put_contents($tmpFile, ob_get_contents()); ?>
 
 
 
