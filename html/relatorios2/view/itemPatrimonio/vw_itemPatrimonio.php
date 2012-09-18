@@ -31,21 +31,21 @@ $idVidautil = $_GET['idVidaUtil'];
 $numeroEmpenho = $_GET['numeroEmpenho'];
 $cnpj = $_GET['cnpj'];
 $orderby = $_GET['orderby'];
-
+//var_dump($idInstituicao);exit;
 $rows = ItemPatrimonio::ItemPatrimonioBy($idSetor, $idInstituicao, $idVidautil, $numeroEmpenho, $cnpj, $orderby);
 
-if ($filtradoPor == "instituicao")
-    $filtro = "Instituição: " . $rows[0]['instituicao'];
-else if ($filtradoPor == "setor")
-    $filtro = "Setor: " . $rows[0]['siglasetor'];
-else if ($filtradoPor == "vidautil")
-    $filtro = "Conta contábil: " . $rows[0]['idvidautil'];
-else if ($filtradoPor == "empenho")
-    $filtro = "Número Empenho: " . $rows[0]['numeroempenho'];
-else if ($filtradoPor == "cnpj")
-    $filtro = "CNPJ: " . $rows[0]['cnpj'];
-else
-    $filtro = "nao definido";
+//if ($filtradoPor == "instituicao")
+//    $filtro = "Instituição: " . $rows[0]['instituicao'];
+//else if ($filtradoPor == "setor")
+//    $filtro = "Setor: " . $rows[0]['siglasetor'];
+//else if ($filtradoPor == "vidautil")
+//    $filtro = "Conta contábil: " . $rows[0]['idvidautil'];
+//else if ($filtradoPor == "empenho")
+//    $filtro = "Número Empenho: " . $rows[0]['numeroempenho'];
+//else if ($filtradoPor == "cnpj")
+//    $filtro = "CNPJ: " . $rows[0]['cnpj'];
+//else
+//    $filtro = "nao definido";
 
 //echo $rows[0]['idInstituicao'];
 
@@ -59,7 +59,7 @@ if (!$rows) {
     <?
 } else {
 
-    $titulo = "Relatório de Itens Patrimoniais";
+    $titulo = "RELATÓRIO DE ITENS PATRIMONIAIS".'INSTITUIÇÕES: '.$idInstituicao;
     //$valorTotal = 0;
     ?>
 
@@ -104,10 +104,11 @@ if (!$rows) {
                         "sPaginationType": "full_numbers",
                         "aaSorting": [],                                        
                         "aoColumnDefs": [  //{ "bSortable": false, "aTargets": [ 4 ] } ,
-                            {  "sType": "date-uk", "aTargets": [ 7 ]},
                             {  "sType": "date-uk", "aTargets": [ 8 ]},
                             {  "sType": "date-uk", "aTargets": [ 9 ]},
+                            {  "sType": "date-uk", "aTargets": [ 10 ]},
                             {  "sType": "currency", "aTargets": [ 4 ]},
+                            {  "sType": "currency", "aTargets": [ 7 ]},
                             {  "sType": "formatted-num", "aTargets": [ 2 ]},
                             //                                                         {  "sType": "formatted-num", "aTargets": [  ]}                                                         
                         ]
@@ -124,24 +125,25 @@ if (!$rows) {
             <div id="conteudo">
 
                 <?php require_once '../statics/cabecalho_1.php'; ?>
-                <div id="menu">
+<!--                <div id="menu">
                     <a onclick="javascript:history.go(-1);">Voltar&nbsp&nbsp&nbsp&nbsp&nbsp</a><br/>
-                    <a href="<?php echo $url; ?>">Imprimir Relatório <img src="../statics/img/action_print.gif" alt="Imprimir Relatório" /></a>
-                </div>
+                    <a href="<?php // echo $url; ?>">Imprimir Relatório <img src="../statics/img/action_print.gif" alt="Imprimir Relatório" /></a>
+                </div>-->
                 <div id="menu"><br/></div>
-                <table cellpadding="0" cellspacing="0" border="0" class="display" id="tabela" style="width: 100%">
+                <table cellpadding="0" cellspacing="0" border="0" class="display" id="tabela" style="width: 100%;">
                     <thead> 
                         <tr>                                
-                            <td class="valores">Nº Tombo</td>
-                            <td class="descricao">Descrição</td>
-                            <td class="valores">Valor (R$)</td>
-                            <td class="valores">C. Contábil</td>
-                            <td class="valores">Setor</td>
-                            <td class="valores">Nº Empenho</td>
-                            <td class="valores">NF</td>
-                            <td class="data">Data Ateste</td>
-                            <td class="data">Data de Aquisição</td>
-                            <td class="data">Data de início de uso</td>                                  
+                            <th class="valores">Nº Tombo</th>
+                            <th class="descricao">Descrição</th>
+                            <th class="valores">Valor (R$)</th>
+                            <th class="valores">C. Contábil</th>
+                            <th class="valores">Setor</th>
+                            <th class="valores">Nº Empenho</th>
+                            <th class="valores">NF</th>
+                            <th class="valores">CNJP</th>
+                            <th class="data">Data Ateste</th>
+                            <th class="data">Data de Aquisição</th>
+                            <th class="data">Data de início de uso</th>                                  
                         </tr>
                     </thead> 
                     <tbody>
@@ -158,6 +160,7 @@ if (!$rows) {
                                 <td class="valores" style="text-align: left;"><?php echo $rows[$i]['siglasetor']; ?></td>
                                 <td class="valores" style="text-align: left;"><?php echo $rows[$i]['numeroempenho']; ?></td>
                                 <td class="valores" style="text-align: left;"><?php echo $rows[$i]['notafiscal']; ?></td>
+                                <td class="valores" style="text-align: left;"><?php echo $rows[$i]['cnpj']; ?></td>
                                 <td class="data" style="text-align: center;"><?php echo $rows[$i]['dataateste']; ?></td>
                                 <td class="data" style="text-align: center;"><?php echo $rows[$i]['dataaquisicao']; ?></td>
                                 <td class="data" style="text-align: right;"><?php echo $rows[$i]['datainiciouso']; ?></td>                                    
@@ -172,6 +175,7 @@ if (!$rows) {
                             <td class="valores" style="text-align: right;"><?php echo number_format($saldoTotal, 2, ',', '.'); ?></td>  
                             <td class="valores" style="text-align: center;">--</td>
                             <td class="valores" style="text-align: center;">--</td>
+                            <td class="valores" style="text-align: center;">--</td>                                    
                             <td class="valores" style="text-align: center;">--</td>                                    
                             <td class="valores" style="text-align: center;">--</td>                                    
                             <td class="data" style="text-align: center;">--</td>                                    
