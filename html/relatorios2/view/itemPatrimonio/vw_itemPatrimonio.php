@@ -58,8 +58,11 @@ if (!$rows) {
     </script>
     <?
 } else {
-
-    $titulo = "RELATÓRIO DE ITENS PATRIMONIAIS".'INSTITUIÇÕES: '.$idInstituicao;
+$saldoTotal = 0;
+                        for ($i = 0; $i < count($rows); $i++) {
+                            $ccontabil=$rows[$i]['idvidautil'];
+                            $siglasetor=$rows[$i]['siglasetor'];}
+    $titulo = "RELATÓRIO DE ITENS PATRIMONIAIS".'<br>INSTITUIÇÕES: '.$idInstituicao.'<br>SETOR: '.$siglasetor.'<br>C. CONTÁBIL: '.$idVidautil.'<br>NUMERO EMPENHO: '.$numeroEmpenho.'<br>CNPJ: '.$cnpj;
     //$valorTotal = 0;
     ?>
 
@@ -151,6 +154,7 @@ if (!$rows) {
                         $saldoTotal = 0;
                         for ($i = 0; $i < count($rows); $i++) {
                             $saldoTotal += $rows[$i]['itempat_valor'];
+                            $siglasetor=$rows[$i]['siglasetor'];
                             ?>                              
                             <tr>                                     
                                 <td class="valores" style="text-align: center;"><?php echo $rows[$i]['iditempatrimonio']; ?></td>
