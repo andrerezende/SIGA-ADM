@@ -5,7 +5,7 @@ ob_start();
 ini_set('display_errors', 1);
 require_once '../../controller/ItemPatrimonio.php';
 require_once '../../controller/DataHelper.php';
-
+require_once '../../model/DAO/DAOItemPatrimonio.php';
 $dataHelper = new DataHelper();
 
 $baseURL = 'http://' . $_SERVER['HTTP_HOST'];
@@ -31,8 +31,13 @@ $idVidautil = $_GET['idVidaUtil'];
 $numeroEmpenho = $_GET['numeroEmpenho'];
 $cnpj = $_GET['cnpj'];
 $orderby = $_GET['orderby'];
-//var_dump($idInstituicao);exit;
-$rows = ItemPatrimonio::ItemPatrimonioBy($idSetor, $idInstituicao, $idVidautil, $numeroEmpenho, $cnpj, $orderby);
+$itemPatrimonio = new DAOItemPatrimonio();
+//var_dump($idSetor,$idInstituicao,$idVidautil, $numeroEmpenho, $cnpj, $orderby);exit;
+$nomesInstituicoes = $itemPatrimonio->getNomesInstituicoes(array('idInstituicao' => $idInstituicao));
+$rows = ItemPatrimonio::ItemPatrimonioBy($idSetor,$idInstituicao,$idVidautil, $numeroEmpenho, $cnpj, $orderby);
+
+//var_dump($rows);exit;
+$nomes=0;
 
 //if ($filtradoPor == "instituicao")
 //    $filtro = "Instituição: " . $rows[0]['instituicao'];
@@ -46,154 +51,158 @@ $rows = ItemPatrimonio::ItemPatrimonioBy($idSetor, $idInstituicao, $idVidautil, 
 //    $filtro = "CNPJ: " . $rows[0]['cnpj'];
 //else
 //    $filtro = "nao definido";
-
 //echo $rows[0]['idInstituicao'];
-
-if (!$rows) {
-    ?>
-    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+//if (!$rows) {
+//    
+?>
+<!--    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
     <script>
         alert("Não encontrado.");
         history.go(-1);
-    </script>
-    <?
-} else {
-$saldoTotal = 0;
-                        for ($i = 0; $i < count($rows); $i++) {
-                            $ccontabil=$rows[$i]['idvidautil'];
-                            $siglasetor=$rows[$i]['siglasetor'];}
-    $titulo = "RELATÓRIO DE ITENS PATRIMONIAIS".'<br>INSTITUIÇÕES: '.$idInstituicao.'<br>SETOR: '.$siglasetor.'<br>C. CONTÁBIL: '.$idVidautil.'<br>NUMERO EMPENHO: '.$numeroEmpenho.'<br>CNPJ: '.$cnpj;
-    //$valorTotal = 0;
-    ?>
-
-    <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
-        "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
-    <html>
-        <head>
-            <meta http-equiv="content-type" content="text/html;charset=UTF-8" />
-
-            <link rel="stylesheet" type="text/css" href="<?php echo $css0; ?>" />
-            <link rel="stylesheet" type="text/css" href="<?php echo $css3; ?>" />
-            <link rel="stylesheet" type="text/css" href="<?php echo $css4; ?>" />
-
-            <script type="text/javascript" src="<?php echo $js1 ?>"></script>
-            <style type="text/css" media="screen">
-
-                .dataTables_info { padding-top: 0; }
-                .dataTables_paginate { padding-top: 0; }
-                .css_right { float: right; }
-                #tabela_wrapper .fg-toolbar { font-size: 0.8em }
-                #theme_links span { float: left; padding: 2px 10px; }
-
-            </style>
-
-            <script type="text/javascript" src="<?php echo $js2 ?>"></script>
-            <script type="text/javascript" charset="utf-8">
-                $(document).ready( function() {
-                    $('#tabela').dataTable( {					
-                        					
-                        "oLanguage": {
-
-                            "sSearch": "Procurar",
-                            "sLengthMenu": "Mostrar _MENU_ registros por página",
-                            "sZeroRecords": "Nada encontrado - 0",
-                            "sInfo": "Mostrando _START_ até _END_ de _TOTAL_ Registros",
-                            "sInfoEmpty": "Mostrando 0 até 0 de 0 registros",
-                            "sInfoFiltered": "(Filtrado de _MAX_ registros no total)"
-                        },
-                        "bJQueryUI": true,
-                        "aLengthMenu": [[-1, 10, 25, 50,100,200,500,1000,5000], ['Todos', 10, 25, 50,100,200,500,1000,5000]],
-                        "iDisplayLength": -1,
-                        "sPaginationType": "full_numbers",
-                        "aaSorting": [],                                        
-                        "aoColumnDefs": [  //{ "bSortable": false, "aTargets": [ 4 ] } ,
-                            {  "sType": "date-uk", "aTargets": [ 8 ]},
-                            {  "sType": "date-uk", "aTargets": [ 9 ]},
-                            {  "sType": "date-uk", "aTargets": [ 10 ]},
-                            {  "sType": "currency", "aTargets": [ 4 ]},
-                            {  "sType": "currency", "aTargets": [ 7 ]},
-                            {  "sType": "formatted-num", "aTargets": [ 2 ]},
-                            //                                                         {  "sType": "formatted-num", "aTargets": [  ]}                                                         
-                        ]
-                         
-                    } );
-                } );
-            </script>
-            </script>
-            <title><?php echo $titulo; ?></title>                    
-        </head>
-        <body align="center">
-
-            <?php //ob_start();    ?>
-            <div id="conteudo">
-
-                <?php require_once '../statics/cabecalho_1.php'; ?>
-<!--                <div id="menu">
-                    <a onclick="javascript:history.go(-1);">Voltar&nbsp&nbsp&nbsp&nbsp&nbsp</a><br/>
-                    <a href="<?php // echo $url; ?>">Imprimir Relatório <img src="../statics/img/action_print.gif" alt="Imprimir Relatório" /></a>
-                </div>-->
-                <div id="menu"><br/></div>
-                <table cellpadding="0" cellspacing="0" border="0" class="display" id="tabela" style="width: 100%;">
-                    <thead> 
-                        <tr>                                
-                            <th class="valores">Nº Tombo</th>
-                            <th class="descricao">Descrição</th>
-                            <th class="valores">Valor (R$)</th>
-                            <th class="valores">C. Contábil</th>
-                            <th class="valores">Setor</th>
-                            <th class="valores">Nº Empenho</th>
-                            <th class="valores">NF</th>
-                            <th class="valores">CNJP</th>
-                            <th class="data">Data Ateste</th>
-                            <th class="data">Data de Aquisição</th>
-                            <th class="data">Data de início de uso</th>                                  
-                        </tr>
-                    </thead> 
-                    <tbody>
-                        <?php
-                        $saldoTotal = 0;
-                        for ($i = 0; $i < count($rows); $i++) {
-                            $saldoTotal += $rows[$i]['itempat_valor'];
-                            $siglasetor=$rows[$i]['siglasetor'];
-                            ?>                              
-                            <tr>                                     
-                                <td class="valores" style="text-align: center;"><?php echo $rows[$i]['iditempatrimonio']; ?></td>
-                                <td class="descricao" style="text-align: left;"><?php echo $rows[$i]['itempat_descricao']; ?></td>
-                                <td class="valores" style="text-align: right;"><?php echo number_format($rows[$i]['itempat_valor'], 2, ',', '.'); ?></td>
-                                <td class="valores" style="text-align: center;"><?php echo $rows[$i]['idvidautil']; ?></td>
-                                <td class="valores" style="text-align: left;"><?php echo $rows[$i]['siglasetor']; ?></td>
-                                <td class="valores" style="text-align: left;"><?php echo $rows[$i]['numeroempenho']; ?></td>
-                                <td class="valores" style="text-align: left;"><?php echo $rows[$i]['notafiscal']; ?></td>
-                                <td class="valores" style="text-align: left;"><?php echo $rows[$i]['cnpj']; ?></td>
-                                <td class="data" style="text-align: center;"><?php echo $rows[$i]['dataateste']; ?></td>
-                                <td class="data" style="text-align: center;"><?php echo $rows[$i]['dataaquisicao']; ?></td>
-                                <td class="data" style="text-align: right;"><?php echo $rows[$i]['datainiciouso']; ?></td>                                    
-                            </tr>                            
-                            <?php
-                        }
-                        ?>
-                        <tfoot style="background-color: #D1CFD0;"">                                    
-
-                            <td class="valores" style="text-align: left;">--</td>
-                            <td class="descricao" style="text-align: center;">--</td>
-                            <td class="valores" style="text-align: right;"><?php echo number_format($saldoTotal, 2, ',', '.'); ?></td>  
-                            <td class="valores" style="text-align: center;">--</td>
-                            <td class="valores" style="text-align: center;">--</td>
-                            <td class="valores" style="text-align: center;">--</td>                                    
-                            <td class="valores" style="text-align: center;">--</td>                                    
-                            <td class="valores" style="text-align: center;">--</td>                                    
-                            <td class="data" style="text-align: center;">--</td>                                    
-                            <td class="data" style="text-align: center;">--</td>                                    
-                            <td class="data" style="text-align: center;">--</td>                                    
-
-                        </tfoot>                         
-                    </tbody>    
-                </table>                        
-            </div>
-        </body>
-    </html>
-    <?php file_put_contents($tmpFile, ob_get_contents()); ?>
-
-    <?php
+    </script>-->
+<?
+//} else 
+//{
+//$saldoTotal = 0;
+for ($i = 0; $i < count($rows); $i++) {
+    $ccontabil = $rows[$i]['idvidautil'];
+    $siglasetor = $rows[$i]['siglasetor'];
 }
+for ($i = 0; $i < count($nomesInstituicoes); $i++) {
+    $nomes.=$nomesInstituicoes[$i]['nome'] . " / ";
+}
+
+$arraySize = count($rows);
+$titulo = "RELATÓRIO DE ITENS PATRIMONIAIS" . '<br>INSTITUIÇÕES: ' . $nomes . '<br>SETOR: ' . $siglasetor . '<br>C. CONTÁBIL: ' . $idVidautil . '<br>NUMERO EMPENHO: ' . $numeroEmpenho . '<br>CNPJ: ' . $cnpj;
+?>
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
+    "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+<html>
+    <head>
+        <meta http-equiv="content-type" content="text/html;charset=UTF-8" />
+
+        <link rel="stylesheet" type="text/css" href="<?php echo $css0; ?>" />
+        <link rel="stylesheet" type="text/css" href="<?php echo $css3; ?>" />
+        <link rel="stylesheet" type="text/css" href="<?php echo $css4; ?>" />
+
+        <script type="text/javascript" src="<?php echo $js1 ?>"></script>
+        <style type="text/css" media="screen">
+
+            .dataTables_info { padding-top: 0; }
+            .dataTables_paginate { padding-top: 0; }
+            .css_right { float: right; }
+            #tabela_wrapper .fg-toolbar { font-size: 0.8em }
+            #theme_links span { float: left; padding: 2px 10px; }
+
+        </style>
+
+        <script type="text/javascript" src="<?php echo $js2 ?>"></script>
+        <script type="text/javascript" charset="utf-8">
+            $(document).ready( function() {
+                $('#tabela').dataTable( {					
+                        					
+                    "oLanguage": {
+
+                        "sSearch": "Procurar",
+                        "sLengthMenu": "Mostrar _MENU_ registros por página",
+                        "sZeroRecords": "Nada encontrado - 0",
+                        "sInfo": "Mostrando _START_ até _END_ de _TOTAL_ Registros",
+                        "sInfoEmpty": "Mostrando 0 até 0 de 0 registros",
+                        "sInfoFiltered": "(Filtrado de _MAX_ registros no total)"
+                    },
+                    "bJQueryUI": true,
+                    "aLengthMenu": [[-1, 10, 25, 50,100,200,500,1000,5000], ['Todos', 10, 25, 50,100,200,500,1000,5000]],
+                    "iDisplayLength": -1,
+                    "sPaginationType": "full_numbers",
+                    "aaSorting": [],                                        
+                    "aoColumnDefs": [  //{ "bSortable": false, "aTargets": [ 4 ] } ,
+                        {  "sType": "date-uk", "aTargets": [ 8 ]},
+                        {  "sType": "date-uk", "aTargets": [ 9 ]},
+                        {  "sType": "date-uk", "aTargets": [ 10 ]},
+                        {  "sType": "currency", "aTargets": [ 4 ]},
+                        {  "sType": "currency", "aTargets": [ 7 ]},
+                        {  "sType": "formatted-num", "aTargets": [ 2 ]},
+ //                     {  "sType": "formatted-num", "aTargets": [  ]}                                                         
+                    ]
+                         
+                } );
+            } );
+        </script>
+        </script>
+        <title><?php echo $titulo; ?></title>                    
+    </head>
+    <body align="center">
+
+        <?php //ob_start();     ?>
+        <div id="conteudo">
+
+            <?php require_once '../statics/cabecalho_1.php'; ?>
+            <!--                <div id="menu">
+                                <a onclick="javascript:history.go(-1);">Voltar&nbsp&nbsp&nbsp&nbsp&nbsp</a><br/>
+                                <a href="<?php // echo $url;    ?>">Imprimir Relatório <img src="../statics/img/action_print.gif" alt="Imprimir Relatório" /></a>
+                            </div>-->
+            <div id="menu"><br/></div>
+            <table cellpadding="0" cellspacing="0" border="0" class="display" id="tabela" style="width: 100%;">
+                <thead> 
+                    <tr>                                
+                        <th class="valores">Nº Tombo</th>
+                        <th class="descricao">Descrição</th>
+                        <th class="valores">Valor (R$)</th>
+                        <th class="valores">C. Contábil</th>
+                        <th class="valores">Setor</th>
+                        <th class="valores">Nº Empenho</th>
+                        <th class="valores">NF</th>
+                        <th class="valores">CNJP</th>
+                        <th class="data">Data Ateste</th>
+                        <th class="data">Data de Aquisição</th>
+                        <th class="data">Data de início de uso</th>                                  
+                    </tr>
+                </thead> 
+                <tbody>
+                    <?php
+                    $saldoTotal = 0;
+                    for ($i = 0; $i < count($rows); $i++) {
+                        $saldoTotal += $rows[$i]['itempat_valor'];
+                        $siglasetor = $rows[$i]['siglasetor'];
+                        ?>                              
+                        <tr>                                     
+                            <td class="valores" style="text-align: center;"><?php echo $rows[$i]['iditempatrimonio']; ?></td>
+                            <td class="descricao" style="text-align: left;"><?php echo $rows[$i]['itempat_descricao']; ?></td>
+                            <td class="valores" style="text-align: right;"><?php echo number_format($rows[$i]['itempat_valor'], 2, ',', '.'); ?></td>
+                            <td class="valores" style="text-align: center;"><?php echo $rows[$i]['idvidautil']; ?></td>
+                            <td class="valores" style="text-align: left;"><?php echo $rows[$i]['siglasetor']; ?></td>
+                            <td class="valores" style="text-align: left;"><?php echo $rows[$i]['numeroempenho']; ?></td>
+                            <td class="valores" style="text-align: left;"><?php echo $rows[$i]['notafiscal']; ?></td>
+                            <td class="valores" style="text-align: left;"><?php echo $rows[$i]['cnpj']; ?></td>
+                            <td class="data" style="text-align: center;"><?php echo $rows[$i]['dataateste']; ?></td>
+                            <td class="data" style="text-align: center;"><?php echo $rows[$i]['dataaquisicao']; ?></td>
+                            <td class="data" style="text-align: right;"><?php echo $rows[$i]['datainiciouso']; ?></td>                                    
+                        </tr>                            
+                        <?php
+                    }
+                    ?>
+                    <tfoot style="background-color: #D1CFD0;"">                                    
+
+                        <td class="valores" style="text-align: left;">--</td>
+                        <td class="descricao" style="text-align: center;">--</td>
+                        <td class="valores" style="text-align: right;"><?php echo number_format($saldoTotal, 2, ',', '.'); ?></td>  
+                        <td class="valores" style="text-align: center;">--</td>
+                        <td class="valores" style="text-align: center;">--</td>
+                        <td class="valores" style="text-align: center;">--</td>                                    
+                        <td class="valores" style="text-align: center;">--</td>                                    
+                        <td class="valores" style="text-align: center;">--</td>                                    
+                        <td class="data" style="text-align: center;">--</td>                                    
+                        <td class="data" style="text-align: center;">--</td>                                    
+                        <td class="data" style="text-align: center;">--</td>                                    
+
+                    </tfoot>                         
+                </tbody>    
+            </table>                        
+        </div>
+    </body>
+</html>
+<?php file_put_contents($tmpFile, ob_get_contents()); ?>
+
+
 

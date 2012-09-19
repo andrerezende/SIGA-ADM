@@ -2,10 +2,12 @@
 //ini_set('display_errors', 1);
 
 require_once 'Conexao.php';
-
+require_once '../../view/itemPatrimonio/vw_itemPatrimonio.php';
+//require_once '../../../relatorios/classes/Relatorio.php';
 class DAOItemPatrimonio {
 
     protected $db;
+    protected $dataSource;
 
     function __construct() {
         $this->db = Conexao::getInstance()->getDB();
@@ -14,38 +16,74 @@ class DAOItemPatrimonio {
     /**
      * Quando o objeto for destruído, ele acessará o singleton Conexão para usset as variáveis do bd
      */
+    public function getNomesInstituicoes($params = array()) {
+        $params1= $params['idInstituicao'];
+//                var_dump($params1);exit;
+//                $nomesInstituicoes = $this->dataSource->execute("
+			$sql="SELECT instituicao AS nome
+			FROM cm_instituicao
+			WHERE idinstituicao IN ($params1)
+			ORDER BY idinstituicao";
+//                        var_dump($sql);exit;
+                        try {$preparedStatment = $this->db->prepare($sql);
+		
+
+//            $sql="SELECT instituicao AS nome
+//		FROM cm_instituicao
+//		WHERE idinstituicao IN ($params1)
+//		ORDER BY idinstituicao";
+
+            $preparedStatment->execute();
+
+            $rows = $preparedStatment->fetchAll(PDO::FETCH_ASSOC);
+//            var_dump($rows);exit;
+        } catch (PDOException $e) {
+            $e->getMessage();
+
+        } catch (Exception $e) {
+            $e2->getMessage();
+        }
+        return $rows;
+//		);
+////                var_dump($params1);exit;
+//		foreach ($nomesInstituicoes as $idInstituicao) {
+//			$idInstituicoes .= substr($idInstituicao->nome, 10) . ',';
+//		}
+//		return ucwords(mb_strtolower(substr($idInstituicoes, 0, -1)));
+	}
+        
     function __destruct() {
         Conexao::getInstance()->disconnect();
     }
 
     public function getItensPatrimonioBy($idSetor = null, $idInstituicao = null, $idVidaUtil = null,
             $numeroEmpenho = null, $cnpj = null,  $orderby = null) {
-
+//var_dump($idSetor,$idInstituicao,$idVidaUtil, $numeroEmpenho, $cnpj, $orderby);exit;
         $sql = "SELECT
-    -- item patrimonio
+   
    i.iditempatrimonio, i.descricao as itempat_descricao, i.valor as itempat_valor,
 
-   -- setor
+
    s.siglasetor, s.idsetor,
 
-   -- instituicao
+   
    inst.idinstituicao, inst.instituicao,
 
-   -- vida util
+   
    v.idvidautil, v.descricao as vidautil_descricao,
 
-   -- nota fiscal
+  
    i.notafiscal,
 
-   -- cnpj
+   
    n.cnpj,
 
-   -- datas
+   
    TO_CHAR(n.dataateste,'DD/MM/YYYY') AS dataAteste,
    TO_CHAR(i.dataaquisicao, 'DD/MM/YYYY') AS dataAquisicao,
    TO_CHAR(i.datainiciouso, 'DD/MM/YYYY') AS dataIniciouso,
 
-   -- empenho
+   
    i.numeroempenho ";
 
         $sql .= " FROM
@@ -58,9 +96,9 @@ class DAOItemPatrimonio {
         $sql .= " WHERE i.ativo = 'S' ";
 
         if($idSetor || $idInstituicao || $idVidaUtil || $numeroEmpenho || $cnpj) {
-
+//var_dump($idInstituicao);exit;
             if($idSetor) $sql .= " AND cast(i.idsetor as text) = :idsetor ";
-            if($idInstituicao) $sql .= " AND cast(inst.idinstituicao as text) = :idinstituicao ";
+            if($idInstituicao) $sql .= " AND inst.idinstituicao IN ($idInstituicao)";
             if($idVidaUtil) $sql .= " AND cast(v.idvidautil as text) = :idvidautil";
             if($numeroEmpenho) $sql .= " AND cast(i.numeroempenho as text) = :numeroempenho";
             if($cnpj) $sql .= " AND n.cnpj = :cnpj";
@@ -68,20 +106,20 @@ class DAOItemPatrimonio {
 
         if($orderby)
             $sql .= " ORDER BY $orderby ASC";
-
+//        var_dump($sql);exit;
         try {
             $preparedStatment = $this->db->prepare($sql);
 
             if($idSetor) $preparedStatment->bindParam(':idsetor', $idSetor);
-            if($idInstituicao) $preparedStatment->bindParam(':idinstituicao', $idInstituicao);
+//            if($idInstituicao) $preparedStatment->bindParam ($idInstituicao);
             if($idVidaUtil) $preparedStatment->bindParam(':idvidautil', $idVidaUtil);
             if($numeroEmpenho) $preparedStatment->bindParam(':numeroempenho', $numeroEmpenho);
             if($cnpj) $preparedStatment->bindParam(':cnpj', $cnpj);
-
+            
             $preparedStatment->execute();
 
             $rows = $preparedStatment->fetchAll(PDO::FETCH_ASSOC);
-
+            
         } catch (PDOException $e) {
             $e->getMessage();
         }
