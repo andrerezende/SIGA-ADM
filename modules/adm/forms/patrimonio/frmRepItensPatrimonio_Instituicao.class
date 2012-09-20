@@ -1,127 +1,176 @@
 <?php
+
 // 14/06/2011 - Daniel Bonfim
 class frmRepItensPatrimonio_Instituicao extends MForm {
-	/**
-	 * Business utilizado
-	 * @var frmRepItensPatrimonio_Instituicao
-	 */
 
-	public function  __construct() {
-		global $MIOLO, $module;
-		parent::__construct('Filtragem por Instituição');
-		$this->defaultButton = false;
-		//$this->page->addJsCode(file_get_contents(dirname(__FILE__).'/js/frmPedidoNew.js'));
-		$this->EventHandler();
-	}
+    protected $objInstituicao;
+    protected $allInstits;
+    public $teste;
+    protected $mtfUsuarios;
 
-	public function  CreateFields() {
-		global $MIOLO, $page, $module, $context, $action, $history;
-		parent::CreateFields();
-                  
-
-                $orderby = Form::GetFormValue('orderby');
-                $opcoes = array(
-                                 "i.iditempatrimonio"=>"Nº Tombo",
-                                 "i.descricao"=>"Descrição",                                
-                                );
-                
-		$fields = array(
-                    new MLookupTextField('instituicao', '', 'Instituição', 30, NULL, NULL, NULL, 'common', 'instituicao2'),
-                    new MLookupTextField('idVidaUtil', '', 'Conta Contábil', 10, NULL, NULL, NULL, 'adm', 'ContaContabil'),
-                    new MHiddenField('idInstituicao'),
-                    
-                    new MSelection('orderby', $orderby,'Ordenar por', $opcoes)
-		);  
-                
-		$this->SetFields($fields);
-                $this->SetFieldAttr('instituicao', 'related', 'idInstituicao,instituicao');
-                $this->SetFieldAttr('idVidaUtil', 'related', 'idVidaUtil');
-                
-                
-		$buttons = array(
-			new MButton('btnPost','Gerar Relatório'),
-                        //new FormButton('btnPost','Gerar Relatório'),
-                        new MButton('btnLimpar','Limpar')
-		);
-                
-		$this->SetButtons($buttons);
-                 
-/*
-		// Validadores
-		$validators = array(
-                       new MRequiredValidator('instituicao'),
-                       new MRequiredValidator('idVidaUtil'),
-                       //new MRequiredValidator('orderby'),
-		);
-		$this->setValidators($validators);
- * 
- */
-
-		
-                $this->page->onLoad("MIOLO_GetElementById('instituicao').focus();");
-	}
-        
-        
-        function btnLimpar_click() {            
-            $this->SetFieldValue('instituicao', "");
-            $this->SetFieldValue('idInstituicao', "");
-            $this->SetFieldValue('idVidaUtil', ""); 
-        }
-        
-
-    function btnPost_click()
-    {        
-	global $MIOLO, $module, $item, $theme;
-        
-        /*
-        $report = new MJasperReport('sigaept');
-        $parameters['SUBREPORT_DIR']	= $MIOLO->GetConf('home.modules');
-        $parameters['int_pIdUsuario']	= $MIOLO->login->idkey;
-        $parameters['pOrdem']           =  Form::GetFormValue('orderby');
-        $parameters['pData']            = date('d/m/y');
-        $parameters['pURL']		= $MIOLO->GetConf('home.url');
-                
-        $parameters['pIdInstituicao']	=  Form::GetFormValue('idInstituicao');
-        $parameters['pIdVidaUtil']	=  Form::GetFormValue('idVidaUtil');
-        $parameters['pIdSetor']         =  '%';  
-         
-        if(empty($parameters['pIdInstituicao']) || is_null($parameters['pIdInstituicao'])) {
-            $this->Error("Instituição não informada");
-            return;
-        }
-        
-        if(empty($parameters['pIdVidaUtil']) || is_null($parameters['pIdVidaUtil'])) {
-            $parameters['pIdVidaUtil']	=  '%';
-        }        
-        
-        if(!empty($parameters['pOrdem']) && !is_null($parameters['pOrdem'])) {
-            ($parameters['pOrdem'] == "i.iditempatrimonio") ? $report->Execute($module, 'itensPatrimonio2', $parameters) : $report->Execute($module, 'itensPatrimonio', $parameters);
-        
-        } else {
-            // numero tombo como padrao
-            $parameters['pOrdem'] = "i.iditempatrimonio";
-            $report->Execute($module, 'itensPatrimonio2', $parameters);
-            //$this->Error("Selecione o tipo de ordenação");
-            //return;
-        }
-         * 
-         */
-        
-        // 07-11-2011 - Daniel Bonfim
-        $filtradoPor = "instituicao";
-        $idInstituicao = Form::GetFormValue('idInstituicao');
-        $idVidaUtil = Form::GetFormValue('idVidaUtil');
-        $orderby = (Form::GetFormValue('orderby')) ? Form::GetFormValue('orderby') : "i.iditempatrimonio";
-        
-        if(!$idInstituicao) {
-            $this->Error("Instituição não informada");
-            return;
-        }
-        
-        header("Location: http://".$_SERVER['HTTP_HOST']."/relatorios2/repItensPatrimonio.php?filtradoPor=$filtradoPor&idInstituicao=$idInstituicao&idVidaUtil=$idVidaUtil&orderby=$orderby");
-        
+    /**
+     * Business utilizado
+     * @var frmRepItensPatrimonio_Instituicao
+     */
+    public function __construct() {
+        global $MIOLO, $module;
+        $this->objInstituicao = $MIOLO->GetBusiness('common', 'instituicao');
+        parent::__construct('Filtragem por Instituição, setor, conta contábil, nº empenho e CNPJ');
+        $this->defaultButton = false;
+        //$this->page->addJsCode(file_get_contents(dirname(__FILE__).'/js/frmPedidoNew.js'));
+        $this->EventHandler();
     }
 
-	
+    public function CreateFields() {
+        global $MIOLO, $page, $module, $context, $action, $history;
+        parent::CreateFields();
+
+
+        $orderby = Form::GetFormValue('orderby');
+        $opcoes = array(
+            "i.iditempatrimonio" => "Nº Tombo",
+            "i.descricao" => "Descrição",
+        );
+        $teste = array();
+        $this->allInstits = $this->objInstituicao->ListAlInst2();
+        $mtField = array(array('mtinstits', 'Instituições', '', $this->allInstits));
+        $mtfUsuarios = new MMultiTextField2('instituicao', NULL, 'Instituições', $mtField, 300, true, 'vertical');
+        $fields = array(
+            $mtfUsuarios,
+            new MLookupTextField('siglaSetor', '', 'Setor', 15, NULL, NULL, NULL, 'common', 'setor2'),
+            new MLookupTextField('idVidaUtil', '', 'Conta Contábil', 10, NULL, NULL, NULL, 'adm', 'ContaContabil'),
+            new MHiddenField('idIsntituicao'),
+//            new MHiddenField('instituicao'),
+            new MHiddenField('idSetor'),
+            new MTextField("txEmpenho", '', "Número Empenho", "20"),
+            new MTextField("txCnpj", '', "CNPJ", "20"),
+                //snew MSelection('orderby', $orderby, 'Ordenar por', $opcoes)
+        );
+
+        $this->SetFields($fields);
+        $this->SetFieldAttr('instituicao', 'related', 'idInstituicao,instituicao');
+        $this->SetFieldAttr('siglaSetor', 'related', 'idSetor,siglaSetor');
+        $this->SetFieldAttr('idVidaUtil', 'related', 'idVidaUtil');
+        $this->SetFieldAttr('lkpMaterial', 'module', 'adm');
+        $this->SetFieldAttr('lkpMaterial', 'item', 'material');
+        $this->SetFieldAttr('lkpMaterial', 'event', 'filler');
+        $this->SetFieldAttr('lkpMaterial', 'related', 'idMaterial,lkpMaterial');
+
+        $buttons = array(
+            new MButton('btnPost', 'Gerar Relatório'),
+//            new FormButton('btnPost','Gerar Relatório'),
+            new MButton('btnLimpar', 'Limpar')
+        );
+
+        $this->SetButtons($buttons);
+
+        /*
+          // Validadores
+          $validators = array(
+          new MRequiredValidator('instituicao'),
+          new MRequiredValidator('idVidaUtil'),
+          //new MRequiredValidator('orderby'),
+          );
+          $this->setValidators($validators);
+         */
+
+
+
+//        $this->page->onLoad("MIOLO_GetElementById('idInstituicao').focus();");
+//        $this->page->onLoad("MIOLO_GetElementById('idVidaUtil').focus();");
+    }
+
+    function btnLimpar_click() {
+//        $this->SetFieldValue('instituicao', "");
+        $this->SetFieldValue('idInstituicao', "");
+        $this->SetFieldValue('idVidaUtil', "");
+        $this->SetFieldValue('txEmpenho', "");
+        $this->SetFieldValue('siglaSetor', "");
+        $this->SetFieldValue('idSetor', "");
+        $this->SetFieldValue('txCnpj', "");
+    }
+
+    function btnPost_click() {
+        global $MIOLO, $module, $item, $theme;
+
+        /*
+          $report = new MJasperReport('sigaept');
+          $parameters['SUBREPORT_DIR']	= $MIOLO->GetConf('home.modules');
+          $parameters['int_pIdUsuario']	= $MIOLO->login->idkey;
+          $parameters['pOrdem']           =  Form::GetFormValue('orderby');
+          $parameters['pData']            = date('d/m/y');
+          $parameters['pURL']		= $MIOLO->GetConf('home.url');
+
+          $parameters['pIdInstituicao']	=  Form::GetFormValue('idInstituicao');
+          $parameters['pIdVidaUtil']	=  Form::GetFormValue('idVidaUtil');
+          $parameters['pIdSetor']         =  '%';
+
+          if(empty($parameters['pIdInstituicao']) || is_null($parameters['pIdInstituicao'])) {
+          $this->Error("Instituição não informada");
+          return;
+          }
+
+          if(empty($parameters['pIdVidaUtil']) || is_null($parameters['pIdVidaUtil'])) {
+          $parameters['pIdVidaUtil']	=  '%';
+          }
+
+          if(!empty($parameters['pOrdem']) && !is_null($parameters['pOrdem'])) {
+          ($parameters['pOrdem'] == "i.iditempatrimonio") ? $report->Execute($module, 'itensPatrimonio2', $parameters) : $report->Execute($module, 'itensPatrimonio', $parameters);
+
+          } else {
+          // numero tombo como padrao
+          $parameters['pOrdem'] = "i.iditempatrimonio";
+          $report->Execute($module, 'itensPatrimonio2', $parameters);
+          //$this->Error("Selecione o tipo de ordenação");
+          //return;
+          }
+         * 
+         */
+
+        // 07-11-2011 - Daniel Bonfim
+        $filtradoPor = "instituicao";
+        $idInstituicao = Form::GetFormValue('instituicao');
+        $instituicao = Form::GetFormValue('instituicao');
+        $idSetor = Form::GetFormValue('idSetor');
+        $idVidaUtil = Form::GetFormValue('idVidaUtil');
+        $empenho = Form::GetFormValue('txEmpenho');
+        $cnpj = Form::GetFormValue('txCnpj');
+//        $orderby = (Form::GetFormValue('orderby')) ? Form::GetFormValue('orderby') : "i.iditempatrimonio";
+        $objSetor = $MIOLO->GetBusiness('common', 'setor', $idSetor);
+        $siglaSetor = $objSetor->sigla;
+        
+//        var_dump($siglaSetor);exit;
+        if (!$idInstituicao) {
+            $this->Error("Instituição não informada");
+        } else if (!$idSetor) {
+            $this->Error("Setor não informado");
+        } else if (!$idVidaUtil) {
+            $this->Error("Conta contábil não informada.");
+        }else {  //else if (!$empenho) {
+//            $this->Error("Número Empenho não informado.");
+//        } else if (!$cnpj) {
+//            $this->Error("Número do CNPJ não informado.");
+//        }
+            foreach ($idInstituicao as &$word) {
+                $cochetes = array('[', ']');
+                $word = str_replace($cochetes, '', $word);
+            }
+
+        $idinstits = $this->objInstituicao->getIDInstArray($idInstituicao);
+
+        foreach ($idinstits as $ids) {
+            $idurl = $idurl . $ids . ',';
+        }
+        $idurl = substr($idurl, 0, (strlen($idurl)-1));
+        
+        $urlref = $idurl;
+        $MIOLO->page->AddJsCode('window.open("http://' . $_SERVER['HTTP_HOST'] . '/relatorios2/repItensPatrimonio.php?filtradoPor=' . $filtradoPor . '&idInstituicao=' . urlencode($urlref) . '&idSetor=' . $idSetor . '&idVidaUtil=' . $idVidaUtil . '&numeroEmpenho=' . $empenho . '&cnpj=' . $cnpj . '&orderby=' . $orderby . '&siglasetor='.$siglaSetor. '");');
+        return;
+        }
+        
+    }
+    
+
 }
+
 ?>
