@@ -26,12 +26,6 @@ class DAOItemPatrimonio {
 			ORDER BY idinstituicao";
 //                        var_dump($sql);exit;
                         try {$preparedStatment = $this->db->prepare($sql);
-		
-
-//            $sql="SELECT instituicao AS nome
-//		FROM cm_instituicao
-//		WHERE idinstituicao IN ($params1)
-//		ORDER BY idinstituicao";
 
             $preparedStatment->execute();
 
@@ -96,29 +90,32 @@ class DAOItemPatrimonio {
         $sql .= " WHERE i.ativo = 'S' ";
 
         if($idSetor || $idInstituicao || $idVidaUtil || $numeroEmpenho || $cnpj) {
-//var_dump($idInstituicao);exit;
-            if($idSetor) $sql .= " AND cast(i.idsetor as text) = :idsetor ";
+            if($idSetor) $sql .= " AND i.idsetor IN ($idSetor) ";
             if($idInstituicao) $sql .= " AND inst.idinstituicao IN ($idInstituicao)";
-            if($idVidaUtil) $sql .= " AND cast(v.idvidautil as text) = :idvidautil";
-            if($numeroEmpenho) $sql .= " AND cast(i.numeroempenho as text) = :numeroempenho";
-            if($cnpj) $sql .= " AND n.cnpj = :cnpj";
-        }
+            if($idVidaUtil) $sql .= " AND v.idvidautil IN ($idVidaUtil)";
+            if($numeroEmpenho) $sql .= " AND i.numeroempenho IN ($numeroEmpenho)";
+            if($cnpj) $sql .= " AND n.cnpj IN ($cnpj)";
+//var_dump($idInstituicao,$idSetor,$idVidaUtil,$cnpj,$numeroEmpenho);exit;
+       
+            
+            
+            }
 
-        if($orderby)
-            $sql .= " ORDER BY $orderby ASC";
-//        var_dump($sql);exit;
+//        if($orderby)
+//            $sql .= " ORDER BY $orderby ASC";
         try {
             $preparedStatment = $this->db->prepare($sql);
 
-            if($idSetor) $preparedStatment->bindParam(':idsetor', $idSetor);
+//            if($idSetor) $preparedStatment->bindParam('i.idsetor', $idSetor);
 //            if($idInstituicao) $preparedStatment->bindParam ($idInstituicao);
-            if($idVidaUtil) $preparedStatment->bindParam(':idvidautil', $idVidaUtil);
-            if($numeroEmpenho) $preparedStatment->bindParam(':numeroempenho', $numeroEmpenho);
-            if($cnpj) $preparedStatment->bindParam(':cnpj', $cnpj);
-            
+//            if($idVidaUtil) $preparedStatment->bindParam('v.idvidautil', $idVidaUtil);
+//            if($numeroEmpenho) $preparedStatment->bindParam('i.numeroempenho', $numeroEmpenho);
+//            if($cnpj) $preparedStatment->bindParam('n.cnpj', $cnpj);
+//            var_dump($sql);exit;
             $preparedStatment->execute();
 
             $rows = $preparedStatment->fetchAll(PDO::FETCH_ASSOC);
+// var_dump($sql);exit;
             
         } catch (PDOException $e) {
             $e->getMessage();

@@ -23,7 +23,7 @@ $tmpFile = tempnam('/tmp', 'pdf_');
 
 // Url utilizada no link de impressão do relatório. ( mandando o html )
 $url = $baseURL . '/relatorios2/PRINT_PDF/print_pdf.php?input_file=' . rawurlencode($tmpFile);
-
+$siglaSetor = $_GET['siglasetor'];
 $filtradoPor = $_GET['filtradoPor'];
 $idSetor = $_GET['idSetor'];
 $idInstituicao = $_GET['idInstituicao'];
@@ -73,7 +73,7 @@ for ($i = 0; $i < count($nomesInstituicoes); $i++) {
 }
 
 $arraySize = count($rows);
-$titulo = "RELATÓRIO DE ITENS PATRIMONIAIS" . '<br>INSTITUIÇÕES: ' . $nomes . '<br>SETOR: ' . $siglasetor . '<br>C. CONTÁBIL: ' . $idVidautil . '<br>NUMERO EMPENHO: ' . $numeroEmpenho . '<br>CNPJ: ' . $cnpj;
+$titulo = "RELATÓRIO DE ITENS PATRIMONIAIS" . '<br>INSTITUIÇÕES: ' . $nomes . '<br>SETOR: ' . $siglaSetor . '<br>C. CONTÁBIL: ' . $idVidautil . '<br>NUMERO EMPENHO: ' . $numeroEmpenho . '<br>CNPJ: ' . $cnpj;
 ?>
 
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
