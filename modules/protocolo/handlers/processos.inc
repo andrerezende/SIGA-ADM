@@ -31,11 +31,15 @@ switch ($action) {
 	case 'irpf';
 		$MIOLO->InvokeHandler($module, 'processos/irpf');
 		break;
-            // 22-09-2011 - Daniel Bonfim
+            
         case 'usuariosBySetor':
                 $MIOLO->InvokeHandler($module, 'processos/usuariosBySetor');
                 break;
-            // 11-10-2011 - Daniel Bonfim
+            
+        case 'versaosistemas':
+                $MIOLO->InvokeHandler($module, 'processos/versaosistemas');
+                break;
+            
         case 'processosBySetor':
                 $MIOLO->InvokeHandler($module, 'processos/processosBySetor');
                 break;
