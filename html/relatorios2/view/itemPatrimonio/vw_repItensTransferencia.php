@@ -181,9 +181,10 @@ $url = $baseURL . '/relatorios2/PRINT_PDF/print_pdf.php?input_file=' . rawurlenc
   } else { */
 $arraySize = count($rows);
 
-$titulo = "RELATÓRIO DE TRANSFERÊNCIA DE ITENS PATRIMONIAIS" . "<br/ TOMBO: >" . $tombo .
+$titulo = "RELATÓRIO DE TRANSFERÊNCIA DE ITENS PATRIMONIAIS" . "<br/> TOMBO:" . $tombo .
         "<BR/>INSTITUTO DE ORIGEM: " . $instOrigem[0]['instituicao'] . "<br/>INSTITUTO DE DESTINO: " . $instDestino[0]['instituicao'] .
-        "<br/>SETOR DE ORIGEM: " . $setorOrigem[0]['siglasetor'] . " | SETOR DE DESTINO: " . $setorDestino[0]['siglasetor'];
+        "<br/>SETOR DE ORIGEM: " . $setorOrigem[0]['siglasetor'] . " | SETOR DE DESTINO: " . $setorDestino[0]['siglasetor'].
+        "<br/>A PARTIR DE ".$datainicio." ATÉ ".$datafim;
 
 //	$titulo = "Relatório de Transferência de Itens Patrimoniais ";
 if ($tombo || $setorOrigem || $setorDestino || $datainicio || $datafim) {

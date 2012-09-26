@@ -16,6 +16,7 @@
         $panel = new ActionPanel('pnlProtocolo','Protocolo','',$close);
         //$panel->SetIconType('small');
         $panel->AddUserAction('PROT_USR',A_EXECUTE,'Processos',$ui->GetImageTheme('','icons/processos.png'),$module,'main:processos:find');
+//        $panel->AddUserAction('PROT_USR',A_EXECUTE,'Versão do Sistema',$ui->GetImageTheme('','icons/MAD.png'),$module,'main:versaosistemas:find');
         // 31-10-2011 - Daniel Bonfim
         $panel->AddUserAction('prot',A_ACCESS, 'Pendências de Protocolo', $ui->GetImageTheme('','icons/protocolo.png'), 'protocolo', 'main:processos:pendentes');
 //        $panel->AddUserAction('PROT_USR',A_EXECUTE,'Múltiplos Processos',$ui->GetImageTheme('','icons/multiplos_processos.png'),$module,'main:multiplos');
