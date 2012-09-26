@@ -4,13 +4,156 @@ ob_start();
 require_once '../../model/DAO/Conexao.php';
 require_once '../../controller/DataHelper.php';
 
-$idUO = $_GET['idPatrimonio'];
-$uo = $_GET['uo'];
+//define('WP_MEMORY_LIMIT','100M');
+//echo "relatorios2/view/itemPatrimonio/vw_repDepreciacaoPorContaContabil.php?idusuario=$idUsuario&idInstituicao=$idInstituicao&unidade=$unidade&mesReferencia=$mesReferencia&anoReferencia=$anoReferencia&situacao=$situacao&mesRelatorio=$mesRelatorio";
 
-$sql = '
-select idvidautil, descricao, anosvidautil, valorresidual
-from ad_vidautil
-ORDER BY idvidautil';
+$idUsuario = $_GET['idusuario'];
+$idInstituicao = $_GET['idInstituicao'];
+$unidade = $_GET['unidade'];
+$mesReferencia = $_GET['mesReferencia'];
+$anoReferencia = $_GET['anoReferencia'];
+$situacao = $_GET['situacao'];
+$mesRelatorio = $_GET['mesRelatorio'];
+$retrato = $_GET['retrato'];
+
+if ($situacao == 'Estornados') {
+    $situacao = '';
+} else {
+    $situacao = 'NOT';
+}
+
+if ($retrato == 2) {
+    $sql = "
+SELECT
+idrubrica as contacontabil,
+SUM(valor) as valor_bruto,
+
+SUM(CASE extract(day from iniciouso) WHEN 1 THEN
+CASE (((extract(year from AGE(date('$mesRelatorio'), iniciouso))* 12 + extract(month from AGE(date('$mesRelatorio'), iniciouso)))-1) > mesesdepreciacao OR
+((extract(year from AGE(date('$mesRelatorio'), iniciouso))* 12 + extract(month from AGE(date('$mesRelatorio'), iniciouso)))-1) = 0) WHEN true THEN
+0
+ELSE
+valordepreciavelmes
+END
+ELSE
+CASE ((extract(year from AGE(date('$mesRelatorio'), iniciouso))* 12 + extract(month from AGE(date('$mesRelatorio'), iniciouso))) > mesesdepreciacao OR
+extract(year from AGE(date('$mesRelatorio'), iniciouso))* 12 + extract(month from AGE(date('$mesRelatorio'), iniciouso)) = 0) WHEN true THEN
+0
+ELSE
+valordepreciavelmes
+END
+END) as valordepreciavelmes,
+
+
+SUM((valordepreciavelmes *
+CASE extract(day from iniciouso) WHEN 1 THEN
+CASE ((extract(year from AGE(date('$mesRelatorio'), iniciouso))* 12 + extract(month from AGE(date('$mesRelatorio'), iniciouso)))-1) > mesesdepreciacao WHEN true THEN
+mesesdepreciacao
+ELSE
+((extract(year from AGE(date('$mesRelatorio'), iniciouso))* 12 + extract(month from AGE(date('$mesRelatorio'), iniciouso)))-1)
+END
+ELSE
+CASE (extract(year from AGE(date('$mesRelatorio'), iniciouso))* 12 + extract(month from AGE(date('$mesRelatorio'), iniciouso))) > mesesdepreciacao WHEN true THEN
+mesesdepreciacao
+ELSE
+(extract(year from AGE(date('$mesRelatorio'), iniciouso))* 12 + extract(month from AGE(date('$mesRelatorio'), iniciouso)))
+END
+END)) as valordepreciado,
+
+SUM((valor - (valordepreciavelmes *
+CASE extract(day from iniciouso) WHEN 1 THEN
+CASE ((extract(year from AGE(date('$mesRelatorio'), iniciouso))* 12 + extract(month from AGE(date('$mesRelatorio'), iniciouso)))-1) > mesesdepreciacao WHEN true THEN
+mesesdepreciacao
+ELSE
+((extract(year from AGE(date('$mesRelatorio'), iniciouso))* 12 + extract(month from AGE(date('$mesRelatorio'), iniciouso)))-1)
+END
+ELSE
+CASE (extract(year from AGE(date('$mesRelatorio'), iniciouso))* 12 + extract(month from AGE(date('$mesRelatorio'), iniciouso))) > mesesdepreciacao WHEN true THEN
+mesesdepreciacao
+ELSE
+(extract(year from AGE(date('$mesRelatorio'), iniciouso))* 12 + extract(month from AGE(date('$mesRelatorio'), iniciouso)))
+END
+END))) as valorLiquido
+
+FROM vw_depreciacao
+WHERE iniciouso < date('$mesRelatorio')
+AND vw_depreciacao.iditempatrimonio $situacao IN
+(select
+iditempatrimonio
+from ad_movimentopat where tipomovimento='4'
+)
+GROUP BY
+idrubrica
+ORDER BY
+idrubrica;
+";
+} else {
+    $sql = "SELECT
+idrubrica as contacontabil,
+SUM(valor) as valor_bruto,
+
+SUM(CASE extract(day from iniciouso) WHEN 1 THEN
+CASE (((extract(year from AGE(date('$mesRelatorio'), iniciouso))* 12 + extract(month from AGE(date('$mesRelatorio'), iniciouso)))-1) > mesesdepreciacao OR
+((extract(year from AGE(date('$mesRelatorio'), iniciouso))* 12 + extract(month from AGE(date('$mesRelatorio'), iniciouso)))-1) = 0) WHEN true THEN
+0
+ELSE
+valordepreciavelmes
+END
+ELSE
+CASE ((extract(year from AGE(date('$mesRelatorio'), iniciouso))* 12 + extract(month from AGE(date('$mesRelatorio'), iniciouso))) > mesesdepreciacao OR
+extract(year from AGE(date('$mesRelatorio'), iniciouso))* 12 + extract(month from AGE(date('$mesRelatorio'), iniciouso)) = 0) WHEN true THEN
+0
+ELSE
+valordepreciavelmes
+END
+END) as valordepreciavelmes,
+
+
+SUM((valordepreciavelmes *
+CASE extract(day from iniciouso) WHEN 1 THEN
+CASE ((extract(year from AGE(date('$mesRelatorio'), iniciouso))* 12 + extract(month from AGE(date('$mesRelatorio'), iniciouso)))-1) > mesesdepreciacao WHEN true THEN
+mesesdepreciacao
+ELSE
+((extract(year from AGE(date('$mesRelatorio'), iniciouso))* 12 + extract(month from AGE(date('$mesRelatorio'), iniciouso)))-1)
+END
+ELSE
+CASE (extract(year from AGE(date('$mesRelatorio'), iniciouso))* 12 + extract(month from AGE(date('$mesRelatorio'), iniciouso))) > mesesdepreciacao WHEN true THEN
+mesesdepreciacao
+ELSE
+(extract(year from AGE(date('$mesRelatorio'), iniciouso))* 12 + extract(month from AGE(date('$mesRelatorio'), iniciouso)))
+END
+END)) as valordepreciado,
+
+SUM((valor - (valordepreciavelmes *
+CASE extract(day from iniciouso) WHEN 1 THEN
+CASE ((extract(year from AGE(date('$mesRelatorio'), iniciouso))* 12 + extract(month from AGE(date('$mesRelatorio'), iniciouso)))-1) > mesesdepreciacao WHEN true THEN
+mesesdepreciacao
+ELSE
+((extract(year from AGE(date('$mesRelatorio'), iniciouso))* 12 + extract(month from AGE(date('$mesRelatorio'), iniciouso)))-1)
+END
+ELSE
+CASE (extract(year from AGE(date('$mesRelatorio'), iniciouso))* 12 + extract(month from AGE(date('$mesRelatorio'), iniciouso))) > mesesdepreciacao WHEN true THEN
+mesesdepreciacao
+ELSE
+(extract(year from AGE(date('$mesRelatorio'), iniciouso))* 12 + extract(month from AGE(date('$mesRelatorio'), iniciouso)))
+END
+END))) as valorLiquido
+
+FROM vw_depreciacao
+WHERE iniciouso < date('$mesRelatorio') and cast(idinstituicao as integer) = '$idInstituicao'
+AND vw_depreciacao.iditempatrimonio $situacao IN
+(select
+iditempatrimonio
+from ad_movimentopat where tipomovimento='4'
+)
+
+
+GROUP BY
+idrubrica
+ORDER BY
+idrubrica;";
+}
+
 
 try {
     $db = Conexao::getInstance()->getDB();
@@ -22,132 +165,141 @@ try {
 
 
     $rows = $preparedStatment->fetchAll(PDO::FETCH_ASSOC);
+    //var_dump($rows);exit;
 
     Conexao::getInstance()->disconnect();
 } catch (Exception $e) {
     $e->getMessage();
 }
 
+
 $dataHelper = new DataHelper();
 
 $baseURL = 'http://' . $_SERVER['HTTP_HOST'];
-$css0 = $baseURL . '/relatorios2/view/statics/css/estilo3.css';
-$css3 = $baseURL . '/relatorios2/view/statics/css/demo_table_jui.css';
-$css4 = $baseURL . '/relatorios2/view/statics/css/jquery-ui-1.8.21.custom.css';
+$css = $baseURL . '/relatorios2/view/statics/css/estilo.css';
 
-$js1 = $baseURL . '/relatorios2/view/statics/js/jquery.js';
-$js2 = $baseURL . '/relatorios2/view/statics/js/jquery.dataTables.js';
-$js3 = $baseURL . '/relatorios2/view/statics/js/formatted-currency-asc.js';
+// Arquivo temporário que será utilizado para gerar o PDF.
+$tmpFile = tempnam('/tmp', 'pdf_');
 
 // Url utilizada no link de impressão do relatório. ( mandando o html )
 $url = $baseURL . '/relatorios2/PRINT_PDF/print_pdf.php?input_file=' . rawurlencode($tmpFile);
 
+
+
+//echo $dnotafiscal = $_GET['notafiscal'];
+//die("$mesRelatorio // $idInstituicao // $instituicao // $idVidaUtil");
+//print_r($itens);exit;
+
+
+
+/* if(!$itens) {
+  ?>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <script>
+  alert("Não encontrado.");
+  history.go(-1);
+  </script>
+  <?
+  } else { */
 $arraySize = count($rows);
 
-$titulo = "LISTA DE CONTAS CONTÁBEIS";
+$titulo = " Relatório de Depreciação Por Conta Contábil - ";
 
-
-if (!$rows) {
-    ?>
-    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-    <script>
-        alert("Não encontrado.");  
-        history.go(-1);
-    </script> 
-    <?
+if ($situacao == 'NOT') {
+    $titulo.="Somente de Itens Ativos";
 } else {
-
-    //$url = "../../PRINT_PDF/almoxerifado/pdf_rmaByValorTotal.php?idUoAlmoxerifado=$idUoAlmoxerifado&mes=$mes&ano=$ano";
-    ?>
-
-    <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
-        "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
-    <html>
-        <head>
-            <meta http-equiv="content-type" content="text/html;charset=UTF-8" />
-
-            <link rel="stylesheet" type="text/css" href="<?php echo $css0; ?>" />
-            <link rel="stylesheet" type="text/css" href="<?php echo $css3; ?>" />
-            <link rel="stylesheet" type="text/css" href="<?php echo $css4; ?>" />
-
-            <script type="text/javascript" src="<?php echo $js1 ?>"></script>
-            <style type="text/css" media="screen">
-
-                .dataTables_info { padding-top: 0; }
-                .dataTables_paginate { padding-top: 0; }
-                .css_right { float: right; }
-                #tabela_wrapper .fg-toolbar { font-size: 0.8em }
-                #theme_links span { float: left; padding: 2px 10px; }
-
-            </style>
-
-            <script type="text/javascript" src="<?php echo $js2 ?>"></script>
-            <script type="text/javascript" charset="utf-8">
-                $(document).ready( function() {
-                    $('#tabela').dataTable( {
-    					
-                        "aoColumnDefs": [
-                            { "bVisible": true, "aTargets": [ 0 ] }
-                        ],
-                        "oLanguage": {
-
-                            "sSearch": "Procurar",
-                            "sLengthMenu": "Mostrar _MENU_ registros por página",
-                            "sZeroRecords": "Nada encontrado - 0",
-                            "sInfo": "Mostrando _START_ até _END_ de _TOTAL_ Registros",
-                            "sInfoEmpty": "Mostrando 0 até 0 de 0 registros",
-                            "sInfoFiltered": "(Filtrado de _MAX_ registros no total)"
-                        },
-                        "bJQueryUI": true,
-                        "aLengthMenu": [[-1, 10, 25, 50,100,200,500,1000,5000], ['Todos', 10, 25, 50,100,200,500,1000,5000]],
-                        "iDisplayLength": -1,
-                        "sPaginationType": "full_numbers",
-                        "aaSorting": [[ 1, "asc" ]]
+    $titulo.="Somente de Itens Estornados";
+}
 
 
-                    } );
-                } );
-            </script>
-            </script>
-            <title><?php echo $titulo; ?></title>                    
-        </head>
-        <body align="center">
+if ($mesRelatorio || $Instituicao) {
+    $filtro = "Filtros: ";
+}
+if ($mesRelatorio) {
+    $filtromRelatorio = "<br/>Período do Relatório:&nbsp " . $mesRelatorio . " ";
+}
+if ($unidade) {
+    $filtroInstituicao = "<br/>Instituição:&nbsp IFBAIANO - " . $unidade . " ";
+} else {
+    $filtroInstituicao = "<br/>Todas as Unidades";
+}
+?>
 
-            <?php //ob_start();  ?>
-            <div id="conteudo">
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
+    "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+<html>
+    <head>
+        <meta http-equiv="content-type" content="text/html;charset=UTF-8" />
+        <link rel="stylesheet" type="text/css" href="<?php echo $css; ?>" />
+        <title><?php echo $titulo; ?></title>
+    </head>
+    <body>
 
-                <?php require_once '../statics/cabecalho.php'; ?>
-<!--                <div id="menu">
-                    <a onclick="javascript:history.go(-1);">Voltar&nbsp&nbsp&nbsp&nbsp&nbsp</a><br/>
-                    <a href="<?php // echo $url; ?>">Imprimir Relatório <img src="../statics/img/action_print.gif" alt="Imprimir Relatório" /></a>
-                </div>-->
-                <div id="menu"><br/></div>
-                <table cellpadding="0" cellspacing="0" border="0" class="display" id="tabela" style="width: 100%;">
-                    <thead> 
-                        <tr>                                
-                            <th class="valores">Código</th>  
-                            <th class="descricao">Descrição</th>
-                            <th class="valores">Vida Útil (Anos)</th>
-                            <th class="valores">Valor Residual (%)</th>                                    
-                        </tr>
-                    </thead> 
-                    <tbody>
-                        <?php for ($i = 0; $i < count($rows); $i++) { ?>                               
-                            <tr>                                     
-                                <td class="valores" style="text-align: center;"><?php echo $rows[$i]['idvidautil']; ?></td>
-                                <td class="descricao" style="text-align: left;"><?php echo $rows[$i]['descricao']; ?></td>
-                                <td class="valores" style="text-align: right;"><?php echo $rows[$i]['anosvidautil']; ?></td>
-                                <td class="valores" style="text-align: right;"><?php echo $rows[$i]['valorresidual']; ?></td>                                    
-                            </tr>                            
-                            <?php
-                        }
-                        ?>                          
-                    </tbody>    
-                </table>                        
+<?php //ob_start();  ?>
+        <div id="conteudo">
+
+        <?php include_once '../statics/cabecalho.php'; ?>
+
+            <div id="menu">
+                <a onclick="javascript:history.go(-1);">Voltar&nbsp&nbsp&nbsp&nbsp&nbsp</a><br/>
+                <a href="<?php echo $url; ?>">Imprimir Relatório <img src="../statics/img/action_print.gif" alt="Imprimir Relatório" /></a>
             </div>
-        </body>
-    </html>
-    <?php file_put_contents($tmpFile, ob_get_contents()); ?>
+
+            <table>
+                <tr>
+                    <th align="left"><?php echo "Filtros: <br/> Itens Pesquisados: $arraySize <BR/> $filtromRelatorio <br/>$filtroInstituicao"; ?></th>
+                </tr>
+            </table>
+
+            <table>
+                <tr>
+                    <th class="data" style="width: 5%; text-align: center;">Conta Contábil</th>
+                    <th class="descricao" style="width: 5%;text-align: center;">Valor Bruto(R$)</th>
+                    <th class="valores" style="width: 4%;text-align: center;">Valor Depreciado(R$)</th>
+                    <th class="descricao" style="width: 5%;">Valor Depreciado Mês(R$)</th>
+                    <th class="valores" style="width: 5%;">Valor Líquido(R$)</th>
+
+
+                </tr>
 
 <?php
-}
+$arraySize = count($rows);
+for ($i = 0; $i < $arraySize; $i++) {
+
+    $totalValorBruto += $rows[$i]['valor_bruto'];
+    $totalValorDepreciado += $rows[$i]['valordepreciado'];
+    $totalValorDepreciadoMes += $rows[$i]['valordepreciavelmes'];
+    $totalValorLiquido += $rows[$i]['valorliquido'];
+    ?>
+                    <tr>
+                        <td class="valores" style="text-align: center;"><?php echo $rows[$i]['contacontabil']; ?></td>
+                        <td class="valores" style="text-align: center;"><?php echo number_format($rows[$i]['valor_bruto'], 2, ',', '.'); ?></td>
+                        <td class="valores" style="width: 4%;text-align: center;"><?php echo number_format($rows[$i]['valordepreciado'], 2, ',', '.'); ?></td>
+                        <td class="valores" style="text-align: center;"><?php echo number_format($rows[$i]['valordepreciavelmes'], 2, ',', '.'); ?></td>
+                        <td class="valores" style="text-align: center;"><?php echo number_format($rows[$i]['valorliquido'], 2, ',', '.'); ?></td>
+
+                    </tr>
+
+<?php }
+unset($rows);
+?>
+                <tr>
+                    <th class="descricao" style="width: 5%; text-align: center;">Total</th>
+                    <th class="totais"><?php echo number_format($totalValorBruto, 2, ',', '.'); ?></th>
+                    <th class="totais"><?php echo number_format($totalValorDepreciado, 2, ',', '.'); ?></th>
+                    <th class="totais"><?php echo number_format($totalValorDepreciadoMes, 2, ',', '.'); ?></th>
+                    <th class="totais"><?php echo number_format($totalValorLiquido, 2, ',', '.'); ?></th>
+                </tr>
+            </table>
+
+        </div>
+
+
+    </body>
+</html>
+
+<?php file_put_contents($tmpFile, ob_get_contents()); ?>
+
+
+
+<?php
