@@ -99,7 +99,7 @@ $arraySize = count($rows);
   } else { */
 $arraySize = count($rows);
 for ($i = 0; $i < count($rows); $i++) {
-    $titulo = ("RELATÓRIO DE AQUISIÇÕES POR SETOR " ."<BR/>SETOR= " .$rows[$i]['siglasetor'] . "<BR/>NO PERÍODO DE " . $datainicio . " ATÉ " . $datafim);
+    $titulo = ("RELATÓRIO DE AQUISIÇÕES POR SETOR " ."<BR/>SETOR: " .$rows[$i]['siglasetor'] . "<BR/>PERÍODO: " . $datainicio . " A " . $datafim);
 }
 ?>
 
