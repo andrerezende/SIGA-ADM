@@ -64,7 +64,8 @@ class frmUsuario extends MForm
            new MButton('btnEdit',   'Editar'),
 		   new MButton('btnNew',    'Incluir'),
            new MButton('btnDelete', 'Excluir'),
-	       new MButton('btnList',   'Relação')
+	       new MButton('btnList',   'Relação'),
+	       new MButton('btnGrupo', 'Grupos')
        );
 	   $this->SetButtons($buttons);
 	}
@@ -114,7 +115,8 @@ class frmUsuario extends MForm
 		$this->SetFieldValue('lkpNome', $data->nome);
 		$this->SetFieldValue('edtNick', $data->nick);
         // o atributo IdGrupo
-        $grupos = $this->GetAttribute($data->grupos,'idGrupo');
+        
+        $grupos = $this->GetAttribute($data->grupos,'idGrupo');        
         $this->mtfGrupos->SetCodeValue($grupos);
 	}
 
@@ -220,17 +222,23 @@ class frmUsuario extends MForm
             $this->objUsuario->GetByLogin($login);
         }		
         if ($this->objUsuario->idUsuario)
-        {
+        {            
             // coloca os dados do objeto nos campos do formulário
             $this->SetData($this->objUsuario);
             // exibe os campos
             $this->SetFieldsVisible(true);
             $this->SetFieldAttr('lkpLogin','readonly',true);
-            $this->SetFieldValue('key',$this->objUsuario->idUsuario);
+            $this->SetFieldValue('key',$this->objUsuario->idUsuario);            
             $this->AddButton(new MButton('btnCancel', 'Cancelar', $this->home));
+            if ($this->objUsuario->ativo == 'S'){
+                $this->AddButton(new MButton('btnAtivo', 'Desativar usuário'));
+            }elseif ($this->objUsuario->ativo == 'N'){
+                $this->AddButton(new MButton('btnAtivo', 'Ativar usuário'));    
+            }    
             $this->SetButtonAttr('btnEdit','name','btnPost');
             $this->SetButtonAttr('btnPost','label','Gravar');
             $this->SetButtonAttr('btnNew','visible', false);
+//            $this->SetButtonAttr('btnGrupo','visible', false);
         }
         else
         {
@@ -312,7 +320,59 @@ class frmUsuario extends MForm
             $this->AddError("Usuário [$login] não encontrado!");
         }
 	}
+        
+        //Muda a coluna ativo do usuário de 'S' para 'N' ou vice-versa.
+        function btnAtivo_click()
+        {
+            global $item, $MIOLO;
 
+            $login = $this->GetFieldValue('lkpLogin');
+            // verifica se está sendo executado através do evento do grid
+            $item = ($key != '') ? $key : $item;
+            if ($item != '')
+            {
+                $this->objUsuario->GetById($item);
+            }		
+            else
+            {
+                $this->objUsuario->GetByLogin($login);
+            }
+            $objUsuario = $this->objUsuario;
+            
+            if ($objUsuario->ativo == 'S'){
+                $objUsuario->ativo = 'N';
+                try
+                {
+                    
+                     $objUsuario->Update();
+                     $MIOLO->Prompt(Prompt::Information("Usuário [$objUsuario->login] inativado com sucesso.",$this->home));
+                }
+                catch (EMioloException $e)
+                {
+                    
+		             $MIOLO->Prompt(Prompt::Information( $objUsuario->GetErrors(),$this->home));
+                }	        
+            }elseif ($objUsuario->ativo == 'N'){
+                $objUsuario->ativo = 'S';
+                try
+                {
+                     $objUsuario->Update();
+                     $MIOLO->Prompt(Prompt::Information("Usuário [$objUsuario->login] ativado com sucesso.",$this->home));
+                }
+                catch (EMioloException $e)
+                {
+		             $MIOLO->Prompt(Prompt::Information( $objUsuario->GetErrors(),$this->home));
+                }
+            }    
+        }
+
+        function btnGrupo_click()
+        {            
+            $login = $this->GetFieldValue('lkpLogin');            
+            $url = $this->manager->getActionUrl('common','main:mad:usersgrupo', $login);            
+            $this->page->Redirect($url);
+        }        
+        
     function GetAttribute($array, $attr)
     {
         $rs = array();
