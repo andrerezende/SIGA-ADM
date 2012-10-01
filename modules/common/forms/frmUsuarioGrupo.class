@@ -1,275 +1,267 @@
 <?
-class frmUsuarioGrupo extends MForm
-{
+
+class frmUsuarioGrupo extends MForm {
+
     var $objUsuario;
     var $objGrupo;
     protected $objUo;
-        
-    function __construct()
-    {   
+
+    function __construct() {
         global $MIOLO;
-        
-        $this->objUsuario = $MIOLO->GetBusiness('common','usuario');
-        $this->objGrupo = $MIOLO->GetBusiness('common','grupo');
-        
-        parent::__construct('Associação de grupos à usuários');        
-        $this->SetIcon($MIOLO->GetUI()->GetImage('common','user1.png'));
-        $this->SetClose($MIOLO->GetActionURL('common','main'));
+
+        $this->objUsuario = $MIOLO->GetBusiness('common', 'usuario');
+        $this->objGrupo = $MIOLO->GetBusiness('common', 'grupo');
+
+        parent::__construct('Associação de grupos à usuários');
+        $this->SetIcon($MIOLO->GetUI()->GetImage('common', 'user1.png'));
+        $this->SetClose($MIOLO->GetActionURL('common', 'main'));
         $this->EventHandler();
         $this->page->addJsCode(file_get_contents(dirname(__FILE__) . '/../../adm/ui/js/mask.js'));
-     }
-     
-     function CreateFields()
-     {  
-            global $MIOLO, $perms;
+    }
 
-            $queryUsuario = $this->objUsuario->ListAllLogins();
-            $mtFieldUsuario = array(array('mtusuario','Usuários','',$queryUsuario));
+    function CreateFields() {
+        global $MIOLO, $perms, $item;        
+        
+        $queryUsuario = $this->objUsuario->ListAllLogins();
+        $mtFieldUsuario = array(array('mtusuario', 'Usuários', '', $queryUsuario));
 
-            $queryGrupo = $this->objGrupo->ListAll();
-            $mtFieldGrupo = array(array('mtgrupo','Grupos','',$queryGrupo->chunkResult()));
+        $queryGrupo = $this->objGrupo->ListAll();
+        $mtFieldGrupo = array(array('mtgrupo', 'Grupos', '', $queryGrupo->chunkResult()));
 
-            // Lista as uos que o usuário tem acesso       
-            if ($perms->CheckAccess('ADM_FINANCAS',A_EXECUTE))
-            {
-                $objUo = $MIOLO->GetBusiness('adm','uo');
-                $query = $objUo->ListByNomeAtivo(strtoupper($uo), 'S');
-            }
-            else if ($perms->CheckAccess('ADM_GESTORUO',A_EXECUTE))
-            {
-                $idUsuario = $MIOLO->GetLogin()->idkey;
-                $gestor = $MIOLO->GetBusiness('adm','gestor');
-                $query = $gestor->listUoByUsuario($idUsuario);
-            }
+        // Lista as uos que o usuário tem acesso       
+        if ($perms->CheckAccess('ADM_FINANCAS', A_EXECUTE)) {
+            $objUo = $MIOLO->GetBusiness('adm', 'uo');
+            $query = $objUo->ListByNomeAtivo(strtoupper($uo), 'S');
+        } else if ($perms->CheckAccess('ADM_GESTORUO', A_EXECUTE)) {
+            $idUsuario = $MIOLO->GetLogin()->idkey;
+            $gestor = $MIOLO->GetBusiness('adm', 'gestor');
+            $query = $gestor->listUoByUsuario($idUsuario);
+        }
+        foreach ($query->result as $uos) {
+            $arrayUO[] = array($uos[1], $uos[0]);
+        }
 
-            $permissao = array(1 => 'Requisitante', 2 => 'Gestor', 3 => 'Executor');
+        $permissao = array(1 => 'Requisitante', 2 => 'Gestor', 3 => 'Executor');
 
-            $fields = array(          
-                new MMultiTextField2('mtfUsuarios',NULL,'Usuários',$mtFieldUsuario,300,true,'vertical'),
-                new MMultiTextField2('mtfGrupos',NULL,'Grupos',$mtFieldGrupo,300,true,'vertical'),
-                new MSpacer(1),
-                new MSeparator(''),
-                new MTextHeader('header', 1,'Permissões de U.O.'),
-                new MSelection('uo', '','Unidade Orçamentária',$query->chunkResult()),                       
-                new MSelection('perm', '','Permissão',$permissao), 
-                new MTextField('dataInicio','','Data Inicio',10, 'Ex.: 25/09/2012'),
-            );
 
-            $this->SetFields($fields);
-            
-            $this->dataInicio->addAttribute('onKeyUp','makeMask(this, \'##/##/####\');');
-            $this->dataInicio->addAttribute('onBlur','makeMask(this, \'##/##/####\');');
 
-            $buttons = array(
-                new MButton('btnSalvar',   'Salvar')		  
-            );
-            $this->SetButtons($buttons);
-      }
-      
-      function btnSalvar_click()
-      {
-            global $MIOLO;
-          
-            //Dados do formulário.
-            $idUsuarios = $this->mtfUsuarios->GetCodeValue();              
-            $idGrupos = $this->mtfGrupos->GetCodeValue();  
-            $uo = $this->GetFieldValue('uo');   
-            $permissao = $this->GetFieldValue('perm');            
-            
-            //Instanciação dos objetos.            
-            $objGrupo = $MIOLO->GetBusiness('common','grupo');            
-            
-            //Tratamento de exceções.
-            if (is_null($idUsuarios[0])) 
-            {
-                $this->addError('Por Favor, selecione pelo menos 1 usuário.');
-                return;
-            }
-            if ($this->GetFieldValue('uo') && !$this->GetFieldValue('perm'))
-            {
-                $this->addError('Por Favor, selecione uma permissão.');
-                return;
-            }
-            if (!$this->GetFieldValue('uo') && $this->GetFieldValue('perm'))
-            {
-                $this->addError('Por Favor, selecione uma uo.');
-                return;
-            }
-            
+        $fields = array(
+            new MMultiTextField2('mtfUsuarios', NULL, 'Usuários', $mtFieldUsuario, 300, true, 'vertical'),
+            new MMultiTextField2('mtfGrupos', NULL, 'Grupos', $mtFieldGrupo, 300, true, 'vertical'),
+            new MSpacer(1),
+            new MSeparator(''),
+            new MTextHeader('header', 1, 'Permissões de U.O.'),
+            new MCheckBoxGroup('checkGroup', ' U.O.s ', $arrayUO, 'no', '', 'vertical', 'css'),
+//                new MSelection('uo', '','Unidade Orçamentária',$query->chunkResult()),                 
+            new MSelection('perm', '', 'Permissão', $permissao),
+            new MTextField('dataInicio', '', 'Data Inicio', 10, 'Ex.: 25/09/2012'),
+        );
+
+        $this->SetFields($fields);
+
+        $this->dataInicio->addAttribute('onKeyUp', 'makeMask(this, \'##/##/####\');');
+        $this->dataInicio->addAttribute('onBlur', 'makeMask(this, \'##/##/####\');');
+
+        $buttons = array(
+            new MButton('btnSalvar', 'Salvar')
+        );
+        $this->SetButtons($buttons);
+        if ($item) {
+            $objUsuarioRef = $MIOLO->GetBusiness('common', 'usuario');
+            $objUsuarioRef = $objUsuarioRef->GetByLogin($item);
+            $grupos = $this->GetAttribute($objUsuarioRef->grupos, 'idGrupo');
+            $this->mtfGrupos->SetCodeValue($grupos);
+        }
+    }
+
+    function btnSalvar_click() {
+        global $MIOLO;
+
+        //Dados do formulário.
+        $idUsuarios = $this->mtfUsuarios->GetCodeValue();
+        $idGrupos = $this->mtfGrupos->GetCodeValue();
+        $uos = $this->GetFieldValue('checkGroup');
+        $permissao = $this->GetFieldValue('perm');
+
+        foreach ($uos as $ids) {
+            if ($ids != '')
+                $idsUos[] = $ids;
+        }
+        
+        //Tratamento de exceções.
+        if (is_null($idUsuarios[0])) {
+            $this->addError('Por favor, selecione pelo menos 1 usuário.');
+            return;
+        }
+        if ($idsUos && !$this->GetFieldValue('perm')) {
+            $this->addError('Por favor, selecione uma permissão.');
+            return;
+        }
+        if (is_null($idsUos) && $this->GetFieldValue('perm')) {
+            $this->addError('Por favor, selecione pelo menos uma uo.');
+            return;
+        }
+
+        //Grupos do formulário
+        foreach ($idUsuarios as $usuario) {
+            $idUsuario = $usuario[0];
+            $objUsuario = $MIOLO->GetBusiness('common', 'usuario', $idUsuario);
             //Grupos do formulário
-            foreach($idUsuarios as $usuario)
-            {
-                $idUsuario = $usuario[0];
-                $objUsuario = $MIOLO->GetBusiness('common','usuario', $idUsuario);
-                //Grupos do formulário
-                foreach($idGrupos as $g)
-                {
-                    $data->grupos[] = (string)$g[0]; // obtém o idGrupo
-                }
-                
-                //Grupos do usuário
-                $grupos2 = $objUsuario->GetArrayGroupsIds();
-                while (list($key, $val) = each($grupos2)) {  
-                    $data->grupos[] = $val; 
-                }
-                
-                $objUsuario->SetArrayGroups(array_unique($data->grupos)); 
-                
-                $this->objUo = $MIOLO->GetBusiness('adm','uo', $uo);
-                switch ($permissao)
-                {
-                    case '1' :
-                        if (!$this->GetFieldValue('uo')) 
-                        {
-                            $this->addError('Por Favor, selecione uma uo.');
-                            return;
-                        }
-                        $objUsuario->retrieveAssociation('pessoa');
-                        $this->objUo->getUsuarios();
+            foreach ($idGrupos as $g) {
+                $data->grupos[] = (string) $g[0]; // obtém o idGrupo
+            }
 
-                        if($this->comparaIds($idUsuario)){
-                            try {                                   
-                                $this->objUo->AddUsuario($objUsuario);
-                                $this->objUo->saveAssociation('usuarios');
-                                $this->objUo->Log(OP_INS,"Novo acesso relacionado à UO");
-                                }  catch (Exception $e)      {
+//            //Grupos do usuário
+//            $grupos2 = $objUsuario->GetArrayGroupsIds();
+//            while (list($key, $val) = each($grupos2)) {
+//                $data->grupos[] = $val;
+//            }            
+            
+            $objUsuario->SetArrayGroups(array_unique($data->grupos));
+            if (!is_null($idsUos)) {
+                foreach ($idsUos as $uo) {
+                    $this->objUo = $MIOLO->GetBusiness('adm', 'uo', $uo);
+                    switch ($permissao) {
+                        case '1' :
+                            $objUsuario->retrieveAssociation('pessoa');
+                            $this->objUo->getUsuarios();
+
+                            if ($this->comparaIds($idUsuario)) {
+                                try {
+                                    $this->objUo->AddUsuario($objUsuario);
+                                    $this->objUo->saveAssociation('usuarios');
+                                    $this->objUo->Log(OP_INS, "Novo acesso relacionado à UO");
+                                } catch (Exception $e) {
                                     $this->AddError($e->getMessage());
                                 }
-                        }        
-                        break;
-                        
-                    case '2'     :                         
-                        if (!$this->GetFieldValue('dataInicio')) 
-                        {
-                            $this->addError('Por Favor, digite a data de inicio.');
-                            return;
-                        }
-                        if (!$this->ValidaData($this->GetFieldValue('dataInicio'))) 
-                        {                            
-                            $this->addError('Por Favor, digite uma data válida.');
-                            return;
-                        } 
-
-                        $gestor = $this->objUo->getGestor($idUsuario);
-                        
-                        $msgLog = '';
-
-                        /* caso gestor ja existir */
-                        if( $gestor )
-                        {
-                            if( $gestor->dataFim )
-                            {
-                                $gestor->dataFim = '';
-                                $msgLog = 'Reativando Gestor relacionado à UO';
-                                $this->AddError('Gestor já está relacionado à UO');
                             }
-                        }
-                        else
-                        {
-                            $gestor = $this->manager->GetBusiness('adm','gestor');
-//                            $gestor->setData($this->getData());
-                            $gestor->idUsuario = $idUsuario;
-                            $gestor->idUo = $this->objUo->idUo;
-                            $gestor->dataInicio = $this->GetFieldValue('dataInicio');
-                            
-                            $msgLog = 'Novo gestor relacionado à UO';
-                        }
-                        try
-                        {
-                            $gestor->save();
-                            $this->objUo->Log(OP_INS,$msgLog);
-                        }
-                        catch (Exception $e)
-                        {
-                            $this->manager->Error("Informe o seguinte erro à equipe do CGCO: ",$e->getMessage());
-                        }
-                        break;
-                    
-                    case '3'     :                         
-                        if (!$this->GetFieldValue('dataInicio')) 
-                        {
-                            $this->addError('Por Favor, digite a data de inicio.');
-                            return;
-                        }
-                        if (!$this->ValidaData($this->GetFieldValue('dataInicio'))) 
-                        {                            
-                            $this->addError('Por Favor, digite uma data válida.');
-                            return;
-                        }
-                        
-                        $executor = $this->objUo->getExecutor($idUsuario);
+                            break;
 
-                        $msgLog = '';
+                        case '2' :
+                            if (!$this->GetFieldValue('dataInicio')) {
+                                $this->addError('Por favor, digite a data de inicio.');
+                                return;
+                            }
+                            if (!$this->ValidaData($this->GetFieldValue('dataInicio'))) {
+                                $this->addError('Por favor, digite uma data válida.');
+                                return;
+                            }
 
-                        /* caso executor ja existir */
-                        if( $executor )
-                        {
-                            if( $executor->dataFim )
-                            {
-                                $executor->dataFim = '';
-                                $msgLog = 'Reativando Executor relacionado à UO';
-                                $this->AddError('Executor já está relacionado à UO');
+                            $gestor = $this->objUo->getGestor($idUsuario);
 
-                            }                            
-                        }
-                        else
-                        {
-                            $executor = $this->manager->GetBusiness('adm','executor');
-//                            $executor->setData($this->getData());
-                            $executor->idUsuario = $idUsuario;                            
-                            $executor->dataInicio = $this->GetFieldValue('dataInicio');
-                            $executor->idUo = $this->objUo->idUo;
-                            $msgLog = 'Novo executor relacionado à UO';
-                        }
-                        try
-                        {
-                            $executor->save();
-                            $this->objUo->Log(OP_INS,$msgLog);
-                        }
-                        catch (Exception $e)
-                        {
-                            $this->manager->Error("Informe o seguinte erro à equipe do CGCO: ",$e->getMessage());
-                        }  
-                        break;
+                            $msgLog = '';
+
+                            /* caso gestor ja existir */
+                            if ($gestor) {
+                                if ($gestor->dataFim) {
+                                    $gestor->dataFim = '';
+                                    $msgLog = 'Reativando Gestor relacionado à UO';
+                                    $this->AddError('Gestor já está relacionado à UO');
+                                }
+                            } else {
+                                $gestor = $this->manager->GetBusiness('adm', 'gestor');
+                                //                            $gestor->setData($this->getData());
+                                $gestor->idUsuario = $idUsuario;
+                                $gestor->idUo = $this->objUo->idUo;
+                                $gestor->dataInicio = $this->GetFieldValue('dataInicio');
+
+                                $msgLog = 'Novo gestor relacionado à UO';
+                            }
+                            try {
+                                $gestor->save();
+                                $this->objUo->Log(OP_INS, $msgLog);
+                            } catch (Exception $e) {
+                                $this->manager->Error("Informe o seguinte erro à equipe do CGCO: ", $e->getMessage());
+                            }
+                            break;
+
+                        case '3' :
+                            if (!$this->GetFieldValue('dataInicio')) {
+                                $this->addError('Por favor, digite a data de inicio.');
+                                return;
+                            }
+                            if (!$this->ValidaData($this->GetFieldValue('dataInicio'))) {
+                                $this->addError('Por favor, digite uma data válida.');
+                                return;
+                            }
+
+                            $executor = $this->objUo->getExecutor($idUsuario);
+
+                            $msgLog = '';
+
+                            /* caso executor ja existir */
+                            if ($executor) {
+                                if ($executor->dataFim) {
+                                    $executor->dataFim = '';
+                                    $msgLog = 'Reativando Executor relacionado à UO';
+                                    $this->AddError('Executor já está relacionado à UO');
+                                }
+                            } else {
+                                $executor = $this->manager->GetBusiness('adm', 'executor');
+                                //                            $executor->setData($this->getData());
+                                $executor->idUsuario = $idUsuario;
+                                $executor->dataInicio = $this->GetFieldValue('dataInicio');
+                                $executor->idUo = $this->objUo->idUo;
+                                $msgLog = 'Novo executor relacionado à UO';
+                            }
+                            try {
+                                $executor->save();
+                                $this->objUo->Log(OP_INS, $msgLog);
+                            } catch (Exception $e) {
+                                $this->manager->Error("Informe o seguinte erro à equipe do CGCO: ", $e->getMessage());
+                            }
+                            break;
+                    }
                 }
-
-                $objUsuario->save();   
-                $data->grupos = array();
-                
-                
-                
             }
-            $MIOLO->Information('Usuários atualizados com sucesso.', $this->home );            
-      }
-      
-      public function comparaIds($idusario){
-            $flag = TRUE; 
-            for ($i = 0 ;$i < count($this->objUo->usuarios);$i++){
-                      if($this->objUo->usuarios[$i]->idUsuario == $idusario){
-                         $flag = false; 
-                         break;
-                         }
-            }
-            return $flag;
-      }
-      
-      public function ValidaData($dat){       
-            
-            $data = explode("/","$dat"); // fatia a string $dat em pedados, usando / como referência
-            $d = $data[0];
-            $m = $data[1];
-            $y = $data[2];
-            
-            if ($d && $m && $y){
-                $res = checkdate($m,$d,$y);
-                if ($res == 1){
-                    $flag = true;
-                } else {
-                    $flag = false;
-                }
-            }else $flag = false;    
-            return $flag;
+            $objUsuario->save();
+            $data->grupos = array();
         }
+        
+        $url = $MIOLO->GetActionURL($module,'main:mad:users');
+        $MIOLO->Information('Usuário(s) atualizado(s) com sucesso.', $url);
+    }
+
+    public function comparaIds($idusario) {
+        $flag = TRUE;
+        for ($i = 0; $i < count($this->objUo->usuarios); $i++) {
+            if ($this->objUo->usuarios[$i]->idUsuario == $idusario) {
+                $flag = false;
+                break;
+            }
+        }
+        return $flag;
+    }
+
+    public function ValidaData($dat) {
+
+        $data = explode("/", "$dat"); // fatia a string $dat em pedados, usando / como referência
+        $d = $data[0];
+        $m = $data[1];
+        $y = $data[2];
+
+        if ($d && $m && $y) {
+            $res = checkdate($m, $d, $y);
+            if ($res == 1) {
+                $flag = true;
+            } else {
+                $flag = false;
+            }
+        }else
+            $flag = false;
+        return $flag;
+    }
+
+    function GetAttribute($array, $attr) {
+        $rs = array();
+        if (!is_null($array)) {
+            foreach ($array as $c) {
+                $rs[] = $c->$attr;
+            }
+        }
+        return $rs;
+    }
+
 }
 
 ?>
