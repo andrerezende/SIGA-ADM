@@ -81,17 +81,17 @@ try {
     $db = Conexao::getInstance()->getDB();
 
     $sql2 = "select siglasetor from cm_setor where idsetor=$setorOrigem";
-    
+
 
 
     $preparedStatment = $db->prepare($sql2);
-    
+
     $preparedStatment->execute();
 
 
     $setorOrigem = $preparedStatment->fetchAll(PDO::FETCH_ASSOC);
-    
-    
+
+
     $db = Conexao::getInstance()->getDB();
 
     $sql3 = "select instituicao from cm_instituicao where idinstituicao=$instOrigem";
@@ -112,29 +112,29 @@ try {
     $db = Conexao::getInstance()->getDB();
 
     $sql4 = "select siglasetor from cm_setor where idsetor=$setorDestino";
-    
+
     $preparedStatment = $db->prepare($sql4);
-    
+
 
 
     $preparedStatment->execute();
 
 
     $setorDestino = $preparedStatment->fetchAll(PDO::FETCH_ASSOC);
-    
-    
+
+
     $db = Conexao::getInstance()->getDB();
 
-    
+
     $sql5 = "select instituicao from cm_instituicao where idinstituicao=$instDestino";
-    
+
     $preparedStatment = $db->prepare($sql5);
 
 
     $preparedStatment->execute();
 
 
-    
+
     $instDestino = $preparedStatment->fetchAll(PDO::FETCH_ASSOC);
 
     //-------------------------------------------------------------------------------------------------------------
@@ -180,13 +180,53 @@ $url = $baseURL . '/relatorios2/PRINT_PDF/print_pdf.php?input_file=' . rawurlenc
   <?
   } else { */
 $arraySize = count($rows);
+// tratar titulo : By Danilo Merçon
 
-$titulo = "RELATÓRIO DE TRANSFERÊNCIA DE ITENS PATRIMONIAIS" . "<br/> TOMBO:" . $tombo .
-        "<BR/>INSTITUTO DE ORIGEM: " . $instOrigem[0]['instituicao'] . "<br/>INSTITUTO DE DESTINO: " . $instDestino[0]['instituicao'] .
-        "<br/>SETOR DE ORIGEM: " . $setorOrigem[0]['siglasetor'] . " | SETOR DE DESTINO: " . $setorDestino[0]['siglasetor'].
-        "<br/>A PARTIR DE ".$datainicio." ATÉ ".$datafim;
+$titulo1 = "RELATÓRIO DE TRANSFERÊNCIA DE ITENS PATRIMONIAIS";
+$titulo = "RELATÓRIO DE TRANSFERÊNCIA DE ITENS PATRIMONIAIS<br/>";
+if ($tombo == "") {
+    $titulo;
+} else {
+    $titulo .= "TOMBO: " . $tombo."<br/>";
+}
+if ($instOrigem[0]['instituicao'] == "") {
+    $titulo;
+} else {
+    $titulo .= "INSTITUTO DE ORIGEM: " . $instOrigem[0]['instituicao'];
+}
+if ($instDestino[0]['instituicao'] == "") {
+    $titulo;
+} else {
+    $titulo .= "   INSTITUTO DE DESTINO: " . $instDestino[0]['instituicao']."<br/>";
+}
+if ($setorOrigem[0]['siglasetor'] == "") {
+    $titulo;
+} else {
+    $titulo .= "<br>SETOR DE ORIGEM: " . $setorOrigem[0]['siglasetor'];
+}
+if ($setorDestino[0]['siglasetor'] == "") {
+    $titulo;
+} else {
+    $titulo .= "  SETOR DE DESTINO: " . $setorDestino[0]['siglasetor']."<br/>";
+}
 
-//	$titulo = "Relatório de Transferência de Itens Patrimoniais ";
+if ($datafim === "" && $datainicio === "") {
+    $titulo;
+} elseif ($datainicio === "") {
+    $titulo .= "<br/>DATA FINAL: " . $datafim;
+} elseif ($datafim === "") {
+    $titulo .= "<br/>DATA INICIAL: " . $datainicio;
+} else {
+    $titulo .= "<br/>PERÍODO:" . $datainicio . " A " . $datafim;
+}
+
+
+
+
+
+
+
+
 if ($tombo || $setorOrigem || $setorDestino || $datainicio || $datafim) {
     $filtro = "Filtros: ";
 }
@@ -259,23 +299,23 @@ if ($datafim) {
             } );
         </script>
         </script>
-        <title><?php echo $titulo; ?></title>                    
+        <title><?php echo $titulo1; ?></title>                    
     </head>
     <body align="center">
 
-        <?php //ob_start();     ?>
+        <?php //ob_start();       ?>
         <div id="conteudo">
 
             <?php require_once '../statics/cabecalho.php'; ?>
-<!--            <div id="menu">
-                <a onclick="javascript:history.go(-1);">Voltar&nbsp&nbsp&nbsp&nbsp&nbsp</a><br/>
-                <a href="<?php // echo $url; ?>">Imprimir Relatório <img src="../statics/img/action_print.gif" alt="Imprimir Relatório" /></a>
-            </div>-->
+            <!--            <div id="menu">
+                            <a onclick="javascript:history.go(-1);">Voltar&nbsp&nbsp&nbsp&nbsp&nbsp</a><br/>
+                            <a href="<?php // echo $url;   ?>">Imprimir Relatório <img src="../statics/img/action_print.gif" alt="Imprimir Relatório" /></a>
+                        </div>-->
             <div id="menu"><br/></div>
             <table cellpadding="0" cellspacing="0" border="0" class="display" id="tabela" style="width: 100%">
                 <thead> 
                     <tr>                                
-                        <td class="data">Data da Transferênci</td>
+                        <td class="data">Data da Transferência</td>
                         <td class="descricao">Tombo</td>
                         <td class="valores">Descrição</td>
                         <td class="descricao">Setor de Origem</td>
