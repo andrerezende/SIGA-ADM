@@ -189,38 +189,38 @@ if ($tombo == "") {
 } else {
     $titulo .= "TOMBO: " . $tombo."<br/>";
 }
-if ($instOrigem[0]['instituicao'] == "") {
+
+if ($instOrigem[0]['instituicao'] == "" && $instDestino[0]['instituicao'] == "") {
     $titulo;
-} else {
-    $titulo .= "INSTITUTO DE ORIGEM: " . $instOrigem[0]['instituicao'];
+} elseif($instDestino[0]['instituicao'] == "") {
+    $titulo .= "INSTITUTO DE ORIGEM: " . $instOrigem[0]['instituicao']."<br/>";
 }
-if ($instDestino[0]['instituicao'] == "") {
-    $titulo;
+  elseif ($instOrigem[0]['instituicao'] == "") {
+    $titulo .= "INSTITUTO DE DESTINO: " . $instDestino[0]['instituicao']."<br/>";
 } else {
-    $titulo .= "   INSTITUTO DE DESTINO: " . $instDestino[0]['instituicao']."<br/>";
+    $titulo .= "INSTITUTO DE ORIGEM: " . $instOrigem[0]['instituicao'] . " |" . " DESTINO: " . $instDestino[0]['instituicao']."<br/>";
 }
-if ($setorOrigem[0]['siglasetor'] == "") {
+
+if ($setorOrigem[0]['siglasetor'] == "" && $setorDestino[0]['siglasetor'] == "") {
     $titulo;
-} else {
-    $titulo .= "<br>SETOR DE ORIGEM: " . $setorOrigem[0]['siglasetor'];
+} elseif ($setorDestino[0]['siglasetor'] == "") {
+    $titulo .= "SETOR DE ORIGEM: " . $setorOrigem[0]['siglasetor']."<br/>";
 }
-if ($setorDestino[0]['siglasetor'] == "") {
-    $titulo;
+  elseif ($setorOrigem[0]['siglasetor'] == "") {
+    $titulo.= "  SETOR DE DESTINO: " . $setorDestino[0]['siglasetor']."<br/>";
 } else {
-    $titulo .= "  SETOR DE DESTINO: " . $setorDestino[0]['siglasetor']."<br/>";
+    $titulo .= "SETOR DE ORIGEM: " . $setorOrigem[0]['siglasetor']." |"." DESTINO: " . $setorDestino[0]['siglasetor']."<br/>";
 }
 
 if ($datafim === "" && $datainicio === "") {
     $titulo;
 } elseif ($datainicio === "") {
-    $titulo .= "<br/>DATA FINAL: " . $datafim;
+    $titulo .= "DATA FINAL: " . $datafim;
 } elseif ($datafim === "") {
-    $titulo .= "<br/>DATA INICIAL: " . $datainicio;
+    $titulo .= "DATA INICIAL: " . $datainicio;
 } else {
-    $titulo .= "<br/>PERÍODO:" . $datainicio . " A " . $datafim;
+    $titulo .= "PERÍODO:" . $datainicio . " A " . $datafim;
 }
-
-
 
 
 
