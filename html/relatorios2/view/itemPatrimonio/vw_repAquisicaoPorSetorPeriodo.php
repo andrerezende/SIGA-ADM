@@ -101,6 +101,7 @@ $arraySize = count($rows);
 for ($i = 0; $i < count($rows); $i++) {
     $titulo = ("RELATÓRIO DE AQUISIÇÕES POR SETOR " ."<BR/>SETOR: " .$rows[$i]['siglasetor'] . "<BR/>PERÍODO: " . $datainicio . " A " . $datafim);
 }
+$titulo1 = "RELATÓRIO DE AQUISIÇÕES POR SETOR ";
 ?>
 
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
@@ -155,7 +156,7 @@ for ($i = 0; $i < count($rows); $i++) {
             } );
         </script>
         </script>
-        <title><?php echo $titulo; ?></title>                    
+        <title><?php echo $titulo1; ?></title>                    
     </head>
     <body align="center">
 

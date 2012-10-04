@@ -81,7 +81,8 @@ $url = $baseURL . '/relatorios2/PRINT_PDF/print_pdf.php?input_file=' . rawurlenc
   <?
   } else { */
 $arraySize = count($rows);
-$titulo = "RELATORIO DE BAIXAS POR INSTITUIÇÃO"."<BR/>INSTITUIÇÕES: ". $instituicoes . "<BR/>A PARTIR DE ". $datainicio . " ATÉ " . $_GET['datafim'];
+$titulo1 = "RELATORIO DE BAIXAS POR INSTITUIÇÃO";
+$titulo = "RELATORIO DE BAIXAS POR INSTITUIÇÃO"."<BR/>INSTITUIÇÕES: ". $instituicoes . "<BR/>PERÍODO: ". $datainicio . " A " . $_GET['datafim'];
 ?>
 
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
@@ -136,7 +137,7 @@ $titulo = "RELATORIO DE BAIXAS POR INSTITUIÇÃO"."<BR/>INSTITUIÇÕES: ". $inst
                 } );
             </script>
             </script>
-            <title><?php echo $titulo; ?></title>                    
+            <title><?php echo $titulo1; ?></title>                    
         </head>
         <body align="center">
 
@@ -152,10 +153,10 @@ $titulo = "RELATORIO DE BAIXAS POR INSTITUIÇÃO"."<BR/>INSTITUIÇÕES: ". $inst
                 <table cellpadding="0" cellspacing="0" border="0" class="display" id="tabela" style="width: 100%">
                     <thead> 
                         <tr>                                
-                            <td class="valores">Classificador</td>
-                            <td class="valores">N.Pat</td>
+                            <td class="valores">Tombo</td>
                             <td class="descricao">Descrição</td>
                             <td class="valores">Setor</td>
+                            <td class="valores">Classificador</td>
                             <td class="valores">Valor</td>
                             <td class="descricao">Motivos</td>
                             <td class="data">Data de Aquisição</td>
@@ -170,10 +171,10 @@ $titulo = "RELATORIO DE BAIXAS POR INSTITUIÇÃO"."<BR/>INSTITUIÇÕES: ". $inst
                             $saldoTotal += $rows[$i]['itempat_valor'];
                             ?>                              
                             <tr>                                     
-                                <td class="valores" style="text-align: center;"><?php echo $rows[$i]['idclassificador']; ?></td>
                                 <td class="valores" style="text-align: center;"><?php echo $rows[$i]['npat']; ?></td>
                                 <td class="descricao" style="text-align: left;"><?php echo $rows[$i]['descricao']; ?></td>
                                 <td class="valores" style="text-align: center;"><?php echo $rows[$i]['setor']; ?></td>
+                                <td class="valores" style="text-align: center;"><?php echo $rows[$i]['idclassificador']; ?></td>
                                 <td class="valores" style="text-align: right;"><?php echo number_format($rows[$i]['valor'], 2, ',', '.'); ?></td>
                                 <td class="descricao" style="text-align: left;"><?php echo $rows[$i]['motivo']; ?></td>
                                 <td class="data" style="text-align: center;"><?php echo $rows[$i]['dataaquisicao']; ?></td>

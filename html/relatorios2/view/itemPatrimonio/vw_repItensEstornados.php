@@ -97,7 +97,8 @@ $url = $baseURL . '/relatorios2/PRINT_PDF/print_pdf.php?input_file=' . rawurlenc
   <?
   } else { */
 $arraySize = count($rows);
-$titulo = "RELATÓRIO DE INTENS ESTORNADOS<br/>"."NOTA FISCAL= ".$notafiscal."<br/>DESCRIÇÃO DO INTEM= ".$descricao."<BR/>A PARTIR DE ".$datainicio." ATÉ ".$datafim;
+$titulo = "RELATÓRIO DE INTENS ESTORNADOS<br/>"."NOTA FISCAL= ".$notafiscal."<br/>DESCRIÇÃO DO INTEM= ".$descricao."<BR/>PERÍODO: ".$datainicio." A ".$datafim;
+$titulo1 = "RELATÓRIO DE INTENS ESTORNADOS";
 ?>
 
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
@@ -151,7 +152,7 @@ $titulo = "RELATÓRIO DE INTENS ESTORNADOS<br/>"."NOTA FISCAL= ".$notafiscal."<b
             } );
         </script>
         </script>
-        <title><?php echo $titulo; ?></title>                    
+        <title><?php echo $titulo1; ?></title>                    
     </head>
     <body align="center">
 
