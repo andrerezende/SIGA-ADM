@@ -1,10 +1,11 @@
 <?php
 ob_start();
 //ini_set('display_errors', 1);
+
 require_once '../../controller/ItemPatrimonio.php';
 include_once '../../controller/UtilitariosSiga.php';
 require_once '../../controller/DataHelper.php';
-
+var_dump('teste');exit;
 $dataHelper = new DataHelper();
 
 $baseURL = 'http://' . $_SERVER['HTTP_HOST'];

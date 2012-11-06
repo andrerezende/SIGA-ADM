@@ -97,8 +97,29 @@ $url = $baseURL . '/relatorios2/PRINT_PDF/print_pdf.php?input_file=' . rawurlenc
   <?
   } else { */
 $arraySize = count($rows);
-$titulo = "RELATÓRIO DE INTENS ESTORNADOS<br/>"."NOTA FISCAL= ".$notafiscal."<br/>DESCRIÇÃO DO INTEM= ".$descricao."<BR/>PERÍODO: ".$datainicio." A ".$datafim;
+$titulo = "RELATÓRIO DE INTENS ESTORNADOS<br/>";
 $titulo1 = "RELATÓRIO DE INTENS ESTORNADOS";
+if ($notafiscal==""){
+    $titulo;
+}else{
+    $titulo .= "NOTA FISCAL: " . $notafiscal . "<br />";
+}
+if ($descricao==""){
+    $titulo;
+}else{
+    $titulo .= "DESCRIÇÃO DO INTEM: ".$descricao . "<br />";
+}
+
+if ($datafim === "" && $datainicio === "") {
+    $titulo;
+} elseif ($datainicio === "") {
+    $titulo .= "DATA FINAL: " . $datafim;
+} elseif ($datafim === "") {
+    $titulo .= "DATA INICIAL: " . $datainicio;
+} else {
+    $titulo .= "PERÍODO: &nbsp&nbsp" . $datainicio . " A " . $datafim;
+}
+
 ?>
 
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
@@ -173,7 +194,7 @@ $titulo1 = "RELATÓRIO DE INTENS ESTORNADOS";
                         <td class="valores">Item Patrimonial</td>
                         <td class="descricao">Marca</td>
                         <td class="valores">Valor Bruto(R$)</td>
-                        <td class="descricao">Sigla</td>
+                        <td class="descricao" style="text-align: center;">Sigla</td>
                         <td class="valores">Nota Fiscal</td>
                     </tr>
                 </thead> 
@@ -185,12 +206,12 @@ for ($i = 0; $i < count($rows); $i++) {
     ?>                              
                         <tr>                                     
                             <td class="valores" style="text-align: center;"><?php echo $rows[$i]['dataaquisicao']; ?></td>
-                            <td class="valores" style="text-align: center;"><?php echo $rows[$i]['iditempatrimonio']; ?></td>
+                            <td style="width: 7em" class="valores" style="text-align: center;"><?php echo $rows[$i]['iditempatrimonio']; ?></td>
                             <td class="valores" style="text-align: left;"><?php echo $rows[$i]['descricao']; ?></td>
                             <td class="valores" style="text-align: center;"><?php echo $rows[$i]['marcamodelo']; ?></td>
                             <td class="valores" style="text-align: right;"><?php echo number_format($rows[$i]['valor'], 2, ',', '.'); ?></td>
-                            <td class="valores" style="text-align: left;"><?php echo $rows[$i]['siglasetor']; ?></td>
-                            <td class="valores" style="text-align: center;"><?php echo $rows[$i]['notafiscal']; ?></td>
+                            <td style="width: 6em" class="valores" style="text-align: center;"><?php echo $rows[$i]['siglasetor']; ?></td>
+                            <td style="width: 6.5em" class="valores" style="text-align: center;"><?php echo $rows[$i]['notafiscal']; ?></td>
                         </tr>                            
     <?php
 }

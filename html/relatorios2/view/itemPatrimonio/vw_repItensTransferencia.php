@@ -198,7 +198,7 @@ if ($instOrigem[0]['instituicao'] == "" && $instDestino[0]['instituicao'] == "")
   elseif ($instOrigem[0]['instituicao'] == "") {
     $titulo .= "INSTITUTO DE DESTINO: " . $instDestino[0]['instituicao']."<br/>";
 } else {
-    $titulo .= "INSTITUTO DE ORIGEM: " . $instOrigem[0]['instituicao'] . " |" . " DESTINO: " . $instDestino[0]['instituicao']."<br/>";
+    $titulo .= "INSTITUTO DE ORIGEM: " . $instOrigem[0]['instituicao'] . " &nbsp; | &nbsp;" . " DESTINO: " . $instDestino[0]['instituicao']."<br/>";
 }
 
 if ($setorOrigem[0]['siglasetor'] == "" && $setorDestino[0]['siglasetor'] == "") {
@@ -209,7 +209,7 @@ if ($setorOrigem[0]['siglasetor'] == "" && $setorDestino[0]['siglasetor'] == "")
   elseif ($setorOrigem[0]['siglasetor'] == "") {
     $titulo.= "  SETOR DE DESTINO: " . $setorDestino[0]['siglasetor']."<br/>";
 } else {
-    $titulo .= "SETOR DE ORIGEM: " . $setorOrigem[0]['siglasetor']." |"." DESTINO: " . $setorDestino[0]['siglasetor']."<br/>";
+    $titulo .= "SETOR DE ORIGEM: " . $setorOrigem[0]['siglasetor']." &nbsp;| &nbsp;"." DESTINO: " . $setorDestino[0]['siglasetor']."<br/>";
 }
 
 if ($datafim === "" && $datainicio === "") {
@@ -219,7 +219,7 @@ if ($datafim === "" && $datainicio === "") {
 } elseif ($datafim === "") {
     $titulo .= "DATA INICIAL: " . $datainicio;
 } else {
-    $titulo .= "PERÍODO:" . $datainicio . " A " . $datafim;
+    $titulo .= "PERÍODO: &nbsp;&nbsp;" . $datainicio . " A " . $datafim;
 }
 
 

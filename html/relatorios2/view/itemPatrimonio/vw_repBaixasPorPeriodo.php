@@ -81,8 +81,8 @@ $url = $baseURL . '/relatorios2/PRINT_PDF/print_pdf.php?input_file=' . rawurlenc
   <?
   } else { */
 $arraySize = count($rows);
-$titulo1 = "RELATORIO DE BAIXAS POR INSTITUIÇÃO";
-$titulo = "RELATORIO DE BAIXAS POR INSTITUIÇÃO"."<BR/>INSTITUIÇÕES: ". $instituicoes . "<BR/>PERÍODO: ". $datainicio . " A " . $_GET['datafim'];
+$titulo1 = "RELATÓRIO DE BAIXAS POR INSTITUIÇÃO";
+$titulo = "RELATÓRIO DE BAIXAS POR INSTITUIÇÃO"."<BR/>INSTITUIÇÕES: ". $instituicoes . "<BR/>PERÍODO: &nbsp". $datainicio . " A " . $_GET['datafim'];
 ?>
 
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
