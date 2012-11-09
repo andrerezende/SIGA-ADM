@@ -172,7 +172,7 @@ if ($cnpj == ''){
                                 <a href="<?php // echo $url;    ?>">Imprimir Relatório <img src="../statics/img/action_print.gif" alt="Imprimir Relatório" /></a>
                             </div>-->
             <div id="menu"><br/></div>
-            <table cellpadding="0" cellspacing="0" border="0" class="display" id="tabela" style="width: 100%;">
+            <table cellpadding="0" cellspacing="0" border="0" class="display" id="tabela" style="width: 30%">
                 <thead> 
                     <tr>                                
                         <th class="valores" >Nº Tombo</th>
@@ -196,17 +196,17 @@ if ($cnpj == ''){
                         $siglasetor = $rows[$i]['siglasetor'];
                         ?>                              
                         <tr>                                     
-                            <td class="valores" style="text-align: center;"><?php echo $rows[$i]['iditempatrimonio']; ?></td>
-                            <td class="descricao" style="text-align: left;"  style="width: 30%"><?php echo $rows[$i]['itempat_descricao']; ?></td>
-                            <td class="valores" style="text-align: right;"><?php echo number_format($rows[$i]['itempat_valor'], 2, ',', '.'); ?></td>
-                            <td class="valores" style="text-align: center;"><?php echo $rows[$i]['idvidautil']; ?></td>
-                            <td class="valores" style="text-align: left;"><?php echo $rows[$i]['siglasetor']; ?></td>
+                            <td class="valores" style="text-align: left;"><?php echo $rows[$i]['iditempatrimonio']; ?></td>
+                            <td class="descricao" style="text-align: center;"><?php echo $rows[$i]['itempat_descricao']; ?></td>
+                            <td class="valores" style="text-align: left;"><?php echo number_format($rows[$i]['itempat_valor'], 2, ',', '.'); ?></td>
+                            <td class="valores" style="text-align: left;"><?php echo $rows[$i]['idvidautil']; ?></td>
+                            <td class="valores" style="text-align: center;"><?php echo $rows[$i]['siglasetor']; ?></td>
                             <td class="valores" style="text-align: left;"><?php echo $rows[$i]['numeroempenho']; ?></td>
                             <td class="valores" style="text-align: left;"><?php echo $rows[$i]['notafiscal']; ?></td>
                             <td class="valores" style="text-align: left;"><?php echo $rows[$i]['cnpj']; ?></td>
-                            <td class="data" style="text-align: center;"><?php echo $rows[$i]['dataateste']; ?></td>
-                            <td class="data" style="text-align: center;"><?php echo $rows[$i]['dataaquisicao']; ?></td>
-                            <td class="data" style="text-align: right;"><?php echo $rows[$i]['datainiciouso']; ?></td>                                    
+                            <td class="data" style="text-align: left;"><?php echo $rows[$i]['dataateste']; ?></td>
+                            <td class="data" style="text-align: left;"><?php echo $rows[$i]['dataaquisicao']; ?></td>
+                            <td class="data" style="text-align: left;"><?php echo $rows[$i]['datainiciouso']; ?></td>                                    
                         </tr>                            
                         <?php
                     }
