@@ -34,10 +34,10 @@ $orderby = $_GET['orderby'];
 $itemPatrimonio = new DAOItemPatrimonio();
 //var_dump($idSetor,$idInstituicao,$idVidautil, $numeroEmpenho, $cnpj, $orderby);exit;
 $nomesInstituicoes = $itemPatrimonio->getNomesInstituicoes(array('idInstituicao' => $idInstituicao));
-$rows = ItemPatrimonio::ItemPatrimonioBy($idSetor,$idInstituicao,$idVidautil, $numeroEmpenho, $cnpj, $orderby);
+$rows = ItemPatrimonio::ItemPatrimonioBy($idSetor, $idInstituicao, $idVidautil, $numeroEmpenho, $cnpj, $orderby);
 
 //var_dump($rows);exit;
-$nomes=0;
+$nomes = 0;
 
 //if ($filtradoPor == "instituicao")
 //    $filtro = "Instituição: " . $rows[0]['instituicao'];
@@ -64,45 +64,47 @@ $nomes=0;
 //} else 
 //{
 //$saldoTotal = 0;
-for ($i = 0; $i < count($rows); $i++) {
-    $ccontabil = $rows[$i]['idvidautil'];
-    $siglasetor = $rows[$i]['siglasetor'];
+for ($i = 0;
+$i < count($rows);
+$i++) {
+$ccontabil = $rows[$i]['idvidautil'];
+$siglasetor = $rows[$i]['siglasetor'];
 }
-for ($i = 0; $i < count($nomesInstituicoes); $i++) {
-    $nomes.=$nomesInstituicoes[$i]['nome'] . " | ";
+for ($i = 0;
+$i < count($nomesInstituicoes);
+$i++) {
+$nomes.=$nomesInstituicoes[$i]['nome'] . " | ";
 }
 
 $arraySize = count($rows);
 $titulo = "RELATÓRIO DE ITENS PATRIMONIAIS";
 $titulo1 = "RELATÓRIO DE ITENS PATRIMONIAIS";
 
-if ($nomes == 0){
-    $titulo1;
-}else{
-    $titulo1 .= '<br>INSTITUIÇÕES: ' . $nomes; 
+if ($nomes == 0) {
+$titulo1;
+} else {
+$titulo1 .= '<br>INSTITUIÇÕES: ' . $nomes;
 }
-if ($siglaSetor == ''){
-    $titulo1;
-}else{
-    $titulo1 .= '<br>SETOR: ' . $siglaSetor;
+if ($siglaSetor == '') {
+$titulo1;
+} else {
+$titulo1 .= '<br>SETOR: ' . $siglaSetor;
 }
-if ($idVidautil == ''){
-    $titulo1;
-}else{
-    $titulo1 .= '<br>C. CONTÁBIL: ' . $idVidautil ;
+if ($idVidautil == '') {
+$titulo1;
+} else {
+$titulo1 .= '<br>C. CONTÁBIL: ' . $idVidautil;
 }
-if ($numeroEmpenho == ''){
-    $titulo1;
-}else{
-    $titulo1 .= '<br>NUMERO EMPENHO: ' . $numeroEmpenho ;
+if ($numeroEmpenho == '') {
+$titulo1;
+} else {
+$titulo1 .= '<br>NUMERO EMPENHO: ' . $numeroEmpenho;
 }
-if ($cnpj == ''){
-    $titulo1;
-}else{
-    $titulo1 .= '<br>CNPJ: ' . $cnpj;
+if ($cnpj == '') {
+$titulo1;
+} else {
+$titulo1 .= '<br>CNPJ: ' . $cnpj;
 }
-
-
 ?>
 
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
@@ -152,7 +154,7 @@ if ($cnpj == ''){
                         {  "sType": "currency", "aTargets": [ 4 ]},
                         {  "sType": "currency", "aTargets": [ 7 ]},
                         {  "sType": "formatted-num", "aTargets": [ 2 ]},
- //                     {  "sType": "formatted-num", "aTargets": [  ]}                                                         
+                        //                     {  "sType": "formatted-num", "aTargets": [  ]}                                                         
                     ]
                          
                 } );
@@ -163,71 +165,77 @@ if ($cnpj == ''){
     </head>
     <body align="center">
 
-        <?php //ob_start();     ?>
+<?php //ob_start();       ?>
         <div id="conteudo">
 
-            <?php require_once '../statics/cabecalho_1.php'; ?>
-<!--                            <div id="menu">
-                                <a onclick="javascript:history.go(-1);">Voltar&nbsp&nbsp&nbsp&nbsp&nbsp</a><br/>
-                                <a href="<?php // echo $url;    ?>">Imprimir Relatório <img src="../statics/img/action_print.gif" alt="Imprimir Relatório" /></a>
-                            </div>-->
+<?php require_once '../statics/cabecalho_1.php'; ?>
+            <!--                            <div id="menu">
+                                            <a onclick="javascript:history.go(-1);">Voltar&nbsp&nbsp&nbsp&nbsp&nbsp</a><br/>
+                                            <a href="<?php // echo $url;      ?>">Imprimir Relatório <img src="../statics/img/action_print.gif" alt="Imprimir Relatório" /></a>
+                                        </div>-->
             <div id="menu"><br/></div>
-            <table cellpadding="0" cellspacing="0" border="0" class="display" id="tabela" style="width: 30%">
-                <thead> 
-                    <tr>                                
-                        <th class="valores" >Nº Tombo</th>
-                        <th class="descricao">Descrição</th>
-                        <th class="valores">Valor (R$)</th>
-                        <th class="valores">C. Contábil</th>
-                        <th class="valores">Setor</th>
-                        <th class="valores">Nº Empenho</th>
-                        <th class="valores">NF</th>
-                        <th class="valores">CNJP</th>
-                        <th class="data">Data Ateste</th>
-                        <th class="data">Data de Aquisição</th>
-                        <th class="data">Data de início de uso</th>                                  
-                    </tr>
-                </thead> 
-                <tbody>
-                    <?php
+            <?php
+            header ("Last-Modified: " . gmdate("D,d M YH:i:s") . " GMT");
+            header ("Cache-Control: no-cache, must-revalidate");
+            header ("Pragma: no-cache");
+            header ("Content-type: application/x-msexcel");
+            header ("Content-Disposition: attachment; filename = \"Relatorio.xls\"" );
                     $saldoTotal = 0;
-                    for ($i = 0; $i < count($rows); $i++) {
-                        $saldoTotal += $rows[$i]['itempat_valor'];
-                        $siglasetor = $rows[$i]['siglasetor'];
-                        ?>                              
-                        <tr>                                     
-                            <td class="valores" style="text-align: left;"><?php echo $rows[$i]['iditempatrimonio']; ?></td>
-                            <td class="descricao" style="text-align: center;"><?php echo $rows[$i]['itempat_descricao']; ?></td>
-                            <td class="valores" style="text-align: left;"><?php echo number_format($rows[$i]['itempat_valor'], 2, ',', '.'); ?></td>
-                            <td class="valores" style="text-align: left;"><?php echo $rows[$i]['idvidautil']; ?></td>
-                            <td class="valores" style="text-align: center;"><?php echo $rows[$i]['siglasetor']; ?></td>
-                            <td class="valores" style="text-align: left;"><?php echo $rows[$i]['numeroempenho']; ?></td>
-                            <td class="valores" style="text-align: left;"><?php echo $rows[$i]['notafiscal']; ?></td>
-                            <td class="valores" style="text-align: left;"><?php echo $rows[$i]['cnpj']; ?></td>
-                            <td class="data" style="text-align: left;"><?php echo $rows[$i]['dataateste']; ?></td>
-                            <td class="data" style="text-align: left;"><?php echo $rows[$i]['dataaquisicao']; ?></td>
-                            <td class="data" style="text-align: left;"><?php echo $rows[$i]['datainiciouso']; ?></td>                                    
-                        </tr>                            
-                        <?php
-                    }
-                    ?>
-                    <tfoot style="background-color: #D1CFD0;"">                                    
+                    
+                    
 
-                        <td class="valores" style="text-align: left;">--</td>
-                        <td class="descricao" style="text-align: center;">--</td>
-                        <td class="valores" style="text-align: right;"><?php echo number_format($saldoTotal, 2, ',', '.'); ?></td>  
-                        <td class="valores" style="text-align: center;">--</td>
-                        <td class="valores" style="text-align: center;">--</td>
-                        <td class="valores" style="text-align: center;">--</td>                                    
-                        <td class="valores" style="text-align: center;">--</td>                                    
-                        <td class="valores" style="text-align: center;">--</td>                                    
-                        <td class="data" style="text-align: center;">--</td>                                    
-                        <td class="data" style="text-align: center;">--</td>                                    
-                        <td class="data" style="text-align: center;">--</td>                                    
+             echo "
+            <table cellpadding = '0' cellspacing = '0' border = '0' class = 'display' id = 'tabela' style = 'width: 30%'>
+                <thead>
+                    <tr>
+                        <th class = 'valores' >Nº Tombo</th>
+                        <th class = 'descricao'>Descrição</th>
+                        <th class = 'valores'>Valor (R$)</th>
+                        <th class = 'valores'>C. Contábil</th>
+                        <th class = 'valores'>Setor</th>
+                        <th class = 'valores'>Nº Empenho</th>
+                        <th class = 'valores'>NF</th>
+                        <th class = 'valores'>CNJP</th>
+                        <th class = 'data'>Data Ateste</th>
+                        <th class = 'data'>Data de Aquisição</th>
+                        <th class = 'data'>Data de início de uso</th>
+                    </tr>
+                </thead>
+                <tbody>"; 
+                    
+             
+                for ($i = 0;$i < count($rows);$i++) {
+                    
+                    $saldoTotal += $rows[$i]['itempat_valor'];
+                    $siglasetor = $rows[$i]['siglasetor'];
+                    $iditemp = $rows[$i]['iditempatrimonio'];
+                    $itempat = $rows[$i]['itempat_descricao'];
+                    $itempatv = $rows[$i]['itempat_valor'];
+                    $idvida = $rows[$i]['idvidautil'];
+                    $siglas = $rows[$i]['siglasetor'];
+                    $numeroe = $rows[$i]['numeroempenho'];
+                    $notaf = $rows[$i]['notafiscal'];
+                    $cnpjtab = $rows[$i]['cnpj']; 
+                    $dataat = $rows[$i]['dataateste'];
+                    $dataaq = $rows[$i]['dataaquisicao'];
+                    $datain = $rows[$i]['datainiciouso'];                                     
+                    
+                    echo "<tr>                                     
+                        <td class='valores' style='text-align: left;'>".$iditemp."</td>
+                        <td class='descricao' style='text-align: center;'>".$itempat."</td>
+                        <td class='valores' style='text-align: left;'>".$itempatv."</td>
+                        <td class='valores' style='text-align: left;'>".$idvida."</td>
+                        <td class='valores' style='text-align: center;'>".$siglas."</td>
+                        <td class='valores' style='text-align: left;'>".$numeroe."</td>
+                        <td class='valores' style='text-align: left;'>".$notaf."</td>
+                        <td class='valores' style='text-align: left;'>".$cnpjtab."</td>
+                        <td class='data' style='text-align: left;'>".$dataat."</td>
+                        <td class='data' style='text-align: left;'>".$dataaq."</td>
+                        <td class='data' style='text-align: left;'>".$datain."</td>                                    
+                    </tr>   
+                    
 
-                    </tfoot>                         
-                </tbody>    
-            </table>                        
+            ";}?>         
         </div>
     </body>
 </html>
