@@ -19,28 +19,7 @@ class DAOSetor {
     public function getNomeNickFromAllSetores() {
         $sql = "SELECT p.nome, u.login, s.siglasetor FROM CM_SETOR s
                 JOIN cm_usuario u ON (u.idsetor = s.idsetor)
-                JOIN cm_pessoa p ON (p.idpessoa = u.idpessoa)
-                WHERE u.ativo = 'S';";
-        
-        try {        
-            //$this->db->beginTransaction();
-            $consulta = $this->db->query($sql);        
-            $arr = $consulta->fetchAll(PDO::FETCH_ASSOC);
-            //$this->db->commit();
-        
-        } catch (PDOException $e) {
-            $e->getMessage();
-            // rollback
-        }
-        
-        return $arr;
-    }
-    
-    public function getInativosFromAllSetores() {
-        $sql = "SELECT p.nome, u.login, s.siglasetor FROM CM_SETOR s
-                JOIN cm_usuario u ON (u.idsetor = s.idsetor)
-                JOIN cm_pessoa p ON (p.idpessoa = u.idpessoa)
-                WHERE u.ativo = 'N';";
+                JOIN cm_pessoa p ON (p.idpessoa = u.idpessoa)";
         
         try {        
             //$this->db->beginTransaction();
@@ -60,8 +39,7 @@ class DAOSetor {
         $sql = "SELECT p.nome, u.login FROM CM_SETOR s
                 JOIN cm_usuario u ON (u.idsetor = s.idsetor)
                 JOIN cm_pessoa p ON (p.idpessoa = u.idpessoa)
-                WHERE s.siglasetor = :setor
-                AND u.ativo = 'S';";
+                WHERE s.siglasetor = :setor;";
         
         try {            
             //$this->db->beginTransaction();

@@ -53,6 +53,7 @@ class DAOItemPatrimonio {
     public function getItensPatrimonioBy($idSetor = null, $idInstituicao = null, $idVidaUtil = null,
             $numeroEmpenho = null, $cnpj = null,  $orderby = null) {
 //var_dump($idSetor,$idInstituicao,$idVidaUtil, $numeroEmpenho, $cnpj, $orderby);exit;
+        
         $sql = "SELECT
    
    i.iditempatrimonio, i.descricao as itempat_descricao, i.valor as itempat_valor,
@@ -88,16 +89,23 @@ class DAOItemPatrimonio {
    LEFT JOIN ad_notafiscal n ON i.idnotafiscal = n.idnotafiscal ";
 
         $sql .= " WHERE i.ativo = 'S' ";
-
+//var_dump($sql);exit;
         if($idSetor || $idInstituicao || $idVidaUtil || $numeroEmpenho || $cnpj) {
-            if($idSetor) $sql .= " AND i.idsetor IN ($idSetor) ";
+            
+            if($idSetor == "") {
+                $sql ;
+            }else{ 
+                $sql .= " AND i.idsetor IN ($idSetor) ";
+            }
+//            var_dump($sql);exit;
+            
             if($idInstituicao) $sql .= " AND inst.idinstituicao IN ($idInstituicao)";
             if($idVidaUtil) $sql .= " AND v.idvidautil IN ($idVidaUtil)";
             if($numeroEmpenho) $sql .= " AND i.numeroempenho IN ($numeroEmpenho)";
             if($cnpj) $sql .= " AND n.cnpj IN ($cnpj)";
-//var_dump($idInstituicao,$idSetor,$idVidaUtil,$cnpj,$numeroEmpenho);exit;
+
        
-            
+// var_dump($sql);exit;         
             
             }
 

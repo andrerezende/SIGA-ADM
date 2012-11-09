@@ -26,24 +26,6 @@ class Setor {
         return $arrTratado;
     }
     
-    public static function getInativosFromAllSetores() {
-        
-        $DAOSetor = new DAOSetor();
-        $rows = $DAOSetor->getInativosFromAllSetores();        
-        unset($DAOSetor);
-        
-        foreach($rows as $row) {
-            $setores[] = $row['siglasetor'];
-        }
-
-        $setores = array_unique($setores);
-        $setores = array_values($setores);
-        
-        $arrTratado = Array('setores'=>$setores, 'rows'=>$rows);
-        
-        return $arrTratado;
-    }
-    
     // Relatório de usuários por setor escolhido
     public static function getNameAndNickBySetor($setor) {
         $setor = strtoupper(trim($setor));

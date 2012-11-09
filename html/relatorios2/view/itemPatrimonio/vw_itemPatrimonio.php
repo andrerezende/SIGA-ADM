@@ -69,11 +69,40 @@ for ($i = 0; $i < count($rows); $i++) {
     $siglasetor = $rows[$i]['siglasetor'];
 }
 for ($i = 0; $i < count($nomesInstituicoes); $i++) {
-    $nomes.=$nomesInstituicoes[$i]['nome'] . " / ";
+    $nomes.=$nomesInstituicoes[$i]['nome'] . " | ";
 }
 
 $arraySize = count($rows);
-$titulo = "RELATÓRIO DE ITENS PATRIMONIAIS" . '<br>INSTITUIÇÕES: ' . $nomes . '<br>SETOR: ' . $siglaSetor . '<br>C. CONTÁBIL: ' . $idVidautil . '<br>NUMERO EMPENHO: ' . $numeroEmpenho . '<br>CNPJ: ' . $cnpj;
+$titulo = "RELATÓRIO DE ITENS PATRIMONIAIS";
+$titulo1 = "RELATÓRIO DE ITENS PATRIMONIAIS";
+
+if ($nomes == 0){
+    $titulo1;
+}else{
+    $titulo1 .= '<br>INSTITUIÇÕES: ' . $nomes; 
+}
+if ($siglaSetor == ''){
+    $titulo1;
+}else{
+    $titulo1 .= '<br>SETOR: ' . $siglaSetor;
+}
+if ($idVidautil == ''){
+    $titulo1;
+}else{
+    $titulo1 .= '<br>C. CONTÁBIL: ' . $idVidautil ;
+}
+if ($numeroEmpenho == ''){
+    $titulo1;
+}else{
+    $titulo1 .= '<br>NUMERO EMPENHO: ' . $numeroEmpenho ;
+}
+if ($cnpj == ''){
+    $titulo1;
+}else{
+    $titulo1 .= '<br>CNPJ: ' . $cnpj;
+}
+
+
 ?>
 
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
@@ -138,7 +167,7 @@ $titulo = "RELATÓRIO DE ITENS PATRIMONIAIS" . '<br>INSTITUIÇÕES: ' . $nomes .
         <div id="conteudo">
 
             <?php require_once '../statics/cabecalho_1.php'; ?>
-            <!--                <div id="menu">
+<!--                            <div id="menu">
                                 <a onclick="javascript:history.go(-1);">Voltar&nbsp&nbsp&nbsp&nbsp&nbsp</a><br/>
                                 <a href="<?php // echo $url;    ?>">Imprimir Relatório <img src="../statics/img/action_print.gif" alt="Imprimir Relatório" /></a>
                             </div>-->
@@ -146,7 +175,7 @@ $titulo = "RELATÓRIO DE ITENS PATRIMONIAIS" . '<br>INSTITUIÇÕES: ' . $nomes .
             <table cellpadding="0" cellspacing="0" border="0" class="display" id="tabela" style="width: 100%;">
                 <thead> 
                     <tr>                                
-                        <th class="valores">Nº Tombo</th>
+                        <th class="valores" >Nº Tombo</th>
                         <th class="descricao">Descrição</th>
                         <th class="valores">Valor (R$)</th>
                         <th class="valores">C. Contábil</th>
@@ -168,7 +197,7 @@ $titulo = "RELATÓRIO DE ITENS PATRIMONIAIS" . '<br>INSTITUIÇÕES: ' . $nomes .
                         ?>                              
                         <tr>                                     
                             <td class="valores" style="text-align: center;"><?php echo $rows[$i]['iditempatrimonio']; ?></td>
-                            <td class="descricao" style="text-align: left;"><?php echo $rows[$i]['itempat_descricao']; ?></td>
+                            <td class="descricao" style="text-align: left;"  style="width: 30%"><?php echo $rows[$i]['itempat_descricao']; ?></td>
                             <td class="valores" style="text-align: right;"><?php echo number_format($rows[$i]['itempat_valor'], 2, ',', '.'); ?></td>
                             <td class="valores" style="text-align: center;"><?php echo $rows[$i]['idvidautil']; ?></td>
                             <td class="valores" style="text-align: left;"><?php echo $rows[$i]['siglasetor']; ?></td>
