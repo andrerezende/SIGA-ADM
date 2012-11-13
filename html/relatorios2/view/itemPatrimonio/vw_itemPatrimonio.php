@@ -1,5 +1,5 @@
 <?php
-ini_set('memory_limit', '128M');
+ini_set('memory_limit', '1024M');
 ob_start();
 
 ini_set('display_errors', 1);
@@ -36,7 +36,7 @@ $itemPatrimonio = new DAOItemPatrimonio();
 $nomesInstituicoes = $itemPatrimonio->getNomesInstituicoes(array('idInstituicao' => $idInstituicao));
 $rows = ItemPatrimonio::ItemPatrimonioBy($idSetor, $idInstituicao, $idVidautil, $numeroEmpenho, $cnpj, $orderby);
 
-//var_dump($rows);exit;
+//var_dump($nomesInstituicoes);exit;
 $nomes = 0;
 
 //if ($filtradoPor == "instituicao")
@@ -70,17 +70,16 @@ $i++) {
 $ccontabil = $rows[$i]['idvidautil'];
 $siglasetor = $rows[$i]['siglasetor'];
 }
-for ($i = 0;
-$i < count($nomesInstituicoes);
-$i++) {
-$nomes.=$nomesInstituicoes[$i]['nome'] . " | ";
+for ($i = 0;$i < count($nomesInstituicoes);$i++) {
+$nomes .= $nomesInstituicoes[$i]['nome'] . " | ";
 }
+//var_dump($nomes);exit;
 
 $arraySize = count($rows);
 $titulo = "RELATÓRIO DE ITENS PATRIMONIAIS";
 $titulo1 = "RELATÓRIO DE ITENS PATRIMONIAIS";
 
-if ($nomes == 0) {
+if ($nomes == '') {
 $titulo1;
 } else {
 $titulo1 .= '<br>INSTITUIÇÕES: ' . $nomes;
@@ -235,7 +234,22 @@ $titulo1 .= '<br>CNPJ: ' . $cnpj;
                     </tr>   
                     
 
-            ";}?>         
+            ";}
+                    echo "<tfoot style='background-color: #D1CFD0;'>                                    
+                        <td class='valores' style='text-align: center;'>--</td>
+                        <td class='valores' style='text-align: center;'>--</td>
+                        <td class='valores' style='text-align: center;'>".$saldoTotal."</td>
+                        <td class='valores' style='text-align: center;'>--</td>
+                        <td class='valores' style='text-align: center;'>--</td>                                    
+                        <td class='valores' style='text-align: center;'>--</td>                                    
+                        <td class='valores' style='text-align: center;'>--</td>                                    
+                        <td class='valores' style='text-align: center;'>--</td>                                    
+                        <td class='valores' style='text-align: center;'>--</td>                                    
+                        <td class='valores' style='text-align: center;'>--</td>                                    
+                        <td class='valores' style='text-align: center;'>--</td>                                    
+                    </tfoot>    ";
+            
+            ?>         
         </div>
     </body>
 </html>

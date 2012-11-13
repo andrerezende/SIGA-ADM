@@ -165,7 +165,7 @@ if ($datafim === "" && $datainicio === "") {
                     "aoColumnDefs": [  //{ "bSortable": false, "aTargets": [ 4 ] } ,
                        {  "sType": "date-uk", "aTargets": [ 0 ]},
                        {  "sType": "currency", "aTargets": [  ]},
-                       {  "sType": "formatted-num", "aTargets": [ 4 ]},
+                       {  "sType": "currency", "aTargets": [ 4 ]},
                         //                                                         {  "sType": "formatted-num", "aTargets": [  ]}                                                         
                     ]
                          

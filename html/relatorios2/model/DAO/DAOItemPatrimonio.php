@@ -2,7 +2,7 @@
 //ini_set('display_errors', 1);
 
 require_once 'Conexao.php';
-require_once '../../view/itemPatrimonio/vw_itemPatrimonio.php';
+//require_once '../../view/itemPatrimonio/vw_itemPatrimonio.php';
 //require_once '../../../relatorios/classes/Relatorio.php';
 class DAOItemPatrimonio {
 

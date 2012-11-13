@@ -23,7 +23,7 @@
         <br/>
 
         <h3><p class="titulo-relatorio" align="center">
-			<?php echo $titulo1 ?>
+			<?php echo $titulo ?>
 
 		</p>
 	</h3>
