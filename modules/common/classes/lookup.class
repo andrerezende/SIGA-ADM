@@ -284,7 +284,7 @@ class BusinessCommonLookup
         $lookup->SetGrid('common',$sql,$columns,'Pesquisa por Banco',15,0);
 	}
 
-
+        //Lookup contendo somente os usuários ativos
 	function LookupUsuario(&$lookup)
     {   
         $filterLogin = $lookup->GetFilterValue('filterLogin');
@@ -304,8 +304,50 @@ class BusinessCommonLookup
            new DataGridColumn('nome','Nome','left', true, '50%',true),
            new DataGridColumn('nick','Nick','left', true, '10%',true),
            new DataGridColumn('siglasetor','Setor','left', true, '20%',true)
-        );
-        $sql = new sql("u.idusuario, u.login, u.password,u.idpessoa, u.idsetor,  u.nick, p.nome, s.siglasetor",'cm_usuario u, cm_pessoa p, cm_setor s', '(u.idpessoa = p.idpessoa) and (u.idsetor = s.idsetor)','u.login');
+        );        
+        $sql = new sql("u.idusuario, u.login, u.password,u.idpessoa, u.idsetor,  u.nick, p.nome, s.siglasetor",'cm_usuario u, cm_pessoa p, cm_setor s', "(u.idpessoa = p.idpessoa) and (u.idsetor = s.idsetor) and (u.ativo = 'S')",'u.login');
+        if ( $filterLogin || $filterNome)
+        {
+            $sql->where .= " and (";
+            if ( $filterLogin )
+            {
+               $sql->where .= "( upper(u.login) like upper('{$filterLogin}%') )";
+            }
+            if ( $filterNome )
+            {
+				if ($filterLogin)
+				{
+					$sql->where .= $clause;
+				}
+               $sql->where .= " ( upper(p.nome) like upper('{$filterNome}%') )";
+            }
+            $sql->where .= " )";
+        }
+        $lookup->SetGrid('common',$sql,$columns, 'Pesquisa Usuários',10,0);
+    }
+    
+    //Lookup contendo usuario ativos e não ativos
+    function LookupUsuarioTodos(&$lookup)
+    {   
+        $filterLogin = $lookup->GetFilterValue('filterLogin');
+        if (!$filterLogin) 
+           $filterLogin = $lookup->GetFilterValue();
+        $filterNome = $lookup->GetFilterValue('filterNome');
+        if (!$filterNome)
+           if (!$filterLogin)
+              $filterNome = '';
+        $clause = $lookup->GetFilterValue('clause');
+
+        $lookup->AddFilterField( new TextField('filterLogin', $filterLogin,'Login', 20));
+        $lookup->AddFilterField( new Selection('clause', $clause,'',array('AND' => '- e -','OR'  => '- ou -' )));
+        $lookup->AddFilterField( new TextField('filterNome', $filterNome,'Nome', 40));
+        $columns = array(
+           new DataGridColumn('login','Login','left', true, '10%',true),
+           new DataGridColumn('nome','Nome','left', true, '50%',true),
+           new DataGridColumn('nick','Nick','left', true, '10%',true),
+           new DataGridColumn('siglasetor','Setor','left', true, '20%',true)
+        );        
+        $sql = new sql("u.idusuario, u.login, u.password,u.idpessoa, u.idsetor,  u.nick, p.nome, s.siglasetor",'cm_usuario u, cm_pessoa p, cm_setor s', "(u.idpessoa = p.idpessoa) and (u.idsetor = s.idsetor)",'u.login');
         if ( $filterLogin || $filterNome)
         {
             $sql->where .= " and (";
@@ -342,10 +384,10 @@ class BusinessCommonLookup
            new DataGridColumn('nome','Nome','left', true, '90%',true)
         );
         $columns[0]->visible = false;
-        $sql = new sql('p.idpessoa, p.nome','cm_pessoa p');
+        $sql = new sql('p.idpessoa, p.nome','cm_pessoa p, cm_usuario u', "(u.idpessoa = p.idpessoa) AND (u.ativo = 'S')");
         if ( $filterNome )
         {
-          $sql->where .= " ( upper(p.nome) like
+          $sql->where .= " AND ( upper(p.nome) like
           upper('{$filterNome}%') )";
         }
         $sql->SetOrderBy('p.nome');  
@@ -379,11 +421,11 @@ class BusinessCommonLookup
         );
         $columns[0]->visible = false;
         
-		$sql = new sql('p.idpessoa, p.nome, p.cpf','cm_pessoa p');
+		$sql = new sql('p.idpessoa, p.nome, p.cpf','cm_pessoa p, cm_usuario u', "(u.idpessoa = p.idpessoa) AND (u.ativo = 'S')");
         
 		if( (($filterCPF=='A DEFINIR') && ($filterNome=='A DEFINIR')) || ($filterNome!='A DEFINIR'))
         {
-          $sql->where .= " ( upper(p.nome) like upper('{$filterNome}%') )";
+          $sql->where .= " AND ( upper(p.nome) like upper('{$filterNome}%') )";
 		  $sql->SetOrderBy('p.nome');
         }
 		if( ($filterCPF) && ($filterCPF!='A DEFINIR') )
@@ -436,10 +478,11 @@ class BusinessCommonLookup
            new DataGridColumn('datafim','Data Fim','left', true, '15%',true)
         );
         $sql = new sql('idsetor,siglasetor,nomesetor,dataini,datafim,tiposetor,fone,'.
-'fax,centrocusto,obs,localizacao, idsetor as key', 'cm_setor','','siglasetor');
+'fax,centrocusto,obs,localizacao, idsetor as key', 'cm_setor','datafim IS NULL','siglasetor');
         if ( $filter )
         {
-            $sql->where .= " ( upper(siglasetor) like upper('{$filter}%') or upper(nomesetor) like upper('%{$filter}%') )";
+            $sql->where .= " and ( upper(siglasetor) like upper('{$filter}%') or upper(nomesetor) like upper('%{$filter}%') )";
+//var_dump($sql);exit;
         }
         $lookup->SetGrid('common',$sql,$columns,
         'Pesquisa Setores',15,0);
@@ -557,10 +600,10 @@ class BusinessCommonLookup
 			new DataGridColumn('cep','CEP','left', true, '1%',false),
         );
         $columns[0]->visible = false;
-        $sql = new sql('p.idpessoa, p.nome, p.cpf, p.telefone, p.rua, p.numero, p.complemento, p.bairro, p.cep','cm_pessoa p');
+        $sql = new sql('p.idpessoa, p.nome, p.cpf, p.telefone, p.rua, p.numero, p.complemento, p.bairro, p.cep','cm_pessoa p, cm_usuario u', "(u.idpessoa = p.idpessoa) AND (u.ativo = 'S')");
         if ( $filterNome )
         {
-          $sql->where .= " ( upper(p.nome) like
+          $sql->where .= " AND ( upper(p.nome) like
           upper('{$filterNome}%') )";
         }
         $sql->SetOrderBy('p.nome');  

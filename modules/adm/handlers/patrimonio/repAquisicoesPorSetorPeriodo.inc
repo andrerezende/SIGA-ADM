@@ -6,4 +6,5 @@
     $theme->InsertContent($form);
     $a = $context ? $context->ShiftAction() : 'main';
     $handled = $MIOLO->InvokeHandler($module,$a);
+  
 ?>
