@@ -1,0 +1,93 @@
+<?
+global $MIOLO;
+/**
+ * Use Module Control
+ */
+$MIOLO->Uses('controls/linkunidade.class','adm');
+
+/**
+ * Formulário básico para seleção de Unidadess
+ * 
+ */
+class frmItemPatrimonioFind extends Form
+{
+    public $id;
+    function __construct()
+    {
+	global $MIOLO, $module;
+        $this->Form('Pesquisar Item Patrimonial');
+	$this->SetClose($MIOLO->GetActionURL($module,'main:manutencao'));
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+        global $MIOLO, $action;
+        $ui = $MIOLO->GetUI();
+        
+        $findButton = new ButtonFind('');
+        $findButton->SetName('btnFind');
+        
+        $fields = array(
+                new MTextField('notafiscal','','Nº da Nota Fiscal',20),
+                //new MTextField('iditem','','Identificador',7),
+            );
+        $buttons = array(new FormButton('btnCal', 'Recalcular'));
+        $this->setFields($fields);
+        $this->defaultButton = false;
+        $this->setButtons($buttons);
+    }
+    
+    function btnCal_click()
+	{       global $MIOLO, $action, $module, $item;
+                $ui = $MIOLO->GetUI();
+                $idNotaFiscal = $this->GetFormValue('notafiscal');
+                
+		$itempatrimonio = $this->manager->getBusiness('adm','itempatrimonio');
+                $quantidade = $itempatrimonio->getNumero($idNotaFiscal);
+                
+		if($idNotaFiscal=='')
+		{
+			$this->AddError('É necessário definir o número da nota fiscal.');
+		}
+		else
+		{
+                        $notaFiscal = $MIOLO->GetBusiness($module, 'notafiscal', $idNotaFiscal);
+
+			/*$objMaterial = $itemReq->getMaterialByCod($idRequisicao,$codMaterial)->result[0];
+			$status = $objMaterial[4];*/
+			if ($notaFiscal == NULL)
+			{
+				$this->addError('Nota fiscal não encontrada!');
+			}
+			else
+			{
+                                $itens = $itempatrimonio->getItemPatrimonio($notaFiscal->idNotaFiscal);
+
+                                for($i = 0;$i < count($itens);$i++){
+                                    $itempatrimonio = $MIOLO->GetBusiness($module, 'itempatrimonio', $itens[$i][0]);
+                                   // var_dump($itempatrimonio->valor);
+                                
+				    $itempatrimonio->valor = $notaFiscal->valor /  $quantidade;                                                                
+				    $itempatrimonio->valor = explode(".", $itempatrimonio->valor);
+				    $itempatrimonio->valor = $itempatrimonio->valor[0].".".substr($itempatrimonio->valor[1],  0, 2);
+                                                                //Contador para saber quantos itens vão ficar com os centavos de sobra.
+				    $restoContador =  str_replace(',','.',str_replace('.','',$notaFiscal->valor)) - ($itempatrimonio->valor*$quantidade);
+				    $restoContador = (int)(number_format($restoContador*100, 2));
+				    if ($restoContador > $i){
+					$itempatrimonio->valor += 0.01;
+                                    }
+                                    //var_dump($itempatrimonio->valor);exit;
+                                    $itempatrimonio->update2();
+                                    
+                                 }  
+                                 $go = $this->manager->GetActionURL('adm','main:calitempatrimonio',$unidade->sigla);
+				 $this->manager->Information('Item atualizado com sucesso.',$go);
+                                                                
+			}
+		}
+	}
+        
+        public function calculo(){}
+ }
+?>
