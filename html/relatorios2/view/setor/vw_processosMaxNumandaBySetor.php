@@ -71,7 +71,7 @@ $titulo = "RELATÓRIO DE PROCESSOS DO SETOR $setor";
                         "sInfoFiltered": "(Filtrado de _MAX_ registros no total)"
                     },
                     "bJQueryUI": true,
-                    "aLengthMenu": [[-1, 10, 25, 50,100,200,500,1000,5000], ['Todos', 10, 25, 50,100,200,500,1000,5000]],
+                    "aLengthMenu": [[-1, 10, 25, 50,100,200,500,1000,5000], ['todos', 10, 25, 50,100,200,500,1000,5000]],
                     "iDisplayLength": 10,
                     "sPaginationType": "full_numbers",
                     "aaSorting": [],                                        
