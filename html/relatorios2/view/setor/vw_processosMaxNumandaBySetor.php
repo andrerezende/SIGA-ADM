@@ -72,7 +72,7 @@ $titulo = "RELATÓRIO DE PROCESSOS DO SETOR $setor";
                     },
                     "bJQueryUI": true,
                     "aLengthMenu": [[-1, 10, 25, 50,100,200,500,1000,5000], ['Todos', 10, 25, 50,100,200,500,1000,5000]],
-                    "iDisplayLength": -1,
+                    "iDisplayLength": 10,
                     "sPaginationType": "full_numbers",
                     "aaSorting": [],                                        
                     "aoColumnDefs": [  //{ "bSortable": false, "aTargets": [ 4 ] } ,
@@ -95,7 +95,10 @@ $titulo = "RELATÓRIO DE PROCESSOS DO SETOR $setor";
 
 <?php require_once '../statics/cabecalho.php'; ?>
 
-            <div id="menu"><br/></div>
+            <div id="menu">
+                <a onclick="javascript:history.go(-1);">Voltar&nbsp&nbsp&nbsp&nbsp&nbsp</a><br/>
+                <a href="<?php echo $url; ?>">Gerar Planilha <img src="../statics/img/action_print.gif" alt="Imprimir Relatório" /></a>
+            </div>
             <table cellpadding="0" cellspacing="0" border="0" class="display" id="tabela" style="width: 100%">
                 <thead> 
                     <tr>                                
