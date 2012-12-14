@@ -143,7 +143,7 @@ $titulo1 .= '<br>CNPJ: ' . $cnpj;
                     },
                     "bJQueryUI": true,
                     "aLengthMenu": [[-1, 10, 25, 50,100,200,500,1000,5000], ['Todos', 10, 25, 50,100,200,500,1000,5000]],
-                    "iDisplayLength": -1,
+                    "iDisplayLength": 10,
                     "sPaginationType": "full_numbers",
                     "aaSorting": [],                                        
                     "aoColumnDefs": [  //{ "bSortable": false, "aTargets": [ 4 ] } ,
@@ -165,20 +165,28 @@ $titulo1 .= '<br>CNPJ: ' . $cnpj;
     <body align="center">
 
 <?php //ob_start();       ?>
-        <div id="conteudo">
+        <div id="conteudo">      
 
 <?php require_once '../statics/cabecalho_1.php'; ?>
             <!--                            <div id="menu">
                                             <a onclick="javascript:history.go(-1);">Voltar&nbsp&nbsp&nbsp&nbsp&nbsp</a><br/>
                                             <a href="<?php // echo $url;      ?>">Imprimir Relatório <img src="../statics/img/action_print.gif" alt="Imprimir Relatório" /></a>
                                         </div>-->
-            <div id="menu"><br/></div>
+            <div id="menu">
+                <!--<a onclick="javascript:history.go(-1);">Voltar&nbsp&nbsp&nbsp&nbsp&nbsp</a><br/>
+                <a href="<?php echo $exc; ?>">Gerar Planilha <img src="../statics/img/action_print.gif" alt="Imprimir Relatório" /></a>-->
+            </div>
+          <form name="" method="post">
+               <input type="submit" name="Enviar" id="Enviar" value="Gerar Planilha"/>
+           </form>
             <?php
             header ("Last-Modified: " . gmdate("D,d M YH:i:s") . " GMT");
             header ("Cache-Control: no-cache, must-revalidate");
             header ("Pragma: no-cache");
-            header ("Content-type: application/x-msexcel");
-            header ("Content-Disposition: attachment; filename = \"Relatorio.xls\"" );
+            if(isset($_POST["Enviar"])){
+              header ("Content-type: application/x-msexcel");
+              header ("Content-Disposition: attachment; filename = \"Relatorio.xls\"" );
+            }
                     $saldoTotal = 0;
                     
                     
@@ -254,6 +262,3 @@ $titulo1 .= '<br>CNPJ: ' . $cnpj;
     </body>
 </html>
 <?php file_put_contents($tmpFile, ob_get_contents()); ?>
-
-
-
