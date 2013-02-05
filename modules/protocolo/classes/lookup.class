@@ -183,6 +183,161 @@ class BusinessProtocoloLookup
 		);
 
 	}
+        
+        function LookupProcessoPertecente1(&$lookup)
+	{
+        global $MIOLO;
+        // variáveis
+		$processo = $MIOLO->getBusiness('protocolo','processo');
+                $processo->getByNumero($lookup->GetFilterValue('filter1'));
+		$lookup->AddFilterField(
+            new MHiddenField('filter1',$processo->numProcesso)
+		);
+
+	$numProcesso = $lookup->GetFilterValue('filter0');
+	
+	if ($numProcesso == 'undefined')
+		{
+			$numProcesso = '';
+		}
+		
+        $filter0 = new MTextField('filter0',$numProcesso,'Número do Processo',50);
+        $filter0->addAttribute('maxlength','14');
+		$lookup->AddFilterField($filter0);
+		$columns = array(
+			new DataGridColumn('num','Número','left',true,'15%',true),
+			new DataGridColumn('numpro','Número','left',true,'',false),
+			new DataGridColumn('titulo','Título','left',true,'85%',true),
+		);
+
+        // configura o número de processo
+        // if ($numProcesso) $numProcesso = str_repeat('0',14-strlen($numProcesso)).$numProcesso;
+        $serie = substr($numProcesso,0,6);
+        $ano = substr($numProcesso,7,4);
+        $codigo = substr($numProcesso,12,2);
+        if (!is_numeric($codigo)) unset($codigo);
+        $numProcesso = $ano.$serie.$codigo;
+
+        // query
+		$sql = new sql();
+		$sql->SetColumns("
+            substr(p.numpro,5,6)||'/'||substr(p.numpro,1,4)||'-'||substr(p.numpro,11,2) as num,
+			p.numpro,
+			p.titulo
+		");
+
+		$sql->SetTables('ad_processo p, ad_retencao r');
+
+        $sql->setWhere("p.numpro = r.numpro and (r.setor = '".$processo->retencao->setor."' or r.setor in ( select setorfilho from ad_setoracesso where setor = '".$processo->retencao->setor."' )) and p.tipo = '".$processo->tipo."' and r.inativo = 'N' and p.numpro <> "."'$processo->numProcesso'");
+
+		if ($numProcesso)
+		{
+			$where = "p.numpro like upper('%$numProcesso%')";
+			$sql->SetWhereAnd($where);
+		}
+        $sql->setOrderBy('numpro');
+
+        // configura o grid
+		$lookup->SetGrid(
+			'sigaept',
+			$sql,
+			$columns,
+			'Pesquisa de Processo',
+			10,
+			0
+		);
+
+	}
+        
+        function LookupProcesso(&$lookup)
+    {
+        $numProcesso = $lookup->GetFilterValue('filter0');
+        $filter = $lookup->GetFilterValue('filter');
+        if (!$filter) 
+           $filter = $lookup->GetFilterValue();
+                if (!$filter)
+                    $filter = '%';
+        $lookup->AddFilterField( new TextField('filter',
+        $filter,'Número do Processo', 20));
+        $columns = array(
+           new DataGridColumn('num','Número','left',true,'15%',true),
+	   new DataGridColumn('numpro','Número','left',true,'',false),
+	   new DataGridColumn('titulo','Título','left',true,'85%',true),
+        );
+        
+         // configura o número de processo
+        $serie = substr($numProcesso,0,6);
+        $ano = substr($numProcesso,7,4);
+        $codigo = substr($numProcesso,12,2);
+        if (!is_numeric($codigo)) unset($codigo);
+        $numProcesso = $ano.$serie.$codigo;
+        
+        $sql = new sql();
+		$sql->SetColumns("
+            substr(p.numpro,5,6)||'/'||substr(p.numpro,1,4)||'-'||substr(p.numpro,11,2) as num,
+			p.numpro,
+			p.titulo
+		");
+
+        $sql->setWhere("p.numpro = r.numpro and (r.setor = '".$processo->retencao->setor."' or r.setor in ( select setorfilho from ad_setoracesso where setor = '".$processo->retencao->setor."' )) and p.tipo = '".$processo->tipo."' and r.inativo = 'N' and p.numpro <> "."'$processo->numProcesso'");
+
+		if ($numProcesso)
+		{
+			$where = "p.numpro like upper('%$numProcesso%')";
+			$sql->SetWhereAnd($where);
+		}
+        $lookup->SetGrid('common',$sql,$columns,
+        'Pesquisa Processo',15,0);
+    }
+    
+        function LookupNovoProcesso(&$lookup){ 
+        global $MIOLO;
+        // variáveis
+                session_start();
+                $numProcessoCorrente =  $_SESSION['numProcessoCorrente'];
+		$processo = $MIOLO->getBusiness('protocolo','processo');
+                $processo->getByNumero($numProcessoCorrente);
+                $lookup->AddFilterField(new Text('','Digite o id ou descrição do patrimonio:'));
+		$lookup->AddFilterField(new TextField('filter',utf8_encode($codmaterial),'',12));
+                $columns = array(
+			new DataGridColumn('num','Número','left',true,'15%',true),
+			new DataGridColumn('numpro','Número','left',true,'',false),
+			new DataGridColumn('titulo','Título','left',true,'85%',true),
+		);
+
+                $sql = new sql();
+		$sql->SetColumns("
+            substr(p.numpro,5,6)||'/'||substr(p.numpro,1,4)||'-'||substr(p.numpro,11,2) as num,
+			p.numpro,
+			p.titulo
+		");
+                $sql->SetTables('ad_processo p, ad_retencao r');
+	
+                $sql->setWhere("p.numpro = r.numpro and (r.setor = '".$processo->retencao->setor."' or r.setor in ( select setorfilho from ad_setoracesso where setor = '".$processo->retencao->setor."' )) and p.tipo = '".$processo->tipo."' and r.inativo = 'N' and p.numpro <> "."'$processo->numProcesso'");
+                
+
+		$filterNome = utf8_encode($lookup->GetFilterValue('filter'));
+                
+
+		if ($filterNome) {
+                    $where = "p.numpro like upper('%$filterNome%')";
+		    $sql->SetWhereAnd($where);
+			
+		}
+
+                $sql->setOrderBy('numpro');
+                 
+        // configura o grid
+		$lookup->SetGrid(
+			'sigaept',
+			$sql,
+			$columns,
+			'Pesquisa de Processo',
+			10,
+			0
+		);
+
+        }
 
 }
 ?>
