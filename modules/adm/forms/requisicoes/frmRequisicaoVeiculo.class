@@ -1,4 +1,4 @@
-<?
+<?ini_set( 'default_charset', 'utf-8');
 //importação da biblioteca responsável pelo envio de email
 MIOLO::Import('extensions::class.phpmailer.php','PHPMailer');
 class frmRequisicaoveiculo extends Form {
@@ -15,13 +15,16 @@ class frmRequisicaoveiculo extends Form {
 				$this->EventHandler();
 				$this->page->AddJsCode(file_get_contents(dirname(__FILE__) . '/../../ui/js/mask.js'));
 		}
-
+                
 		function CreateFields() {
 				// 30-11-2011 - Daniel Bonfim
 
 				global $MIOLO, $module;
 				$ui = $this->manager->getUi();
-
+                                $gestor = $this->manager->GetBusiness('adm','gestor');
+                                $result = $gestor->getGestorUo(14);
+                                $options = $result->chunkResult();
+                                
 				$this->form = $ui->GetForm($module, 'frmItinerarioNew', $this->objRequisicao, 'requisicoes');
 				$lkpLocalOrigem = new MLookupTextField('localOrigem', '', 'Origem', 20);
 				$lkpLocalDestino = new MLookupTextField('localDestino', '', 'Destino', 20);
@@ -54,30 +57,40 @@ class frmRequisicaoveiculo extends Form {
 						new HiddenField('idPessoa'),
 						new MPanel('', 'Dados do Responsável'),
 						new TextField('nome', '', 'Nome', 50),
-						new TextField('siape', '', 'Matrícula Siape', 20),
-						new TextField('cpf', '', 'CPF', 20, '999.999.999-99'),
+                                                new MLookupFieldValue('lkpNome','','Nome',59),
+						new HiddenField('siape', '', 'Matrícula Siape', 20),
+						new TextField('cpf', '', 'CPF', 20, '999.999.999-99'),//19-02-2013 Retirar
 						new HiddenField('hiddenCpf', ''),
 						new TextField('telefone', '', 'Telefone de Contato', 20),
 						new TextField('celular', '', 'Celular de Contato', 20),
 						new MSpacer(2),
+                                                new MPanel('painelGestor', 'Dados do Gestor'),
+                                                new Selection('idUoGestor','','Gestor(a)',$options),
+                                                new MSpacer(2),
 						new MPanel('painelViagem', 'Dados da Viagem'),
 						new HiddenField('idUsuarioGestor', ''),
 				);
 
 
 				$this->SetFields($fields);
+                                $this->SetFieldAttr('lkpNome','module','common');
+	                        $this->SetFieldAttr('lkpNome','item','pessoa1');
+	                        $this->SetFieldAttr('lkpNome','event', 'filler');
+	                        $this->SetFieldAttr('lkpNome','related', 'idPessoa,lkpNome');
 				$objRequisicaoVeiculo = $this->manager->getBusiness('adm', 'requisicaoveiculo');
 				$objRequisicaoVeiculo = $objRequisicaoVeiculo->GetById($this->objRequisicao->idRequisicao);
                                 
 				/* --------------------------------------------Adicionar Dados da Viagem----------------------------------------------------------- */
-				$this->AddField(new Selection('tipoVeiculo', $objRequisicaoVeiculo->tipoVeiculo, 'Tipo Veículo'));
+				//$this->AddField(new Selection('tipoVeiculo', $objRequisicaoVeiculo->tipoVeiculo, 'Tipo Veículo'));
 				$this->AddField(new Selection('tipoTransporte', $objRequisicaoVeiculo->tipoTransporte, 'Transporte'));
 				$this->AddField(new TextField('qtdPassageiros', $objRequisicaoVeiculo->quantidadePassageiros, 'Quantidade de Passageiros', 10, 'Total sem motorista'));
+                                $this->AddField(new TextField('qtdVolume', $objRequisicaoVeiculo->qtdVolume, 'Quantidade de Volume', 10, 'Metro cúbico '));//19-02-2013
 				$this->AddField(new MMultiLineField('outrosPassageiros', $objRequisicaoVeiculo->nomePassageiros, 'Relação de Passageiros', '', 3, 50));
 				$this->AddField(new MMultiLineField('justificativa', $objRequisicaoVeiculo->justificativa, 'Finalidade da Viagem', '', 3, 50));
 				$this->AddField(new MMultiLineField('obs', $objRequisicaoVeiculo->obs, 'Observações', '', 3, 50));
 				$this->AddField(new MSpacer(2));
-				$this->AddField(new MLinkButton('linkItinerario', 'Inserir Itinerario', ''));
+				$this->AddField(new MButton('linkItinerario', 'Inserir Itinerário', ''));
+                                //$this->AddField(new MLinkButton('linkItinerario', 'Inserir Itinerario', ''));
 
 
 				$this->SetFieldAttr('localOrigem', 'endereco', $lkpLocalOrigem);
@@ -92,15 +105,15 @@ class frmRequisicaoveiculo extends Form {
 				$query = $tabelaGeral->listByTabela('AD_TIPOCARGA');
 				$this->SetFieldAttr('tipoTransporte', 'options', $query->result);
 
-				$tipoVeiculo = $this->manager->getBusiness('adm', 'tipoveiculo');
+				/*$tipoVeiculo = $this->manager->getBusiness('adm', 'tipoveiculo')19-02-2013
 				$query = $tipoVeiculo->listAll();
-				$this->SetFieldAttr('tipoVeiculo', 'options', $query->result);
+				$this->SetFieldAttr('tipoVeiculo', 'options', $query->result);*/
 
 				$buttons = array(
-						new FormButton('btnSolicitar', 'Enviar'),
+						new FormButton('btnSolicitar', 'Enviar'),//19-02-2013
                                                 /*new FormButton('btnLimpar', 'Limpar'),   
                                                 new FormButton('btnSair', 'Sair'), */  
-						new FormButton('btnSalvar', 'Confirmar'),
+						new FormButton('btnSalvar', 'Confirmar'),//19-02-2013
 						new FormButton('btnSalvareSolicitar', 'Confirmar e requerer para outro passageiro'),
 						new FormButton('btnAtender', 'Enviar'),
 						new FormButton('btnConfirmarAtendimento', 'Confirmar'),
@@ -152,8 +165,10 @@ class frmRequisicaoveiculo extends Form {
 						$this->setButtonAttr('btnSolicitar', 'visible', FALSE);
 						$this->setObjectData();
 				}
-
+				$pessoaCPF = $this->manager->GetBusiness('common', 'pessoa');
 				$idUsuario = $this->manager->GetLogin()->idkey;
+                                $cpfUsuario = $pessoaCPF->getCPF($idUsuario);
+                                $this->SetFieldValue('cpf', $cpfUsuario);
 
 				switch ($this->objRequisicao->status) {
 
@@ -163,18 +178,19 @@ class frmRequisicaoveiculo extends Form {
 								//$validators = array(new CPFValidator('cpf','','required'));
 								//$this->SetValidators($validators);
 								// Verifica se é a requisição do primeiro passageiro (controle == null)
-								if ($controle = $this->getFormValue('controle') != null) {
-										$idRequisicaoAntiga = $this->getFormValue('idRequisicaoAntiga');
+								if ($controle = $this->getFormValue('controle') != null) {//Dúvida no código
+										/*$idRequisicaoAntiga = $this->getFormValue('idRequisicaoAntiga');
 										$tipoVeiculo = $this->getFormValue('tipoVeiculo');
 										if (($tipoVeiculo == '2') || ($tipoVeiculo == '4')) {
 												$this->AddInfo("Solicitação submetida à avaliação do gestor. O número da requisição é " . $idRequisicaoAntiga . ". Atenção, a lista dos passageiros deve ser enviada ao setor de Transportes até 5 dias antes da viagem.");
 										} else {
 												$this->AddInfo("Solicitação submetida à avaliação do gestor. O número da requisição é " . $idRequisicaoAntiga . ".");
-										}
+										}*/
 										$this->SetDataDadosRequisicao();
 										$this->setReadOnlyDadosRequisicao();
 
 										if ($objRequisicaoVeiculo->idPessoa) {
+                                                                                    
 												$this->btnCPF_click();
 										} else {
 
@@ -184,13 +200,15 @@ class frmRequisicaoveiculo extends Form {
 										//$this->SetFieldAttr('valorEstimado','visible',FALSE);
 										$this->SetButtonAttr('btnNextCPF', 'visible', TRUE);
 								} else {
-										if ($objRequisicaoVeiculo->idPessoa) {
+										//if ($objRequisicaoVeiculo->idPessoa) {
+                                                                                    
 												$this->visible(FALSE);
 												$this->btnCPF_click();
-										} else {
+										/*} else {
 
 												$this->visible(FALSE);
-										}
+                                                                                                $this->btnCPF_click();
+										}*/
 										//$this->setFieldAttr('valorEstimado','visible',FALSE);
 										$this->setButtonAttr('btnCPF', 'visible', TRUE);
 								}
@@ -220,7 +238,7 @@ class frmRequisicaoveiculo extends Form {
 										//$this->setFieldAttr('cep','visible',FALSE);
 										//$this->setFieldAttr('edtEstado','visible',FALSE);
 										//$this->setFieldAttr('lkpMunicipio','visible',FALSE);
-										$this->setFieldAttr('tipoVeiculo', 'visible', TRUE);
+										//$this->setFieldAttr('tipoVeiculo', 'visible', TRUE);19-02-2013
 										$this->setFieldAttr('tipoTransporte', 'visible', FALSE);
 										$this->setButtonAttr('btnAtender', 'visible', TRUE);
 								}
@@ -238,7 +256,7 @@ class frmRequisicaoveiculo extends Form {
 								//$this->setFieldAttr('cep','visible',FALSE);
 								//$this->setFieldAttr('edtEstado','visible',FALSE);
 								//$this->setFieldAttr('lkpMunicipio','visible',FALSE);
-								$this->setFieldAttr('tipoVeiculo', 'visible', TRUE);
+								//$this->setFieldAttr('tipoVeiculo', 'visible', TRUE);19-02-2013
 								$this->setFieldAttr('tipoTransporte', 'visible', FALSE);
 
 
@@ -269,7 +287,7 @@ class frmRequisicaoveiculo extends Form {
 										$this->SetFieldAttr('lkpMotorista', 'event', 'filler');
 										$this->SetFieldAttr('lkpMotorista', 'related', 'idMotorista,lkpMotorista');
 										$SESSAO = $this->manager->getSession();
-										$SESSAO->set('tipoveiculo', $this->tipoVeiculo->getValue());
+										//$SESSAO->set('tipoveiculo', $this->tipoVeiculo->getValue());19-02-2013
 										$this->SetFieldAttr('lkpVeiculo', 'module', 'adm');
 										$this->SetFieldAttr('lkpVeiculo', 'item', 'veiculo');
 										$this->SetFieldAttr('lkpVeiculo', 'event', 'filler');
@@ -449,7 +467,7 @@ class frmRequisicaoveiculo extends Form {
 										//$this->setFieldAttr('cep','visible',FALSE);
 										//$this->setFieldAttr('edtEstado','visible',FALSE);
 										//$this->setFieldAttr('lkpMunicipio','visible',FALSE);
-										$this->setFieldAttr('tipoVeiculo', 'visible', TRUE);
+										//$this->setFieldAttr('tipoVeiculo', 'visible', TRUE);19-02-2013
 										$this->setFieldAttr('tipoTransporte', 'visible', FALSE);
 										$this->SetFieldAttr('lkpVeiculo', 'module', 'adm');
 										$this->SetFieldAttr('lkpVeiculo', 'item', 'veiculo');
@@ -508,7 +526,7 @@ class frmRequisicaoveiculo extends Form {
 										//$this->setFieldAttr('cep','visible',FALSE);
 										//$this->setFieldAttr('edtEstado','visible',FALSE);
 										//$this->setFieldAttr('lkpMunicipio','visible',FALSE);
-										$this->setFieldAttr('tipoVeiculo', 'visible', TRUE);
+										//$this->setFieldAttr('tipoVeiculo', 'visible', TRUE);19-02-2013
 										$this->setFieldAttr('tipoTransporte', 'visible', FALSE);
 								} else {
 										$itemRequisicao = $this->objRequisicao->getItem();
@@ -562,13 +580,15 @@ class frmRequisicaoveiculo extends Form {
 				//$this->SetFieldValue('numrg',$itemRequisicao->pessoa->numrg);
 				$this->SetFieldValue('cpf', $itemRequisicao->pessoa->cpf);
 				$this->SetFieldValue('telefone', $itemRequisicao->pessoa->telefone);
+                                $this->SetFieldValue('lkpNome',$itemRequisicao->pessoa->nome);
+				//$this->SetFieldValue('bairro',$itemRequisicao->pessoa->bairro)
 				//$this->SetFieldValue('endereco',$itemRequisicao->pessoa->endereco);
 				//$this->SetFieldValue('bairro',$itemRequisicao->pessoa->bairro);
 				//$this->SetFieldValue('cep',$itemRequisicao->pessoa->cep);
 				//$this->SetFieldValue('lkpMunicipio',$itemRequisicao->pessoa->municipio->municipio);
 				//$this->SetFieldValue('edtEstado',$itemRequisicao->pessoa->municipio->idUF);
 				$this->SetFieldValue('tipoTransporte', $itemRequisicao->tipoTransporte);
-				$this->SetFieldValue('tipoVeiculo', $itemRequisicao->tipoVeiculo);
+				//$this->SetFieldValue('tipoVeiculo', $itemRequisicao->tipoVeiculo);19-02-2013
 				//$this->SetFieldValue('enderecoOrig',$itemRequisicao->enderecoOrig);
 				//$this->SetFieldValue('bairroOrig',$itemRequisicao->bairroOrig);
 				//$this->SetFieldValue('idMunicipioOrig',$itemRequisicao->municipioOrig->idmunicipio);
@@ -599,11 +619,13 @@ class frmRequisicaoveiculo extends Form {
 		}
 
 		//teste
-		function setReadOnly($all = true, $pessoa = true) {
+		function setReadOnly($all = true, $pessoa = true) {//19-02-2013
 				$this->setFieldAttr('nome', 'readonly', $pessoa);
 				$this->setFieldAttr('siape', 'readonly', $pessoa);
 				$this->setFieldAttr('telefone', 'readonly', $pessoa);
 				$this->setFieldAttr('celular', 'readonly', $pessoa);
+                                //$this->setFieldAttr('lkpNome', 'readonly', $pessoa);
+                                //$this->setFieldAttr('idUoGestor', 'readonly', $pessoa);
 				//$this->setFieldAttr('numrg','readonly',$pessoa);
 				//$this->setFieldAttr('cpf','readonly',$pessoa);
 				//$this->setFieldAttr('telefone','readonly',$pessoa);
@@ -613,7 +635,7 @@ class frmRequisicaoveiculo extends Form {
 				//$this->setFieldAttr('lkpMunicipio','readonly',$pessoa);
 				//$this->setFieldAttr('edtEstado','readonly',$pessoa);
 				$this->setFieldAttr('tipoTransporte', 'readonly', $all);
-				$this->setFieldAttr('tipoVeiculo', 'readonly', $all);
+				//$this->setFieldAttr('tipoVeiculo', 'readonly', $all);19-02-2013
 				//$this->setFieldAttr('enderecoOrig','readonly',$all);
 				//$this->setFieldAttr('bairroOrig','readonly',$all);
 				//$this->setFieldAttr('cepOrig','readonly',$all);
@@ -647,16 +669,19 @@ class frmRequisicaoveiculo extends Form {
 				$this->setFieldAttr('linkItinerario', 'visible', FALSE);
 				$this->setFieldAttr('justificativa', 'readonly', TRUE);
 				$this->setFieldAttr('obs', 'readonly', TRUE);
-				$this->setFieldAttr('cpf', 'readonly', TRUE);
+				$this->setFieldAttr('cpf', 'readonly', false);
 				$this->setFieldAttr('outrosPassageiros', 'readonly', TRUE);
 				$this->setFieldAttr('qtdPassageiros', 'readonly', TRUE);
-		}
+                                $this->setFieldAttr('qtdVolume', 'readonly', TRUE);
+		}                
 
 		function btnSolicitar_click() {
-
 				global $MIOLO;
 				$data = $this->GetData();
-				//var_dump($data);exit;
+                                $pessoa = $this->manager->GetBusiness('common','usuario');
+                                /*$idUserGestor = $this->GetFormValue('idUoGestor');
+                                $gestorEmail= $pessoa->getGestorEmailUsuario($idUserGestor);*/
+
 				// Testa se todos os campos foram preenchidos corretamente
 				//$mkDataSaidaOrig = mktime(0,0,0,substr($data->dataSaidaOrig,3,2),substr($data->dataSaidaOrig,0,2),substr($data->dataSaidaOrig,6,4));
 				//$mkPrevDataChegDest = mktime(0,0,0,substr($data->prevDataChegDest,3,2),substr($data->prevDataChegDest,0,2),substr($data->prevDataChegDest,6,4));
@@ -665,13 +690,17 @@ class frmRequisicaoveiculo extends Form {
                                  
 				$objItinerario = $this->manager->getBusiness('adm', 'itinerario');
 				$quantidadeItinerario = $objItinerario->GetTotalItinerarioByRequisicao($this->objRequisicao->idRequisicao);
-
+                                
 
 				if (!$data->qtdPassageiros || !$data->qtdPassageiros < 0) {
 
 						$this->addError("Preencha a quantidade de passageiros!");
 
 						// $this->btnSalvar();
+				}
+                                if (!$this->GetFormValue('idUoGestor')) {
+						$this->AddError("É necessário adicionar o Gestor");
+						$this->btnCPF_click();
 				}
 				if ($quantidadeItinerario < 1) {
 						$this->AddError("É necessário adicionar pelo menos 1 Itinerário");
@@ -690,7 +719,19 @@ class frmRequisicaoveiculo extends Form {
 						$this->btnCPF_click();
 				}
   
-                               $this->emailConfirmacao(); 
+                                $pessoa = $this->manager->GetBusiness('common','usuario');
+                                $uo = $this->manager->getbusiness('adm','uo');
+                                
+                                $idUserGestor = $this->GetFormValue('idUoGestor');
+                                $gestorEmail= $pessoa->getGestorEmailUsuario($idUserGestor);
+                                $this->emailConfirmacao1($gestorEmail); 
+                                
+                                
+                                $emailResponsavel = $pessoa->getGestorEmailUsuario($this->GetFieldValue('idPessoa'));
+                                $this->emailConfirmacao1($emailResponsavel);
+                                
+                                $email = $uo->getEmailResponsavel($this->objRequisicao->idUoExecutante);
+                                $this->emailConfirmacao1($email); 
 
 				$this->setFieldAttr('cpf', 'visible', FALSE);
 				$this->visible(true);
@@ -701,7 +742,7 @@ class frmRequisicaoveiculo extends Form {
                                 /*$this->setButtonAttr('btnLimpar', 'visible', TRUE);
                                 $this->setButtonAttr('btnSair', 'visible', TRUE);*/
 				$this->setButtonAttr('btnCancelar', 'visible', TRUE);
-				$this->setButtonAttr('btnSolicitar', 'visible', FALSE);
+				$this->setButtonAttr('btnSolicitar', 'visible', TRUE);
 				$this->setButtonAttr('btnCPF', 'visible', FALSE);
 				$this->setButtonAttr('btnNextCPF', 'visible', FALSE);
 		}
@@ -731,8 +772,8 @@ class frmRequisicaoveiculo extends Form {
 				//$this->setFieldAttr('valorEstimado','visible',TRUE);
 				//print_r($data);exit;
 
-				$tipoVeiculo = $this->manager->getBusiness('adm', 'tipoveiculo');
-				$tipoVeiculo->getById($data->tipoVeiculo);
+				/*$tipoVeiculo = $this->manager->getBusiness('adm', 'tipoveiculo');19-02-2013
+				$tipoVeiculo->getById($data->tipoVeiculo);*/
 
 				//Calculando o numero de diárias e o valor estimado
 				//$diaChegada = substr($data->prevDataRetorno,0,2);
@@ -754,7 +795,7 @@ class frmRequisicaoveiculo extends Form {
 				$this->SetFieldValue('telefone', $data->telefone);
 				$this->SetFieldValue('celular', $data->celular);
 				$this->SetFieldValue('tipoTransporte', $data->tipoTransporte);
-				$this->SetFieldValue('tipoVeiculo', $data->tipoVeiculo);
+				//$this->SetFieldValue('tipoVeiculo', $data->tipoVeiculo);19-02-2013
 				$this->SetFieldValue('idPessoa', $data->idPessoa);
 				$this->SetFieldValue('justificativa', $data->justificativa);
 				$this->SetFieldValue('idUsuarioGestor', $data->idUsuarioGestor);
@@ -762,16 +803,21 @@ class frmRequisicaoveiculo extends Form {
 		}
 
 		public function btnSalvar_click() {
-
+                    global $MIOLO;
 				$itemRequisicao = $this->objRequisicao->getItem();
 				$this->objRequisicao->getUoRequisitante();
 				$idUsuario = $this->manager->GetLogin()->idkey;
-
+                                 
 				$data = $this->getData();
 				$itemRequisicao->setData($data);
 				$this->objRequisicao->addItem($itemRequisicao);
-
-
+                                $pessoa = $this->manager->GetBusiness('common','usuario');
+                                $idUserGestor = $this->GetFormValue('idUoGestor');
+                                $gestorEmail= $pessoa->getGestorEmailUsuario($idUserGestor);
+                                $this->emailConfirmacao1($gestorEmail); 
+                                $uo = $this->manager->getbusiness('adm','uo');
+                                $email = $uo->getEmailResponsavel($this->objRequisicao->idUoExecutante);
+                                $this->emailConfirmacao1($email); 
 
 				// SALVANDO TUDO
 
@@ -837,11 +883,11 @@ class frmRequisicaoveiculo extends Form {
 								//$this->objRequisicao->save();
 								$this->objRequisicao->Log(OP_INS, "Requisicao " . $this->objRequisicao->idRequisicao . ": submetida a avaliação do gestor.");
 
-								if (($objRequisicaoVeiculo->tipoVeiculo == '2') || ($objRequisicaoVeiculo->tipoVeiculo == '4')) {
+								/*if (($objRequisicaoVeiculo->tipoVeiculo == '2') || ($objRequisicaoVeiculo->tipoVeiculo == '4')) {//Dúvida código
 										$this->manager->information("Solicitação submetida à avaliação do gestor. O número da requisição é " . $this->objRequisicao->idRequisicao . ". Atenção, a lista dos passageiros deve ser enviada ao setor de Transportes até 5 dias antes da viagem.", $this->manager->getActionUrl('adm', 'main:requisicoes:find'));
 								} else {
 										$this->manager->information("Solicitação submetida à avaliação do gestor. O número da requisição é " . $this->objRequisicao->idRequisicao . ".", $this->manager->getActionUrl('adm', 'main:requisicoes:find'));
-								}
+                                                                }*/
 						}
 				} catch (Exception $e) {
 						$this->addError($e->getMessage());
@@ -857,8 +903,9 @@ class frmRequisicaoveiculo extends Form {
 				$objRequisicaoVeiculo = $objRequisicaoVeiculo->GetById($this->objRequisicao->idRequisicao);
 
 				$objRequisicaoVeiculo->tipoTransporte = $this->GetFormValue('tipoTransporte');
-				$objRequisicaoVeiculo->tipoVeiculo = $this->GetFormValue('tipoVeiculo');
+				//$objRequisicaoVeiculo->tipoVeiculo = $this->GetFormValue('tipoVeiculo');19-02-2013
 				$objRequisicaoVeiculo->quantidadePassageiros = $this->GetFormValue('qtdPassageiros');
+                                $objRequisicaoVeiculo->qtdVolume = $this->GetFormValue('qtdVolume');
 				$objRequisicaoVeiculo->nomePassageiros = $this->GetFormValue('outrosPassageiros');
 				$objRequisicaoVeiculo->justificativa = $this->GetFormValue('justificativa');
 				$objRequisicaoVeiculo->obs = $this->GetFormValue('obs');
@@ -938,7 +985,7 @@ class frmRequisicaoveiculo extends Form {
 								"requisita" => $requisicao->idTipoReq,
 								"idRequisicao" => $this->objRequisicao->idRequisicao,
 								"tipoTransporte" => $itemRequisicao->tipoTransporte,
-								"tipoVeiculo" => $itemRequisicao->tipoVeiculo,
+								"tipoVeiculo" => $itemRequisicao->tipoVeiculo,//Dúvida código
 								//"enderecoOrig"=>$itemRequisicao->enderecoOrig,
 								//"bairroOrig"=>$itemRequisicao->bairroOrig,
 								//"idMunicipioOrig"=>$data->idMunicipioOrig,
@@ -975,7 +1022,6 @@ class frmRequisicaoveiculo extends Form {
 		}
 
 		public function btnNextCPF_click() {
-
 				$this->SetFieldAttr('nome', 'visible', TRUE);
 				//$this->SetFieldAttr('numrg','visible',TRUE);
 				$this->SetFieldAttr('telefone', 'visible', TRUE);
@@ -1010,9 +1056,13 @@ class frmRequisicaoveiculo extends Form {
 				$this->setButtonAttr('btnSolicitar', 'visible', true);
 		}
 
-		function visible($bool) {
+		function visible($bool) {//19-02-2013
 
 				$this->SetFieldAttr('nome', 'visible', $bool);
+                                $this->SetFieldAttr('lkpNome', 'visible', $bool);
+                                $this->SetFieldAttr('idUoGestor', 'visible', $bool);
+                                $this->SetFieldAttr('cpf', 'visible', $bool);
+                                //$this->SetFieldAttr('idUoGestor', 'visible', $bool)
 				//$this->SetFieldAttr('numrg','visible',$bool);
 				$this->SetFieldAttr('telefone', 'visible', $bool);
 				//$this->SetFieldAttr('endereco','visible',$bool);
@@ -1022,7 +1072,7 @@ class frmRequisicaoveiculo extends Form {
 				//$this->SetFieldAttr('edtEstado','visible',$bool);
 				$this->SetFieldAttr('Finalidade', 'visible', $bool);
 				$this->SetFieldAttr('outrosPassageiros', 'visible', $bool);
-				$this->SetFieldAttr('tipoVeiculo', 'visible', $bool);
+				//$this->SetFieldAttr('tipoVeiculo', 'visible', $bool);19-02-2013
 				$this->SetFieldAttr('tipoTransporte', 'visible', $bool);
 				//$this->SetFieldAttr('enderecoOrig','visible',$bool);
 				//$this->SetFieldAttr('bairroOrig','visible',$bool);
@@ -1043,6 +1093,7 @@ class frmRequisicaoveiculo extends Form {
 				//$this->SetFieldAttr('quilometragemEst','visible',$bool);
 				$this->SetFieldAttr('justificativa', 'visible', $bool);
 				$this->SetFieldAttr('painelViagem', 'visible', $bool);
+                                $this->SetFieldAttr('painelGestor', 'visible', $bool);
 				$this->SetFieldAttr('outrosPassageiros', 'visible', $bool);
 				//$this->SetFieldAttr('dadosOrigem','visible',$bool);
 				//$this->SetFieldAttr('dadosDestino','visible',$bool);
@@ -1054,6 +1105,7 @@ class frmRequisicaoveiculo extends Form {
 				$this->SetFieldAttr('celular', 'visible', $bool);
 				$this->SetFieldAttr('dadosViagem', 'visible', $bool);
 				$this->SetFieldAttr('qtdPassageiros', 'visible', $bool);
+                                $this->SetFieldAttr('qtdVolume', 'visible', $bool);
 				$this->SetFieldAttr('linkItinerario', 'visible', $bool);
 				$this->SetFieldAttr('obs', 'visible', $bool);
 
@@ -1101,7 +1153,7 @@ class frmRequisicaoveiculo extends Form {
 		}
 
 		function btnCPF_click() {
-
+                                //var_dump("btnCPF");exit;
 				global $MIOLO;
 
 				$pessoa = $this->manager->getBusiness('common', 'pessoa');
@@ -1109,7 +1161,7 @@ class frmRequisicaoveiculo extends Form {
 				$objRequisicaoVeiculo = $objRequisicaoVeiculo->GetById($this->objRequisicao->idRequisicao);
 				// Deixa o campo CPF só com números
 				$cpf = $this->GetFieldValue('cpf');
-
+                                
 				$cpf = str_replace(".", "", $cpf);
 				$cpf = str_replace("-", "", $cpf);
 
@@ -1157,10 +1209,11 @@ class frmRequisicaoveiculo extends Form {
 				}
 		}
 
-		function setFieldPessoa($pessoa) {
+		function setFieldPessoa($pessoa) {//19-02-2013
 				$pessoa->retrieveAssociation('municipio');
 				$this->SetFieldValue('idPessoa', $pessoa->idpessoa);
 				$this->SetFieldValue('nome', $pessoa->nome);
+                                $this->SetFieldValue('lkpNome', utf8_encode($pessoa->nome));
 				//$this->SetFieldValue('numrg',$pessoa->numrg);
 				$this->SetFieldValue('telefone', $pessoa->telefone);
 				// 25-11-2011 - Daniel Bonfim
@@ -1851,7 +1904,7 @@ class frmRequisicaoveiculo extends Form {
 
 		function setDataDadosRequisicao() {
 				$this->SetFieldValue('tipoTransporte', $this->GetFormValue('tipoTransporte'));
-				$this->SetFieldValue('tipoVeiculo', $this->GetFormValue('tipoVeiculo'));
+				//$this->SetFieldValue('tipoVeiculo', $this->GetFormValue('tipoVeiculo'));19-02-2013
 				$this->SetFieldValue('justificativa', $this->GetFormValue('justificativa'));
 				$this->SetFieldValue('idUsuarioGestor', $this->GetFormValue('idUsuarioGestor'));
 				$this->SetFieldValue('outrosPassageiros', $this->GetFormValue('outrosPassageiros'));
@@ -1859,7 +1912,7 @@ class frmRequisicaoveiculo extends Form {
 
 		function setReadOnlyDadosRequisicao() {
 				$this->SetFieldAttr('tipoTransporte', 'readonly', TRUE);
-				$this->SetFieldAttr('tipoVeiculo', 'readonly', TRUE);
+				//$this->SetFieldAttr('tipoVeiculo', 'readonly', TRUE);19-02-2013
 				$this->SetFieldAttr('prevDataChegDest', 'readonly', TRUE);
 				$this->SetFieldAttr('prevHoraChegDest', 'readonly', TRUE);
 				$this->SetFieldAttr('justificativa', 'readonly', TRUE);
@@ -2055,11 +2108,34 @@ HERE;
                 
                 $mail->Send();
     }
-    public function btnLimpar_click(){
-    
-    }
-    public function btnSair_click(){
-    
+    public function emailConfirmacao1($email){
+        $usuario = $this->manager->getBusiness('common','usuario');
+        /*$uo = $this->manager->getbusiness('adm','uo');
+        $email = $uo->getEmailResponsavel($this->objRequisicao->idUoExecutante);*/
+        $mail = new PHPMailer();
+	$mail->IsSMTP(); // telling the class to use SMTP
+	$mail->Host = "smtp.ifbaiano.edu.br"; // SMTP server
+	$mail->From = 'sigaadm@ifbaiano.edu.br';
+	$mail->FromName = 'SIGA - Sistema Integrado de Gestão Acadêmica';
+        $mail->Subject = "Requisição de Veículo";
+	$mail->WordWrap = 150;   
+
+        $requisicao = $this->objRequisicao->idRequisicao;
+ 
+       $body =
+<<< HERE
+Informamos que a requisição de número $requisicao está pendente!
+
+Atenciosamente,
+SIGA - Sistema Integrado de Gestão Acadêmica
+sigaadm@ifbaiano.edu.br
+
+HERE;
+       
+       $mail->Body = $body;
+                $mail->AddAddress($mail);
+                
+                $mail->Send();
     }
 
 }
