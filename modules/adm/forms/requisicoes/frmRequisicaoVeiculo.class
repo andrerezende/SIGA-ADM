@@ -14,10 +14,12 @@ class frmRequisicaoveiculo extends Form {
 				$this->Form(null);
 				$this->EventHandler();
 				$this->page->AddJsCode(file_get_contents(dirname(__FILE__) . '/../../ui/js/mask.js'));
+                                
 		}
                 
 		function CreateFields() {
 				// 30-11-2011 - Daniel Bonfim
+                    
 
 				global $MIOLO, $module;
 				$ui = $this->manager->getUi();
@@ -89,7 +91,7 @@ class frmRequisicaoveiculo extends Form {
 				$this->AddField(new MMultiLineField('justificativa', $objRequisicaoVeiculo->justificativa, 'Finalidade da Viagem', '', 3, 50));
 				$this->AddField(new MMultiLineField('obs', $objRequisicaoVeiculo->obs, 'Observações', '', 3, 50));
 				$this->AddField(new MSpacer(2));
-				$this->AddField(new MButton('linkItinerario', 'Inserir Itinerário', ''));
+				//$this->AddField(new MButton('linkItinerario', 'Inserir Itinerário', ''));
                                 //$this->AddField(new MLinkButton('linkItinerario', 'Inserir Itinerario', ''));
 
 
@@ -104,13 +106,15 @@ class frmRequisicaoveiculo extends Form {
 				$tabelaGeral = $this->manager->getBusiness('common', 'tabelageral');
 				$query = $tabelaGeral->listByTabela('AD_TIPOCARGA');
 				$this->SetFieldAttr('tipoTransporte', 'options', $query->result);
+                                $this->SetFieldAttr('idUoGestor', 'options', $options);
 
 				/*$tipoVeiculo = $this->manager->getBusiness('adm', 'tipoveiculo')19-02-2013
 				$query = $tipoVeiculo->listAll();
 				$this->SetFieldAttr('tipoVeiculo', 'options', $query->result);*/
 
 				$buttons = array(
-						new FormButton('btnSolicitar', 'Enviar'),//19-02-2013
+						new FormButton('linkItinerario', 'Inserir Itinerário', ''),
+                                                new FormButton('btnSolicitar', 'Enviar'),//19-02-2013
                                                 /*new FormButton('btnLimpar', 'Limpar'),   
                                                 new FormButton('btnSair', 'Sair'), */  
 						new FormButton('btnSalvar', 'Confirmar'),//19-02-2013
@@ -727,6 +731,11 @@ class frmRequisicaoveiculo extends Form {
 				$this->setTitle("Confirmação da requisição de Veiculo");
 				$this->setData();
 				$this->setReadOnly();
+				$idGetor = $this->GetFormValue('idUoGestor');
+                               /* if($MIOLO->login->idkey != $idGetor){
+                                   // $this->setButtonAttr('btnCancelar', 'visible', TRUE);
+                                    $this->manager->information("Solicitação" . $this->objRequisicao->idRequisicao . ": submetida a avaliação do gestor.".".", $this->manager->getActionUrl('adm', 'main:requisicoes:find'));
+                                }else{*/
 				$this->setButtonAttr('btnSalvar', 'visible', TRUE);
                                 /*$this->setButtonAttr('btnLimpar', 'visible', TRUE);
                                 $this->setButtonAttr('btnSair', 'visible', TRUE);*/
@@ -734,6 +743,7 @@ class frmRequisicaoveiculo extends Form {
 				$this->setButtonAttr('btnSolicitar', 'visible', TRUE);
 				$this->setButtonAttr('btnCPF', 'visible', FALSE);
 				$this->setButtonAttr('btnNextCPF', 'visible', FALSE);
+                               // }
 		}
 
 		function btnCancelar_click() {
@@ -804,29 +814,22 @@ class frmRequisicaoveiculo extends Form {
                                 $idUserGestor = $this->GetFormValue('idUoGestor');
                                 $id= $pessoa->getIdPesso($idUserGestor);
                                 $gestorEmail = $pessoa->getEmailPessoa($id);
-                                $this->emailConfirmacao1($gestorEmail);
+                                $this->emailConfirmacao($gestorEmail,false);
                                 if($this->GetFieldValue('idPessoa')){
                                     
                                 $emailResponsavel = $pessoa->getEmailPessoa($this->GetFieldValue('idPessoa'));
-                                $this->emailConfirmacao1($emailResponsavel);
+                                $this->emailConfirmacao($emailResponsavel,false);
                                 }else{
                                      
                                    $emailResponsavel =  $pessoa->getGestorEmailUsuario($idUsuario);
-                                   $this->emailConfirmacao1($emailResponsavel);
+                                   $this->emailConfirmacao($emailResponsavel,false);
                                 }
                                 $emailExecutante = $uo->getEmailResponsavel($this->objRequisicao->idUoExecutante);
-                                $this->emailConfirmacao1($emailExecutante);
+                                $this->emailConfirmacao($emailExecutante,true);
                                 
 				$data = $this->getData();
 				$itemRequisicao->setData($data);
 				$this->objRequisicao->addItem($itemRequisicao);
-                                
-                                /*$idUserGestor = $this->GetFormValue('idUoGestor');
-                                $gestorEmail= $pessoa->getGestorEmailUsuario($idUserGestor);
-                                $this->emailConfirmacao1($gestorEmail); 
-                                $uo = $this->manager->getbusiness('adm','uo');
-                                $email = $uo->getEmailResponsavel($this->objRequisicao->idUoExecutante);
-                                $this->emailConfirmacao1($email); */
 
 				// SALVANDO TUDO
 
@@ -2090,36 +2093,8 @@ class frmRequisicaoveiculo extends Form {
                 
 
     
-    public function emailConfirmacao(){
-        $usuario = $this->manager->getBusiness('common','usuario');
-        $uo = $this->manager->getbusiness('adm','uo');
-        $email = $uo->getEmailResponsavel($this->objRequisicao->idUoExecutante);
-        $mail = new PHPMailer();
-	$mail->IsSMTP(); // telling the class to use SMTP
-	$mail->Host = "smtp.ifbaiano.edu.br"; // SMTP server
-	$mail->From = 'sigaadm@ifbaiano.edu.br';
-	$mail->FromName = 'SIGA - Sistema Integrado de Gestão Acadêmica';
-        $mail->Subject = "Requisição de Veículo";
-	$mail->WordWrap = 150;   
-
-        $requisicao = $this->objRequisicao->idRequisicao;
- 
-       $body =
-<<< HERE
-Informamos que a requisição de número $requisicao está pendente!
-
-Atenciosamente,
-SIGA - Sistema Integrado de Gestão Acadêmica
-sigaadm@ifbaiano.edu.br
-
-HERE;
-       
-       $mail->Body = $body;
-                $mail->AddAddress($email);
-                
-                $mail->Send();
-    }
-    public function emailConfirmacao1($email){
+    
+    public function emailConfirmacao($email,$identificao){
         $usuario = $this->manager->getBusiness('common','usuario');
         //$email = $uo->getEmailResponsavel($this->objRequisicao->idUoExecutante);
         $mail = new PHPMailer();
@@ -2131,17 +2106,27 @@ HERE;
 	$mail->WordWrap = 150;   
 
         $requisicao = $this->objRequisicao->idRequisicao;
- 
+        if($identificao){
+        $body2 =
+                 <<< HERE
+                            Informamos que a requisição de número $requisicao foi criada!
+
+                            Atenciosamente,
+                            SIGA - Sistema Integrado de Gestão Acadêmica
+                            sigaadm@ifbaiano.edu.br
+
+HERE;
+        }else{
        $body =
 <<< HERE
-Informamos que a requisição de número $requisicao está pendente!
+Informamos que a requisição de número $requisicao está pendente de aprovação!
 
 Atenciosamente,
 SIGA - Sistema Integrado de Gestão Acadêmica
 sigaadm@ifbaiano.edu.br
 
 HERE;
-       
+        }
        $mail->Body = $body;
                 $mail->AddAddress($email);
                 
