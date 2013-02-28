@@ -86,7 +86,7 @@ class frmRequisicaoveiculo extends Form {
 				//$this->AddField(new Selection('tipoVeiculo', $objRequisicaoVeiculo->tipoVeiculo, 'Tipo Veículo'));
 				$this->AddField(new Selection('tipoTransporte', $objRequisicaoVeiculo->tipoTransporte, 'Transporte'));
 				$this->AddField(new TextField('qtdPassageiros', $objRequisicaoVeiculo->quantidadePassageiros, 'Quantidade de Passageiros', 10, 'Total sem motorista'));
-                                $this->AddField(new TextField('qtdVolume', $objRequisicaoVeiculo->qtdVolume, 'Quantidade de Volume', 10, 'Metro cúbico '));//19-02-2013
+                                $this->AddField(new TextField('qtdVolume', $objRequisicaoVeiculo->qtdVolume, 'Quantidade de Volumes', 10, 'Quantidade'));//19-02-2013
 				$this->AddField(new MMultiLineField('outrosPassageiros', $objRequisicaoVeiculo->nomePassageiros, 'Relação de Passageiros', '', 3, 50));
 				$this->AddField(new MMultiLineField('justificativa', $objRequisicaoVeiculo->justificativa, 'Finalidade da Viagem', '', 3, 50));
 				$this->AddField(new MMultiLineField('obs', $objRequisicaoVeiculo->obs, 'Observações', '', 3, 50));
@@ -772,7 +772,8 @@ class frmRequisicaoveiculo extends Form {
                                 if($idUser != $idGetor){
                                     $this->setButtonAttr('btnCancelar', 'visible', TRUE);
                                     $this->setButtonAttr('btnSolicitar', 'visible', false);
-                                    $this->addButton(new FormButton('btnSolicitarEnviar', 'Enviar'));
+                                    $this->setButtonAttr('linkItinerario', 'visible', false);
+                                    $this->setButtonAttr('btnSalvar', 'visible', TRUE);//$this->addButton(new FormButton('btnSolicitarEnviar', 'Enviar'));
                                     
                                 }else{
 				$this->setButtonAttr('btnSalvar', 'visible', TRUE);
@@ -788,7 +789,8 @@ class frmRequisicaoveiculo extends Form {
                                     if($idUser != $idGetor){
                                     $this->setButtonAttr('btnCancelar', 'visible', TRUE);
                                     $this->setButtonAttr('btnSolicitar', 'visible', false);
-                                    $this->addButton(new FormButton('btnSolicitarEnviar', 'Enviar'));
+                                    $this->setButtonAttr('linkItinerario', 'visible', false);
+                                    $this->setButtonAttr('btnSalvar', 'visible', TRUE);//$this->addButton(new FormButton('btnSolicitarEnviar', 'Enviar'));
                                     
                                 }else{
 				$this->setButtonAttr('btnSalvar', 'visible', TRUE);
@@ -862,19 +864,17 @@ class frmRequisicaoveiculo extends Form {
 		public function btnSalvar_click() {
                     
                     global $MIOLO;
-                    var_dump(btnSalvar);
                                 $data = $this->getData();
 				$itemRequisicao = $this->objRequisicao->getItem();
 				$this->objRequisicao->getUoRequisitante();
 				
                                  
-                                $pessoa = $this->manager->GetBusiness('common','usuario');
+                                $objUsuario = $this->manager->GetBusiness('common','usuario');
                                 $uo = $this->manager->getbusiness('adm','uo');
                                 
-                                $idUserGestor = $this->GetFormValue('idUoGestor');
-                                $id= $pessoa->getIdPesso($idUserGestor);
-                                $gestorEmail = $pessoa->getEmailPessoa($id);
-                                $this->emailConfirmacao($gestorEmail,false);
+                                $idPessoaGestor= $objUsuario->getIdPesso($this->GetFormValue('idUoGestor'));
+                                $gestorEmail = $objUsuario->getEmailPessoa($idPessoaGestor);
+                                //$this->emailConfirmacao($gestorEmail,false);
                                 
                                 try {
                                     $objRequisicaoVeiculo = $this->manager->getBusiness('adm', 'requisicaoveiculo');
@@ -882,25 +882,25 @@ class frmRequisicaoveiculo extends Form {
                                     
                                 if($this->GetFieldValue('idPessoa')){
                                     $objRequisicaoVeiculo->idPessoa = $this->GetFieldValue('idPessoa');
-                                    $idUsuario = $pessoa->getIdUsuario($data->idPessoa);
-                                $emailResponsavel = $pessoa->getEmailPessoa($this->GetFieldValue('idPessoa'));
-                                $this->emailConfirmacao($emailResponsavel,false);
+                                    $idUsuario = $objUsuario->getIdUsuario($this->GetFieldValue('idPessoa'));
+                                $emailResponsavel = $objUsuario->getGestorEmailUsuario($objRequisicaoVeiculo->idPessoa);
+                                //$this->emailConfirmacao($emailResponsavel,false);
                                 }else{
-                                    $objRequisicaoVeiculo->idPessoa = $this->manager->GetLogin()->idkey;
+                                   $objRequisicaoVeiculo->idPessoa = $objUsuario->getIdPesso($this->manager->GetLogin()->idkey);
                                    $idUsuario = $this->manager->GetLogin()->idkey;
-                                   $emailResponsavel =  $pessoa->getGestorEmailUsuario($idUsuario);
-                                   $this->emailConfirmacao($emailResponsavel,false);
+                                   $emailResponsavel =  $objUsuario->getGestorEmailUsuario($objRequisicaoVeiculo->idPessoa);
+                                   //$this->emailConfirmacao($emailResponsavel,false);
                                 }
                                 $emailExecutante = $uo->getEmailResponsavel($this->objRequisicao->idUoExecutante);
-                                $this->emailConfirmacao($emailExecutante,true);
-                                
+                                //$this->emailConfirmacao($emailExecutante,true);
 				
 				$itemRequisicao->setData($data);
 				$this->objRequisicao->addItem($itemRequisicao);
 
 				// SALVANDO TUDO
+                               
 
-						if ($this->objRequisicao->uoRequisitante->isGestorOf($idUsuario)) {
+						if($idPessoaGestor == $objRequisicaoVeiculo->idPessoa){//if ($this->objRequisicao->uoRequisitante->isGestorOf($idUsuario)) {
 								$requisita = $this->manager->getBusiness('adm', 'requisita');
 
 								/* -------------------------------------Declarando a requisição de veículo------------------------------ */
@@ -936,17 +936,21 @@ class frmRequisicaoveiculo extends Form {
 										$lancamentoInt->idRubrica = $requisita->idRubrica;
 										$lancamentoInt->idRequisicao = $this->objRequisicao->idRequisicao;
 										$lancamentoInt->save();
+                                                                                
+                                                                                $this->emailConfirmacao($emailExecutante,true);
+                                                                                $this->emailConfirmacao($gestorEmail,false);
+                                                                                $this->emailConfirmacao($emailResponsavel,false);
 										$lancamentoInt->Log(OP_INS, "Lançamento Interno numero " . $lancamentoInt->idLancamentoInt . " realizado com sucesso para a Requisicao " . $this->objRequisicao->idRequisicao);
 										$this->objRequisicao->endTransaction();
 
 										$this->objRequisicao->Log(OP_INS, "Requisicao " . $this->objRequisicao->idRequisicao . ": criada e automaticamente autorizada pelo gestor.");
-										$this->manager->information("Solicitação criada e autorizada. O número da requisição é " . $this->objRequisicao->idRequisicao . ".", $this->manager->getActionUrl('adm', 'main:requisicoes:find'));
+                                                                                //$this->hyperlink->SetAction('adm','main:requisicoes',$this->objRequisicao->idRequisicao,array("form"=>"item","tipoReq"=>$this->objRequisicao->idTipoReq));
+										$this->manager->information("Solicitação criada e autorizada. O número da requisição é " . $this->objRequisicao->idRequisicao . ".", $this->manager->getActionUrl('adm','main:requisicoes',$this->objRequisicao->idRequisicao,array("form"=>"item","tipoReq"=>$this->objRequisicao->idTipoReq)));
 								} else {
 										$this->manager->information("Saldo insuficiente para esta rubrica.", $this->manager->getActionUrl('adm', 'main:requisicoes:find'));
 								}
 						} else {
-								/* -------------------------------------Declarando a requisição de veículo------------------------------ */
-                                                    
+													/* -------------------------------------Declarando a requisição de veículo------------------------------ */
 
 								$objRequisicaoVeiculo = $this->manager->getBusiness('adm', 'requisicaoveiculo');
 								$objRequisicaoVeiculo = $objRequisicaoVeiculo->GetById($this->objRequisicao->idRequisicao);
@@ -954,6 +958,14 @@ class frmRequisicaoveiculo extends Form {
 								/* ----------------------------------------------------------------------------------------------------------------- */
 								$this->objRequisicao->setStatus('2');
 								$objRequisicaoVeiculo->status = '2';
+                                                                
+                                                                $this->objRequisicao->idUsuarioGestor = $this->GetFormValue('idUoGestor');
+                                                                $objRequisicaoVeiculo->update();
+								$this->objRequisicao->save();
+                                                               //var_dump($emailExecutante);var_dump($gestorEmail);var_dump($emailResponsavel);exit;
+                                                                $this->emailConfirmacao($emailExecutante,true);
+                                                                $this->emailConfirmacao($gestorEmail,false);
+                                                                $this->emailConfirmacao($emailResponsavel,false);
 								// 24-11-2011 - Daniel Bonfim
 								$cpf = $this->GetFieldValue('hiddenCpf');
 								$pessoa = $this->manager->getBusiness('common', 'pessoa');
@@ -968,6 +980,7 @@ class frmRequisicaoveiculo extends Form {
 								} else {*/
 										$this->manager->information("Solicitação submetida à avaliação do gestor. O número da requisição é " . $this->objRequisicao->idRequisicao . ".", $this->manager->getActionUrl('adm', 'main:requisicoes:find'));
                                                                 //}
+						//}
 						}
 				} catch (Exception $e) {
 						$this->addError($e->getMessage());
@@ -983,7 +996,7 @@ class frmRequisicaoveiculo extends Form {
 				$objRequisicaoVeiculo = $objRequisicaoVeiculo->GetById($this->objRequisicao->idRequisicao);
 
 				$objRequisicaoVeiculo->tipoTransporte = $this->GetFormValue('tipoTransporte');
-				//$objRequisicaoVeiculo->tipoVeiculo = $this->GetFormValue('tipoVeiculo');19-02-2013
+				$objRequisicaoVeiculo->idUsuarioGestor = $this->GetFormValue('idUoGestor');//27-02-2013
 				$objRequisicaoVeiculo->quantidadePassageiros = $this->GetFormValue('qtdPassageiros');
                                 $objRequisicaoVeiculo->qtdVolume = $this->GetFormValue('qtdVolume');
 				$objRequisicaoVeiculo->nomePassageiros = $this->GetFormValue('outrosPassageiros');
@@ -2153,79 +2166,6 @@ class frmRequisicaoveiculo extends Form {
 						$this->objRequisicao->endTransaction();
 						$this->objRequisicao->Log(OP_UPD, "Requisicao " . $this->objRequisicao->idRequisicao . " estornada com sucesso");
 						$this->manager->information("Requisição estornada com sucesso.", $this->manager->getActionUrl('adm', 'main:requisicoes:find'));
-				} catch (Exception $e) {
-						$this->addError($e->getMessage());
-				}
-		}
-                
-function btnSolicitarEnviar_click() {
-                    global $MIOLO;
-                    
-                                $data = $this->getData();
-				$itemRequisicao = $this->objRequisicao->getItem();
-				$this->objRequisicao->getUoRequisitante();
-                               
-                                 
-                                $pessoa = $this->manager->GetBusiness('common','usuario');
-                                $uo = $this->manager->getbusiness('adm','uo');
-                                
-                                $idUserGestor = $this->GetFormValue('idUoGestor');
-                                $id= $pessoa->getIdPesso($idUserGestor);
-                                $gestorEmail = $pessoa->getEmailPessoa($id);
-                                var_dump($gestorEmail);
-                                $this->emailConfirmacao($gestorEmail,false);
-                                try {
-                                    $objRequisicaoVeiculo = $this->manager->getBusiness('adm', 'requisicaoveiculo');
-                                    $objRequisicaoVeiculo = $objRequisicaoVeiculo->GetById($this->objRequisicao->idRequisicao);
-                                    
-                                if($this->GetFieldValue('idPessoa')){
-                                    $objRequisicaoVeiculo->idPessoa = $this->GetFieldValue('idPessoa');
-                                $emailResponsavel = $pessoa->getEmailPessoa($this->GetFieldValue('idPessoa'));
-                                $this->emailConfirmacao($emailResponsavel,false);
-                                }else{
-                                    $objRequisicaoVeiculo->idPessoa = $this->manager->GetLogin()->idkey;
-                                   $idUsuario = $this->manager->GetLogin()->idkey;
-                                   $emailResponsavel =  $pessoa->getEmailPessoa($idUsuario);
-                                   $this->emailConfirmacao($emailResponsavel,false);
-                                   
-                                }
-                                $emailExecutante = $uo->getEmailResponsavel($this->objRequisicao->idUoExecutante);
-                                $this->emailConfirmacao($emailExecutante,true);
-				
-				$itemRequisicao->setData($data);
-				$this->objRequisicao->addItem($itemRequisicao);
-
-				// SALVANDO TUDO
-
-				
-						
-								/* -------------------------------------Declarando a requisição de veículo------------------------------ */
-
-								$objRequisicaoVeiculo = $this->manager->getBusiness('adm', 'requisicaoveiculo');
-								$objRequisicaoVeiculo = $objRequisicaoVeiculo->GetById($this->objRequisicao->idRequisicao);
-
-								/* ----------------------------------------------------------------------------------------------------------------- */
-								$this->objRequisicao->setStatus('2');
-								$objRequisicaoVeiculo->status = '2';
-                                                                
-                                                                $this->objRequisicao->idUsuarioGestor = $this->GetFormValue('idUoGestor');
-                                                                $objRequisicaoVeiculo->update();
-								$this->objRequisicao->save();
-								// 24-11-2011 - Daniel Bonfim
-								$cpf = $this->GetFieldValue('hiddenCpf');
-								$pessoa = $this->manager->getBusiness('common', 'pessoa');
-								$pessoa = $pessoa->GetById($objRequisicaoVeiculo->idPessoa);
-
-								//$this->objRequisicao->veiculo->idPessoa = $pessoa->idpessoa;
-								//$this->objRequisicao->save();
-								$this->objRequisicao->Log(OP_INS, "Requisicao " . $this->objRequisicao->idRequisicao . ": submetida a avaliação do gestor.");
-
-								/*if (($objRequisicaoVeiculo->tipoVeiculo == '2') || ($objRequisicaoVeiculo->tipoVeiculo == '4')) {//Dúvida código
-										$this->manager->information("Solicitação submetida à avaliação do gestor. O número da requisição é " . $this->objRequisicao->idRequisicao . ". Atenção, a lista dos passageiros deve ser enviada ao setor de Transportes até 5 dias antes da viagem.", $this->manager->getActionUrl('adm', 'main:requisicoes:find'));
-								} else {*/
-										$this->manager->information("Solicitação submetida à avaliação do gestor. O número da requisição é " . $this->objRequisicao->idRequisicao . ".", $this->manager->getActionUrl('adm', 'main:requisicoes:find'));
-                                                                //}
-						//}
 				} catch (Exception $e) {
 						$this->addError($e->getMessage());
 				}
