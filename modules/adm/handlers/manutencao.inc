@@ -15,7 +15,8 @@
     $ui = $MIOLO->GetUI();
 
     $navbar->AddOption('Manutenção','adm','main:manutencao');
-    
+    $login = $this->manager->GetLogin();
+   
     $close = $MIOLO->GetActionURL($module,'main');
 
     $panel = new ActionPanel('pnlAdTables','Manutenção do Sistema','',$close);
@@ -45,6 +46,9 @@
     $panel->AddUserAction('adm_executorgarag',A_EXECUTE,'Veiculo',$ui->GetImageTheme('','icons/veiculo.png'),$module,'main:veiculo:find');
    // $panel->AddUserAction('adm_unidade',A_EXECUTE,'Unidade',$ui->GetImageTheme('','icons/unidadem.jpg'),$module,'main:unidade:find');
     $panel->AddUserAction('adm_unidade',A_EXECUTE,'Unidade',$ui->GetImageTheme('','icons/umedidas.png'),$module,'main:unidade:find');
+    if($login->id == 'romero.freire')
+    $panel->AddUserAction('adm_unidade',A_EXECUTE,'Calcula Itens Patrimoniais',$ui->GetImageTheme('','icons/itenspatrimonio.png'),$module,'main:calitempatrimonio:find');
+
 
     
     

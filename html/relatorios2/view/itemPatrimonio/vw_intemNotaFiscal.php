@@ -113,8 +113,8 @@ if (!$rows) {
                             "sInfoFiltered": "(Filtrado de _MAX_ registros no total)"
                         },
                         "bJQueryUI": true,
-                        "aLengthMenu": [[-1, 10, 25, 50,100,200,500,1000,5000], ['Todos', 10, 25, 50,100,200,500,1000,5000]],
-                        "iDisplayLength": -1,
+                        "aLengthMenu": [[-1,10, 25, 50,100,200,500,1000,5000], ['Todos',10, 25, 50,100,200,500,1000,5000]],
+                        "iDisplayLength": 10,
                         "sPaginationType": "full_numbers",
                         "aaSorting": [],                                        
                         "aoColumnDefs": [  //{ "bSortable": false, "aTargets": [ 4 ] } ,
