@@ -1,5 +1,5 @@
 <?
-	if($perms->CheckAccess('ADM_EXECUTORGARAG',A_ACCESS,true))
+	if($perms->CheckAccess('ADM_MOTORISTA',A_ACCESS,true))
     $theme->ClearContent();
     $motorista = $MIOLO->GetUI();
     $objMotorista = $MIOLO->GetBusiness('adm','motorista', $item);
