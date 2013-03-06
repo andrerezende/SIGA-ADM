@@ -32,8 +32,8 @@
     $panel->AddUserAction('adm_financas',A_EXECUTE,'INSS',$ui->GetImageTheme('','icons/inss.png'),$module, 'main:inss:find');
     $panel->AddUserAction('adm_financas',A_EXECUTE,'IRRF',$ui->GetImageTheme('','icons/irrf.png'),$module, 'main:irrf:find');
     $panel->AddUserAction('adm',A_EXECUTE, 'Material',$ui->GetImageTheme('','icons/material_manutencao.png'),  $module,'main:material:find');
-    $panel->AddUserAction('adm_cadastromaterial',A_EXECUTE,'Endereços',$ui->GetImageTheme('','icons/altera_material_de_requisicao.png'),$module, 'main:endereco');
-    $panel->AddUserAction('adm_executorgarag',A_EXECUTE,'Motorista',$ui->GetImageTheme('','icons/motorista.png'),$module,'main:motorista:find');
+    $panel->AddUserAction('ADM_ENDERECO',A_EXECUTE,'Endereços',$ui->GetImageTheme('','icons/altera_material_de_requisicao.png'),$module, 'main:endereco');
+    $panel->AddUserAction('adm_motorista',A_EXECUTE,'Motorista',$ui->GetImageTheme('','icons/motorista.png'),$module,'main:motorista:find');
     $panel->AddUserAction('adm_adminorcamento',A_EXECUTE,'PTR',$ui->GetImageTheme('','icons/ptr.png'),$module,'main:ptr:find');
     $panel->AddUserAction('adm_executorrest',A_EXECUTE,'Restaurante',$ui->GetImageTheme('','icons/restaurante.png'),$module,'main:restaurante:find');
     $panel->AddUserAction('adm_adminorcamento',A_EXECUTE,'Rubrica',$ui->GetImageTheme('','icons/rubrica.png'),$module,'main:rubrica:find');
@@ -43,7 +43,7 @@
     $panel->AddUserAction('adm_adminorcamento',A_EXECUTE,'Tipo Requisição',$ui->GetImageTheme('','icons/tipo_requisicao.png'),$module,'main:tiporeq:find');
   //  $panel->AddUserAction('adm_adminorcamento',A_EXECUTE,'Tipo Requisição',$ui->GetImageTheme('','default.png'),$module,'main:tiporeq:find');
     $panel->AddUserAction('adm_adminuo',A_EXECUTE,'U.O.',$ui->GetImageTheme('','icons/uo.png'),$module,'main:uo:find');
-    $panel->AddUserAction('adm_executorgarag',A_EXECUTE,'Veiculo',$ui->GetImageTheme('','icons/veiculo.png'),$module,'main:veiculo:find');
+    $panel->AddUserAction('ADM_VEICULO',A_EXECUTE,'Veiculo',$ui->GetImageTheme('','icons/veiculo.png'),$module,'main:veiculo:find');
    // $panel->AddUserAction('adm_unidade',A_EXECUTE,'Unidade',$ui->GetImageTheme('','icons/unidadem.jpg'),$module,'main:unidade:find');
     $panel->AddUserAction('adm_unidade',A_EXECUTE,'Unidade',$ui->GetImageTheme('','icons/umedidas.png'),$module,'main:unidade:find');
     if($login->id == 'romero.freire')
