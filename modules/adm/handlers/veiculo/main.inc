@@ -1,5 +1,5 @@
 <?
-	if($perms->CheckAccess('ADM_EXECUTORGARAG',A_ACCESS,true))
+	if($perms->CheckAccess('ADM_VEICULO',A_ACCESS,true))
     $theme->ClearContent();
     $objVeiculo = $MIOLO->GetBusiness('adm','veiculo', $item);
     $navbar->AddOption($objVeiculo->placa." - ".$objVeiculo->modelo, 'adm', 'main:veiculo:main');
