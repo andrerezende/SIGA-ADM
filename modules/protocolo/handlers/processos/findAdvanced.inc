@@ -4,5 +4,5 @@ $theme->ClearContent();
 $ui = $MIOLO->GetUI();
 
 // insere formulário frmProcessosFind
-$form = $ui->GetForm($module,'frmProcessoNovo',NULL,'processos');
+$form = $ui->GetForm($module,'frmProcessosFindAvacada',NULL,'processos');
 $theme->InsertContent($form);
