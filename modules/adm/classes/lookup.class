@@ -533,10 +533,14 @@ class BusinessAdmLookup{
 
 	function LookupMaterialEstoque(&$lookup)
 	{
+            $to_encoding = "UTF-8"; // esse é o encoding de destino 
+            $detect_order = "ISO-8859-1,UTF-8,ASCII"; 
+            
       $idUo = ($lookup->GetFilterValue('filter0')) ? $lookup->GetFilterValue('filter0') : $lookup->GetFilterValue('idUo');
       $codmaterial = (intval($lookup->GetFilterValue('filter1'))) ? $lookup->GetFilterValue('filter1') : $lookup->GetFilterValue('codmaterial');
       $descricao = (!$codmaterial && $lookup->GetFilterValue('filter1')) ? $lookup->GetFilterValue('filter1') : $lookup->GetFilterValue('descricao');
-
+      $from_encoding = mb_detect_encoding($descricao,$detect_order); 
+      $descricao = mb_convert_encoding($descricao,$to_encoding,$from_encoding);
       $lookup->AddFilterField(new HiddenField('idUo',$idUo));
       $lookup->AddFilterField(new Text('','Digite o código:'));
       $lookup->AddFilterField(new TextField('codmaterial',$codmaterial,'',12));
@@ -547,15 +551,15 @@ class BusinessAdmLookup{
       $columns = array(
           new DataGridColumn('codmaterial','Código','left',true,'20%',true),
           new DataGridColumn('unidade','Un','left',true,'10%',true),
-          new DataGridColumn('descricao','Nome','left',true,'70%',true)
+          new DataGridColumn('descricao','Nome','left',true,'60%',true)
       );
       $sql = new sql();
-      $sql->SetColumns('
+      $sql->SetColumns("
           m.idmaterial,
           m.codmaterial,
-          m.descricao,
+          regexp_replace(m.descricao, E'[\\n\\r]+', '','g') as descricao,
           unidade
-      ');
+      ");
       $sql->SetJoin('ad_material m','ad_estoque e','m.idmaterial = e.idmaterial');
       $sql->SetWhere("e.iduo = $idUo");
 
@@ -564,7 +568,7 @@ class BusinessAdmLookup{
       else
           $where = ($descricao ? "upper(m.descricao) like upper('%$descricao%')" : ''); // -- Sugestão da EAFBarbacena - Helton -- //
       $sql->SetWhere($where);
-
+      
       $sql->SetWhereAnd('e.estoque > 0 and e.valortotal > 0');
       $sql->SetOrderBy('descricao');
       $lookup->SetGrid(
@@ -2597,17 +2601,14 @@ Gevã Schaefer Pereira Martins 23/11/2004
 		$lookup->AddFilterField(new TextField('filterVeiculo',$filterVeiculo,'Placa', 30));
 
 		$columns = array(
-			new DataGridColumn('placa','Placa','left',true, '10%',true),
-			new DataGridColumn('marca','Marca','left', true, '10%',true),
-			new DataGridColumn('modelo','Modelo','left', true, '40%',true),
-			new DataGridColumn('instituicao','Instituição','left', true, '40%',true)
+			new DataGridColumn('placa','Placa','left',true, '20%',true),
+			new DataGridColumn('marcamodelo','Marca Modelo','left', true, '20%',true),
+			new DataGridColumn('cor','Cor','left', true, '60%',true),
+			//new DataGridColumn('instituicao','Instituição','left', true, '40%',true)removido
 		);  // UPPER(RTRIM(LastName))      
-        $sql = new sql("DISTINCT i.instituicao,v.placa,v.marca,v.modelo,v.modelo||' - '||v.placa as modeloplaca",'ad_veiculo v,cm_instituicao i,ad_veiculouo u', "(i.idinstituicao = v.idinstituicao) and (v.placa = u.placa) and (v.ativo = '1')",'v.placa');
+        $sql = new sql("v.placa, i.marcamodelo as marcamodelo, v.cor",'ad_veiculo v, ad_itempatrimonio i, ad_veiculouo u', "(v.iditempatrimonio = i.iditempatrimonio) and (v.placa = u.placa) and (v.ativo = '1')",'v.placa');
        
-            $to_encoding = "ISO-8859-1"; // esse é o encoding de destino 
-            $detect_order = "ISO-8859-1,UTF-8,ASCII"; 
-            $from_encoding = mb_detect_encoding($filterVeiculo,$detect_order); 
-            $filterVeiculo = mb_convert_encoding($filterVeiculo,$to_encoding,$from_encoding); 
+ 
             if ($filterVeiculo)
             {          $sql->where .= " and (";
 				if ($filterLogin)
@@ -2619,6 +2620,36 @@ Gevã Schaefer Pereira Martins 23/11/2004
             $sql->where .= " )";
         //}
         $lookup->SetGrid('common',$sql,$columns, 'Pesquisa Veículos',10,0);
+    }
+    
+    function LookupUoVeiculo(&$lookup)
+    {	
+    	global $MIOLO;
+        $filterVeiculo = $lookup->GetFilterValue('filter');
+        if (!$filterVeiculo)
+		{
+        		$filterVeiculo = $lookup->GetFilterValue();
+			if(!$filterVeiculo)
+			{
+				$filterVeiculo = 'A DEFINIR';
+			}
+    	}
+        
+		$lookup->AddFilterField(new TextField('filter',$filterVeiculo,'Placa', 30));
+		
+		$columns = array(
+			new DataGridColumn('placa','Placa','left',true, '33%',true),
+			new DataGridColumn('marca','Marca','left', true, '33%',true),
+			new DataGridColumn('modelo','Modelo','left', true, '33%',true)
+				);
+		
+		$sql = new sql("placa,marca,modelo,modelo||' - '||placa as modeloplaca",'ad_veiculo');
+		if ( $filterDescRubrica )
+		{
+			$sql->where .= " ( placa like upper('{$filterVeiculo}%') ) ";
+		}
+		$sql->SetOrderBy('modelo');
+		$lookup->SetGrid('sigaept',$sql,$columns,'Pesquisa de Veículos',15,0);
     }
         
         function LookupMotorista(&$lookup) {
