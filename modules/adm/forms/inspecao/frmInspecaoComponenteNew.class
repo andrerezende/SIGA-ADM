@@ -1,0 +1,207 @@
+<?php
+class frmInspecaoComponenteNew extends MForm
+{
+	protected $objInspecao;
+	private $motorista;
+        private $veiculo;
+	public $flag = false;
+
+        function __construct($objInspecao) {
+		$this->objInspecao= $objInspecao;
+		parent::__construct('Inspeção Início');
+		$this->EventHandler();
+	}
+
+
+	function CreateFields()
+	{   $ui = $this->manager->getUi();
+            $componente = $this->manager->GetBusiness('adm','componente');
+            $numComponentes = $componente->listarInspecionados($this->objInspecao->idInspecao);
+            $numComponentesF = $componente->listarInspecaoFim($this->objInspecao->idInspecao);
+            switch ($this->objInspecao->idSituacaoInspecao){
+                   case 1:
+                        if(count($numComponentes->result) < 22 )
+                           $this->telaInspecaoInicio();
+                           //$this->form = $ui->GetForm($module, 'frmInspecaoFind', $this->objInspecao, 'inspecao');
+                        
+                   break;
+                    case 2:
+                        if(count($numComponentes->result) < 22 ){
+                           $this->telaInspecaoInicio();
+                           
+                        }  else {
+                            $inspecao = $this->manager->getBusiness('adm','inspecao');
+                            $inspecao = $this->objInspecao->GetById($this->objInspecao->idInspecao);
+                            $inspecao->setStatus(3);
+                            $inspecao->update();
+                            $this->manager->information("Inspeção concluida com sucesso: ".$this->objInspecao->idInspecao,$this->manager->getActionUrl('adm','main:inspecao:find') );
+                             $this->telaInspecaoFim();   
+                        }
+                   break;
+                    case 3:
+                         $this->telaInspecaoFim();
+			//$this->manager->Question("Visualizar Inspeção final". $this->objInspecao->idInspecao . " ?",$action_sim,$action_nao);
+                        
+                       //$action_sim = $this->manager->information("Teste: ".$this->objInspecao->idInspecao,$this->manager->getActionUrl('adm','main:inspecao:find') );//$action_sim = $this->manager->getActionUrl('adm','main:inspecao:new');//$this->manager->getActionUrl('adm','main:requisicoes',$this->objInspecao->idInspecao,array("form"=>"item","tipoReq"=>$this->objRequisicao->idTipoReq));
+                       
+			//$action_nao = $this->manager->getActionUrl('adm','main:inspecao:new');
+                   break;
+                   case 4:
+                        if(count($numComponentesF->result) < 22 ){
+                           $this->telaInspecaoFim();
+                           //$this->form = $ui->GetForm($module, 'frmInspecaoFind', $this->objInspecao, 'inspecao');
+                        }  else {
+                            $inspecao = $this->manager->getBusiness('adm','inspecao');
+                            $inspecao = $this->objInspecao->GetById($this->objInspecao->idInspecao);
+                            $inspecao->setStatus(5);
+                            $inspecao->update();
+                            $this->manager->information("Inspeção FINAL concluida com sucesso: ".$this->objInspecao->idInspecao,$this->manager->getActionUrl('adm','main:inspecao:find') );
+                             //$this->telaInspecaoFim();   
+                        }
+                        
+                   break;
+                   case 5:
+                       $inspecao = $this->manager->getBusiness('adm','inspecao');
+                       $inspecao = $this->objInspecao->GetById($this->objInspecao->idInspecao);
+                        $inspecao->dataHoraFim = date('d/m/Y H:i');
+                        $inspecao->update();
+                   break;
+             }
+            
+	}
+        
+        public function telaInspecaoInicio(){
+                $componente = $this->manager->GetBusiness('adm','componente');
+                $conformidade = $this->manager->GetBusiness('adm','conformidade');
+                $listaComponentes = $componente->compara($this->objInspecao->idInspecao);
+                
+                $resultcomponente = $componente->ListAll();
+                $optionscomponente = $resultcomponente->chunkResult();
+                $this->atualizaInspecao($this->objInspecao->idInspecao);
+                $resultconformidade = $conformidade->ListAll();
+                $optionsconformidade = $resultconformidade->chunkResult();
+                
+			$fields = array(
+                                new TextField('motorista', $this->motorista->pessoa->nome, 'Motorista', 35),
+                                new TextField('veiculo', $this->veiculo->modelo . " - " . $this->veiculo->placa, 'Veiculo', 30),
+                                new MSelection('conponente','','Componente',$listaComponentes),
+                                new MSelection('conformidade','','Situação:',$optionsconformidade),
+                                new MultiLineField('obsinicio', '', 'Observação', '', 3, 50)
+			);
+		        $this->ispecaoPosCriada();
+			$this->SetFields($fields);
+			//$this->SetValidators($validators);
+			$buttons = array(
+				new MButton('btnSalvar', 'Salvar')
+			);
+			$this->SetButtons($buttons);
+        }
+        public function telaInspecaoFim(){
+            $this->SetTitle('Inspeção Final');
+            $componente = $this->manager->GetBusiness('adm','componente');
+                $conformidade = $this->manager->GetBusiness('adm','conformidade');
+                $listaComponentes = $componente->comparaFim($this->objInspecao->idInspecao);
+                
+                $resultcomponente = $componente->ListAll();
+                $optionscomponente = $resultcomponente->chunkResult();
+                $this->atualizaInspecao($this->objInspecao->idInspecao);
+                $resultconformidade = $conformidade->ListAll();
+                $optionsconformidade = $resultconformidade->chunkResult();
+                
+			$fields = array(
+                                new TextField('motorista', $this->motorista->pessoa->nome, 'Motorista', 35),
+                                new TextField('veiculo', $this->veiculo->modelo . " - " . $this->veiculo->placa, 'Veiculo', 30),
+                                new MSelection('conponentef','','Componente',$listaComponentes),
+                                new MSelection('conformidadef','','Situação:',$optionsconformidade),
+                                new MultiLineField('obsiniciof', '', 'Observação', '', 3, 50)
+			);
+		        $this->ispecaoPosCriada();
+			$this->SetFields($fields);
+			//$this->SetValidators($validators);
+			$buttons = array(
+				new MButton('btnSalvarFinal', 'Salvar')
+			);
+			$this->SetButtons($buttons);
+        }
+
+        function btnSalvar_click()
+	{
+		$data = $this->GetData();
+		$inspecao = $this->manager->getBusiness('adm','inspecao');
+                $inspecao = $this->objInspecao->GetById($this->objInspecao->idInspecao);
+                $inspecaoComponete = $this->manager->getBusiness('adm','inspecaocomponente');
+		try
+		{
+			$inspecaoComponete->beginTransaction();
+			$inspecao->setData($data);
+			$inspecao->setStatus(2);
+                        
+                        $inspecaoComponete->idInspecao = $inspecao->idInspecao;
+                        $inspecaoComponete->idComponente= Form::GetFormValue('conponente');
+                        $inspecaoComponete->idConformidadeInicio= Form::GetFormValue('conformidade');
+                        $inspecaoComponete->obsInicio = Form::GetFormValue('obsinicio');
+                        $inspecaoComponete->idInspetorInicio = $this->manager->GetLogin()->idkey;
+			$inspecao->update();
+                        $inspecaoComponete->save();
+			$inspecaoComponete->endTransaction();
+			$inspecaoComponete->Log(OP_INS,'Componente inspecionado.');
+			$this->manager->information("Componente inspecionado com sucesso: ");//.$inspecaoComponete->idInspecao,$this->manager->getActionUrl('adm','main:inspecao:find') );
+		}
+		catch (Exception $e)
+		{
+			$this->AddError($e->GetMessage());
+		}
+	}
+        
+        function btnSalvarFinal_click()
+	{
+		$data = $this->GetData();
+		$inspecao = $this->manager->getBusiness('adm','inspecao');
+                $inspecao = $this->objInspecao->GetById($this->objInspecao->idInspecao);
+                $inspecaoComponete = $this->manager->getBusiness('adm','inspecaocomponente');
+                $inspecaoComponete->GetById($this->objInspecao->idInspecao,Form::GetFormValue('conponentef'));
+		try
+		{
+			$inspecaoComponete->beginTransaction();
+			$inspecao->setData($data);
+			$inspecao->setStatus(4);
+			$inspecao->dataHoraFim = date('d/m/Y H:i');
+                        
+                        $inspecaoComponete->idConformidadeFim= Form::GetFormValue('conformidadef');
+                        $inspecaoComponete->obsFim = Form::GetFormValue('obsiniciof');
+                        $inspecaoComponete->idInspetorFim = $this->manager->GetLogin()->idkey;
+			$inspecao->update();
+                        $inspecaoComponete->update();
+			$inspecaoComponete->endTransaction();
+			$inspecaoComponete->Log(OP_INS,'Inspeção final do componente realizada.');
+			$this->manager->information("Inspeção final do componente realizada com sucesso: ");//.$inspecaoComponete->idInspecao,$this->manager->getActionUrl('adm','main:inspecao:find') );
+		}
+		catch (Exception $e)
+		{
+			$this->AddError($e->GetMessage());
+		}
+	}
+        
+        function atualizaInspecao($idInspecao){
+           $inspecao = $this->objInspecao->GetById($idInspecao);
+           $this->veiculo = $inspecao->getItem(1,$inspecao->idVeiculo);
+           $this->motorista = $inspecao->getItem(2,$inspecao->idMotorista);
+         
+        }
+        public function ispecaoPosCriada(){
+           $this->setFieldAttr('motorista', 'readonly', TRUE);
+           $this->setFieldAttr('veiculo', 'readonly', true);
+        }
+        public function componenteInspecionado(){
+            $inspecaoComponete = $this->manager->getBusiness('adm','inspecaocomponente');
+            $inspecaoComponete = $this->objInspecao->GetById($idInspecaoComponete);
+        }
+        public function numComponenteInspecionado(){
+            $componente = $this->manager->GetBusiness('adm','componente');
+            $numComponentes = $componente->listarInspecionados($this->objInspecao->idInspecao);
+            $tam = count($numComponentes);
+            return $tam;
+        }
+       
+}
+?>

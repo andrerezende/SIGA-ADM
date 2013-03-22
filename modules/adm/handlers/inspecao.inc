@@ -8,7 +8,10 @@
             break;
         case 'new':
             $MIOLO->InvokeHandler($module, 'inspecao/new');
-            break;           
+            break; 
+        case 'final':
+            $MIOLO->InvokeHandler($module, 'inspecao/final');
+            break;
         default:
             $MIOLO->InvokeHandler($module, 'inspecao/main');
         }
