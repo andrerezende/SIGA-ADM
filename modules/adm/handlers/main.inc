@@ -30,6 +30,9 @@ if (!$handled) {
 	$panel->AddUserAction('adm', A_EXECUTE, 'Relatórios', $ui->GetImageTheme('', 'icons/relatorio.png'), $module, 'main:reports');
 	$panel->AddUserAction('adm_requisicao', A_EXECUTE, 'Requisições', $ui->GetImageTheme('', 'icons/requisicoes.png'), $module, 'main:requisicoes:find');
 	$panel->AddAction('Solicitar Cadastro de Material', $ui->GetImageTheme('', 'icons/novo_material.png'), $module, 'main:novomaterial:new');
+        $executante= $this->manager->GetBusiness('adm', 'executor');
+        if($executante->isExecutorOf($this->manager->GetLogin()->idkey))
+        $panel->AddUserAction('AD_INSPECAO_VEICULO', A_EXECUTE, 'Inspeção de Veículo', $ui->GetImageTheme('', 'icons/carroManutencao.png'), $module, 'main:inspecao:find');
 	// Orçamento Termo
 	//$panel->AddAction('Orçamento Termo',$ui->GetImageTheme('','icons/financeiro.png'),$module,'main:orcterm');
 	$panel->AddAction('Orçamento Termo', $ui->GetImageTheme('', 'icons/financeiro.png'), $module, 'main:pedidocompra:find');

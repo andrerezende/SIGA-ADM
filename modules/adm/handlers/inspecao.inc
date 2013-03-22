@@ -1,6 +1,6 @@
 <?
     $action = $context->ShiftAction();
-    $navbar->AddOption('Inspeção', 'adm', 'main:inspecao:find');
+    $navbar->AddOption('Inspeção', 'adm', 'main:inspecao:final');
 	switch($action)
     {
         case 'find':
@@ -8,7 +8,10 @@
             break;
         case 'new':
             $MIOLO->InvokeHandler($module, 'inspecao/new');
-            break;           
+            break; 
+        case 'final':
+            $MIOLO->InvokeHandler($module, 'inspecao/final');
+            break;
         default:
             $MIOLO->InvokeHandler($module, 'inspecao/main');
         }

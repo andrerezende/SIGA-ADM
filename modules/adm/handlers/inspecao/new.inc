@@ -1,7 +1,7 @@
 <?
 	$theme->ClearContent();
 	$ui = $MIOLO->GetUI();
-	$navbar->AddOption('Nova Requisição', 'adm', 'main:requisicoes:new');
-	$form = $ui->GetForm('adm','frmRequisicaoNew',NULL,'requisicoes');
+	$navbar->AddOption('Nova Inspeção', 'adm', 'main:inspecao:new');
+	$form = $ui->GetForm('adm','frmInspecaoNew',NULL,'inspecao');
 	$theme->InsertContent($form);
 ?>
