@@ -1,6 +1,6 @@
 <?
     $action = $context->ShiftAction();
-    $navbar->AddOption('Inspeção', 'adm', 'main:inspecao:find');
+    $navbar->AddOption('Inspeção', 'adm', 'main:inspecao:final');
 	switch($action)
     {
         case 'find':
