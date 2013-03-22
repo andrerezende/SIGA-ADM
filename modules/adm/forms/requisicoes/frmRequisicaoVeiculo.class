@@ -443,7 +443,7 @@ class frmRequisicaoveiculo extends Form {
 										$this->setButtonAttr('btnAbastecimento', 'visible', TRUE);
 										//
 										$this->SetFieldAttr('lkpMotorista', 'module', 'adm');
-										$this->SetFieldAttr('lkpMotorista', 'item', 'motorista');
+										$this->SetFieldAttr('lkpMotorista', 'item', 'motoristaUo');
 										$this->SetFieldAttr('lkpMotorista', 'event', 'filler');
 										$this->SetFieldAttr('lkpMotorista', 'related', 'idMotorista,lkpMotorista');
 										$this->setFieldAttr('cpf', 'visible', FALSE);
@@ -457,7 +457,7 @@ class frmRequisicaoveiculo extends Form {
 										//$this->setFieldAttr('tipoVeiculo', 'visible', TRUE);19-02-2013
 										$this->setFieldAttr('tipoTransporte', 'visible', FALSE);
 										$this->SetFieldAttr('lkpVeiculo', 'module', 'adm');
-										$this->SetFieldAttr('lkpVeiculo', 'item', 'veiculo');
+										$this->SetFieldAttr('lkpVeiculo', 'item', 'veiculoUo');
 										$this->SetFieldAttr('lkpVeiculo', 'event', 'filler');
                                                                                 $this->setFieldAttr('idUoGestor', 'visible', FALSE);
                                                                                 $this->setFieldAttr('painelGestor', 'visible', FALSE);
@@ -949,11 +949,12 @@ class frmRequisicaoveiculo extends Form {
 				$itemRequisicao = $this->objRequisicao->getItem();
 				$this->objRequisicao->getUoRequisitante();
                                 $objUsuario = $this->manager->GetBusiness('common','usuario');
+                                $objPessoa = $this->manager->GetBusiness('common','pessoa');
                                 $uo = $this->manager->getbusiness('adm','uo');
                                 
                                 
                                 $idPessoaGestor= $objUsuario->getIdPesso($this->GetFormValue('idUoGestor'));
-                                $gestorEmail = $objUsuario->getEmailPessoa($idPessoaGestor);
+                                $gestorEmail = $objUsuario->getGestorEmailUsuario($this->GetFormValue('idUoGestor'));
                                 
                                 
                                 try {
@@ -962,14 +963,13 @@ class frmRequisicaoveiculo extends Form {
                                     
                                 if($this->GetFieldValue('idPessoa')){
                                     $objRequisicaoVeiculo->idPessoa = $this->GetFieldValue('idPessoa');
-                                    $idUsuario = $objUsuario->getIdUsuario($this->GetFieldValue('idPessoa'));
-                                    $emailResponsavel = $objUsuario->getGestorEmailUsuario($objRequisicaoVeiculo->idPessoa);
+                                    //$idUsuario = $objUsuario->getIdUsuario($this->GetFieldValue('idPessoa'));
+                                    $emailResponsavel = $objPessoa->getEmailPessoa($objRequisicaoVeiculo->idPessoa);
                                 
                                 }else{
                                    $objRequisicaoVeiculo->idPessoa = $objUsuario->getIdPesso($this->manager->GetLogin()->idkey);
-                                   $idUsuario = $this->manager->GetLogin()->idkey;
-                                   $emailResponsavel =  $objUsuario->getGestorEmailUsuario($objRequisicaoVeiculo->idPessoa);
-                                   
+                                   //$idUsuario = $this->manager->GetLogin()->idkey;
+                                   $emailResponsavel = $objPessoa->getEmailPessoa($objRequisicaoVeiculo->idPessoa);
                                 }
                                 
 				
@@ -1015,7 +1015,6 @@ class frmRequisicaoveiculo extends Form {
 										$lancamentoInt->idRubrica = $requisita->idRubrica;
 										$lancamentoInt->idRequisicao = $this->objRequisicao->idRequisicao;
 										$lancamentoInt->save();
-                                                                                
                                                                                 $this->emailSolicitacaoAutorizada($emailResponsavel,1);
                                                                                 $this->emailSolicitacaoAutorizada($gestorEmail,2);
                                                                                 
@@ -1552,6 +1551,8 @@ class frmRequisicaoveiculo extends Form {
                                                 $this->setFieldAttr('odometroSaida', 'readonly', TRUE);
                                                 $this->setFieldAttr('dataSaida', 'readonly', TRUE);
 						$this->setFieldAttr('horaSaida', 'readonly', TRUE);
+                                                $this->setFieldAttr('lkpMotorista', 'readonly', TRUE);
+						$this->setFieldAttr('lkpVeiculo', 'readonly', TRUE);
 
 						//$this->setFieldAttr('motivoRejeicao', 'readonly', TRUE);
 						//$this->setFieldAttr('acaoGestorUoReq', 'readonly', TRUE);
@@ -1720,7 +1721,7 @@ class frmRequisicaoveiculo extends Form {
 								$action_voltar = $this->manager->getActionUrl('adm', 'main:requisicoes:find', '');
 
 						//$this->manager->information("Requisicao executada com sucesso.", $action_voltar);
-                                                $this->manager->information("Requisicao " . $this->objRequisicao->idRequisicao . ", LIBERADA com sucesso. Em execução.", $this->manager->getActionUrl('adm', 'main:requisicoes:find'));        
+                                                $this->manager->information("Requisicao " . $this->objRequisicao->idRequisicao . ", EM EXECUÇÃO.", $this->manager->getActionUrl('adm', 'main:requisicoes:find'));        
 				} catch (Exception $e) {
 						$this->addError($e->getMessage());
 				}
@@ -1834,7 +1835,7 @@ class frmRequisicaoveiculo extends Form {
 								$action_voltar = $this->manager->getActionUrl('adm', 'main:requisicoes:find', '');
 
 						//$this->manager->information("Requisicao executada com sucesso.", $action_voltar);
-                                                $this->manager->information("Requisicao " . $this->objRequisicao->idRequisicao . ", EXECUTADA com sucesso.", $this->manager->getActionUrl('adm', 'main:requisicoes:find'));        
+                                                $this->manager->information("Requisicao " . $this->objRequisicao->idRequisicao . ", FINALIZADA com sucesso.", $this->manager->getActionUrl('adm', 'main:requisicoes:find'));        
 				} catch (Exception $e) {
 						$this->addError($e->getMessage());
 				}
@@ -2376,149 +2377,118 @@ HERE;
         switch ($identificao){
             case 1: //OK
                 $mail->Subject = "Solicitação $requisicao para utilização de veiculo REALIZADA.";
-                $body = $this->dadosResponsavelNaoExecutor().  $this->dadosViagem().  $this->dadosItinerario();
+                $body = $this->dadosResponsavelNaoExecutor().  $this->dadosViagem();
                 break;
             case 2: //ok 
                 $mail->Subject = "Solicitação $requisicao aguarda AUTORIZAÇÃO para utilização de veículo e o(a) senhor(a) foi designado(a) como gestor(a).";
-                $body = $this->dadosResponsavelNaoExecutor().  $this->dadosViagem().  $this->dadosItinerario();
+                $body = $this->dadosResponsavelNaoExecutor().  $this->dadosViagem();//.  $this->dadosItinerario();
                 break;
             case 3: //ok
                 $mail->Subject = "Solicitação $requisicao  AUTORIZADA pelo(a) gestor(a): $gestor1->login.";
-                $body = $this->dadosResponsavelNaoExecutor().  $this->dadosViagem().  $this->dadosItinerario();
+                $body = $this->dadosResponsavelNaoExecutor().  $this->dadosViagem();
                 break;
             case 4://ok
                 $mail->Subject = "O(A) senhor(a) AUTORIZOU a solicitação $requisicao para utilização de veículo.";
-                $body = $this->dadosResponsavelNaoExecutor().  $this->dadosViagem().  $this->dadosItinerario();
+                $body = $this->dadosResponsavelNaoExecutor().  $this->dadosViagem();
                 break;
             case 5://autorizada
                 $mail->Subject = "Solicitação $requisicao aguarda LIBERAÇÃO para utilização de veículo.";
-                $body = $this->dadosResponsavel().  $this->dadosViagem().  $this->dadosItinerario();
+                $body = $this->dadosResponsavel().  $this->dadosViagem();
                 break;
             case 6:
                 $mail->Subject = "Solicitação $requisicao DEVOLVIDA pelo(a) gestor(a): $gestor1->login";
-                $body = $this->dadosResponsavelNaoExecutor().  $this->dadosViagem(). $this->getMotivoDevolucao().  $this->dadosItinerario();
+                $body = $this->dadosResponsavelNaoExecutor().  $this->dadosViagem(). $this->getMotivoDevolucao();
                 break;
             case 7:
                 $mail->Subject = "O(A) senhor(a) DEVOLVEU a solicitação $requisicao para utilização de veículo.";
-                $body = $this->dadosResponsavelNaoExecutor().  $this->dadosViagem(). $this->getMotivoDevolucao().  $this->dadosItinerario();
+                $body = $this->dadosResponsavelNaoExecutor().  $this->dadosViagem(). $this->getMotivoDevolucao();
                 break;
             case 8:
                 $n = $this->getExecutor();
                 $mail->Subject = "Solicitação $requisicao RECUSADA pelo(a) executor(a): $n";
-                $body = $this->dadosResponsavelNaoExecutor().  $this->dadosViagem(). $this->getMotivoDevolucao().  $this->dadosItinerario();
+                $body = $this->dadosResponsavelNaoExecutor().  $this->dadosViagem(). $this->getMotivoDevolucao();
                 break;
             case 9:
                 $mail->Subject = "O(A) senhor(a) RECUSOU a solicitação $requisicao  para utilização de veículo.";
-                $body = $this->dadosResponsavelNaoExecutor().  $this->dadosViagem(). $this->getMotivoDevolucao().  $this->dadosItinerario();
+                $body = $this->dadosResponsavelNaoExecutor().  $this->dadosViagem(). $this->getMotivoDevolucao();
                 break;
             case 10://ok
                 $n = $this->getExecutor();
                 $mail->Subject = "Solicitação $requisicao LIBERADA pelo(a) executor(a): $n";
-                $body = $this->dadosResponsavelNaoExecutor().  $this->dadosViagem(). $this->dadosItinerario();
+                $body = $this->dadosResponsavelNaoExecutor().  $this->dadosViagem();
                 break;
             case 11://ok
                 $n = $this->getExecutor();
                 $mail->Subject = "Solicitação  $requisicao LIBERADA pelo(a) executor(a): $n";
-                $body = $this->dadosResponsavelNaoExecutor().  $this->dadosViagem(). $this->dadosItinerario();
+                $body = $this->dadosResponsavelNaoExecutor().  $this->dadosViagem();
                 break;
             case 12:
                 $mail->Subject = "O(A) senhor(a) LIBEROU a solicitação $requisicao para utilização de veículo.";
-                $body = $this->dadosResponsavel().  $this->dadosViagem().  $this->dadosItinerario();
+                $body = $this->dadosResponsavel().  $this->dadosViagem();//.  $this->dadosItinerario();
                 break;
             case 13:
                 $n = $this->getExecutor();
                 $mail->Subject = "Solicitação $requisicao RECUSADA pelo(a) executor(a): $n";
-                $body = $this->dadosResponsavelNaoExecutor().  $this->dadosViagem().  ltrim($this->getMotivoRejeicao()). $this->dadosItinerario();
+                $body = $this->dadosResponsavelNaoExecutor().  $this->dadosViagem().  ltrim($this->getMotivoRejeicao());
                 break;
             case 14:
                 $n = $this->getExecutor();
                 $mail->Subject = "Solicitação $requisicao RECUSADA pelo(a) executor(a): $n";
-                $body = $this->dadosResponsavelNaoExecutor().  $this->dadosViagem(). ltrim($this->getMotivoRejeicao()).  $this->dadosItinerario();
+                $body = $this->dadosResponsavelNaoExecutor().  $this->dadosViagem(). ltrim($this->getMotivoRejeicao());
                 break;
             case 15:
                 $mail->Subject = "O(A) senhor(a) RECUSOU a solicitação $requisicao para utilização de veículo.";
-                $body = $this->dadosResponsavel().  $this->dadosViagem(). ltrim($this->getMotivoRejeicao()).  $this->dadosItinerario();
+                $body = $this->dadosResponsavel().  $this->dadosViagem(). ltrim($this->getMotivoRejeicao());
                 break;
             
             case 16:
                 $n = $this->getExecutor();
                 $mail->Subject = "Solicitação $requisicao FINALIZADA pelo(a) executor(a): $n";
-                $body = $this->dadosResponsavelNaoExecutor().  $this->dadosViagem().  $this->dadosItinerario();
+                $body = $this->dadosResponsavelNaoExecutor().  $this->dadosViagem();
                 
                 break;
             case 17:
                 $n = $this->getExecutor();
                 $mail->Subject = "Solicitação $requisicao FINALIZADA pelo(a) executor(a): $n";
-                $body = $this->dadosResponsavelNaoExecutor().  $this->dadosViagem().  $this->dadosItinerario();
+                $body = $this->dadosResponsavelNaoExecutor().  $this->dadosViagem();
                 
                 break;
             case 18:
                 $mail->Subject = "O(A) senhor(a) FINALIZOU a solicitação  $requisicao para utilização de veículo."; 
-                $body = $this->dadosResponsavel().  $this->dadosViagem().  $this->dadosItinerario();
+                $body = $this->dadosResponsavel().  $this->dadosViagem();
                 break;
             case 19:
-                $mail->Subject = "Solicitação  $requisicao  em execução."; 
-                $body = $this->dadosResponsavelNaoExecutor().  $this->dadosViagem().  $this->dadosItinerario();
+                $mail->Subject = "Solicitação  $requisicao  está EM EXECUÇÃO."; 
+                $body = $this->dadosResponsavelNaoExecutor().  $this->dadosViagem();
                 break;
             case 20:
-                $mail->Subject = "Solicitação  $requisicao  em execução."; 
-                $body = $this->dadosResponsavelNaoExecutor().  $this->dadosViagem().  $this->dadosItinerario();
+                $mail->Subject = "Solicitação  $requisicao  está EM EXECUÇÃO."; 
+                $body = $this->dadosResponsavelNaoExecutor().  $this->dadosViagem();
                 break;
             case 21:
-                $mail->Subject = "O(A) senhor(a) PERMITIU a execução a solicitação  $requisicao para utilização de veículo."; 
-                $body = $this->dadosResponsavel().  $this->dadosViagem().  $this->dadosItinerario();
+                $mail->Subject = "O(A) senhor(a) EXECUTOU a solicitação  $requisicao para utilização de veículo."; 
+                $body = $this->dadosResponsavel().  $this->dadosViagem();
                 break;
         }
-       $mail->Body = $body;
+        
+        $itinerario = $this->dadosItinerario();
+        
+        for($i = 0;$i <  count($itinerario); $i++){
+            $s = $s.$itinerario[$i]."\n";
+            $itin = "\n".<<< HERE
+                    
+ITINERÁRIO            
+$s
+
+HERE;
+        }
+
+       $mail->Body = $body.$itin;
                 $mail->AddAddress($email);
                 
                 $mail->Send();
     }
     
-    
-    public function getEmailResponsavel(){
-        global $MIOLO;
-        $data = $this->getData();
-	$this->objRequisicao->getUoRequisitante(); 
-        $objUsuario = $this->manager->getBusiness('common','usuario');
-
-        try {
-                $objRequisicaoVeiculo = $this->manager->getBusiness('adm', 'requisicaoveiculo');
-                $objRequisicaoVeiculo = $objRequisicaoVeiculo->GetById($this->objRequisicao->idRequisicao);
-                                    
-                if($this->GetFieldValue('idPessoa')){
-                        $objRequisicaoVeiculo->idPessoa = $this->GetFieldValue('idPessoa');
-                        $idUsuario = $objUsuario->getIdUsuario($this->GetFieldValue('idPessoa'));
-                        $emailResponsavel = $objUsuario->getGestorEmailUsuario($idUsuario);
-                                
-                 }else{
-                        $objRequisicaoVeiculo->idPessoa = $objUsuario->getIdPesso($this->manager->GetLogin()->idkey);
-                        $idUsuario = $this->manager->GetLogin()->idkey;
-                        $emailResponsavel =  $objUsuario->getGestorEmailUsuario($idUsuario);
-                                  
-                 }
-       } catch (Exception $e) {
-		$this->addError($e->getMessage());
-	 }
-                return $emailResponsavel;
-    }
-    public function getEmailGestor(){
-       global $MIOLO;
-       $data = $this->getData();
-       $this->objRequisicao->getUoRequisitante(); 
-       $objUsuario = $this->manager->getBusiness('common','usuario');
-       $idPessoaGestor= $objUsuario->getIdPesso($this->objRequisicao->idUsuarioGestor);
-       $gestorEmail = $objUsuario->getEmailPessoa($idPessoaGestor);
-       return $gestorEmail;
-    }
-    public function getEmailExecutante(){
-        $idUsuario = $this->manager->GetLogin()->idkey;
-        if ($this->objRequisicao->uoExecutante->isExecutorOf($idUsuario))
-             $objUsuario = $this->manager->getBusiness('common','usuario');
-             $emailExecutante = $objUsuario->getGestorEmailUsuario($idUsuario);
-             
-         return  $emailExecutante;
-    }
     public function dadosItinerario(){
       
         $objItinerario = $this->manager->getBusiness('adm', 'itinerario');
@@ -2537,15 +2507,54 @@ HERE;
                 $objItinerario->datasaida = explode("-", $objItinerario->datasaida);
                 $finalData = $this->formataDia($objItinerario->datasaida[2]). "/ " .$objItinerario->datasaida[1]. "/ " .$objItinerario->datasaida[0];
                 $objItinerario->horaSaida = $this->formataHorario($objItinerario->datasaida[2]);
-                $itinerario = <<<HERE
-ITINERÁRIO
-$finalData $objItinerario->horaSaida [$objEnderecoOrigem->nomelocal] - [$objEnderecoDestino->nomelocal]
-                
-HERE;
-
+                $itinerario = $finalData."  ".$objItinerario->horaSaida."  "."[".$objEnderecoOrigem->nomelocal."]"."  -  "."[".$objEnderecoDestino->nomelocal."]";
+                $array[] = "\n".$itinerario."\n";
 	}
-        return "\n".$itinerario;
+        return ($array);
      }
+    
+    public function getEmailResponsavel(){
+        global $MIOLO;
+        $data = $this->getData();
+	$this->objRequisicao->getUoRequisitante(); 
+        $objPessoa = $this->manager->getBusiness('common','pessoa');
+        $objUsuario = $this->manager->getBusiness('common','usuario');
+
+        try {
+                $objRequisicaoVeiculo = $this->manager->getBusiness('adm', 'requisicaoveiculo');
+                $objRequisicaoVeiculo = $objRequisicaoVeiculo->GetById($this->objRequisicao->idRequisicao);
+                                    
+                if($this->GetFieldValue('idPessoa')){
+                        $objRequisicaoVeiculo->idPessoa = $this->GetFieldValue('idPessoa');
+                        $emailResponsavel = $objPessoa->getEmailPessoa($objRequisicaoVeiculo->idPessoa);
+                                
+                 }else{
+                        $objRequisicaoVeiculo->idPessoa = $objUsuario->getIdPesso($this->manager->GetLogin()->idkey);
+                        $emailResponsavel = $objPessoa->getEmailPessoa($objRequisicaoVeiculo->idPessoa);
+                                  
+                 }
+       } catch (Exception $e) {
+		$this->addError($e->getMessage());
+	 }
+                return $emailResponsavel;
+    }
+    public function getEmailGestor(){
+       global $MIOLO;
+       $data = $this->getData();
+       $this->objRequisicao->getUoRequisitante(); 
+       $objUsuario = $this->manager->getBusiness('common','usuario');
+       $gestorEmail = $objUsuario->getGestorEmailUsuario($this->objRequisicao->idUsuarioGestor);
+       return $gestorEmail;
+    }
+    public function getEmailExecutante(){
+        $idUsuario = $this->manager->GetLogin()->idkey;
+        if ($this->objRequisicao->uoExecutante->isExecutorOf($idUsuario))
+             $objUsuario = $this->manager->getBusiness('common','usuario');
+             $emailExecutante = $objUsuario->getGestorEmailUsuario($idUsuario);
+             
+         return  $emailExecutante;
+    }
+    
      function dadosResponsavel(){
          $tabelaGeral = $this->manager->GetBusiness('common','tabelageral');
         $status = $tabelaGeral->GetByItem('AD_ALMOXSTATUSREQ',$this->objRequisicao->status);
