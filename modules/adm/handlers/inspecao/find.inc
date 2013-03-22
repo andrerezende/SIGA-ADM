@@ -3,7 +3,7 @@
 
         $executante= $this->manager->GetBusiness('adm', 'executor');
         $e = $executante->listaexecutor($this->manager->GetLogin()->idkey)->result[0][0];
-        if($e < 1){
+        if($e <= 1){
 	$theme->ClearContent();
 	$ui = $MIOLO->GetUI();
 	$form = $ui->GetForm('adm','frmInspecaoFind',NULL,'inspecao');
