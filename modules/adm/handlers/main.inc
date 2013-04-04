@@ -19,17 +19,17 @@ if (!$handled) {
 	//$panel->SetIconType('small');
 
 	$panel->adduseraction('adm_almoxarifado', a_execute, 'Almoxarifado', $ui->GetImageTheme('', 'icons/almoxarifado.png'), $module, 'main:uoalmoxarifado:find');
-	$panel->AddAction('Consultas', $ui->GetImageTheme('', 'icons/consultas.png'), $module, 'main:consultas');
+	//$panel->AddAction('Consultas', $ui->GetImageTheme('', 'icons/consultas.png'), $module, 'main:consultas');
 	$panel->AddUserAction('adm_financas', A_EXECUTE, 'Financeiro', $ui->GetImageTheme('', 'icons/financeiro.png'), $module, 'main:financeiro');
 	$panel->AddUserAction('adm_compras', A_EXECUTE, 'Licitações', $ui->GetImageTheme('', 'icons/licitacoes.png'), $module, 'main:listarLicitacoes');
-	$panel->AddUserAction('adm_requisicao', A_EXECUTE, 'Manuais', $ui->GetImageTheme('', 'icons/manuais.png'), $module, 'main:manual');
+	//$panel->AddUserAction('adm_requisicao', A_EXECUTE, 'Manuais', $ui->GetImageTheme('', 'icons/manuais.png'), $module, 'main:manual');
 	$panel->AddUserAction('adm_manutencao', A_EXECUTE, 'Manutenção', $ui->GetImageTheme('', 'icons/manutencao.png'), $module, 'main:manutencao');
 	//$panel->AddUserAction('adm_ordenador',A_EXECUTE,'Ordenador',$ui->GetImageTheme('','icons/ordenador.png'),$module,'main:ordenador');
 	$panel->AddUserAction('adm_patrimonio', A_EXECUTE, 'Patrimônio', $ui->GetImageTheme('', 'icons/patrimonio.png'), $module, 'main:patrimonio');
-	$panel->AddUserAction('adm_recursos', A_EXECUTE, 'Recursos', $ui->GetImageTheme('', 'icons/recursos.png'), $module, 'main:recursos');
-	$panel->AddUserAction('adm', A_EXECUTE, 'Relatórios', $ui->GetImageTheme('', 'icons/relatorio.png'), $module, 'main:reports');
+	//$panel->AddUserAction('adm_recursos', A_EXECUTE, 'Recursos', $ui->GetImageTheme('', 'icons/recursos.png'), $module, 'main:recursos');
+	$panel->AddUserAction('adm', A_EXECUTE, 'Relatórios de Veículos', $ui->GetImageTheme('', 'icons/relatorio.png'), $module, 'main:reports');
 	$panel->AddUserAction('adm_requisicao', A_EXECUTE, 'Requisições', $ui->GetImageTheme('', 'icons/requisicoes.png'), $module, 'main:requisicoes:find');
-	$panel->AddAction('Solicitar Cadastro de Material', $ui->GetImageTheme('', 'icons/novo_material.png'), $module, 'main:novomaterial:new');
+	//$panel->AddAction('Solicitar Cadastro de Material', $ui->GetImageTheme('', 'icons/novo_material.png'), $module, 'main:novomaterial:new');
         $executante= $this->manager->GetBusiness('adm', 'executor');
         if($executante->isExecutorOf($this->manager->GetLogin()->idkey))
         $panel->AddUserAction('AD_INSPECAO_VEICULO', A_EXECUTE, 'Inspeção de Veículo', $ui->GetImageTheme('', 'icons/carroManutencao.png'), $module, 'main:inspecao:find');
@@ -37,9 +37,9 @@ if (!$handled) {
 	//$panel->AddAction('Orçamento Termo',$ui->GetImageTheme('','icons/financeiro.png'),$module,'main:orcterm');
 	$panel->AddAction('Orçamento Termo', $ui->GetImageTheme('', 'icons/financeiro.png'), $module, 'main:pedidocompra:find');
 	$panel->AddUserAction('adm_mv', A_EXECUTE, 'Manutenção de Veículos', $ui->GetImage('adm', 'kcontrol.png'), $module, 'main:manutencaoveiculo');
-	if ($uos > 0) {
+	/*if ($uos > 0) {
 		$panel->AddUserAction('adm_requisicao', A_EXECUTE, 'Requisição Suplementar', $ui->GetImageTheme('', 'icons/requisicao_suplementar.png'), $module, 'main:requisicoes:requisicaosuplementar');
-	}
+	}*/
 
 	$theme->AppendContent($panel);
 
