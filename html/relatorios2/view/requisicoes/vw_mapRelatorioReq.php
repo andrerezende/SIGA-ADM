@@ -8,6 +8,18 @@ $status = $_GET['status'];
 
 switch ($status){
     
+    case 1://SOLICITADA igual a case 6 + (motivo)
+        $sql = "
+SELECT r.idrequisicao, TO_CHAR(r.datahorareq, 'DD/MM/YY HH:MM:SS') 
+  as datahorareq, t.item2 as status, p.nome 
+as realizada 
+  FROM ad_requisicao r inner join ad_itemreqveiculo i
+on r.idrequisicao = i.idrequisicao
+  INNER JOIN cm_tabelageral t on r.status = t.item1
+inner join cm_usuario u on r.idusuarioreq = u.idusuario
+  inner join cm_pessoa p on p.idpessoa = u.idpessoa 
+  where t.tabela = 'AD_ALMOXSTATUSREQ' and r.idrequisicao = $idRequisicao ";
+        break;
     case 2://SOLICITADA igual a case 6 + (motivo)
         $sql = "
 SELECT r.idrequisicao, TO_CHAR(r.datahorareq, 'DD/MM/YY HH:MM:SS') 
@@ -274,40 +286,110 @@ $titulo = " U.O. REITORIA - VEÍCULOS";
                 <a onclick="javascript:history.go(-1);">Voltar&nbsp&nbsp&nbsp&nbsp&nbsp</a><br/>
                 <a href="<?php echo $url; ?>">Imprimir Relatório <img src="../statics/img/action_print.gif" alt="Imprimir Relatório" /></a>
             </div>
-            <div style="background: #0B610B" align="center" class="faixa"><h3>REQUISIÇÃO nº <?php echo $idRequisicao; ?></h3></div><br/>
+            <div style="background: #86B404" align="center" class="faixa"><h3>REQUISIÇÃO nº <?php echo $idRequisicao; ?></h3></div><br/>
             
+             <table>     
+            <tr>
+                <td class="data">SITUAÇÃO:</td>
+                <td class="valores" style="text-align: center;"><?php echo $rows[0]['status']; ?></td>
+            </tr>
+            <tr>
+                <td class="data">REQUISITANTE:</td>
+                <td class="valores" style="text-align: center;"><?php echo $rows[0]['realizada']; ?></td>
+            </tr>
+                 <?php if($status !=1){ ?>
+            <tr>
+                <td class="data">RESPONSÁVEL:</td>
+                <td class="valores" style="text-align: center;"><?php echo $rows[0]['responsavel']; ?></td>
+            </tr>
+            <tr>
+                <td class="data">GESTOR:</td>
+                <td class="valores" style="text-align: center;"><?php echo $rows[0]['gestor']; ?></td>
+            </tr>
+            <tr>
+                <td class="data">EXECUTOR:</td>
+                <td class="valores" style="text-align: center;"><?php echo $rowse[0]['executor']; ?></td>
+            </tr>
+            <tr>
+                <td class="data">QUANTIDADE DE VOLUME:</td>
+                <td class="valores" style="text-align: center;"><?php echo $rows[0]['qtdvolume']; ?></td>
+            </tr>
              
-             
-            <h3 align="left">Situação: <?php echo $rows[0]['status']; ?></h3><br/>
-            <h3 align="left">Requisitante: <?php echo $rows[0]['realizada']; ?></h3>
-            <h3 align="left">Responsável: <?php echo $rows[0]['responsavel']; ?></h3>
-            <h3 align="left">Gestor: <?php echo $rows[0]['gestor']; ?></h3>
-            <h3 align="left">Executor: <?php echo $rowse[0]['executor']; ?></h3><br/>
-            <div style="background: #0B610B" align="center" class="faixa"><h3>TRANSPORTE: PASSAGEIRO E CARGA</h3></div>
-            <h3 align="left">Quantidade de Volumes: <?php echo $rows[0]['qtdvolume']; ?></h3>
             <?php
+            
                if ($rows[0]['qtdpassageiros'] != null) {
             ?>
             
-            <h3 align="left">Quantidade de Passageiros: <?php echo $rows[0]['qtdpassageiros']; ?></h3>
-            <div style="background: #0B610B" align="center" class="faixa"><h3>Relação de Passageiros</h3></div>
+            <tr>
+                <td class="data">QUANTIDADE DE PASSAGEIROS:</td>
+                <td class="valores" style="text-align: center;"><?php echo $rows[0]['qtdpassageiros']; ?></td>
+            </tr>
             
-            <h3 align="left"><?php echo $rows[0]['outrospassageiros']; ?></h3>
+            <tr>
+                <td class="data">PASSAGEIROS:</td>
+                <td class="valores" style="text-align: center;"><?php echo $rows[0]['outrospassageiros']; ?></td>
+            </tr>
             <?php
                }
             ?>
-            <h3 align="left">Finalidade da Viagem <?php echo $rows[0]['justificativa']; ?></h3><br/>
+            
+            <tr>
+                <td class="data">FINALIDADE DA VIAGEM:</td>
+                <td class="valores" style="text-align: center;"><?php echo $rows[0]['justificativa']; ?></td>
+            </tr>
             
             <?php
+                 }
                if ($rows[0]['obs'] != null) {
             ?>
-            <h3 align="left">Observações</h3>
-            <h3 align="left"><?php echo $rows[0]['obs']; ?></h3> 
+            <tr>
+                <td class="valores" style="text-align: center;">OBSERVAÇÕES</td>
+                <td class="valores" style="text-align: center;"><?php echo $rows[0]['obs']; ?></td>
+            </tr>
             <?php
                }
             ?>
-            <div style="background: #0B610B" align="center" class="faixa"><h3>ITINERÁRIO</h3></div> 
-            <table cellpadding="0" cellspacing="0" border="0" class="display" id="tabela" style="width: 100%">
+            <?php
+               if ($status == '5' || $status == '6' || $status == 'A') {
+            ?>
+            
+                
+                <tr>
+                    <td style="text-align: center;">MOTIVO:</td>        
+                    <td style="text-align: center;"><?php echo $rows[0]['motivorejeicao']; ?></td>
+                </tr> 
+             <?php
+               }
+            ?>
+            <?php
+               if ($status == '7' || $status == 'G' || $status == 'J') {
+            ?>
+                
+                <tr>
+                    <td style="text-align: center;">MOTORISTA:</td>        
+                    <td style="text-align: center;"><?php echo $rows[0]['motorista']; ?></td>
+                </tr>
+                <tr>
+                    <td style="text-align: center;">VEÍCULO:</td>        
+                    <td style="text-align: center;"><?php echo $rows[0]['modeloplaca']; ?></td>
+                </tr>
+            <?php
+               }
+               if ($status == 'G') {
+            ?>
+                 
+                 <tr>
+                 <td style="text-align: center;">TOTAL DE KM PECORRIDOS:</td>        
+                 <td style="text-align: center;"><?php echo $rows[0]['odometrocheg'] - $rows[0]['odometrosaida']; ?></td>
+                 </tr>
+                 <?php
+               }
+            ?>
+            </table>
+            <tr> 
+                    <td style="text-align: center;">
+            <div style="background: #86B404" align="center" class="faixa"><h3>ITINERÁRIO</h3></div> 
+            <table>
                 <tr> 
                     <td style="text-align: left;">DATA/HORA</td>
                     <td style="text-align: center;">ORIGEM</td>
@@ -326,44 +408,43 @@ $titulo = " U.O. REITORIA - VEÍCULOS";
             <?php
                }
             ?>
-            </table>      
-             <?php
-               if ($status == '5' || $status == '6' || $status == 'A') {
-            ?>
-            <h3 align="left">MOTIVO: <?php echo $rows[0]['motivorejeicao']; ?></h3><br/>
-             <?php
-               }
-            ?>
-            <?php
-               if ($status == '7' || $status == 'G' || $status == 'J') {
-            ?>
-            <h3 align="left">MOTORISTA: <?php echo $rows[0]['motorista']; ?></h3>
-            <h3 align="left">VEÍCULO: <?php echo $rows[0]['modeloplaca']; ?></h3><br/>
-            <?php
-               }
-            ?>
+                </td>
+            </table> 
             <?php
                if ($status == 'G' || $status == 'J') {
             ?>
-            <div style="background: #0B610B" align="center" class="faixa"><h3>SAÍDA</h3></div><br/>
-            <h3 align="left">HORÁRIO: <?php echo $rows[0]['datahorasaidagar']; ?>   ODÔMETRO: <?php echo $rows[0]['odometrosaida']; ?></h3>
+            <div style="background: #86B404" align="center" class="faixa"><h3>SAÍDA</h3></div><br/>
+            <table>
+                <tr>
+                    <td style="text-align: center;">HORÁRIO:</td>        
+                    <td style="text-align: center;"><?php echo $rows[0]['datahorasaidagar']; ?></td>
+                    <td style="text-align: center;">ODÔMETRO:</td>        
+                    <td style="text-align: center;"><?php echo $rows[0]['odometrosaida']; ?></td>
+                </tr>
+            </table>
             <?php
                }
             ?>
             <?php
-               if ($status == 'J') {
+               if ($status == 'G') {
             ?>
-            <div style="background: #0B610B" align="center" class="faixa"><h3>CHEGADA</h3></div><br/>
-            <h3 align="left">HORÁRIO: <?php echo $rows[0]['datahoracheggar']; ?>   ODÔMETRO: <?php echo $rows[0]['odometrocheg']; ?></h3>
+            <div style="background: #86B404" align="center" class="faixa"><h3>CHEGADA</h3></div><br/>
+            <table>
+                <tr>
+                    <td style="text-align: center;">HORÁRIO:</td>        
+                    <td style="text-align: center;"><?php echo $rows[0]['datahoracheggar']; ?></td>
+                    <td style="text-align: center;">ODÔMETRO:</td>        
+                    <td style="text-align: center;"><?php echo $rows[0]['odometrocheg']; ?></td>
+                </tr>
+            </table>
             
-            <h3 align="left">TOTAL DE <?php echo $rows[0]['odometrocheg']- $rows[0]['odometrosaida']; ?> KM PECORRIDOS</h3>
              <?php
                }
             ?>
             <?php
                if (count($rowsa)>0) {
             ?>
-            <div style="background: #0B610B" align="center" class="faixa"><h3>ABASTECIMENTO</h3></div>
+            <div style="background: #86B404" align="center" class="faixa"><h3>ABASTECIMENTO</h3></div>
             <table>
                 <tr> 
                     <td style="text-align: left;">DATA/HORA</td>
@@ -386,6 +467,7 @@ $titulo = " U.O. REITORIA - VEÍCULOS";
                }
             ?>
             </table>
+            
              <?php
                }
             ?> 

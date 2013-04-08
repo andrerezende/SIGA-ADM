@@ -33,18 +33,6 @@
 		case 'requisicaosuplementar':
             $MIOLO->InvokeHandler($module, 'requisicoes/requisicaosuplementar');
             break;
-            case 'repMapUtilizacaoVeiculo':
-            $MIOLO->InvokeHandler($module, 'requisicoes/repMapUtilizacaoVeiculo');
-            break;
-            case 'repMapUtilizacaoMotorista':
-            $MIOLO->InvokeHandler($module, 'requisicoes/repMapUtilizacaoMotorista');
-            break;
-            case 'repMapReqAbastecimento':
-            $MIOLO->InvokeHandler($module, 'requisicoes/repMapReqAbastecimento');
-            break;
-            case 'repMapRequisicao':
-            $MIOLO->InvokeHandler($module, 'requisicoes/repMapRequisicao');
-            break;
         default:
             $MIOLO->InvokeHandler($module, 'requisicoes/main');
         }

@@ -161,6 +161,10 @@ $titulo1 = "ABASTECIMENTOS";
                 </thead> 
                 <tbody>
 <?php
+$g1 ="GASOLINA";
+$a2 = "ÁLCOOL";
+$d3 = "DIESEL";
+$v4 = "GNV";
 for ($i = 0; $i < count($rows); $i++) {
     //$saldoTotal += $rows[$i]['valor'];
     ?>                              
@@ -171,7 +175,19 @@ for ($i = 0; $i < count($rows); $i++) {
                             <td class="valores" style="text-align: center;"><?php echo $rows[$i]['local']; ?></td>
                             <td class="valores" style="text-align: center;"><?php echo $rows[$i]['valorabastecimento']; ?></td>
                             <td class="valores" style="text-align: left;"><?php echo $rows[$i]['quantidade']; ?></td>
-                            <td class="valores" style="text-align: left;"><?php echo $rows[$i]['combustivel']; ?></td>
+                            <!--<td class="valores" style="text-align: left;"><?php $c = $rows[$i]['combustivel']; ?></td>-->
+                            <?php if($c ==1){ ?>
+                            <td class="valores" style="text-align: left;"><?php echo $g1; ?></td>
+                            <?php } ?>
+                            <?php if($c == 2){ ?>
+                            <td class="valores" style="text-align: left;"><?php echo $a2; ?></td>
+                            <?php } ?>
+                            <?php if($c == 3){ ?>
+                            <td class="valores" style="text-align: left;"><?php echo $d3; ?></td>
+                            <?php } ?>
+                            <?php if($c == 4){ ?>
+                            <td class="valores" style="text-align: left;"><?php echo $v4; ?></td>
+                            <?php } ?>
                             <td class="valores" style="text-align: left;"><?php echo $rows[$i]['odometro']; ?></td>
                         </tr>                            
     <?php
