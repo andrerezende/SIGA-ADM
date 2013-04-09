@@ -189,7 +189,7 @@ SELECT e.iduo, e.idusuario, datainicio, datafim, p.nome as executor
   FROM ad_executor e inner join ad_uo u on  e.iduo = u.iduo
 inner join cm_usuario us on  e.idusuario = us.idusuario
   inner join cm_pessoa p on  us.idpessoa = p.idpessoa 
-where  u.iduo = 14 ";
+where  u.iduo = 19 ";
 
 try {
     $db = Conexao::getInstance()->getDB();
