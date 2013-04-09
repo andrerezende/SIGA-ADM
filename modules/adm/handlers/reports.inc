@@ -14,14 +14,14 @@
     ******************************************************************/
 
 	//A
-	$panel->AddUserAction('adm',A_EXECUTE,'Mapa de Utilização de Veículo',$ui->GetImageTheme('','icons/relatorio.png'),$module, 'main:relatorios:repMapUtilizacaoVeiculo');
+	$panel->AddUserAction('AD_REL_VEICULOS',A_EXECUTE,'Mapa de Utilização de Veículo',$ui->GetImageTheme('','icons/relatorio.png'),$module, 'main:relatorios:repMapUtilizacaoVeiculo');
 	
     // B
-	$panel->AddUserAction('adm',A_EXECUTE,'Mapa de Utilização de Motorista',$ui->GetImageTheme('','icons/relatorio.png'),$module, 'main:relatorios:repMapUtilizacaoMotorista');
+	$panel->AddUserAction('AD_REL_VEICULOS',A_EXECUTE,'Mapa de Utilização de Motorista',$ui->GetImageTheme('','icons/relatorio.png'),$module, 'main:relatorios:repMapUtilizacaoMotorista');
 
     // C
-        $panel->AddUserAction('adm',A_EXECUTE,'Abastecimentos',$ui->GetImageTheme('','icons/relatorio.png'),$module, 'main:relatorios:repMapReqAbastecimento');
-        $panel->AddUserAction('adm',A_EXECUTE,'Imprimir Requisição',$ui->GetImageTheme('','icons/relatorio.png'),$module, 'main:relatorios:repMapRequisicao');
+        $panel->AddUserAction('AD_REL_VEICULOS',A_EXECUTE,'Abastecimentos',$ui->GetImageTheme('','icons/relatorio.png'),$module, 'main:relatorios:repMapReqAbastecimento');
+        $panel->AddUserAction('AD_REL_VEICULOS',A_EXECUTE,'Imprimir Requisição',$ui->GetImageTheme('','icons/relatorio.png'),$module, 'main:relatorios:repMapRequisicao');
     //$panel->AddUserAction('adm_adminorcamento',A_EXECUTE,'ConRazão',$ui->GetImageTheme('','icons/relatorio.png'),$module, 'main:relatorios:repConRazao');
     //$panel->AddUserAction('adm_compras',A_EXECUTE,'Convite Equipamento',$ui->GetImageTheme('','icons/relatorio.png'),$module, 'main:relatorios:repExecConviteEquipamento');
 

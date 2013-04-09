@@ -6,13 +6,14 @@ require_once '../../controller/DataHelper.php';
 
 $idVeiculo = $_GET['idVeiculo'];
 $datainicio = $_GET['datainicio'];
-$datafim = date('d/m/Y');
+$datafim = $_GET['datafim'];
+//$datafim = date('d/m/Y');
 $arrData = explode('/', $datafim);
 $datafim = $arrData [2].'-'.$arrData [1].'-'.$arrData [0];
 
 $sql = "
 SELECT distinct  TO_CHAR(r.datahorareq, 'DD/MM/YY HH:MM:SS') 
-  as datahorareq, v.modelo||' - '||v.placa as modeloplaca, r.idrequisicao
+  as datahorareq, p.nome, r.idrequisicao,v.modelo||' - '||v.placa as modeloplaca
   , e.nomelocal as local, valorabastecimento, quantidade, a.combustivel, odometro
 from ad_requisicao r 
   INNER JOIN cm_tabelageral t on r.status = t.item1 
@@ -22,6 +23,8 @@ inner join ad_itemreqveiculo it on r.idrequisicao = it.idrequisicao
 inner join ad_veiculouo uo on v.placa = uo.placa  
   inner join ad_abastecimento a on a.idrequisicao = r.idrequisicao
 inner join ad_endereco e on e.idendereco = a.idendereco
+  inner join ad_motorista m on m.idmotorista = it.idmotorista
+inner join cm_pessoa p on p.idpessoa = m.idpessoa
   where o.idtiporeq = 4 ";
 
 if ($idVeiculo || $datainicio) {
@@ -75,10 +78,10 @@ $url = $baseURL . '/relatorios2/PRINT_PDF/print_pdf.php?input_file=' . rawurlenc
 $arraySize = count($rows);
 $titulo = "ABASTECIMENTOS<br/>";
 $titulo1 = "ABASTECIMENTOS";
-
-/* if ($datainicio === "") {
-    $titulo .= "DATA FINAL: " . $datafim;
-}  */
+$veiculo = $rows[0]['modeloplaca'];
+if ($idVeiculo != "") {
+    $titulo .= "VEÍCULO: " . $veiculo;
+}
 
 ?>
 
@@ -119,7 +122,7 @@ $titulo1 = "ABASTECIMENTOS";
                     },
                     "bJQueryUI": true,
                     "aLengthMenu": [[-1, 10, 25, 50,100,200,500,1000,5000], ['Todos', 10, 25, 50,100,200,500,1000,5000]],
-                    "iDisplayLength": 10,
+                    "iDisplayLength": -1,
                     "sPaginationType": "full_numbers",
                     "aaSorting": [],                                        
                     "aoColumnDefs": [  //{ "bSortable": false, "aTargets": [ 4 ] } ,
@@ -150,7 +153,7 @@ $titulo1 = "ABASTECIMENTOS";
                 <thead> 
                     <tr>                                
                         <td class="data">DATA / HORA</td>
-                        <td class="descricao">VEÍCULO</td>
+                        <td class="descricao">MOTORISTA</td>
                         <td class="valores">REQUISIÇÃO</td>
                         <td class="descricao">LOCAL</td>
                         <td class="valores">VALOR</td>
@@ -170,23 +173,23 @@ for ($i = 0; $i < count($rows); $i++) {
     ?>                              
                         <tr>                                     
                             <td class="valores" style="text-align: center;"><?php echo $rows[$i]['datahorareq']; ?></td>
-                            <td class="valores" style="text-align: center;"><?php echo $rows[$i]['modeloplaca']; ?></td>
+                            <td class="valores" style="text-align: center;"><?php echo $rows[$i]['nome']; ?></td>
                             <td style="width: 7em" class="valores" style="text-align: center;"><?php echo $rows[$i]['idrequisicao']; ?></td>
                             <td class="valores" style="text-align: center;"><?php echo $rows[$i]['local']; ?></td>
-                            <td class="valores" style="text-align: center;"><?php echo $rows[$i]['valorabastecimento']; ?></td>
+                            <td class="valores" style="text-align: left;"><?php echo $rows[$i]['valorabastecimento']; ?></td>
                             <td class="valores" style="text-align: left;"><?php echo $rows[$i]['quantidade']; ?></td>
                             <!--<td class="valores" style="text-align: left;"><?php $c = $rows[$i]['combustivel']; ?></td>-->
                             <?php if($c ==1){ ?>
-                            <td class="valores" style="text-align: left;"><?php echo $g1; ?></td>
+                            <td class="valores" style="text-align: center;"><?php echo $g1; ?></td>
                             <?php } ?>
                             <?php if($c == 2){ ?>
-                            <td class="valores" style="text-align: left;"><?php echo $a2; ?></td>
+                            <td class="valores" style="text-align: center;"><?php echo $a2; ?></td>
                             <?php } ?>
                             <?php if($c == 3){ ?>
-                            <td class="valores" style="text-align: left;"><?php echo $d3; ?></td>
+                            <td class="valores" style="text-align: center;"><?php echo $d3; ?></td>
                             <?php } ?>
                             <?php if($c == 4){ ?>
-                            <td class="valores" style="text-align: left;"><?php echo $v4; ?></td>
+                            <td class="valores" style="text-align: center;"><?php echo $v4; ?></td>
                             <?php } ?>
                             <td class="valores" style="text-align: left;"><?php echo $rows[$i]['odometro']; ?></td>
                         </tr>                            

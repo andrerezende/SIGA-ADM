@@ -6,14 +6,15 @@ require_once '../../controller/DataHelper.php';
 
 $idMotorista = $_GET['idMotorista'];
 $datainicio = $_GET['datainicio'];
-$datafim = date('d/m/Y');
+$datafim = $_GET['datafim'];
+//$datafim = date('d/m/Y');
 $arrData = explode('/', $datafim);
 $datafim = $arrData [2].'-'.$arrData [1].'-'.$arrData [0];
 
 $sql = "
 SELECT distinct  TO_CHAR(r.datahorareq, 'DD/MM/YY HH:MM:SS') 
   as datahorareq, r.idrequisicao, i.ordem, e.nomelocal 
-  as origem,e2.nomelocal as destino, v.modelo||' - '||v.placa as modeloplaca, t.item2 
+  as origem,e2.nomelocal as destino, v.modelo||' - '||v.placa as modeloplaca, t.item2,p.nome 
 from ad_requisicao r 
   INNER JOIN cm_tabelageral t on r.status = t.item1 
 INNER JOIN ad_tiporeq o on o.idtiporeq = r.tiporequisicao
@@ -22,7 +23,9 @@ INNER JOIN ad_endereco e ON i.idenderecoorigem=e.idendereco INNER JOIN ad_endere
   ON i.idenderecodestino=e2.idendereco
 inner join ad_itemreqveiculo it on r.idrequisicao = it.idrequisicao
   inner join ad_veiculo v on v.placa = it.placa
-inner join ad_veiculouo uo on v.placa = uo.placa  
+inner join ad_veiculouo uo on v.placa = uo.placa
+inner join ad_motorista m on m.idmotorista = it.idmotorista
+        inner join cm_pessoa p on p.idpessoa = m.idpessoa
   where o.idtiporeq = 4 and t.tabela = 'AD_ALMOXSTATUSREQ' ";
 
 if ($idMotorista || $datainicio) {
@@ -76,9 +79,10 @@ $url = $baseURL . '/relatorios2/PRINT_PDF/print_pdf.php?input_file=' . rawurlenc
 $arraySize = count($rows);
 $titulo = "MAPA DE UTILIZAÇÃO DE MOTORISTA<br/>";
 $titulo1 = "MAPA DE UTILIZAÇÃO DE MOTORISTA";
+$motorista = $rows[0]['nome']; 
 
- if ($datainicio === "") {
-    $titulo .= "DATA FINAL: " . $datafim;
+ if ($idMotorista != "") {
+    $titulo .= "MOTORISTA: " . $motorista;
 }  
 
 ?>
@@ -120,7 +124,7 @@ $titulo1 = "MAPA DE UTILIZAÇÃO DE MOTORISTA";
                     },
                     "bJQueryUI": true,
                     "aLengthMenu": [[-1, 10, 25, 50,100,200,500,1000,5000], ['Todos', 10, 25, 50,100,200,500,1000,5000]],
-                    "iDisplayLength": 10,
+                    "iDisplayLength": -1,
                     "sPaginationType": "full_numbers",
                     "aaSorting": [],                                        
                     "aoColumnDefs": [  //{ "bSortable": false, "aTargets": [ 4 ] } ,

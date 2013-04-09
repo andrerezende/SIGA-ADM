@@ -185,11 +185,11 @@ as datahoraabastecimento, e.nomelocal as local,combustivel, valorabastecimento, 
 where  r.idrequisicao =  $idRequisicao ";
 
 $sqle = "
-SELECT e.iduo, e.idusuario, datainicio, datafim, p.nome as executor
-  FROM ad_executor e inner join ad_uo u on  e.iduo = u.iduo
-inner join cm_usuario us on  e.idusuario = us.idusuario
-  inner join cm_pessoa p on  us.idpessoa = p.idpessoa 
-where  u.iduo = 19 ";
+SELECT p.nome
+  FROM ad_itemreqveiculo i
+inner join cm_usuario u on u.idusuario = i.idusuarioexecutor
+  inner join cm_pessoa p on p.idpessoa = u.idpessoa 
+  where  i.idrequisicao =  $idRequisicao";
 
 try {
     $db = Conexao::getInstance()->getDB();
@@ -230,8 +230,10 @@ $url = $baseURL . '/relatorios2/PRINT_PDF/print_pdf.php?input_file=' . rawurlenc
 
 $arraySize = count($rows);
 
-$titulo = " U.O. REITORIA - VEÍCULOS";
-
+$titulo = " U.O. REITORIA - VEÍCULOS<br/>";
+if ($idRequisicao != "") {
+    $titulo .= "REQUISIÇÃO Nº: " . $idRequisicao;
+} 
 
 ?>
 
@@ -286,7 +288,6 @@ $titulo = " U.O. REITORIA - VEÍCULOS";
                 <a onclick="javascript:history.go(-1);">Voltar&nbsp&nbsp&nbsp&nbsp&nbsp</a><br/>
                 <a href="<?php echo $url; ?>">Imprimir Relatório <img src="../statics/img/action_print.gif" alt="Imprimir Relatório" /></a>
             </div>
-            <div style="background: #86B404" align="center" class="faixa"><h3>REQUISIÇÃO nº <?php echo $idRequisicao; ?></h3></div><br/>
             
              <table>     
             <tr>
@@ -306,10 +307,16 @@ $titulo = " U.O. REITORIA - VEÍCULOS";
                 <td class="data">GESTOR:</td>
                 <td class="valores" style="text-align: center;"><?php echo $rows[0]['gestor']; ?></td>
             </tr>
+                 <?php
+               if ($status == '7' || $status == 'A'|| $status == 'G' || $status == 'J') {
+            ?>
             <tr>
                 <td class="data">EXECUTOR:</td>
-                <td class="valores" style="text-align: center;"><?php echo $rowse[0]['executor']; ?></td>
+                <td class="valores" style="text-align: center;"><?php echo $rowse[0]['nome']; ?></td>
             </tr>
+            <?php
+               }
+            ?>
             <tr>
                 <td class="data">QUANTIDADE DE VOLUME:</td>
                 <td class="valores" style="text-align: center;"><?php echo $rows[0]['qtdvolume']; ?></td>

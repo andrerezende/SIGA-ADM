@@ -6,7 +6,8 @@ require_once '../../controller/DataHelper.php';
 
 $idVeiculo = $_GET['idVeiculo'];
 $datainicio = $_GET['datainicio'];
-$datafim = date('d/m/Y');
+$datafim = $_GET['datafim'];
+//$datafim = date('d/m/Y');
 $arrData = explode('/', $datafim);
 $datafim = $arrData [2].'-'.$arrData [1].'-'.$arrData [0];
 
@@ -14,7 +15,7 @@ $sql = "
 select
 	distinct  TO_CHAR(r.datahorareq, 'DD/MM/YY HH:MM:SS')
 	as datahorareq, r.idrequisicao, p.nome,t.item2, i.ordem, e.nomelocal
-	as origem,e2.nomelocal as destino
+	as origem,e2.nomelocal as destino, v.modelo||' - '||v.placa as modeloplaca
 	from ad_requisicao r INNER JOIN cm_tabelageral t on r.status = t.item1
 	INNER JOIN ad_tiporeq o on o.idtiporeq = r.tiporequisicao
 	inner join ad_itinerario i on i.idrequisicao = r.idrequisicao
@@ -23,6 +24,8 @@ select
         inner join ad_itemreqveiculo it on r.idrequisicao = it.idrequisicao
         inner join ad_motorista m on m.idmotorista = it.idmotorista
         inner join cm_pessoa p on p.idpessoa = m.idpessoa 
+        inner join ad_veiculo v on v.placa = it.placa
+        inner join ad_veiculouo uo on v.placa = uo.placa
         where o.idtiporeq = 4 and t.tabela = 'AD_ALMOXSTATUSREQ' ";
 
 if ($idVeiculo || $datainicio) {
@@ -48,7 +51,6 @@ try {
 
 
     $rows = $preparedStatment->fetchAll(PDO::FETCH_ASSOC);
-    //var_dump($rows);exit;
     Conexao::getInstance()->disconnect();
 } catch (Exception $e) {
     $e->getMessage();
@@ -76,9 +78,10 @@ $url = $baseURL . '/relatorios2/PRINT_PDF/print_pdf.php?input_file=' . rawurlenc
 $arraySize = count($rows);
 $titulo = "MAPA DE UTILIZAÇÃO DE VEÍCULO<br/>";
 $titulo1 = "MAPA DE UTILIZAÇÃO DE VEÍCULO";
+$veiculo = $rows[0]['modeloplaca']; 
 
- if ($datainicio === "") {
-    $titulo .= "DATA FINAL: " . $datafim;
+ if ($idVeiculo != "") {
+    $titulo .= "VEÍCULO: " . $veiculo;
 } 
 
 
@@ -122,7 +125,7 @@ $titulo1 = "MAPA DE UTILIZAÇÃO DE VEÍCULO";
                     },
                     "bJQueryUI": true,
                     "aLengthMenu": [[-1, 10, 25, 50,100,200,500,1000,5000], ['Todos', 10, 25, 50,100,200,500,1000,5000]],
-                    "iDisplayLength": 10,
+                    "iDisplayLength": -1,
                     "sPaginationType": "full_numbers",
                     "aaSorting": [],                                        
                     "aoColumnDefs": [  //{ "bSortable": false, "aTargets": [ 4 ] } ,
