@@ -3,7 +3,8 @@
 
 	$theme->ClearContent();
 	$ui = $MIOLO->GetUI();
-	$form = $ui->GetForm('adm','frmInspecaoFind',NULL,'inspecao');
+        $uo = $this->manager->GetBusiness('adm','uo', $item);
+	$form = $ui->GetForm('adm','frmInspecaoFind',$uo,'inspecao');
 	$theme->InsertContent($form);
        
 ?>
