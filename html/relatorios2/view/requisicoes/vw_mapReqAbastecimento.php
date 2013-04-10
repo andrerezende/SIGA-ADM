@@ -7,9 +7,15 @@ require_once '../../controller/DataHelper.php';
 $idVeiculo = $_GET['idVeiculo'];
 $datainicio = $_GET['datainicio'];
 $datafim = $_GET['datafim'];
-//$datafim = date('d/m/Y');
-$arrData = explode('/', $datafim);
-$datafim = $arrData [2].'-'.$arrData [1].'-'.$arrData [0];
+$dataAtual = date('d/m/Y');
+$arrData1 = explode('/', $datafim);
+$newDateFim = $arrData1 [2].'-'.$arrData1 [1].'-'.$arrData1 [0];
+
+$arrData2 = explode('/', $dataAtual);
+$newDateAtual = $arrData2 [2].'-'.$arrData2 [1].'-'.$arrData2 [0];
+
+$arrData = explode('/', $datainicio);
+$newDate = $arrData [2].'-'.$arrData [1].'-'.$arrData [0];
 
 $sql = "
 SELECT distinct  TO_CHAR(r.datahorareq, 'DD/MM/YY HH:MM:SS') 
@@ -31,10 +37,12 @@ if ($idVeiculo || $datainicio) {
     if ($idVeiculo) {
         $sql.="AND it.placa like '%$idVeiculo%'";
     }
-    if ($datainicio) {
-        $arrData = explode('/', $datainicio);
-        $newDate = $arrData [2].'-'.$arrData [1].'-'.$arrData [0];
-        $sql.=" AND r.datahorareq between '$newDate' and '$datafim'";
+    if ($datainicio && $datafim) {
+        $sql.=" AND r.datahorareq between '$newDate' and '$newDateFim'";
+    }else if($datainicio){
+        $sql.=" AND r.datahorareq between '$newDate' and '$newDateAtual'"; 
+    }else if($datafim){
+        $sql.=" AND r.datahorareq < '$newDateFim'"; 
     }
     
 }
@@ -80,8 +88,14 @@ $titulo = "ABASTECIMENTOS<br/>";
 $titulo1 = "ABASTECIMENTOS";
 $veiculo = $rows[0]['modeloplaca'];
 if ($idVeiculo != "") {
-    $titulo .= "VEÍCULO: " . $veiculo;
-}
+    $titulo .= "VEÍCULO: " . $veiculo."<br/>";
+}if($datainicio && $datafim){
+    $titulo .="PERÍODO: De ". $datainicio. " a ". $datafim; 
+ }else if($datainicio){
+    $titulo .="PERÍODO: A partir de ". $datainicio; 
+ }else if($datafim){
+    $titulo .="PERÍODO: Até ". $datafim; 
+ }
 
 ?>
 
@@ -176,8 +190,8 @@ for ($i = 0; $i < count($rows); $i++) {
                             <td class="valores" style="text-align: center;"><?php echo $rows[$i]['nome']; ?></td>
                             <td style="width: 7em" class="valores" style="text-align: center;"><?php echo $rows[$i]['idrequisicao']; ?></td>
                             <td class="valores" style="text-align: center;"><?php echo $rows[$i]['local']; ?></td>
-                            <td class="valores" style="text-align: left;"><?php echo $rows[$i]['valorabastecimento']; ?></td>
-                            <td class="valores" style="text-align: left;"><?php echo $rows[$i]['quantidade']; ?></td>
+                            <td class="valores" style="text-align: right;"><?php echo $rows[$i]['valorabastecimento']; ?></td>
+                            <td class="valores" style="text-align: right;"><?php echo $rows[$i]['quantidade']; ?></td>
                             <!--<td class="valores" style="text-align: left;"><?php $c = $rows[$i]['combustivel']; ?></td>-->
                             <?php if($c ==1){ ?>
                             <td class="valores" style="text-align: center;"><?php echo $g1; ?></td>

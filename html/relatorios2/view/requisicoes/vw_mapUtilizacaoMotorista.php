@@ -7,9 +7,15 @@ require_once '../../controller/DataHelper.php';
 $idMotorista = $_GET['idMotorista'];
 $datainicio = $_GET['datainicio'];
 $datafim = $_GET['datafim'];
-//$datafim = date('d/m/Y');
-$arrData = explode('/', $datafim);
-$datafim = $arrData [2].'-'.$arrData [1].'-'.$arrData [0];
+$dataAtual = date('d/m/Y');
+$arrData1 = explode('/', $datafim);
+$newDateFim = $arrData1 [2].'-'.$arrData1 [1].'-'.$arrData1 [0];
+
+$arrData2 = explode('/', $dataAtual);
+$newDateAtual = $arrData2 [2].'-'.$arrData2 [1].'-'.$arrData2 [0];
+
+$arrData = explode('/', $datainicio);
+$newDate = $arrData [2].'-'.$arrData [1].'-'.$arrData [0];
 
 $sql = "
 SELECT distinct  TO_CHAR(r.datahorareq, 'DD/MM/YY HH:MM:SS') 
@@ -28,14 +34,18 @@ inner join ad_motorista m on m.idmotorista = it.idmotorista
         inner join cm_pessoa p on p.idpessoa = m.idpessoa
   where o.idtiporeq = 4 and t.tabela = 'AD_ALMOXSTATUSREQ' ";
 
-if ($idMotorista || $datainicio) {
+if ($idMotorista || $datainicio || $datafim) {
     if ($idMotorista) {
         $sql.=" AND it.idmotorista = $idMotorista";
     }
-    if ($datainicio) {
-        $arrData = explode('/', $datainicio);
-        $newDate = $arrData [2].'-'.$arrData [1].'-'.$arrData [0];
-        $sql.=" AND r.datahorareq between '$newDate' and '$datafim'";
+    if ($datainicio && $datafim) {
+        
+        $sql.=" AND r.datahorareq between '$newDate' and '$newDateFim'";
+        break;
+    }else if($datainicio){
+        $sql.=" AND r.datahorareq between '$newDate' and '$newDateAtual'"; 
+    }else if($datafim){
+        $sql.=" AND r.datahorareq < '$newDateFim'"; 
     }
     
 }
@@ -82,8 +92,17 @@ $titulo1 = "MAPA DE UTILIZAÇÃO DE MOTORISTA";
 $motorista = $rows[0]['nome']; 
 
  if ($idMotorista != "") {
-    $titulo .= "MOTORISTA: " . $motorista;
-}  
+    $titulo .= "MOTORISTA: " . $motorista. "<br/>";
+ }if($datainicio && $datafim){
+    $titulo .="PERÍODO: De ". $datainicio. " a ". $datafim; 
+    break;
+ }else if($datainicio){
+    $titulo .="PERÍODO: A partir de ". $datainicio; 
+    break;
+ }else if($datafim){
+    $titulo .="PERÍODO: Até ". $datafim;
+    break;
+ }
 
 ?>
 

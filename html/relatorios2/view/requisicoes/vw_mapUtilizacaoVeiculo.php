@@ -7,9 +7,15 @@ require_once '../../controller/DataHelper.php';
 $idVeiculo = $_GET['idVeiculo'];
 $datainicio = $_GET['datainicio'];
 $datafim = $_GET['datafim'];
-//$datafim = date('d/m/Y');
-$arrData = explode('/', $datafim);
-$datafim = $arrData [2].'-'.$arrData [1].'-'.$arrData [0];
+$dataAtual = date('d/m/Y');
+$arrData1 = explode('/', $datafim);
+$newDateFim = $arrData1 [2].'-'.$arrData1 [1].'-'.$arrData1 [0];
+
+$arrData2 = explode('/', $dataAtual);
+$newDateAtual = $arrData2 [2].'-'.$arrData2 [1].'-'.$arrData2 [0];
+
+$arrData = explode('/', $datainicio);
+$newDate = $arrData [2].'-'.$arrData [1].'-'.$arrData [0];
 
 $sql = "
 select
@@ -28,14 +34,16 @@ select
         inner join ad_veiculouo uo on v.placa = uo.placa
         where o.idtiporeq = 4 and t.tabela = 'AD_ALMOXSTATUSREQ' ";
 
-if ($idVeiculo || $datainicio) {
+if ($idVeiculo || $datainicio || $datafim) {
     if ($idVeiculo) {
         $sql.=" AND it.placa like '%$idVeiculo%'";
     }
-    if ($datainicio) {
-        $arrData = explode('/', $datainicio);
-        $newDate = $arrData [2].'-'.$arrData [1].'-'.$arrData [0];
-        $sql.=" AND r.datahorareq between '$newDate' and '$datafim'";
+    if ($datainicio && $datafim) {
+        $sql.=" AND r.datahorareq between '$newDate' and '$newDateFim'";
+    }else if($datainicio){
+        $sql.=" AND r.datahorareq between '$newDate' and '$newDateAtual'"; 
+    }else if($datafim){
+        $sql.=" AND r.datahorareq < '$newDateFim'"; 
     }
     
 }
@@ -81,8 +89,14 @@ $titulo1 = "MAPA DE UTILIZAÇÃO DE VEÍCULO";
 $veiculo = $rows[0]['modeloplaca']; 
 
  if ($idVeiculo != "") {
-    $titulo .= "VEÍCULO: " . $veiculo;
-} 
+    $titulo .= "VEÍCULO: " . $veiculo ." <br/>";
+ }if($datainicio && $datafim){
+    $titulo .="PERÍODO: De ". $datainicio. " a ". $datafim; 
+ }else if($datainicio){
+    $titulo .="PERÍODO: A partir de ". $datainicio; 
+ }else if($datafim){
+    $titulo .="PERÍODO: Até ". $datafim; 
+ }
 
 
 
@@ -155,7 +169,7 @@ $veiculo = $rows[0]['modeloplaca'];
             <table cellpadding="0" cellspacing="0" border="0" class="display" id="tabela" style="width: 100%">
                 <thead> 
                     <tr>                                
-                        <td class="data">DATA / HORA Requisição</td>
+                        <td class="data">DATA / HORA</td>
                         <td class="descricao">REQUISIÇÃO</td>
                         <td class="descricao">ORIGEM</td>
                         <td class="descricao">DESTINO</td>

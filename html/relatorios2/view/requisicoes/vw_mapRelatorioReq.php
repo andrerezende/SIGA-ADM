@@ -484,6 +484,3 @@ if ($idRequisicao != "") {
 
 <?php file_put_contents($tmpFile, ob_get_contents()); ?>
 
-
-
-<?php
