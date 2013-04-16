@@ -8,7 +8,7 @@ $idUO = $_GET['idUoAlmoxerifado'];
 $uo = $_GET['uo'];
 
 $sql = '
-SELECT m.codmaterial, m.descricao, m.unidade, e.estoquemin, e.estoque, e.valortotal
+SELECT m.codmaterial, m.idsubelemento, m.descricao, m.unidade, e.estoquemin, e.estoque, e.valortotal
 FROM ad_estoque e
 	INNER JOIN ad_material m on e.idmaterial = m.idmaterial
 WHERE iduo = '.$idUO.
@@ -128,6 +128,7 @@ if(!$rows) {
                             <thead> 
                                 <tr>                                
                                     <th class="valores">Código</th>  
+                                    <th class="valores">Subitem</th>  
                                     <th class="descricao">Classificação</th>                                    
                                     <th class="valores">Estoque</th>   
                                     <th class="valores">Estoque Min</th>
@@ -141,9 +142,9 @@ if(!$rows) {
                            $saldoTotal += $rows[$i]['valortotal'];
                          ?>
                                
-                                <tr> 
-                                    
+                                <tr>                                     
                                     <td class="valores" style="text-align: center;"><?php echo $rows[$i]['codmaterial']; ?></td>
+                                    <td class="valores" style="text-align: right;"><?php echo $rows[$i]['idsubelemento']; ?></td>
                                     <td class="descricao" style="text-align: left;"><?php echo $rows[$i]['descricao']; ?></td>
                                     <td class="valores" style="text-align: right;"><?php echo number_format($rows[$i]['estoque'], 0, ',', '.'); ?></td>
                                     <td class="valores" style="text-align: right;"><?php echo number_format($rows[$i]['estoquemin'], 0, ',', '.'); ?></td>                                    
