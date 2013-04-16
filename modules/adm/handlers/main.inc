@@ -16,9 +16,11 @@ if (!$handled) {
 	$result = $acessouoreq->listUoByUsuario($idUsuario);
 	$uos = count($result->result);
 	$panel = new ActionPanel('pnlAdm', 'Administração', '', NULL);
-        $itemV = 4;
-        $itemM = 8;
 	//$panel->SetIconType('small');
+        $objTipoReqVei = $this->manager->GetBusiness('adm','tiporeq');
+        $objTipoReqAlm = $this->manager->GetBusiness('adm','tiporeq');
+        $objTipoReqVei->GetById(4);
+        $objTipoReqAlm->GetById(8);
 
 	$panel->adduseraction('adm_almoxarifado', a_execute, 'Almoxarifado', $ui->GetImageTheme('', 'icons/almoxarifado.png'), $module, 'main:uoalmoxarifado:find');
 	//$panel->AddAction('Consultas', $ui->GetImageTheme('', 'icons/consultas.png'), $module, 'main:consultas');
@@ -30,8 +32,8 @@ if (!$handled) {
 	$panel->AddUserAction('adm_patrimonio', A_EXECUTE, 'Patrimônio', $ui->GetImageTheme('', 'icons/patrimonio.png'), $module, 'main:patrimonio');
 	//$panel->AddUserAction('adm_recursos', A_EXECUTE, 'Recursos', $ui->GetImageTheme('', 'icons/recursos.png'), $module, 'main:recursos');
 	$panel->AddUserAction('AD_REL_VEICULOS', A_EXECUTE, 'Relatórios de Veículos', $ui->GetImageTheme('', 'icons/relatorio.png'), $module, 'main:reports');
-	$panel->AddUserAction('adm_requisicao', A_EXECUTE, 'Requisições Veículos', $ui->GetImageTheme('', 'icons/requisicoes.png'), $module, 'main:requisicaoveiculo:findveiculo');
-        $panel->AddUserAction('adm_requisicao', A_EXECUTE, 'Requisições Almoxarifado', $ui->GetImageTheme('', 'icons/requisicoes.png'), $module, 'main:requisicoes:find');
+	$panel->AddUserAction('adm_requisicao', A_EXECUTE, 'Requisições Veículos', $ui->GetImageTheme('', 'icons/requisicoes.png'), $module, 'main:requisicaoveiculo:findveiculo',$objTipoReqVei->idTipoReq,array("form"=>"item","tipoReq"=>$objTipoReqVei->idTipoReq));
+        $panel->AddUserAction('adm_requisicao', A_EXECUTE, 'Requisições Almoxarifado', $ui->GetImageTheme('', 'icons/requisicoes.png'), $module, 'main:requisicoes:find',$objTipoReqAlm->idTipoReq,array("form"=>"item","tipoReq"=>$objTipoReqAlm->idTipoReq));
 	//$panel->AddAction('Solicitar Cadastro de Material', $ui->GetImageTheme('', 'icons/novo_material.png'), $module, 'main:novomaterial:new');
         $executante= $this->manager->GetBusiness('adm', 'executor');
         if($executante->isExecutorOf($this->manager->GetLogin()->idkey))
