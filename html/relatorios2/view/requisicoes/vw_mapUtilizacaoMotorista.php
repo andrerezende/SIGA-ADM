@@ -41,7 +41,6 @@ if ($idMotorista || $datainicio || $datafim) {
     if ($datainicio && $datafim) {
         
         $sql.=" AND r.datahorareq between '$newDate' and '$newDateFim'";
-        break;
     }else if($datainicio){
         $sql.=" AND r.datahorareq between '$newDate' and '$newDateAtual'"; 
     }else if($datafim){
