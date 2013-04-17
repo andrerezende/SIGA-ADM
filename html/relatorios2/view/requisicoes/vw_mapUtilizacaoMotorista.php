@@ -34,12 +34,12 @@ inner join ad_motorista m on m.idmotorista = it.idmotorista
         inner join cm_pessoa p on p.idpessoa = m.idpessoa
   where o.idtiporeq = 4 and t.tabela = 'AD_ALMOXSTATUSREQ' ";
 
+
 if ($idMotorista || $datainicio || $datafim) {
     if ($idMotorista) {
         $sql.=" AND it.idmotorista = $idMotorista";
     }
     if ($datainicio && $datafim) {
-        
         $sql.=" AND r.datahorareq between '$newDate' and '$newDateFim'";
     }else if($datainicio){
         $sql.=" AND r.datahorareq between '$newDate' and '$newDateAtual'"; 
@@ -93,14 +93,11 @@ $motorista = $rows[0]['nome'];
  if ($idMotorista != "") {
     $titulo .= "MOTORISTA: " . $motorista. "<br/>";
  }if($datainicio && $datafim){
-    $titulo .="PERÍODO: De ". $datainicio. " a ". $datafim; 
-    break;
+    $titulo .="PERÍODO: De ". $datainicio. " a ". $datafim;
  }else if($datainicio){
     $titulo .="PERÍODO: A partir de ". $datainicio; 
-    break;
  }else if($datafim){
     $titulo .="PERÍODO: Até ". $datafim;
-    break;
  }
 
 ?>
