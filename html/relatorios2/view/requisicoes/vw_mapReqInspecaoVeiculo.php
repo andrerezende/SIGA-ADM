@@ -4,7 +4,8 @@ ob_start();
 require_once '../../model/DAO/Conexao.php';
 require_once '../../controller/DataHelper.php';
 
-$idMotorista = $_GET['idMotorista'];
+$idVeiculo = $_GET['idVeiculo'];
+$ididMotorista = $_GET['idMotorista'];
 $datainicio = $_GET['datainicio'];
 $datafim = $_GET['datafim'];
 $dataAtual = date('d/m/Y');
@@ -18,34 +19,32 @@ $arrData = explode('/', $datainicio);
 $newDate = $arrData [2].'-'.$arrData [1].'-'.$arrData [0];
 
 $sql = "
-SELECT distinct  TO_CHAR(i.datasaida, 'DD/MM/YY HH:MM:SS') 
-  as datahorareq, r.idrequisicao, i.ordem, e.nomelocal 
-  as origem,e2.nomelocal as destino, v.modelo||' - '||v.placa as modeloplaca, t.item2,p.nome 
-from ad_requisicao r 
-  INNER JOIN cm_tabelageral t on r.status = t.item1 
-INNER JOIN ad_tiporeq o on o.idtiporeq = r.tiporequisicao
-  inner join ad_itinerario i on i.idrequisicao = r.idrequisicao
-INNER JOIN ad_endereco e ON i.idenderecoorigem=e.idendereco INNER JOIN ad_endereco e2
-  ON i.idenderecodestino=e2.idendereco
-inner join ad_itemreqveiculo it on r.idrequisicao = it.idrequisicao
-  inner join ad_veiculo v on v.placa = it.placa
-inner join ad_veiculouo uo on v.placa = uo.placa
-inner join ad_motorista m on m.idmotorista = it.idmotorista
-        inner join cm_pessoa p on p.idpessoa = m.idpessoa
-  where o.idtiporeq = 4 and t.tabela = 'AD_ALMOXSTATUSREQ' ";
+select
+	distinct  TO_CHAR(r.datahorareq, 'DD/MM/YY HH:MM:SS')
+	as datahorareq, r.idrequisicao, p.nome,t.item2, i.ordem, e.nomelocal
+	as origem,e2.nomelocal as destino, v.modelo||' - '||v.placa as modeloplaca
+	from ad_requisicao r INNER JOIN cm_tabelageral t on r.status = t.item1
+	INNER JOIN ad_tiporeq o on o.idtiporeq = r.tiporequisicao
+	inner join ad_itinerario i on i.idrequisicao = r.idrequisicao
+	INNER JOIN ad_endereco e ON i.idenderecoorigem=e.idendereco INNER JOIN ad_endereco e2
+        ON i.idenderecodestino=e2.idendereco
+        inner join ad_itemreqveiculo it on r.idrequisicao = it.idrequisicao
+        inner join ad_motorista m on m.idmotorista = it.idmotorista
+        inner join cm_pessoa p on p.idpessoa = m.idpessoa 
+        inner join ad_veiculo v on v.placa = it.placa
+        inner join ad_veiculouo uo on v.placa = uo.placa
+        where o.idtiporeq = 4 and t.tabela = 'AD_ALMOXSTATUSREQ' ";
 
-if ($idMotorista || $datainicio || $datafim) {
-    if ($idMotorista) {
-        $sql.=" AND it.idmotorista = $idMotorista";
+if ($idVeiculo || $datainicio || $datafim) {
+    if ($idVeiculo) {
+        $sql.=" AND it.placa like '%$idVeiculo%'";
     }
     if ($datainicio && $datafim) {
-        
-        $sql.=" AND i.datasaida between '$newDate' and '$newDateFim'";
-        break;
+        $sql.=" AND r.datahorareq between '$newDate' and '$newDateFim'";
     }else if($datainicio){
-        $sql.=" AND i.datasaida between '$newDate' and '$newDateAtual'"; 
+        $sql.=" AND r.datahorareq between '$newDate' and '$newDateAtual'"; 
     }else if($datafim){
-        $sql.=" AND i.datasaida < '$newDateFim'"; 
+        $sql.=" AND r.datahorareq < '$newDateFim'"; 
     }
     
 }
@@ -61,7 +60,6 @@ try {
 
 
     $rows = $preparedStatment->fetchAll(PDO::FETCH_ASSOC);
-    //var_dump($rows);exit;
     Conexao::getInstance()->disconnect();
 } catch (Exception $e) {
     $e->getMessage();
@@ -87,22 +85,21 @@ $url = $baseURL . '/relatorios2/PRINT_PDF/print_pdf.php?input_file=' . rawurlenc
 
 
 $arraySize = count($rows);
-$titulo = "MAPA DE UTILIZAÇÃO DE MOTORISTA<br/>";
-$titulo1 = "MAPA DE UTILIZAÇÃO DE MOTORISTA";
-$motorista = $rows[0]['nome']; 
+$titulo = "MAPA DE UTILIZAÇÃO DE VEÍCULO<br/>";
+$titulo1 = "MAPA DE UTILIZAÇÃO DE VEÍCULO";
+$veiculo = $rows[0]['modeloplaca']; 
 
- if ($idMotorista != "") {
-    $titulo .= "MOTORISTA: " . $motorista. "<br/>";
+ if ($idVeiculo != "") {
+    $titulo .= "VEÍCULO: " . $veiculo ." <br/>";
  }if($datainicio && $datafim){
     $titulo .="PERÍODO: De ". $datainicio. " a ". $datafim; 
-    break;
  }else if($datainicio){
     $titulo .="PERÍODO: A partir de ". $datainicio; 
-    break;
  }else if($datafim){
-    $titulo .="PERÍODO: Até ". $datafim;
-    break;
+    $titulo .="PERÍODO: Até ". $datafim; 
  }
+
+
 
 ?>
 
@@ -173,11 +170,11 @@ $motorista = $rows[0]['nome'];
             <table cellpadding="0" cellspacing="0" border="0" class="display" id="tabela" style="width: 100%">
                 <thead> 
                     <tr>                                
-                        <td class="data">DATA / HORA Requisição</td>
+                        <td class="data">DATA / HORA</td>
                         <td class="descricao">REQUISIÇÃO</td>
                         <td class="descricao">ORIGEM</td>
                         <td class="descricao">DESTINO</td>
-                        <td class="descricao">VEÍCULO</td>
+                        <td class="descricao">MOTORISTA</td>
                         <td class="valores">SITUAÇÃO</td>
                     </tr>
                 </thead> 
@@ -191,7 +188,7 @@ for ($i = 0; $i < count($rows); $i++) {
                             <td style="width: 7em" class="valores" style="text-align: center;"><?php echo $rows[$i]['idrequisicao']; ?></td>
                             <td class="valores" style="text-align: center;"><?php echo $rows[$i]['origem']; ?></td>
                             <td class="valores" style="text-align: center;"><?php echo $rows[$i]['destino']; ?></td>
-                            <td class="valores" style="text-align: center;"><?php echo $rows[$i]['modeloplaca']; ?></td>
+                            <td class="valores" style="text-align: center;"><?php echo $rows[$i]['nome']; ?></td>
                             <td class="valores" style="text-align: left;"><?php echo $rows[$i]['item2']; ?></td>
                         </tr>                            
     <?php
