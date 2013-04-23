@@ -198,8 +198,7 @@ for ($i = 0; $i < count($rows); $i++) {
                         <td class="valores" style="text-align: center;">--</td>
                         <td class="valores" style="text-align: center;">--</td>
                         <td class="valores" style="text-align: center;">--</td>
-                        <td class="valores" style="text-align: center;">--</td>
-                        <td class="valores" style="text-align: right;"><?php echo number_format($saldoTotal, 2, ',', '.'); ?></td>                                   
+                        <td class="valores" style="text-align: center;">--</td>                                   
                     </tfoot>                         
                 </tbody>    
             </table>                        
