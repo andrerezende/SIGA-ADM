@@ -1,5 +1,7 @@
 <?
     $action = $context->ShiftAction();
+    $theme->ClearContent();
+    $ui = $MIOLO->GetUI();
 	$navbar->AddOption('Requisição', 'adm', 'main:requisicaoveiculo:findveiculo');
     
     
@@ -38,6 +40,9 @@
             break;           
 		case 'requisicaosuplementar':
             $MIOLO->InvokeHandler($module, 'requisicoes/requisicaosuplementar');
+            break;
+        case 'loginmot':
+            $MIOLO->InvokeHandler($module, 'requisicaoveiculo/loginmot');
             break;
         default:
             $MIOLO->InvokeHandler($module, 'requisicaoveiculo/main');

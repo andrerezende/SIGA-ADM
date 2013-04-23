@@ -99,20 +99,37 @@ class frmConformidadeMotorista extends Form
 		} else {
 			if ($this->auth->Authenticate($uid, $challenge, $response)) {
                             
-                            if($this->objInspecao->retornIDaMotorista($this->objInspecao->idMotorista, $this->objInspecao->idInspecao)){
+                            $id = $this->retornaIdUsuario($uid, $this->objInspecao->idInspecao);
+                            if($id){
+                            //if($this->objInspecao->retornIDaMotorista($this->objInspecao->idMotorista, $this->objInspecao->idInspecao)){
                                 $this->objInspecao->beginTransaction();
                                 $this->objInspecao->confirmacao = 1;
                                 $this->objInspecao->update();
                                 $this->objInspecao->endTransaction();
                                 $go = $this->manager->getActionUrl('adm','main:inspecao',$this->objInspecao->idInspecao,array("form"=>"item","idInspecao"=>$this->objInspecao->idInspecao));
                                 $this->page->Redirect($go);
+                            // }
+                             }else{
+                                 $tries = $this->GetFormValue('tries');
+                                 if ($tries >= $max_tries) {
+					$MIOLO->Error('Erro na identificação do motorista!');
+				} else {
+					$err = 'Erro na identificação do motorista!' . ' - Restam ' . ( $max_tries - $tries) .
+							' ' . 'tentativa(s).';
+					$tries++;
+					$this->SetFormValue('tries',$tries);
+					$pwd = null;
+					if ($err) {
+						$this->AddError($err);
+					}
+				}
                              }
 			} else {
 				$tries = $this->GetFormValue('tries');
 				if ($tries >= $max_tries) {
-					$MIOLO->Error('Erro na identificação do usuário!');
+					$MIOLO->Error('Erro na identificação do motorista!');
 				} else {
-					$err = 'Erro na identificação do usuário!' . ' - Restam ' . ( $max_tries - $tries) .
+					$err = 'Erro na identificação do motorista!' . ' - Restam ' . ( $max_tries - $tries) .
 							' ' . 'tentativa(s).';
 					$tries++;
 					$this->SetFormValue('tries',$tries);
@@ -128,10 +145,30 @@ class frmConformidadeMotorista extends Form
         public function LoginPermitted($uid) {
 		global $MIOLO;
                 $objUsuario = $this->manager->GetBusiness('common','usuario');
-		$ok = $objUsuario->CheckAtivo($uid);                
+		$ok = $objUsuario->CheckAtivo($uid);
+                $reto = $objUsuario->GetByLoginPass();
 		return $ok;
 	}
         
+        public function retornaIdUsuario($uid,$idInspecao) {
+		global $MIOLO;
+                
+                $objUsuario = $this->manager->GetBusiness('common','usuario');
+                $objInspecao = $this->manager->GetBusiness('adm','inspecao');
+                $objMotorista = $this->manager->GetBusiness('adm','motorista');
+                
+                $idPessoa = $objUsuario->GetByIDUsuarioLoginPass($uid);
+                $idMotorista = $objMotorista->GetByIDMotoristaPessoa($idPessoa);
+                
+                $idUser = $objInspecao->GetByIDMotorista($idInspecao,$idMotorista);
+                if($idUser){
+                   $ok = true;
+                }else{
+                   $ok = false; 
+                }
+                
+		return $ok;
+        }
         public function isAuthenticated() {
 		return $this->auth->isLogged();
 	}
