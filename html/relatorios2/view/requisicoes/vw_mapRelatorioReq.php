@@ -260,8 +260,6 @@ if ($idRequisicao != "") {
         <?php include_once '../statics/cabecalho.php'; ?>
 
             <div id="menu">
-                <a onclick="javascript:history.go(-1);">Voltar&nbsp&nbsp&nbsp&nbsp&nbsp</a><br/>
-                <a href="<?php echo $url; ?>">Imprimir Relatório <img src="../statics/img/action_print.gif" alt="Imprimir Relatório" /></a>
             </div>
             <table border="1" style="width: 100% !important;" >
                 <tr>
@@ -385,6 +383,9 @@ if ($idRequisicao != "") {
             ?>
             </table></td></tr>
             </table>
+            <?php
+               if ($rowsi == '') {
+            ?>
 <br/>
           <table border="1" width="100%">
             <tr>
@@ -415,6 +416,7 @@ if ($idRequisicao != "") {
                 </tr>
             </table>  
             <?php
+            }
                if ($status == 'G' || $status == 'J') {
             ?>
 <br/>
@@ -438,8 +440,8 @@ if ($idRequisicao != "") {
             ?>
             </td>
             <td >
-            <div style="background: #86B404" align="center" class="faixa"><h3>CHEGADA</h3></div><br/>
-            <table>
+            <div style="font-weight: bold;" align="center"><h3>CHEGADA</h3></div>
+                            <table border="1" width="100%">
                 <tr>
                     <td style="text-align: center;">HORÁRIO:</td>        
                     <td style="text-align: center;"><?php echo $rows[0]['datahoracheggar']; ?></td>
