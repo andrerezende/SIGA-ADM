@@ -18,7 +18,7 @@ $arrData = explode('/', $datainicio);
 $newDate = $arrData [2].'-'.$arrData [1].'-'.$arrData [0];
 
 $sql = "
-SELECT distinct  TO_CHAR(r.datahorareq, 'DD/MM/YY HH:MM:SS') 
+SELECT distinct  TO_CHAR(i.datasaida, 'DD/MM/YY HH:MM:SS') 
   as datahorareq, r.idrequisicao, i.ordem, e.nomelocal 
   as origem,e2.nomelocal as destino, v.modelo||' - '||v.placa as modeloplaca, t.item2,p.nome 
 from ad_requisicao r 
@@ -40,11 +40,13 @@ if ($idMotorista || $datainicio || $datafim) {
         $sql.=" AND it.idmotorista = $idMotorista";
     }
     if ($datainicio && $datafim) {
+        
+        $sql.=" AND i.datasaida between '$newDate' and '$newDateFim'";
         $sql.=" AND r.datahorareq between '$newDate' and '$newDateFim'";
     }else if($datainicio){
-        $sql.=" AND r.datahorareq between '$newDate' and '$newDateAtual'"; 
+        $sql.=" AND i.datasaida between '$newDate' and '$newDateAtual'"; 
     }else if($datafim){
-        $sql.=" AND r.datahorareq < '$newDateFim'"; 
+        $sql.=" AND i.datasaida < '$newDateFim'"; 
     }
     
 }

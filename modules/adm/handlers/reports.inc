@@ -22,6 +22,7 @@
     // C
         $panel->AddUserAction('AD_REL_VEICULOS',A_EXECUTE,'Abastecimentos',$ui->GetImageTheme('','icons/relatorio.png'),$module, 'main:relatorios:repMapReqAbastecimento');
         $panel->AddUserAction('AD_REL_VEICULOS',A_EXECUTE,'Imprimir Requisição',$ui->GetImageTheme('','icons/relatorio.png'),$module, 'main:relatorios:repMapRequisicao');
+        $panel->AddUserAction('AD_REL_VEICULOS',A_EXECUTE,'Imprimir Inspeção',$ui->GetImageTheme('','icons/relatorio.png'),$module, 'main:relatorios:repMapInspecaoVeiculo');
     //$panel->AddUserAction('adm_adminorcamento',A_EXECUTE,'ConRazão',$ui->GetImageTheme('','icons/relatorio.png'),$module, 'main:relatorios:repConRazao');
     //$panel->AddUserAction('adm_compras',A_EXECUTE,'Convite Equipamento',$ui->GetImageTheme('','icons/relatorio.png'),$module, 'main:relatorios:repExecConviteEquipamento');
 

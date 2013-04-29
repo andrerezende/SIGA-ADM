@@ -1,0 +1,231 @@
+<?php
+class frmConformidadeMotorista extends Form
+{
+	protected $objRequisicao;
+	public $auth;
+	public $tries;
+
+        function __construct($objRequisicao) {
+		$this->objRequisicao= $objRequisicao;
+		$this->Form(null);
+		$this->page->AddScript('m_md5.js');
+		$this->AddJsCode($this->doChallengeResponse());
+		$this->OnSubmit('doChallengeResponse()');
+		$this->defaultButton = false;
+		if ($this->page->isPostBack()) {
+			$this->EventHandler();
+		}
+	}
+
+
+	function CreateFields()
+	{  
+            global $MIOLO;
+
+		$this->auth = $this->manager->auth;
+		$challenge = uniqid(rand());
+		$ui = $MIOLO->GetUI();
+                $manter =  'Sim';
+                $options=array('Sim','Não');
+            $fields = array(
+			new MTextField('uid',$this->auth->login->iduser,'Usuário',20),
+			new MPasswordField('pwd','','Senha',20),
+                
+                        new MHiddenField('tries', ''),
+			new MHiddenField('return_to', ''),
+			new MHiddenField('challenge', $challenge),
+			new MHiddenField('response', ''),
+			new MHiddenField('passwd', ''),
+                        new MPanel('inspecaoMotorista', 'Confirmar Inspeção'),
+                        new MTextHeader('header', 1,'Concorda com a inspeção realizada?'),
+	                new MRadioButtonGroup('confirmacao', '', $options,$manter), 
+				);
+            
+				$this->SetFields($fields);
+                                
+                                $this->SetBackgroundColor('white');
+                                
+                                
+                                $buttons = array(
+            new MButton('btnLogin', 'Entrar'),
+            new MButton('btnConfirmar', 'Confirmar'),
+        );
+          $this->SetButtons($buttons);  
+          $this->visibilidade(false);
+                                
+	}
+
+        function btnConfirmar_click()
+	{
+		$data = $this->GetData();
+                $pree = $this->verificaPreencimento();
+                
+                if(Form::GetFormValue('confirmacao')=="Sim")
+                    $opcao = 2;
+                    else
+                    $opcao = 3;
+		try
+		{  
+                    
+                        $objItemVeiculo = $this->manager->GetBusiness('adm','itemveiculo');
+                        $objItemVeiculo = $objItemVeiculo->getById($this->objRequisicao->idRequisicao);
+			$objItemVeiculo->beginTransaction();
+                        $objItemVeiculo->confirmacao = $opcao;
+                        $objItemVeiculo->update();
+                        $objItemVeiculo->endTransaction();
+                        //$ret = $inspecaoComponete->getInspecao($inspecaoComponete->idComponente,$inspecaoComponete->idInspecao);
+                        //$go = $this->manager->getActionUrl('adm','main:requisicoes',$this->objRequisicao->idRequisicao,array("form"=>"item","idRequisicao"=>$this->objRequisicao->idRequisicao));
+                        $go  = $this->manager->getActionUrl('adm', 'main:requisicoes:findveiculo',"Requisicao " . $this->objRequisicao->idRequisicao. " , EM EXECUÇÃO.");
+                        $this->page->Redirect($go);
+                       
+		}
+		catch (Exception $e)
+		{
+			$this->AddError($e->GetMessage());
+		}
+                //}
+	}
+       function verificaPreencimento(){
+           $ok = true;
+           if($this->GetFieldValue('login') == ''){
+               $ok = false;
+                    $this->addError("Entre com seu login!");
+           }else if($this->GetFieldValue('senha')==''){
+                $ok = false;
+                    $this->addError("Entre com sua senha!");
+           }
+           return $ok;
+       }
+       
+       public function btnLogin_click() {
+		global $MIOLO;
+
+		$this->GetData();
+		$MIOLO->LogMessage('[LOGIN] Validating login information MD5');
+
+		// Max login tries
+		$max_tries = 3;
+
+		// autenticar usuário e obter dados do login
+		$uid = $this->GetFormValue('uid');
+		$pwd = $this->GetFormValue('pwd');              
+		$challenge = $this->GetFieldValue('challenge');
+		$response = $this->GetFieldValue('response');
+
+		if (!$this->LoginPermitted($uid)) {
+			$err = 'Acesso não permitido.';
+                        $this->AddError($err);
+		} else {
+                    $senha =md5($pwd);
+                        $usuario = $this->manager->GetBusiness('common','usuario');
+                        if ($usuario->GetByMotoristaLoginPass($uid, $senha)) {
+			//if ($this->auth->Authenticate($uid, $challenge, $response)) {
+                            
+                            $id = $this->retornaIdUsuario($uid, $this->objRequisicao->idRequisicao);
+                            if($id){
+                            //if($this->objInspecao->retornIDaMotorista($this->objInspecao->idMotorista, $this->objInspecao->idInspecao)){
+                                $objItemVeiculo = $this->manager->GetBusiness('adm','itemveiculo');
+                                $objItemVeiculo->getById($this->objRequisicao->idRequisicao);
+                                $objItemVeiculo->beginTransaction();
+                                $objItemVeiculo->confirmacao = 1;
+                                $objItemVeiculo->update();
+                                $objItemVeiculo->endTransaction();
+                                $this->visibilidadeLogin(false);
+                                $this->visibilidade(true);
+                                //$go = $this->manager->getActionUrl('adm','main:requisicoes',$this->objRequisicao->idRequisicao,array("form"=>"item","idRequisicao"=>$this->objRequisicao->idRequisicao));
+                                //$this->page->Redirect($go);
+                            // }
+                             }else{
+                                 $tries = $this->GetFormValue('tries');
+                                 if ($tries >= $max_tries) {
+					$MIOLO->Error('Erro na identificação do motorista!');
+				} else {
+					$err = 'Erro na identificação do motorista!' . ' - Restam ' . ( $max_tries - $tries) .
+							' ' . 'tentativa(s).';
+					$tries++;
+					$this->SetFormValue('tries',$tries);
+					$pwd = null;
+					if ($err) {
+						$this->AddError($err);
+					}
+				}
+                             }
+			} else {
+				$tries = $this->GetFormValue('tries');
+				if ($tries >= $max_tries) {
+					$MIOLO->Error('Erro na identificação do motorista!');
+				} else {
+					$err = 'Erro na identificação do motorista!' . ' - Restam ' . ( $max_tries - $tries) .
+							' ' . 'tentativa(s).';
+					$tries++;
+					$this->SetFormValue('tries',$tries);
+					$pwd = null;
+					if ($err) {
+						$this->AddError($err);
+					}
+				}
+			}
+		}
+	}
+        
+        public function LoginPermitted($uid) {
+		global $MIOLO;
+                $objUsuario = $this->manager->GetBusiness('common','usuario');
+		$ok = $objUsuario->CheckAtivo($uid);
+                $reto = $objUsuario->GetByLoginPass();
+		return $ok;
+	}
+        
+        public function retornaIdUsuario($uid,$idInspecao) {
+		global $MIOLO;
+                
+                $objUsuario = $this->manager->GetBusiness('common','usuario');
+                $objMotorista = $this->manager->GetBusiness('adm','motorista');
+                $objItemVeiculo = $this->manager->GetBusiness('adm','itemveiculo');
+                
+                $idPessoa = $objUsuario->GetByIDUsuarioLoginPass($uid);
+                $idMotorista = $objMotorista->GetByIDMotoristaPessoa($idPessoa);
+                $objItemVeiculo->getById($this->objRequisicao->idRequisicao);
+                
+                if($idMotorista == $objItemVeiculo->idMotorista){
+                   $ok = true;
+                }else{
+                   $ok = false; 
+                }
+                
+		return $ok;
+        }
+        public function isAuthenticated() {
+		return $this->auth->isLogged();
+	}
+       
+       function retornaTela(){
+           $go = $this->manager->getActionUrl('adm','main:requisicoes',$this->objRequisicao->idRequisicao,array("form"=>"item","idRequisicao"=>$this->objRequisicao->idRequisicao));
+           $this->page->Redirect($go);
+           
+       }
+       public function visibilidade($vis){
+           $this->SetFieldAttr('inspecaoMotorista', 'visible', $vis);
+           $this->SetFieldAttr('header', 'visible', $vis);
+           $this->SetFieldAttr('confirmacao', 'visible', $vis);
+           $this->setButtonAttr('btnConfirmar', 'visible', $vis);                      
+       }
+       
+       public function visibilidadeLogin($vis){
+           $this->SetFieldAttr('uid', 'visible', $vis);
+           $this->SetFieldAttr('pwd', 'visible', $vis);
+           $this->setButtonAttr('btnLogin', 'visible', $vis);
+       }
+       public function doChallengeResponse() {
+		$code = "function doChallengeResponse() { \n".
+				"  var str = miolo.getElementById('uid').value + \":\" + \n" .
+				"        MD5(miolo.getElementById('pwd').value) + \":\" + \n" .
+				"        miolo.getElementById('challenge').value; \n".
+//				"        miolo.setElementValueById('pwd','');\n".
+				"        miolo.setElementValueById('response',MD5(str));\n".
+				"  return true;\n".
+				"}\n";
+		return $code;
+	}
+}
+?>
