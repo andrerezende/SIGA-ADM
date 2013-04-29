@@ -125,9 +125,9 @@ if ($idRequisicao != "") {
                         <table align="center"  width="100%" border="1">
                 <tr> 
                     <td width="25%" style="text-align: left;"><b>COMPONENTE</b></td>
-                    <td width="15%" style="text-align: center;"><b>CONFORMIDADE INÍCIO<b/></td> 
-                    <td width="15%" style="text-align: center;"><b>CONFORMIDADE FIM<b/></td>
+                    <td width="15%" style="text-align: center;"><b>CONFORMIDADE INÍCIO<b/></td>
                     <td width="20%" style="text-align: center;"><b>OBS INÍCIO<b/></td>
+                    <td width="15%" style="text-align: center;"><b>CONFORMIDADE FIM<b/></td>
                     <td width="20%" style="text-align: center;"><b>OBS: FIM<b/></td>
                 </tr>
             <?php
@@ -136,8 +136,8 @@ if ($idRequisicao != "") {
                    <tr>
                             <td style="text-align: left;"><?php echo $rows[$i]['ds_componente']; ?></td>
                             <td style="text-align: center;"><?php echo $rows[$i]['c_inicio']; ?></td>
-                            <td style="text-align: center;"><?php echo $rows[$i]['c_fim']; ?></td>
                             <td style="text-align: center;"><?php echo $rows[$i]['ob_inicio']; ?></td>
+                            <td style="text-align: center;"><?php echo $rows[$i]['c_fim']; ?></td>
                             <td style="text-align: center;"><?php echo $rows[$i]['ob_fim']; ?></td>
                 </tr> 
                   <!-- <h3 align="left">HORÁRIO: <?php //echo $rowsi[$i]['datasaida']; ?>  ORIGEM: <?php //echo $rowsi[$i]['origem']; ?> - DESTINO: <?php //echo $rowsi[$i]['destino']; ?></h3>-->
