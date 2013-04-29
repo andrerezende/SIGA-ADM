@@ -42,26 +42,26 @@ $sqla = "
 SELECT v.modelo||' - '||v.placa as modeloplaca
   FROM vei_inspecao i 
 inner join ad_veiculo v on i.id_veiculo = v.placa
-  where i.id_inspecao = $idRequisicao ";
+  where i.id_inspecao = $idInspecao ";
 
 
 try {
     $db = Conexao::getInstance()->getDB();
 
     $preparedStatment = $db->prepare($sql);
-    //$preparedStatment1 = $db->prepare($sqli);
-   // $preparedStatment2 = $db->prepare($sqla);
+    $preparedStatment1 = $db->prepare($sqli);
+    $preparedStatment2 = $db->prepare($sqla);
    // $preparedStatment3 = $db->prepare($sqle);
 
 
     $preparedStatment->execute();
-    //$preparedStatment1->execute();
-    //$preparedStatment2->execute();
+    $preparedStatment1->execute();
+    $preparedStatment2->execute();
     //$preparedStatment3->execute();
 
     $rows = $preparedStatment->fetchAll(PDO::FETCH_ASSOC);
-   // $rowsi = $preparedStatment1->fetchAll(PDO::FETCH_ASSOC);
-   //$rowsa = $preparedStatment2->fetchAll(PDO::FETCH_ASSOC);
+    $rowsi = $preparedStatment1->fetchAll(PDO::FETCH_ASSOC);
+    $rowsa = $preparedStatment2->fetchAll(PDO::FETCH_ASSOC);
     //$rowse = $preparedStatment3->fetchAll(PDO::FETCH_ASSOC);
 
     Conexao::getInstance()->disconnect();
@@ -86,6 +86,8 @@ $url = $baseURL . '/relatorios2/PRINT_PDF/print_pdf.php?input_file=' . rawurlenc
 $arraySize = count($rows);
 
 $titulo = " INSPEÇÃO DE  - VEÍCULOS<br/>";
+$titulo .= "MOTORISTA: " . $rowsi[0]['nome'] ."<br/>";
+$titulo .= "VEÍCULO: " . $rowsa[0]['modeloplaca'];
 if ($idRequisicao != "") {
     $titulo .= "INSPEÇÃO Nº: " . $idRequisicao;
 } 
@@ -114,14 +116,12 @@ if ($idRequisicao != "") {
         <?php include_once '../statics/cabecalho.php'; ?>
 
             <div id="menu">
-                <a onclick="javascript:history.go(-1);">Voltar&nbsp&nbsp&nbsp&nbsp&nbsp</a><br/>
-                <a href="<?php echo $url; ?>">Imprimir Relatório <img src="../statics/img/action_print.gif" alt="Imprimir Relatório" /></a>
             </div>
           <table border="1" width="100%">
             <tr>
                     <td style="text-align: center;">
                         <div style="border-width:medium; border-color:#000" align="center">
-                            <h3>ITINERÁRIO</h3></div> 
+                            <h3>INSPEÇÃO DE N° <?php echo $idInspecao; ?></h3></div> 
                         <table align="center"  width="100%" border="1">
                 <tr> 
                     <td width="25%" style="text-align: left;"><b>COMPONENTE</b></td>

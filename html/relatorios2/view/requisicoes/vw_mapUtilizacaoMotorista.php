@@ -40,13 +40,9 @@ if ($idMotorista || $datainicio || $datafim) {
         $sql.=" AND it.idmotorista = $idMotorista";
     }
     if ($datainicio && $datafim) {
-<<<<<<< HEAD
         
         $sql.=" AND i.datasaida between '$newDate' and '$newDateFim'";
-        break;
-=======
         $sql.=" AND r.datahorareq between '$newDate' and '$newDateFim'";
->>>>>>> 7d4919b568e9c8f79783d0af9e8aeaf4a8e3f804
     }else if($datainicio){
         $sql.=" AND i.datasaida between '$newDate' and '$newDateAtual'"; 
     }else if($datafim){
