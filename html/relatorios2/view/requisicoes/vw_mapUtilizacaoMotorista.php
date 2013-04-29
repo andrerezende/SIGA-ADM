@@ -34,14 +34,19 @@ inner join ad_motorista m on m.idmotorista = it.idmotorista
         inner join cm_pessoa p on p.idpessoa = m.idpessoa
   where o.idtiporeq = 4 and t.tabela = 'AD_ALMOXSTATUSREQ' ";
 
+
 if ($idMotorista || $datainicio || $datafim) {
     if ($idMotorista) {
         $sql.=" AND it.idmotorista = $idMotorista";
     }
     if ($datainicio && $datafim) {
+<<<<<<< HEAD
         
         $sql.=" AND i.datasaida between '$newDate' and '$newDateFim'";
         break;
+=======
+        $sql.=" AND r.datahorareq between '$newDate' and '$newDateFim'";
+>>>>>>> 7d4919b568e9c8f79783d0af9e8aeaf4a8e3f804
     }else if($datainicio){
         $sql.=" AND i.datasaida between '$newDate' and '$newDateAtual'"; 
     }else if($datafim){
@@ -94,14 +99,11 @@ $motorista = $rows[0]['nome'];
  if ($idMotorista != "") {
     $titulo .= "MOTORISTA: " . $motorista. "<br/>";
  }if($datainicio && $datafim){
-    $titulo .="PERÍODO: De ". $datainicio. " a ". $datafim; 
-    break;
+    $titulo .="PERÍODO: De ". $datainicio. " a ". $datafim;
  }else if($datainicio){
     $titulo .="PERÍODO: A partir de ". $datainicio; 
-    break;
  }else if($datafim){
     $titulo .="PERÍODO: Até ". $datafim;
-    break;
  }
 
 ?>
@@ -197,13 +199,7 @@ for ($i = 0; $i < count($rows); $i++) {
     <?php
 }
 ?>
-                    <tfoot style="background-color: #D1CFD0;">                                    
-                        <td class="valores" style="text-align: left;">--</td>
-                        <td class="valores" style="text-align: center;">--</td>
-                        <td class="valores" style="text-align: center;">--</td>
-                        <td class="valores" style="text-align: center;">--</td>
-                        <td class="valores" style="text-align: center;">--</td>
-                        <td class="valores" style="text-align: right;"><?php echo number_format($saldoTotal, 2, ',', '.'); ?></td>                                   
+                    <tfoot style="background-color: #D1CFD0;">                                 
                     </tfoot>                         
                 </tbody>    
             </table>                        

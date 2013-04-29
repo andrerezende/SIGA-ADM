@@ -219,7 +219,8 @@ try {
 $dataHelper = new DataHelper();
 
 $baseURL = 'http://' . $_SERVER['HTTP_HOST'];
-$css = $baseURL . '/relatorios2/view/statics/css/estilo.css';
+$css = $baseURL . '/relatorios2/view/statics/css/reqestilo.css';
+$css2 = $baseURL . '/relatorios2/view/statics/css/reqestilo2.css';
 
 // Arquivo temporário que será utilizado para gerar o PDF.
 $tmpFile = tempnam('/tmp', 'pdf_');
@@ -243,36 +244,10 @@ if ($idRequisicao != "") {
     <head>
         <meta http-equiv="content-type" content="text/html;charset=UTF-8" />
         <link rel="stylesheet" type="text/css" href="<?php echo $css; ?>" />
+        <link rel="stylesheet" type="text/css" href="<?php echo $css2; ?>" />
         
-        <script type="text/javascript" src="<?php echo $js2 ?>"></script>
         <script type="text/javascript" charset="utf-8">
-            $(document).ready( function() {
-                $('#tabela').dataTable( {					
-                        					
-                    "oLanguage": {
-
-                        "sSearch": "Procurar",
-                        "sLengthMenu": "Mostrar _MENU_ registros por página",
-                        "sZeroRecords": "Nada encontrado - 0",
-                        "sInfo": "Mostrando _START_ até _END_ de _TOTAL_ Registros",
-                        "sInfoEmpty": "Mostrando 0 até 0 de 0 registros",
-                        "sInfoFiltered": "(Filtrado de _MAX_ registros no total)"
-                    },
-                    "bJQueryUI": true,
-                    "aLengthMenu": [[-1, 10, 25, 50,100,200,500,1000,5000], ['Todos', 10, 25, 50,100,200,500,1000,5000]],
-                    "iDisplayLength": 10,
-                    "sPaginationType": "full_numbers",
-                    "aaSorting": [],                                        
-                    "aoColumnDefs": [  //{ "bSortable": false, "aTargets": [ 4 ] } ,
-                       {  "sType": "date-uk", "aTargets": [ 0 ]},
-                       {  "sType": "currency", "aTargets": [  ]},
-                       {  "sType": "currency", "aTargets": [ 4 ]},
-                        //                                                         {  "sType": "formatted-num", "aTargets": [  ]}                                                         
-                    ]
-                         
-                } );
-            } );
-        </script>
+            
         </script>
         
         <title><?php echo $titulo; ?></title>
@@ -285,40 +260,49 @@ if ($idRequisicao != "") {
         <?php include_once '../statics/cabecalho.php'; ?>
 
             <div id="menu">
-                <a onclick="javascript:history.go(-1);">Voltar&nbsp&nbsp&nbsp&nbsp&nbsp</a><br/>
-                <a href="<?php echo $url; ?>">Imprimir Relatório <img src="../statics/img/action_print.gif" alt="Imprimir Relatório" /></a>
             </div>
+            <table border="1" style="width: 100% !important;" >
+                <tr>
+                    <td style="text-align: center;">
+                        <div class="faixa">
+                            <h3>DESCRIÇÕES</h3></div>
             
              <table>     
             <tr>
-                <td class="data">SITUAÇÃO:</td>
+                <td class="data" style="text-align: right;" width="20%" ><b>SITUAÇÃO:</b></td>
                 <td class="valores" style="text-align: center;"><?php echo $rows[0]['status']; ?></td>
             </tr>
+                 
             <tr>
-                <td class="data">REQUISITANTE:</td>
+                <!--<td class="data">REQUISITANTE:</td>-->
+                <td class="data" style="text-align: right;"><b>REQUISITANTE:</b></td>
                 <td class="valores" style="text-align: center;"><?php echo $rows[0]['realizada']; ?></td>
             </tr>
                  <?php if($status !=1){ ?>
             <tr>
-                <td class="data">RESPONSÁVEL:</td>
+                <!--<td class="data">RESPONSÁVEL:</td>-->
+                <td class="data" style="text-align: right;"><b>RESPONSÁVEL:</b></td>
                 <td class="valores" style="text-align: center;"><?php echo $rows[0]['responsavel']; ?></td>
             </tr>
             <tr>
-                <td class="data">GESTOR:</td>
+                <!--<td class="data">GESTOR:</td>-->
+                <td class="data" style="text-align: right;"><b>GESTOR:</b></td>
                 <td class="valores" style="text-align: center;"><?php echo $rows[0]['gestor']; ?></td>
             </tr>
                  <?php
                if ($status == '7' || $status == 'A'|| $status == 'G' || $status == 'J') {
             ?>
             <tr>
-                <td class="data">EXECUTOR:</td>
+                <!--<td class="data">EXECUTOR:</td>-->
+                <td class="data" style="text-align: right;"><b>EXECUTOR:</b></td>
                 <td class="valores" style="text-align: center;"><?php echo $rowse[0]['nome']; ?></td>
             </tr>
             <?php
                }
             ?>
             <tr>
-                <td class="data">QUANTIDADE DE VOLUME:</td>
+                <!--<td class="data">QUANTIDADE DE VOLUME:</td>-->
+                <td class="data" style="text-align: right;"><b>QUANTIDADE DE VOLUME:</b></td>
                 <td class="valores" style="text-align: center;"><?php echo $rows[0]['qtdvolume']; ?></td>
             </tr>
              
@@ -328,12 +312,14 @@ if ($idRequisicao != "") {
             ?>
             
             <tr>
-                <td class="data">QUANTIDADE DE PASSAGEIROS:</td>
+                <!--<td class="data">QUANTIDADE DE PASSAGEIROS:</td>-->
+                <td class="data" style="text-align: right;"><b>QUANTIDADE DE PASSAGEIROS:</b></td>
                 <td class="valores" style="text-align: center;"><?php echo $rows[0]['qtdpassageiros']; ?></td>
             </tr>
             
             <tr>
-                <td class="data">PASSAGEIROS:</td>
+                <!--<td class="data">PASSAGEIROS:</td>-->
+                <td class="data" style="text-align: right;"><b>PASSAGEIROS:</b></td>
                 <td class="valores" style="text-align: center;"><?php echo $rows[0]['outrospassageiros']; ?></td>
             </tr>
             <?php
@@ -341,7 +327,8 @@ if ($idRequisicao != "") {
             ?>
             
             <tr>
-                <td class="data">FINALIDADE DA VIAGEM:</td>
+                <!--<td class="data">FINALIDADE DA VIAGEM:</td>-->
+                <td style="text-align: right;"><b>FINALIDADE DA VIAGEM:</b></td>
                 <td class="valores" style="text-align: center;"><?php echo $rows[0]['justificativa']; ?></td>
             </tr>
             
@@ -350,7 +337,8 @@ if ($idRequisicao != "") {
                if ($rows[0]['obs'] != null) {
             ?>
             <tr>
-                <td class="valores" style="text-align: center;">OBSERVAÇÕES</td>
+                <!--<td class="valores" style="text-align: center;">OBSERVAÇÕES</td>-->
+                <td class="valores" style="text-align: right;"><b>OBSERVAÇÕES:</b></td>
                 <td class="valores" style="text-align: center;"><?php echo $rows[0]['obs']; ?></td>
             </tr>
             <?php
@@ -362,7 +350,8 @@ if ($idRequisicao != "") {
             
                 
                 <tr>
-                    <td style="text-align: center;">MOTIVO:</td>        
+                    <!--<td style="text-align: center;">MOTIVO:</td>-->
+                    <td style="text-align: right;"><b>MOTIVO:</b></td>
                     <td style="text-align: center;"><?php echo $rows[0]['motivorejeicao']; ?></td>
                 </tr> 
              <?php
@@ -373,11 +362,11 @@ if ($idRequisicao != "") {
             ?>
                 
                 <tr>
-                    <td style="text-align: center;">MOTORISTA:</td>        
+                    <td style="text-align: right;"><b>MOTORISTA:</b></td>        
                     <td style="text-align: center;"><?php echo $rows[0]['motorista']; ?></td>
                 </tr>
                 <tr>
-                    <td style="text-align: center;">VEÍCULO:</td>        
+                    <td style="text-align: right;"><b>VEÍCULO:</b></td>        
                     <td style="text-align: center;"><?php echo $rows[0]['modeloplaca']; ?></td>
                 </tr>
             <?php
@@ -386,21 +375,28 @@ if ($idRequisicao != "") {
             ?>
                  
                  <tr>
-                 <td style="text-align: center;">TOTAL DE KM PECORRIDOS:</td>        
+                 <td style="text-align: right;"><b>TOTAL DE KM PECORRIDOS:</b></td>        
                  <td style="text-align: center;"><?php echo $rows[0]['odometrocheg'] - $rows[0]['odometrosaida']; ?></td>
                  </tr>
                  <?php
                }
             ?>
+            </table></td></tr>
             </table>
-            <tr> 
+            <?php
+               if ($rowsi == '') {
+            ?>
+<br/>
+          <table border="1" width="100%">
+            <tr>
                     <td style="text-align: center;">
-            <div style="background: #86B404" align="center" class="faixa"><h3>ITINERÁRIO</h3></div> 
-            <table>
+                        <div style="border-width:medium; border-color:#000" align="center">
+                            <h3>ITINERÁRIO</h3></div> 
+                        <table align="center"  width="100%" border="1">
                 <tr> 
-                    <td style="text-align: left;">DATA/HORA</td>
-                    <td style="text-align: center;">ORIGEM</td>
-                    <td style="text-align: center;">DESTINO</td>
+                    <td width="15%" style="text-align: left;"><b>DATA/HORA</b></td>
+                    <td width="42,5%" style="text-align: center;"><b>ORIGEM<b/></td>
+                    <td width="42,5%" style="text-align: center;"><b>DESTINO<b/></td>
                 </tr>
             <?php
                for ($i = 0; $i < count($rowsi); $i++) {
@@ -415,13 +411,20 @@ if ($idRequisicao != "") {
             <?php
                }
             ?>
-                </td>
-            </table> 
+                </table>
+                    </td>
+                </tr>
+            </table>  
             <?php
+            }
                if ($status == 'G' || $status == 'J') {
             ?>
-            <div style="background: #86B404" align="center" class="faixa"><h3>SAÍDA</h3></div><br/>
-            <table>
+<br/>
+            <table width="100%" border="1">
+                    <tr>
+                        <td >
+                            <div style="font-weight: bold;" align="center"><h3>SAIDA</h3></div>
+                            <table border="1" width="100%">
                 <tr>
                     <td style="text-align: center;">HORÁRIO:</td>        
                     <td style="text-align: center;"><?php echo $rows[0]['datahorasaidagar']; ?></td>
@@ -435,8 +438,10 @@ if ($idRequisicao != "") {
             <?php
                if ($status == 'G') {
             ?>
-            <div style="background: #86B404" align="center" class="faixa"><h3>CHEGADA</h3></div><br/>
-            <table>
+            </td>
+            <td >
+            <div style="font-weight: bold;" align="center"><h3>CHEGADA</h3></div>
+                            <table border="1" width="100%">
                 <tr>
                     <td style="text-align: center;">HORÁRIO:</td>        
                     <td style="text-align: center;"><?php echo $rows[0]['datahoracheggar']; ?></td>
@@ -451,13 +456,19 @@ if ($idRequisicao != "") {
             <?php
                if (count($rowsa)>0) {
             ?>
-            <div style="background: #86B404" align="center" class="faixa"><h3>ABASTECIMENTO</h3></div>
-            <table>
+            </td>
+                    </tr>
+            </table>
+            <table border="1" width="100%">
+                        <tr>
+                            <td style="text-align: center;">            
+                                <div align="center" ><h3>ABASTECIMENTO</h3></div>
+                                <table width="100%">
                 <tr> 
-                    <td style="text-align: left;">DATA/HORA</td>
-                    <td style="text-align: center;">LOCAL</td>
-                    <td style="text-align: center;">VALOR</td>
-                    <td style="text-align: center;">ODOMETRO</td>
+                    <td width="18%" style="text-align: left;">DATA/HORA</td>
+                    <td width="46%" style="text-align: center;">LOCAL</td>
+                    <td width="19%" style="text-align: center;">VALOR</td>
+                    <td width="17%" style="text-align: center;">ODOMETRO</td>
                 </tr>
              <?php
                for ($j = 0; $j < count($rowsa); $j++) {
@@ -473,7 +484,7 @@ if ($idRequisicao != "") {
             <?php
                }
             ?>
-            </table>
+            </table></td></tr></table>
             
              <?php
                }

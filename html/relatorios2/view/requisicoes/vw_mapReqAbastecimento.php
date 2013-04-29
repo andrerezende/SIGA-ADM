@@ -210,15 +210,7 @@ for ($i = 0; $i < count($rows); $i++) {
     <?php
 }
 ?>
-                    <tfoot style="background-color: #D1CFD0;">                                    
-                        <td class="valores" style="text-align: left;">--</td>
-                        <td class="valores" style="text-align: center;">--</td>
-                        <td class="valores" style="text-align: center;">--</td>
-                        <td class="valores" style="text-align: center;">--</td>
-                        <td class="valores" style="text-align: right;"><?php echo number_format($saldoTotal, 2, ',', '.'); ?></td>
-                        <td class="valores" style="text-align: center;">--</td>
-                        <td class="valores" style="text-align: center;">--</td>
-                        <td class="valores" style="text-align: center;">--</td>
+                    <tfoot style="background-color: #D1CFD0;">
                     </tfoot>                         
                 </tbody>    
             </table>                        
