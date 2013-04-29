@@ -25,21 +25,34 @@ class frmConformidadeMotorista extends Form
 		$this->auth = $this->manager->auth;
 		$challenge = uniqid(rand());
 		$ui = $MIOLO->GetUI();
+                $manter =  'Sim';
+        $options=array('Sim','Não');
             $fields = array(
-			new MTextField('uid',$this->auth->login->iduser,'Usuário',20),
+			new MTextField('uid',$this->auth->login->iduser,'Usuários',20),
 			new MPasswordField('pwd','','Senha',20),
-                        new MButton('btnLogin', 'Entrar'),
+                        //new MButton('btnLogin', 'Entrar'),
+                       // new MButton('btnConfirmar', 'Confirmar'),
                 
                         new MHiddenField('tries', ''),
 			new MHiddenField('return_to', ''),
 			new MHiddenField('challenge', $challenge),
 			new MHiddenField('response', ''),
 			new MHiddenField('passwd', ''),
+                new MPanel('inspecaoMotorista', 'Confirmar Inspeção'),
+            new MTextHeader('header', 1,'Concorda com a inspeção realizada?'),
+	    new MRadioButtonGroup('confirmacao', '', $options,$manter), 
 				);
             
+            $buttons = array(
+                new MButton('btnLogin', 'Entrar'),
+                new MButton('btnConfirmar', 'Confirmar'),
+            );
+            $this->SetButtons($buttons);
 				$this->SetFields($fields);
                                 $this->SetBackgroundColor('white');
-		                $this->AddButton(new MHiddenField('btnLogin', 'Entrar'));
+		                //$this->AddButton(new MHiddenField('btnLogin', 'Entrar'));
+                                $this->inabilitaDadosMotorista(false);
+                                $this->inabilitaLogin(true);
                                 
                                 
 	}
@@ -92,12 +105,16 @@ class frmConformidadeMotorista extends Form
 		$pwd = $this->GetFormValue('pwd');              
 		$challenge = $this->GetFieldValue('challenge');
 		$response = $this->GetFieldValue('response');
+                
 
 		if (!$this->LoginPermitted($uid)) {
 			$err = 'Acesso não permitido.';
                         $this->AddError($err);
 		} else {
-			if ($this->auth->Authenticate($uid, $challenge, $response)) {
+                    $senha =md5($pwd);
+                    $usuario = $this->manager->GetBusiness('common','usuario');
+                    if ($usuario->GetByMotoristaLoginPass($uid,$senha)) {
+			//if ($this->auth->Authenticate($uid, $challenge, $response)) {
                             
                             $id = $this->retornaIdUsuario($uid, $this->objInspecao->idInspecao);
                             if($id){
@@ -106,8 +123,11 @@ class frmConformidadeMotorista extends Form
                                 $this->objInspecao->confirmacao = 1;
                                 $this->objInspecao->update();
                                 $this->objInspecao->endTransaction();
-                                $go = $this->manager->getActionUrl('adm','main:inspecao',$this->objInspecao->idInspecao,array("form"=>"item","idInspecao"=>$this->objInspecao->idInspecao));
-                                $this->page->Redirect($go);
+                                $this->inabilitaDadosMotorista(true);
+                                $this->inabilitaLogin(false);
+                                //$this->interacaoMotorista();
+                                //$go = $this->manager->getActionUrl('adm','main:inspecao',$this->objInspecao->idInspecao,array("form"=>"item","idInspecao"=>$this->objInspecao->idInspecao));
+                                //$this->page->Redirect($go);
                             // }
                              }else{
                                  $tries = $this->GetFormValue('tries');
@@ -190,5 +210,42 @@ class frmConformidadeMotorista extends Form
 				"}\n";
 		return $code;
 	}
+        public function interacaoMotorista() {
+            $go = $this->manager->GetActionURL('adm', 'inspecao:loginmot', $this->objInspecao->idInspecao);
+         $this->page->Redirect($go);
+       }
+       function inabilitaDadosMotorista($visibilidade) {
+        $this->setButtonAttr('btnConfirmar', 'visible', $visibilidade);
+        $this->setFieldAttr('inspecaoMotorista', 'visible', $visibilidade);
+        $this->setFieldAttr('confirmacao', 'visible', $visibilidade);
+        $this->setFieldAttr('header', 'visible', $visibilidade); 
+    }
+    function inabilitaLogin($visibilidade) {
+        $this->setButtonAttr('btnLogin', 'visible', $visibilidade);
+        $this->setFieldAttr('uid', 'visible', $visibilidade);
+        $this->setFieldAttr('pwd', 'visible', $visibilidade);
+    }
+    
+    public function btnConfirmar_click() {
+        global $MIOLO;
+        $inspecao = $this->manager->getBusiness('adm', 'inspecao');
+                    $inspecao = $this->objInspecao->GetById($this->objInspecao->idInspecao);
+                    if(Form::GetFormValue('confirmacao') == 'Sim'){
+                    $inspecao->dataHoraFim = date('d/m/Y H:i');
+                    $inspecao->setStatus(5);
+                    $inspecao->confirmacao = 2;
+                    $inspecao->update();
+                    $this->manager->information("Inspeção FINAL concluida com sucesso: " . $this->objInspecao->idInspecao, $this->manager->getActionUrl('adm', 'main:inspecao:final',null));
+                    
+                    }else if(Form::GetFormValue('confirmacao') == 'Não'){
+                    $inspecao->dataHoraFim = date('d/m/Y H:i');
+                    $inspecao->setStatus(5);
+                    $inspecao->confirmacao = 3;
+                    $inspecao->update();
+                    $this->manager->information("Inspeção FINAL concluida com sucesso: " . $this->objInspecao->idInspecao, $this->manager->getActionUrl('adm', 'main:inspecao:final',null));
+                    
+                    
+                    }
+    }
 }
 ?>
