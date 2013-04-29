@@ -148,6 +148,7 @@ class frmRequisicaoveiculo extends Form {
 						new FormButton('btnConfirmarRetorno', 'Confimar Retorno'),
 						new FormButton('btnEstornar', 'Estornar'),
 						new FormButton('btnCancelar', 'Cancelar'),
+                                                new FormButton('btnConfirmarMotorista', 'Confirmação do Motorista'),
 						new FormButton('btnNextCPF', 'Enviar'),
 						new FormButton('btnCPF', 'Procurar'),
 						//IFF
@@ -184,6 +185,7 @@ class frmRequisicaoveiculo extends Form {
 				$this->setButtonAttr('btnAnular', 'visible', FALSE);
 				$this->setButtonAttr('btnEstornar', 'visible', FALSE);
                                 $this->setButtonAttr('btnEstornada', 'visible', FALSE);
+                                $this->setButtonAttr('btnConfirmarMotorista', 'visible', FALSE);
 				//IFF
 				$this->setButtonAttr('btnAbastecimento', 'visible', FALSE);
 
@@ -622,6 +624,10 @@ class frmRequisicaoveiculo extends Form {
 										$this->AddField(new CalendarField('dataSaida', substr($dataHoraSaidaGaragem, 0, 10), 'Data Saída', '10'));
 										$this->AddField(new TextField('horaSaida', substr($itemRequisicao->dataHoraSaidaGaragem, 11, 5), 'Hora Saída', 10));
                                                                                 $this->AddField(new MultiLineField('ocorrenciassaida', $itemRequisicao->ocorrenciassaida, 'Ocorrências', '', 3, 50));
+                                                                                $this->AddField(new MTextLabel('label3','OBS: Informações de saída NÃO CONFIRMADAS pelo motorista'));
+                                                                                $this->AddField(new MTextLabel('label2','OBS: Informações de saída CONFIRMADAS pelo motorista'));
+                                                                                $this->AddField(new MTextLabel('label1','OBS: Informações de saída NÃO AVALIADAS pelo motorista'));
+                                                                                $this->AddField(new MSpacer(1));
 										$this->AddField(new TextField('odometroChegada', '', 'Odômetro Chegada', 10));
 										$this->AddField(new CalendarField('dataChegada', '', 'Data Chegada', '10', 'Ex.: 01/01/2001'));
 										$this->AddField(new TextField('horaChegada', '', 'Hora Chegada', 10, 'Ex.: 19:00'));
@@ -658,6 +664,7 @@ class frmRequisicaoveiculo extends Form {
                                                                                 }
 
 										$this->SetFieldAttr('lkpVeiculo', 'related', 'null,placa,null,null,lkpVeiculo');
+                                                                                $this->visibilidadaOpMotorista($itemRequisicao->confirmacao);
                                                                                        $this->setButtonAttr('btnEstornada', 'visible', true);
 								} else if (($this->objRequisicao->idUsuarioRequisitante == $idUsuario) || ($this->objRequisicao->uoRequisitante->isGestorOf($idUsuario))) {// Se for o requisitante ou o gestor da UO que responde pela requisição
 										$objVeiculo = $this->manager->GetBusiness('adm', 'veiculo');
@@ -1539,6 +1546,7 @@ class frmRequisicaoveiculo extends Form {
 		}
 
 		public function btnConfirmarAtendimento_click() {
+                                global $perms;
 				$itemRequisicao = $this->objRequisicao->getItem();
 				$data = $this->getData();
 
@@ -1610,6 +1618,7 @@ class frmRequisicaoveiculo extends Form {
                                 if($acao == "autorizada"){
                                    $this->emailSolicitacaoAutorizada($this->getEmailResponsavel(),3);
                                    $this->emailSolicitacaoAutorizada( $this->getEmailGestor(),4);
+                                   if(!$perms->CheckAccess('AD_EXEC_VEICULO',A_EXECUTE))
                                    $this->emailSolicitacaoAutorizada($this->getEmailExecutante(),5);
                                 }
                                 if($acao == "devolvida"){
@@ -1657,6 +1666,7 @@ class frmRequisicaoveiculo extends Form {
 						//$this->setFieldAttr('ocorrencias', 'readonly', TRUE);
 
 						$this->setButtonAttr('btnExecutar', 'visible', FALSE);
+                                                $this->setButtonAttr('btnConfirmarMotorista', 'visible', false);
 						$this->setButtonAttr('btnConfirmarExecucao', 'visible', TRUE);
 						$this->setButtonAttr('btnCancelar', 'visible', TRUE);
 				}
@@ -1771,6 +1781,7 @@ class frmRequisicaoveiculo extends Form {
 
 
 		public function btnConfirmarExecucao_click() {
+                                global $perms;
 				$cf = new MCurrencyFormatter();
 
 				$itemRequisicao = $this->objRequisicao->getItem();
@@ -1868,6 +1879,7 @@ class frmRequisicaoveiculo extends Form {
 						$this->objRequisicao->endTransaction();
 						$this->emailSolicitacaoAutorizada($this->getEmailResponsavel(),19);
                                                 $this->emailSolicitacaoAutorizada($this->getEmailGestor(),20);
+                                                if(!$perms->CheckAccess('AD_EXEC_VEICULO',A_EXECUTE))
                                                 $this->emailSolicitacaoAutorizada($this->getEmailExecutante(),21);
 						$this->objRequisicao->Log(OP_UPD, "Requisicao " . $this->objRequisicao->idRequisicao . " executada com sucesso.");
 
@@ -1876,15 +1888,17 @@ class frmRequisicaoveiculo extends Form {
 								$action_voltar = $this->manager->getActionUrl('adm', 'main:requisicoes', $proximaRequisicao->idRequisicao, array("form" => "item", "tipoReq" => $proximaRequisicao->idTipoReq));
 						else
 								$action_voltar = $this->manager->getActionUrl('adm', 'main:requisicoes:find', '');
+                                                $this->interacaoMotorista();
 
 						//$this->manager->information("Requisicao executada com sucesso.", $action_voltar);
-                                                $this->manager->information("Requisicao " . $this->objRequisicao->idRequisicao . ", EM EXECUÇÃO.", $this->manager->getActionUrl('adm', 'main:requisicaoveiculo:findveiculo'));        
+                                               //$this->manager->information("Requisicao " . $this->objRequisicao->idRequisicao . ", EM EXECUÇÃO.", $this->manager->getActionUrl('adm', 'main:requisicaoveiculo:findveiculo'));        
 				} catch (Exception $e) {
 						$this->addError($e->getMessage());
 				}
 		}
                 
                 public function btnConfirmarExecucaoN_click() {
+                    global $perms;
 				$cf = new MCurrencyFormatter();
                                 
 
@@ -1986,6 +2000,7 @@ class frmRequisicaoveiculo extends Form {
 						$this->objRequisicao->endTransaction();
 						$this->emailSolicitacaoAutorizada($this->getEmailResponsavel(),16);
                                                 $this->emailSolicitacaoAutorizada($this->getEmailGestor(),17);
+                                                if(!$perms->CheckAccess('AD_EXEC_VEICULO',A_EXECUTE))
                                                 $this->emailSolicitacaoAutorizada($this->getEmailExecutante(),18);
                                                 
 						$this->objRequisicao->Log(OP_UPD, "Requisicao " . $this->objRequisicao->idRequisicao . " PARCIALMENTE FINALIZADA");
@@ -2004,6 +2019,7 @@ class frmRequisicaoveiculo extends Form {
 		}
                 
                 public function btnConfirmarEmExecucao_click() {
+                    global $perms;
 				$cf = new MCurrencyFormatter();
 
 				$itemRequisicao = $this->objRequisicao->getItem();
@@ -2101,6 +2117,7 @@ class frmRequisicaoveiculo extends Form {
 						$this->objRequisicao->endTransaction();
 						$this->emailSolicitacaoAutorizada($this->getEmailResponsavel(),16);
                                                 $this->emailSolicitacaoAutorizada($this->getEmailGestor(),17);
+                                                if(!$perms->CheckAccess('AD_EXEC_VEICULO',A_EXECUTE))
                                                 $this->emailSolicitacaoAutorizada($this->getEmailExecutante(),18);
 						$this->objRequisicao->Log(OP_UPD, "Requisicao " . $this->objRequisicao->idRequisicao . " executada com sucesso.");
 
@@ -2111,14 +2128,15 @@ class frmRequisicaoveiculo extends Form {
 								$action_voltar = $this->manager->getActionUrl('adm', 'main:requisicaoveiculo:findveiculo', '');
 
 						//$this->manager->information("Requisicao executada com sucesso.", $action_voltar);
-                                                $this->manager->information("Requisicao " . $this->objRequisicao->idRequisicao . ", FINALIZADA com sucesso.", $this->manager->getActionUrl('adm', 'main:requisicaoveiculo:findveiculo'));        
+                                                $this->interacaoMotorista();
+                                                //$this->manager->information("Requisicao " . $this->objRequisicao->idRequisicao . ", FINALIZADA com sucesso.", $this->manager->getActionUrl('adm', 'main:requisicaoveiculo:findveiculo'));        
 				} catch (Exception $e) {
 						$this->addError($e->getMessage());
 				}
 		}
 
 		public function btnLiberar_click() {
-                    
+                                global $perms;
 				$data = $this->getData();
 
 				$proximaRequisicao = $this->manager->getBusiness('adm', 'requisicao', $this->objRequisicao->getProximaASerExecutada());
@@ -2193,6 +2211,7 @@ class frmRequisicaoveiculo extends Form {
 										$status = "liberada";
                                                                                 $this->emailSolicitacaoAutorizada($this->getEmailResponsavel(),10);
                                                                                 $this->emailSolicitacaoAutorizada($this->getEmailGestor(),11);
+                                                                                if(!$perms->CheckAccess('AD_EXEC_VEICULO',A_EXECUTE))
                                                                                 $this->emailSolicitacaoAutorizada( $this->getEmailExecutante(),12);
 								}
 
@@ -3312,6 +3331,7 @@ HERE;
 				
      }
      public function btnEstornada_click(){
+         global $perms;
          $objRequisicaoVeiculo = $this->manager->getBusiness('adm', 'requisicaoveiculo');
 	 $objRequisicaoVeiculo = $objRequisicaoVeiculo->GetById($this->objRequisicao->idRequisicao);
          
@@ -3338,6 +3358,7 @@ HERE;
                  $objRequisicaoVeiculo->update();
                  $this->emailSolicitacaoAutorizada($this->getEmailResponsavel(),22);
                  $this->emailSolicitacaoAutorizada($this->getEmailGestor(),22);
+                 if(!$perms->CheckAccess('AD_EXEC_VEICULO',A_EXECUTE))
                  $this->emailSolicitacaoAutorizada( $this->getEmailExecutante(),23);
                  break;
              case 5:
@@ -3355,6 +3376,7 @@ HERE;
                  $objRequisicaoVeiculo->update();
                  $this->emailSolicitacaoAutorizada($this->getEmailResponsavel(),22);
                  $this->emailSolicitacaoAutorizada($this->getEmailGestor(),22);
+                 if(!$perms->CheckAccess('AD_EXEC_VEICULO',A_EXECUTE))
                  $this->emailSolicitacaoAutorizada( $this->getEmailExecutante(),23);
                  break;
              case J:
@@ -3364,6 +3386,7 @@ HERE;
                  $objRequisicaoVeiculo->update();
                  $this->emailSolicitacaoAutorizada($this->getEmailResponsavel(),22);
                  $this->emailSolicitacaoAutorizada($this->getEmailGestor(),22);
+                 if(!$perms->CheckAccess('AD_EXEC_VEICULO',A_EXECUTE))
                  $this->emailSolicitacaoAutorizada( $this->getEmailExecutante(),23);
                  break;
              case G:
@@ -3373,6 +3396,7 @@ HERE;
                  $objRequisicaoVeiculo->update();
                  $this->emailSolicitacaoAutorizada($this->getEmailResponsavel(),22);
                  $this->emailSolicitacaoAutorizada($this->getEmailGestor(),22);
+                 if(!$perms->CheckAccess('AD_EXEC_VEICULO',A_EXECUTE))
                  $this->emailSolicitacaoAutorizada( $this->getEmailExecutante(),23);
                  break;
          }
@@ -3422,6 +3446,51 @@ HERE;
 
 
 	}
+        
+        public function interacaoMotorista(){
+            $objRequisicaoVeiculo = $this->manager->getBusiness('adm', 'requisicaoveiculo');
+	    $objRequisicaoVeiculo = $objRequisicaoVeiculo->GetById($this->objRequisicao->idRequisicao);
+            $action_sim = $this->manager->getActionUrl('adm', 'requisicaoveiculo:loginmot', $this->objRequisicao->idRequisicao, array('form' => 'item', 'idReq' => $this->objRequisicao->idRequisicao));
+            $action_nao = $this->manager->getActionUrl('adm', 'main:requisicoes:findveiculo',"Requisicao " . $this->objRequisicao->idRequisicao. " , EM EXECUÇÃO.");
+            try
+		{
+	                $objRequisicaoVeiculo->beginTransaction();
+                        $objRequisicaoVeiculo->confirmacao = 1;
+                        $objRequisicaoVeiculo->update();
+                        $objRequisicaoVeiculo->endTransaction();
+                        }
+		catch (Exception $e)
+		{
+			$this->AddError($e->GetMessage());
+		}
+	    $this->manager->Question("O MOTORISTA Deseja confirmar os dados verificados da requisição: ". $this->objRequisicao->idRequisicao." ?" ,$action_sim,$action_nao);
+            
+        }
+                
+                public function visibilidadaOpMotorista($confirmacao){
+            switch($confirmacao){
+                                                                                    case 1:
+                                                                                        $this->setFieldAttr('label1', 'visible', TRUE);
+                                                                                        $this->setFieldAttr('label2', 'visible', FALSE);
+                                                                                        $this->setFieldAttr('label3', 'visible', FALSE);
+                                                                                        break;
+                                                                                    case 2:
+                                                                                        $this->setFieldAttr('label1', 'visible', FALSE);
+                                                                                        $this->setFieldAttr('label2', 'visible', TRUE);
+                                                                                        $this->setFieldAttr('label3', 'visible', FALSE);
+                                                                                        break;
+                                                                                    case 3:
+                                                                                        $this->setFieldAttr('label1', 'visible', FALSE);
+                                                                                        $this->setFieldAttr('label2', 'visible', FALSE);
+                                                                                        $this->setFieldAttr('label3', 'visible', TRUE);
+                                                                                        break;
+                                                                                    default:
+                                                                                        $this->setFieldAttr('label1', 'visible', FALSE);
+                                                                                        $this->setFieldAttr('label2', 'visible', FALSE);
+                                                                                        $this->setFieldAttr('label3', 'visible', FALSE);
+                                                                                        break;
+                                                                                }
+        }
 
 }
 
