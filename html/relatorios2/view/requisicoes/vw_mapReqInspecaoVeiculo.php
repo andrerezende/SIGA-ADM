@@ -3,14 +3,12 @@ ini_set('memory_limit', '128M');
 ob_start();
 require_once '../../model/DAO/Conexao.php';
 require_once '../../controller/DataHelper.php';
+//$idMotorista = $_GET['idMotorista'];
+//$datainicio = $_GET['datainicio'];
+//$idVeiculo = $_GET['idVeiculo'];
 $idInspecao = $_GET['idInspecao'];
-$status = $_GET['status'];
-$idMotorista = $_GET['idMotorista'];
-$datainicio = $_GET['datainicio'];
-$idVeiculo = $_GET['idVeiculo'];
-$idInspecao = $_GET['idIsntituicao'];
-$arrData = explode('/', $datainicio);
-$newDate = $arrData [2].'-'.$arrData [1].'-'.$arrData [0];
+//$arrData = explode('/', $datainicio);
+//$newDate = $arrData [2].'-'.$arrData [1].'-'.$arrData [0];
 
 
     
