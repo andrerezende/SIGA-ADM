@@ -79,7 +79,9 @@ $tmpFile = tempnam('/tmp', 'pdf_');
 
 // Url utilizada no link de impressão do relatório. ( mandando o html )
 $url = $baseURL . '/relatorios2/PRINT_PDF/print_pdf.php?input_file=' . rawurlencode($tmpFile);
-
+//$exc = 'http://127.0.0.1//index.php?module=adm&action=inspecao:loginmot';
+$server = $_SERVER['SERVER_NAME']; 
+$exc = 'http://'.$server.'//index.php?module=adm&action=inspecao:loginmot';
 
 $arraySize = count($rows);
 
@@ -103,6 +105,12 @@ if ($idRequisicao != "") {
         <script type="text/javascript" charset="utf-8">
             
         </script>
+        <script>
+function open_win()
+{
+window.open("http://www.w3schools.com")
+}
+</script>
         
         <title><?php echo $titulo; ?></title>
     </head>
@@ -112,7 +120,10 @@ if ($idRequisicao != "") {
         <div id="conteudo">
 
         <?php include_once '../statics/cabecalho.php'; ?>
-
+            
+            <div id="menu">
+                <a href="<?php echo $exc; ?>" target="_parent">Conformidade do Motorista <img src="../statics/img/action_print.gif" alt="Imprimir Relatório" /></a>
+            </div>
             <div id="menu">
             </div>
           <table border="1" width="100%">
