@@ -7,15 +7,17 @@ require_once '../../controller/DataHelper.php';
 //$datainicio = $_GET['datainicio'];
 //$idVeiculo = $_GET['idVeiculo'];
 $idInspecao = $_GET['idInspecao'];
+$idSituacaoInspecao = $_GET['idSituacaoInspecao'];
+$conformidade = $_GET['conformidade'];
 //$arrData = explode('/', $datainicio);
 //$newDate = $arrData [2].'-'.$arrData [1].'-'.$arrData [0];
 
 
     
-    
+ if($idSituacaoInspecao == 5) {  
 
         $sql = "
-SELECT ds_componente, f.ds_conformidade as c_inicio,f1.ds_conformidade as c_fim,ob_inicio, ob_fim, p.nome, v.modelo||' - '||v.placa as modeloplaca
+SELECT ds_componente, f.ds_conformidade as c_inicio,f1.ds_conformidade as c_fim,ob_inicio, ob_fim, p.nome, v.modelo||' - '||v.placa as modeloplaca, confirmacao, confirmacaofinal
   FROM vei_inspecao i 
 inner join vei_inspecao_componente ic on i.id_inspecao = ic.id_inspecao 
   inner join vei_componente c on c.id_componente = ic.id_componente
@@ -25,9 +27,19 @@ inner join ad_motorista m on i.id_motorista = m.idmotorista
   inner join cm_pessoa p on p.idpessoa = m.idpessoa 
 inner join ad_veiculo v on i.id_veiculo = v.placa
 where i.id_inspecao = $idInspecao ";
-
-
-
+}else
+if($idSituacaoInspecao == 3) {
+    $sql = "
+SELECT ds_componente, f.ds_conformidade as c_inicio,ob_inicio, ob_fim, p.nome, v.modelo||' - '||v.placa as modeloplaca,confirmacao
+  FROM vei_inspecao i 
+inner join vei_inspecao_componente ic on i.id_inspecao = ic.id_inspecao 
+  inner join vei_componente c on c.id_componente = ic.id_componente
+inner join vei_conformidade f on f.id_conformidade = ic.id_conformidade_inicio 
+inner join ad_motorista m on i.id_motorista = m.idmotorista
+  inner join cm_pessoa p on p.idpessoa = m.idpessoa 
+inner join ad_veiculo v on i.id_veiculo = v.placa
+where i.id_inspecao =$idInspecao ";
+}
 
 $sqli = "
 SELECT p.nome
@@ -49,7 +61,7 @@ try {
     $preparedStatment = $db->prepare($sql);
     $preparedStatment1 = $db->prepare($sqli);
     $preparedStatment2 = $db->prepare($sqla);
-   // $preparedStatment3 = $db->prepare($sqle);
+    //$preparedStatment3 = $db->prepare($sqlini);
 
 
     $preparedStatment->execute();
@@ -80,9 +92,10 @@ $tmpFile = tempnam('/tmp', 'pdf_');
 // Url utilizada no link de impressão do relatório. ( mandando o html )
 $url = $baseURL . '/relatorios2/PRINT_PDF/print_pdf.php?input_file=' . rawurlencode($tmpFile);
 //$exc = 'http://127.0.0.1//index.php?module=adm&action=inspecao:loginmot';
+if($conformidade == 1){
 $server = $_SERVER['SERVER_NAME']; 
 $exc = 'http://'.$server.'//index.php?module=adm&action=inspecao:loginmot';
-
+}
 $arraySize = count($rows);
 
 $titulo = " INSPEÇÃO DE  - VEÍCULOS<br/>";
@@ -120,17 +133,52 @@ window.open("http://www.w3schools.com")
         <div id="conteudo">
 
         <?php include_once '../statics/cabecalho.php'; ?>
-            
+            <?php if($conformidade == 1){?>
             <div id="menu">
                 <a href="<?php echo $exc; ?>" target="_parent">Conformidade do Motorista <img src="../statics/img/action_print.gif" alt="Imprimir Relatório" /></a>
             </div>
+            <?php }?>
             <div id="menu">
             </div>
           <table border="1" width="100%">
             <tr>
+                <?php switch($rows[5]['confirmacao']){
+                    case 1:
+                        $con = 'INSPEÇÃO de saída NÃO AVALIADAS pelo motorista';
+                        break;
+                    case 2:
+                        $con = 'INSPEÇÃO de saída CONFIRMADAS pelo motorista';
+                        break;
+                    case 3:
+                        $con = 'INSPEÇÃO de saída NÃO CONFIRMADAS pelo motorista';
+                        break;
+                    default:
+                        $con = 'INSPEÇÃO de saída NÃO AVALIADAS pelo motorista';
+                        break;
+                ?>
+            <?php }?>
+                <?php if($rows[5]['confirmacaofinal']){
+                    switch($rows[5]['confirmacaofinal']){
+                    case 1:
+                        $conf = 'INSPEÇÃO de chegada NÃO AVALIADAS pelo motorista';
+                        break;
+                    case 2:
+                        $conf = 'INSPEÇÃO de chegada CONFIRMADAS pelo motorista';
+                        break;
+                    case 3:
+                        $conf = 'INSPEÇÃO de chegada NÃO CONFIRMADAS pelo motorista';
+                        break;
+                    default:
+                        $conf = 'INSPEÇÃO de chegada NÃO AVALIADAS pelo motorista';
+                        break;
+                }?>
+            <?php }?>
                     <td style="text-align: center;">
                         <div style="border-width:medium; border-color:#000" align="center">
-                            <h3>INSPEÇÃO DE N° <?php echo $idInspecao; ?></h3></div> 
+                            <h3>INSPEÇÃO DE N° <?php echo $idInspecao; ?></h3>
+                            <h3><?php echo $con; ?></h3>
+                            <h3><?php echo $conf; ?></h3>
+                        </div> 
                         <table align="center"  width="100%" border="1">
                 <tr> 
                     <td width="25%" style="text-align: left;"><b>COMPONENTE</b></td>

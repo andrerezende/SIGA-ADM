@@ -2,9 +2,10 @@
 
 //$idVeiculo = $_GET['idVeiculo'];
 //$idMotorista = $_GET['idMotorista'];
-//$datainicio = $_GET['datainicio'];
+$idSituacaoInspecao = $_GET['idSituacaoInspecao'];
 $idInspecao = $_GET['idInspecao'];
+$conformidade = $_GET['conformidade'];
 
-header("Location: view/requisicoes/vw_mapReqInspecaoVeiculo.php?idInspecao=$idInspecao");
+header("Location: view/requisicoes/vw_mapReqInspecaoVeiculo.php?idInspecao=$idInspecao&idSituacaoInspecao=$idSituacaoInspecao&conformidade=$conformidade");
 
 ?>
