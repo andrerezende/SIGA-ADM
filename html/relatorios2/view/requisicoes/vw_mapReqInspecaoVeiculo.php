@@ -144,32 +144,32 @@ window.open("http://www.w3schools.com")
             <tr>
                 <?php switch($rows[5]['confirmacao']){
                     case 1:
-                        $con = 'INSPEÇÃO de saída NÃO AVALIADAS pelo motorista';
+                        $con = 'INSPEÇÃO de saída NÃO AVALIADA pelo motorista';
                         break;
                     case 2:
-                        $con = 'INSPEÇÃO de saída CONFIRMADAS pelo motorista';
+                        $con = 'INSPEÇÃO de saída CONFIRMADA pelo motorista';
                         break;
                     case 3:
-                        $con = 'INSPEÇÃO de saída NÃO CONFIRMADAS pelo motorista';
+                        $con = 'INSPEÇÃO de saída NÃO CONFIRMADA pelo motorista';
                         break;
                     default:
-                        $con = 'INSPEÇÃO de saída NÃO AVALIADAS pelo motorista';
+                        $con = 'INSPEÇÃO de saída NÃO AVALIADA pelo motorista';
                         break;
                 ?>
             <?php }?>
                 <?php if($rows[5]['confirmacaofinal']){
                     switch($rows[5]['confirmacaofinal']){
                     case 1:
-                        $conf = 'INSPEÇÃO de chegada NÃO AVALIADAS pelo motorista';
+                        $conf = 'INSPEÇÃO de chegada NÃO AVALIADA pelo motorista';
                         break;
                     case 2:
-                        $conf = 'INSPEÇÃO de chegada CONFIRMADAS pelo motorista';
+                        $conf = 'INSPEÇÃO de chegada CONFIRMADA pelo motorista';
                         break;
                     case 3:
-                        $conf = 'INSPEÇÃO de chegada NÃO CONFIRMADAS pelo motorista';
+                        $conf = 'INSPEÇÃO de chegada NÃO CONFIRMADA pelo motorista';
                         break;
                     default:
-                        $conf = 'INSPEÇÃO de chegada NÃO AVALIADAS pelo motorista';
+                        $conf = 'INSPEÇÃO de chegada NÃO AVALIADA pelo motorista';
                         break;
                 }?>
             <?php }?>
