@@ -8,7 +8,7 @@ $handled = $MIOLO->InvokeHandler($module, $a);
 
 
 
-
+//Teste
 if (!$handled) {
 	//verifica se usuário é requisitante de alguma uo. se for mostra opção Requisição Suplementar
 	$idUsuario = $this->manager->GetLogin()->idkey;
