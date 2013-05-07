@@ -1,8 +1,8 @@
 <?php
 if($perms->CheckAccess('adm',A_ACCESS,true))
 $ui = $MIOLO->GetUI();
-$navbar->AddOption('Administração', 'adm', 'main');
 $theme->SetContent($content);
+$navbar->AddOption('Administração', 'adm', 'main');
 $a = $context ? $context->ShiftAction() : '';
 $handled = $MIOLO->InvokeHandler($module, $a);
 
@@ -38,8 +38,7 @@ if (!$handled) {
         $executante= $this->manager->GetBusiness('adm', 'executor');
         if($executante->isExecutorOf($this->manager->GetLogin()->idkey))
         $panel->AddUserAction('AD_INSPECAO_VEICULO', A_EXECUTE, 'Inspeção de Veículo', $ui->GetImageTheme('', 'icons/carroManutencao.png'), $module, 'main:inspecao:find');
-	// Orçamento Termo
-	//$panel->AddAction('Orçamento Termo',$ui->GetImageTheme('','icons/financeiro.png'),$module,'main:orcterm');
+	
 	$panel->AddAction('Orçamento Termo', $ui->GetImageTheme('', 'icons/financeiro.png'), $module, 'main:pedidocompra:find');
 	$panel->AddUserAction('adm_mv', A_EXECUTE, 'Manutenção de Veículos', $ui->GetImage('adm', 'kcontrol.png'), $module, 'main:manutencaoveiculo');
 	/*if ($uos > 0) {
