@@ -1,6 +1,11 @@
 <?
     $action = $context->ShiftAction();
-    $navbar->AddOption('Requisição', 'adm', 'main:requisicoes:find');
+    if($action == 'new' && $item == '4'){
+	$navbar->AddOption('Requisição', 'adm', 'main:requisicoes:findveiculo');
+    }elseif($action == 'new'){ 
+        $navbar->AddOption('Requisição', 'adm', 'main:requisicoes:find');
+    }
+    
 	switch($action)
     {
         case 'find':
@@ -8,6 +13,9 @@
             break;
         case 'new':
             $MIOLO->InvokeHandler($module, 'requisicoes/new');
+            break;
+        case 'findveiculo':
+            $MIOLO->InvokeHandler($module, 'requisicoes/findveiculo');
             break;
 		case 'reprequisicaoveiculo':
             $MIOLO->InvokeHandler($module, 'requisicoes/reprequisicaoveiculo');
@@ -32,7 +40,7 @@
             break;           
 		case 'requisicaosuplementar':
             $MIOLO->InvokeHandler($module, 'requisicoes/requisicaosuplementar');
-            break;           
+            break;
         default:
             $MIOLO->InvokeHandler($module, 'requisicoes/main');
         }

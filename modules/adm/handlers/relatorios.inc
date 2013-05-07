@@ -101,5 +101,20 @@
 		 case 'repAtribOrc':
  	  	             $MIOLO->InvokeHandler($module, 'relatorios/repAtribOrc');
         break;
+    case 'repMapUtilizacaoVeiculo':
+            $MIOLO->InvokeHandler($module, 'requisicoes/repMapUtilizacaoVeiculo');
+            break;
+            case 'repMapUtilizacaoMotorista':
+            $MIOLO->InvokeHandler($module, 'requisicoes/repMapUtilizacaoMotorista');
+            break;
+            case 'repMapReqAbastecimento':
+            $MIOLO->InvokeHandler($module, 'requisicoes/repMapReqAbastecimento');
+            break;
+            case 'repMapRequisicao':
+            $MIOLO->InvokeHandler($module, 'requisicoes/repMapRequisicao');
+            break;
+            case 'repMapInspecaoVeiculo':
+                $MIOLO->InvokeHandler($module,'requisicoes/repMapInspecaoVeiculo');
+                break;
     }
 ?>

@@ -14,17 +14,20 @@
     ******************************************************************/
 
 	//A
-	$panel->AddUserAction('adm',A_EXECUTE,'Atribuicão de Orçamento',$ui->GetImageTheme('','icons/relatorio.png'),$module, 'main:relatorios:repAtribOrc');
+	$panel->AddUserAction('AD_REL_VEICULOS',A_EXECUTE,'Mapa de Utilização de Veículo',$ui->GetImageTheme('','icons/relatorio.png'),$module, 'main:relatorios:repMapUtilizacaoVeiculo');
 	
     // B
-	$panel->AddUserAction('adm_bolsista',A_EXECUTE,'Bolsas Por Curso',$ui->GetImageTheme('','icons/relatorio.png'),$module, 'main:relatorios:repBolsa');
+	$panel->AddUserAction('AD_REL_VEICULOS',A_EXECUTE,'Mapa de Utilização de Motorista',$ui->GetImageTheme('','icons/relatorio.png'),$module, 'main:relatorios:repMapUtilizacaoMotorista');
 
     // C
-    $panel->AddUserAction('adm_adminorcamento',A_EXECUTE,'ConRazão',$ui->GetImageTheme('','icons/relatorio.png'),$module, 'main:relatorios:repConRazao');
-    $panel->AddUserAction('adm_compras',A_EXECUTE,'Convite Equipamento',$ui->GetImageTheme('','icons/relatorio.png'),$module, 'main:relatorios:repExecConviteEquipamento');
+        $panel->AddUserAction('AD_REL_VEICULOS',A_EXECUTE,'Abastecimentos',$ui->GetImageTheme('','icons/relatorio.png'),$module, 'main:relatorios:repMapReqAbastecimento');
+        $panel->AddUserAction('AD_REL_VEICULOS',A_EXECUTE,'Imprimir Requisição',$ui->GetImageTheme('','icons/relatorio.png'),$module, 'main:relatorios:repMapRequisicao');
+        $panel->AddUserAction('AD_REL_VEICULOS',A_EXECUTE,'Imprimir Inspeção',$ui->GetImageTheme('','icons/relatorio.png'),$module, 'main:relatorios:repMapInspecaoVeiculo');
+    //$panel->AddUserAction('adm_adminorcamento',A_EXECUTE,'ConRazão',$ui->GetImageTheme('','icons/relatorio.png'),$module, 'main:relatorios:repConRazao');
+    //$panel->AddUserAction('adm_compras',A_EXECUTE,'Convite Equipamento',$ui->GetImageTheme('','icons/relatorio.png'),$module, 'main:relatorios:repExecConviteEquipamento');
 
     // D
-    $panel->AddUserAction('adm_executorhotel',A_EXECUTE,'Desp. Hotel',$ui->GetImageTheme('','icons/relatorio.png'),$module, 'main:repDespesasHotel');
+   /* $panel->AddUserAction('adm_executorhotel',A_EXECUTE,'Desp. Hotel',$ui->GetImageTheme('','icons/relatorio.png'),$module, 'main:repDespesasHotel');
 	$panel->AddUserAction('adm_executorpsg',A_EXECUTE,'Desp. Passagem',$ui->GetImageTheme('','icons/relatorio.png'),$module, 'main:repDespesasPassagem');
 	$panel->AddUserAction('adm_executorrest',A_EXECUTE,'Desp. Rest',$ui->GetImageTheme('','icons/relatorio.png'),$module, 'main:repDespesasRestaurante');
 	$panel->AddUserAction('adm',A_EXECUTE,'Diária',$ui->GetImageTheme('','icons/relatorio.png'),$module, 'main:recursos:reportDiaria');    
@@ -105,7 +108,7 @@
     $panel->AddUserAction('adm_adminorcamento',A_EXECUTE,'Total de Gastos',$ui->GetImageTheme('','icons/relatorio.png'),$module, 'main:relatorios:repTotalGastosReqUo');
 
     // V
-    $panel->AddUserAction('adm_executorgarag',A_EXECUTE,'Viagem Motorista',$ui->GetImageTheme('','icons/relatorio.png'),$module, 'main:relatorios:repViagemMotorista');
+    $panel->AddUserAction('adm_executorgarag',A_EXECUTE,'Viagem Motorista',$ui->GetImageTheme('','icons/relatorio.png'),$module, 'main:relatorios:repViagemMotorista');*/
 	
 	$theme->AppendContent($panel);
 

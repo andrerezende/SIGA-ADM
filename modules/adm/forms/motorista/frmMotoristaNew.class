@@ -9,12 +9,15 @@ class frmMotoristaNew extends MForm
 
     function CreateFields()
     {
+        global $MIOLO, $module, $action;
         $tabelaGeral = $this->manager->getBusiness('common','tabelageral');
         $categorias = $tabelaGeral->listByTabela('AD_CATEGORIAHABILITACAO')->result;
         //$ativo = array(1 => "SIM", 0 => "NÃO");
         $fields = array (
             new MHiddenField('idPessoa'),
+            new MHiddenField('idUsuario'),
             new MLookupTextField('lkpPessoa','','Nome',50),
+            new MLookupTextField('lkpLogin','','Login',20),
             new MTextField('carteiraHab','','Carteira de Habilitação','15','Máx. 15 caracteres'),
             new MSelection('categoria','','Categoria',$categorias),
             new MSelection('ativo', '1', 'Ativos', array('0' => 'Não', '1' => 'Sim')),//new MSelection('ativo','','Ativo',$ativo),
@@ -25,6 +28,11 @@ class frmMotoristaNew extends MForm
         $this->SetFieldAttr('lkpPessoa','item','Pessoa1');
         $this->SetFieldAttr('lkpPessoa','event','filler');
         $this->SetFieldAttr('lkpPessoa','related','idPessoa, lkpPessoa');
+        
+        $this->SetFieldAttr('lkpLogin','module','common');
+	$this->SetFieldAttr('lkpLogin','item','UsuarioTodos');
+        $this->SetFieldAttr('lkpLogin','event','filler');
+        $this->SetFieldAttr('lkpLogin','related','idUsuario, lkpLogin');
 	   
         $buttons = array (
             new FormButton('btnNew', 'Cadastrar Motorista')
@@ -34,7 +42,7 @@ class frmMotoristaNew extends MForm
         $validators = array (
             new MRequiredValidator('lkpPessoa'),
             new MRequiredValidator('carteiraHab'),
-            //new MRequiredValidator('categoria'),
+            new MRequiredValidator('lkpLogin'),
             new MDateDMYValidator('dataValidade')
         );
         $this->SetValidators($validators);
@@ -61,8 +69,14 @@ class frmMotoristaNew extends MForm
 		{
 			$this->AddError('Você deve selecionar se o crlv esta ativo.');
 		}
+                elseif( Form::GetFormValue('idUsuario') == '' )
+		{
+			$this->AddError('Você deve informar seu usuário.');
+		}
 		else
 		{
+                        $ret = $this->verificaIdUsuario(Form::GetFormValue('idUsuario'), Form::GetFormValue('idPessoa'));
+                        if($ret){
 			$motorista->SetData($data);
 
 			try
@@ -76,8 +90,26 @@ class frmMotoristaNew extends MForm
 			{
 				$this->addError($e->getMessage());
 			}
+                        }else{
+                           $this->AddError('Motorista não corresponde a esse usuário.'); 
+                        }
 		}
 	}
+        
+        public function verificaIdUsuario($idUsuario, $idPessoa){
+            global $MIOLO;
+            $retorna = true;
+            $objUsuario = $MIOLO->GetBusiness('common','usuario');
+            $idUserPess = $objUsuario->getIDUsuarioIDPessoa($idUsuario, $idPessoa);
+            if($idUserPess){
+                $retorna = true;
+            }
+            else{
+                $retorna = false;
+            }
+            
+            return $retorna;
+        }
 
 }
 ?>
