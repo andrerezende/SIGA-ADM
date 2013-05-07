@@ -261,6 +261,9 @@ if ($idRequisicao != "") {
 
             <div id="menu">
             </div>
+            <?php
+               if ($rows) {
+            ?>
             <table border="1" style="width: 100% !important;" >
                 <tr>
                     <td style="text-align: center;">
@@ -384,7 +387,10 @@ if ($idRequisicao != "") {
             </table></td></tr>
             </table>
             <?php
-               if ($rowsi == '') {
+               }
+            ?>
+            <?php
+               if ($rowsi) {
             ?>
 <br/>
           <table border="1" width="100%">
