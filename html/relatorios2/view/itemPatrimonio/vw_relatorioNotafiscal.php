@@ -36,7 +36,7 @@ $sql = "
        WHERE idmovimentoref IS NULL' ";
 
 if ($idUo || $datainicio || $datafim || $idNotaFiscal || $idContaContabil) {
-    if ($idUo) {
+    if ($idUo) {exit;
         $sql.=" AND iduo = '$idUo'";
     }
     if ($datainicio && $datafim) {
@@ -44,7 +44,7 @@ if ($idUo || $datainicio || $datafim || $idNotaFiscal || $idContaContabil) {
     }else if($datafim){
         $sql.=" AND ad_movimento.datamov < '$newDateFim'"; 
     }else if($idNotaFiscal){
-        $sql.=" AND idnotafiscal = '$idNotaFiscal'"; 
+        $sql.=" AND notafiscal like '%$idNotaFiscal%'"; 
     }else if($idContaContabil){
         $sql.=" AND  idcontaconcabil = '$idContaContabil'"; 
     }
