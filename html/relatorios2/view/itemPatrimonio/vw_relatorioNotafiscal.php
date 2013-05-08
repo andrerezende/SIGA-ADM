@@ -37,7 +37,7 @@ $sql = "
 
 if ($idUo || $datainicio || $datafim || $idNotaFiscal || $idContaContabil) {
     if ($idUo) {exit;
-        $sql.=" AND iduo = '$idUo'";
+        $sql.=" AND iduo = $idUo";
     }
     if ($datainicio && $datafim) {
         $sql.=" AND ad_movimento.datamov between '$newDateInicio' and '$newDateFim'";
@@ -46,7 +46,7 @@ if ($idUo || $datainicio || $datafim || $idNotaFiscal || $idContaContabil) {
     }else if($idNotaFiscal){
         $sql.=" AND notafiscal like '%$idNotaFiscal%'"; 
     }else if($idContaContabil){
-        $sql.=" AND  idcontaconcabil = '$idContaContabil'"; 
+        $sql.=" AND  idcontaconcabil = $idContaContabil"; 
     }
     
 }
@@ -88,13 +88,9 @@ $url = $baseURL . '/relatorios2/PRINT_PDF/print_pdf.php?input_file=' . rawurlenc
 
 $arraySize = count($rows);
 $titulo = "RELAÇÃO DE NOTAS FISCAIS<br/>";
-$veiculo = $rows[0]['modeloplaca']; 
+//$veiculo = $rows[0]['modeloplaca']; 
 
- if ($idVeiculo != "") {
-    $titulo .= "VEÍCULO: " . $veiculo ." <br/>";
- }if($datainicio && $datafim){
-    $titulo .="PERÍODO: De ". $datainicio. " a ". $datafim; 
- }else if($datainicio){
+if($datainicio){
     $titulo .="PERÍODO: A partir de ". $datainicio; 
  }else if($datafim){
     $titulo .="PERÍODO: Até ". $datafim; 
