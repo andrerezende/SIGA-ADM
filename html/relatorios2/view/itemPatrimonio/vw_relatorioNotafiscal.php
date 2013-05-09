@@ -164,16 +164,16 @@ if($datainicio||$datafim){
             <table cellpadding="0" cellspacing="0" border="0" class="display" id="tabela" style="width: 960px">
                 <thead> 
                     <tr>                                
-                        <td style="width: 5%" class="data">N°da Nota</td>
+                        <td style="width: 5%" class="data">N° da Nota</td>
                         <td style="width: 5%" class="descricao">CNPJ</td>
-                        <td style="width: 5%"class="descricao">SUB ELEMENTO</td>
+                        <td style="width: 5%"class="descricao">SUB ELE MEN TO</td>
                         <td style="width: 5%"class="descricao">LANÇA MENTO</td>
                         <td  style="width:5%"class="descricao">DATA NOTA</td>
-                        <td style="width: 5%" class="valores">MOVIMEN TAÇÃO</td>
+                        <td style="width: 5%" class="valores">MOVI MEN TAÇÃO</td>
                         <td style="width: 5%" class="valores">DATA MOVIMEN TAÇÃO</td>
-                        <td style="width: 5%" class="valores">QUANTI DADE</td>
+                        <td style="width: 5%" class="valores">QTD</td>
                         <td style="width: 2%" class="valores">DESCRIÇÃO</td>
-                        <td style="width: 5%" class="valores">COD. MATERIAL</td>
+                        <td style="width: 5%" class="valores">COD. MATE RIAL</td>
                         <td style="width: 2%" class="valores">SETOR</td>
                         <td style="width: 5%" class="valores">EMPENHO</td>
                     </tr>
