@@ -19,8 +19,7 @@ $newDateFim = $arrData1 [2].'-'.$arrData1 [1].'-'.$arrData1 [0];
 $arrData = explode('/', $datainicio);
 $newDateInicio = $arrData [2].'-'.$arrData [1].'-'.$arrData [0];
 
-$sql = "
-﻿SELECT tipomovimento, datamov, quantidade, valortotal, 
+$sql = "SELECT tipomovimento, datamov, quantidade, valortotal, 
        ad_material.descricao, 
        ad_material.codmaterial, 
        ad_uo.sigla, 
@@ -30,27 +29,27 @@ $sql = "
        datanotafiscal,
        ad_fornecedor.cnpj,
        ad_material.idsubelemento
-       FROM ad_movimento  LEFT JOIN ad_material ON ad_movimento.idmaterial = ad_material.idmaterial
-       LEFT JOIN ad_uo ON ad_movimento.iduoalmox = ad_uo.iduo
-       LEFT JOIN ad_fornecedor ON ad_movimento.idfornecedor = ad_fornecedor.idfornecedor
-       WHERE idmovimentoref IS NULL' ";
-
-if ($idUo || $datainicio || $datafim || $idNotaFiscal || $idContaContabil) {
-    if ($idUo) {exit;
+FROM ad_movimento 
+LEFT JOIN ad_material ON ad_movimento.idmaterial = ad_material.idmaterial
+LEFT JOIN ad_uo ON ad_movimento.iduoalmox = ad_uo.iduo
+LEFT JOIN ad_fornecedor ON ad_movimento.idfornecedor = ad_fornecedor.idfornecedor
+       WHERE idmovimentoref IS NULL ";
+if ($idUo || $datainicio || $datafim || $idNotaFiscal) {
+    if ($idUo) {
         $sql.=" AND iduo = $idUo";
     }
-    if ($datainicio && $datafim) {
+    else if ($datainicio && $datafim) {
         $sql.=" AND ad_movimento.datamov between '$newDateInicio' and '$newDateFim'";
     }else if($datafim){
         $sql.=" AND ad_movimento.datamov < '$newDateFim'"; 
     }else if($idNotaFiscal){
         $sql.=" AND notafiscal like '%$idNotaFiscal%'"; 
     }else if($idContaContabil){
-        $sql.=" AND  idcontaconcabil = $idContaContabil"; 
+        $sql.=" AND  ad_material.idelemento = '%$idContaContabil%'"; 
     }
     
 }
-$sql.=" ORDER BY idrequisicao DESC ";
+//$sql.=" ORDER BY idrequisicao DESC ";
 
 try {
     $db = Conexao::getInstance()->getDB();
@@ -85,15 +84,13 @@ $tmpFile = tempnam('/tmp', 'pdf_');
 // Url utilizada no link de impressão do relatório. ( mandando o html )
 $url = $baseURL . '/relatorios2/PRINT_PDF/print_pdf.php?input_file=' . rawurlencode($tmpFile);
 
-
+//var_dump($rows);exit;
 $arraySize = count($rows);
 $titulo = "RELAÇÃO DE NOTAS FISCAIS<br/>";
 //$veiculo = $rows[0]['modeloplaca']; 
 
-if($datainicio){
-    $titulo .="PERÍODO: A partir de ". $datainicio; 
- }else if($datafim){
-    $titulo .="PERÍODO: Até ". $datafim; 
+if($datainicio||$datafim){
+    $titulo .="PERÍODO: A partir de ". $datainicio." Até ". $datafim; 
  }
 
 
@@ -137,7 +134,7 @@ if($datainicio){
                     },
                     "bJQueryUI": true,
                     "aLengthMenu": [[-1, 10, 25, 50,100,200,500,1000,5000], ['Todos', 10, 25, 50,100,200,500,1000,5000]],
-                    "iDisplayLength": -1,
+                    "iDisplayLength": 10,
                     "sPaginationType": "full_numbers",
                     "aaSorting": [],                                        
                     "aoColumnDefs": [  //{ "bSortable": false, "aTargets": [ 4 ] } ,
