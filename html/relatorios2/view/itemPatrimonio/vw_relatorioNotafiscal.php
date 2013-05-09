@@ -161,21 +161,21 @@ if($datainicio||$datafim){
                 <a href="<?php // echo $url; ?>">Imprimir Relatório <img src="../statics/img/action_print.gif" alt="Imprimir Relatório" /></a>
             </div>-->
             <div id="menu"><br/></div>
-            <table cellpadding="0" cellspacing="0" border="0" class="display" id="tabela" style="width: 100%">
+            <table cellpadding="0" cellspacing="0" border="0" class="display" id="tabela" style="width: 960px">
                 <thead> 
                     <tr>                                
-                        <td class="data">N° da Nota</td>
-                        <td class="descricao">CNPJ</td>
-                        <td class="descricao">SUBELEMENTO</td>
-                        <td class="descricao">LANÇAMENTO</td>
-                        <td class="descricao">DATA NOTA</td>
-                        <td class="valores">MOVIMENTAÇÃO</td>
-                        <td class="valores">DATA MOVIMENTAÇÃO</td>
-                        <td class="valores">QUANTIDADE</td>
-                        <td class="valores">DESCRIÇÃO</td>
-                        <td class="valores">COD. MATERIAL</td>
-                        <td class="valores">SETOR</td>
-                        <td class="valores">EMPENHO</td>
+                        <td style="width: 5%" class="data">N°da Nota</td>
+                        <td style="width: 5%" class="descricao">CNPJ</td>
+                        <td style="width: 5%"class="descricao">SUB ELEMENTO</td>
+                        <td style="width: 5%"class="descricao">LANÇA MENTO</td>
+                        <td  style="width:5%"class="descricao">DATA NOTA</td>
+                        <td style="width: 5%" class="valores">MOVIMEN TAÇÃO</td>
+                        <td style="width: 5%" class="valores">DATA MOVIMEN TAÇÃO</td>
+                        <td style="width: 5%" class="valores">QUANTI DADE</td>
+                        <td style="width: 2%" class="valores">DESCRIÇÃO</td>
+                        <td style="width: 5%" class="valores">COD. MATERIAL</td>
+                        <td style="width: 2%" class="valores">SETOR</td>
+                        <td style="width: 5%" class="valores">EMPENHO</td>
                     </tr>
                 </thead>
                 <tbody>
@@ -184,18 +184,18 @@ for ($i = 0; $i < count($rows); $i++) {
     //$saldoTotal += $rows[$i]['valor'];
     ?>                              
                         <tr>                                     
-                            <td class="valores" style="text-align: center;"><?php echo $rows[$i]['notafiscal']; ?></td>
-                            <td style="width: 7em" class="valores" style="text-align: center;"><?php echo $rows[$i]['cnpj']; ?></td>
-                            <td style="width: 7em" class="valores" style="text-align: center;"><?php echo $rows[$i]['idsubelemento']; ?></td>
-                            <td class="valores" style="text-align: center;"><?php echo $rows[$i]['datahora']; ?></td>
-                            <td class="valores" style="text-align: center;"><?php echo $rows[$i]['datanotafiscal']; ?></td>
-                            <td class="valores" style="text-align: left;"><?php echo $rows[$i]['tipomovimento']; ?></td>
-                            <td class="valores" style="text-align: left;"><?php echo $rows[$i]['datamov']; ?></td>
-                            <td class="valores" style="text-align: left;"><?php echo $rows[$i]['quantidade']; ?></td>
-                            <td class="valores" style="text-align: left;"><?php echo $rows[$i]['descricao']; ?></td>
-                            <td class="valores" style="text-align: left;"><?php echo $rows[$i]['codmaterial']; ?></td>
-                            <td class="valores" style="text-align: left;"><?php echo $rows[$i]['sigla']; ?></td>
-                            <td class="valores" style="text-align: left;"><?php echo $rows[$i]['empenho']; ?></td>
+                            <td style="width: 5%"class="valores" style="text-align: center;"><?php echo $rows[$i]['notafiscal']; ?></td>
+                            <td style="width: 5%"class="valores" style="text-align: center;"><?php echo $rows[$i]['cnpj']; ?></td>
+                            <td style="width: 5%"class="valores" style="text-align: center;"><?php echo $rows[$i]['idsubelemento']; ?></td>
+                            <td style="width: 5%"class="valores" style="text-align: center;"><?php echo $rows[$i]['datahora']; ?></td>
+                            <td style="width: 5%"class="valores" style="text-align: center;"><?php echo $rows[$i]['datanotafiscal']; ?></td>
+                            <td style="width: 5%"class="valores" style="text-align: left;"><?php echo $rows[$i]['tipomovimento']; ?></td>
+                            <td style="width: 5%"class="valores" style="text-align: left;"><?php echo $rows[$i]['datamov']; ?></td>
+                            <td style="width: 5%"class="valores" style="text-align: left;"><?php echo $rows[$i]['quantidade']; ?></td>
+                            <td style="width: 2%"class="descricao" style="text-align: left;"><?php echo $rows[$i]['descricao']; ?></td>
+                            <td style="width: 5%"class="valores" style="text-align: left;"><?php echo $rows[$i]['codmaterial']; ?></td>
+                            <td style="width: 5%"class="descricao" style="text-align: left;"><?php echo $rows[$i]['sigla']; ?></td>
+                            <td style="width: 5%"class="valores" style="text-align: left;"><?php echo $rows[$i]['empenho']; ?></td>
                         </tr>                            
     <?php
 }
