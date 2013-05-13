@@ -14,9 +14,6 @@ $panel3->SetIconType('large');
 $panel4 = new ActionPanel('pnlAdTables', 'Termo de Responsabilidade', '', $close);
 $panel4->SetIconType('large');
 
-$panel5 = new ActionPanel('pnlAdTables', 'Relatórios Por Notas Fiscais', '', $close);
-$panel5->SetIconType('large');
-
 $perms = $MIOLO->getPerms()->checkAccess('ADM_VIDAUTIL', A_ACCESS);
 
 $panel->AddUserAction('adm_patrimonio', A_EXECUTE, 'Itens Patrimoniais', $ui->GetImageTheme('', 'icons/ItemPatrimonioTag.png'), $module, 'main:itempatrimonio:find');
@@ -66,7 +63,7 @@ $panel3->AddUserAction('adm_patrimonio', A_EXECUTE, 'RMB', $ui->GetImageTheme(''
 //$panel2->addUserAction('adm_patrimonio', A_EXECUTE, 'Itens patrimoniais estornados', $ui->GetImageTheme('','icons/relatorio.png'), $module, 'main:patrimonio:repItensEstornados');
 
 $panel2->AddUserAction('adm_patrimonio', A_EXECUTE, 'Transferências de Itens', $ui->GetImageTheme('', 'icons/PatrimonioTransferencia.png'), $module, 'main:patrimonio:repItensTransferencia');
-$panel5->AddUserAction('adm_patrimonio', A_EXECUTE, 'Relatório Por Noata Fiscal', $ui->GetImageTheme('', 'icons/PatrimonioTransferencia.png'), $module, 'main:patrimonio:replatorioNotaFiscal');
+
 
 $theme->AppendContent($panel);
 $theme->AppendContent($panel4);
@@ -81,9 +78,6 @@ switch ($action) {
         break;
     case 'repItensTransferencia':
         $MIOLO->InvokeHandler($module, 'patrimonio/repItensTransferencia');
-        break;
-    case 'replatorioNotaFiscal':
-        $MIOLO->InvokeHandler($module, 'patrimonio/relatorioNotafiscal');
         break;
     case 'repItensEstornados':
         $MIOLO->InvokeHandler($module, 'patrimonio/repItensEstornados');

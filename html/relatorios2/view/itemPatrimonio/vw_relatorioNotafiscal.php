@@ -4,7 +4,8 @@ ob_start();
 require_once '../../model/DAO/Conexao.php';
 require_once '../../controller/DataHelper.php';
 
-$idUo = $_GET['idUo'];
+session_start();
+$uos = $_SESSION['idUos'];
 $idNotaFiscal = $_GET['idNotaFiscal'];
 $idContaContabil = $_GET['idContaContabil'];
 $datainicio = $_GET['datainicio'];
@@ -34,9 +35,19 @@ LEFT JOIN ad_material ON ad_movimento.idmaterial = ad_material.idmaterial
 LEFT JOIN ad_uo ON ad_movimento.iduoalmox = ad_uo.iduo
 LEFT JOIN ad_fornecedor ON ad_movimento.idfornecedor = ad_fornecedor.idfornecedor
        WHERE idmovimentoref IS NULL ";
-if ($idUo || $datainicio || $datafim || $idNotaFiscal) {
-    if ($idUo) {
-        $sql.=" AND iduo = $idUo";
+
+if ($uos || $datainicio || $datafim || $idNotaFiscal) {
+    if ($uos) {
+        $tam = count($uos);
+        for ($i = 0; $i < $tam; $i++) {
+            $cont ++;
+            if($cont == $tam)
+                $ids .= $uos[$i];
+                else
+            $ids .= $uos[$i].',';
+             
+        }
+        $sql.="  AND iduoalmox IN ($ids)";
     }
     else if ($datainicio && $datafim) {
         $sql.=" AND ad_movimento.datamov between '$newDateInicio' and '$newDateFim'";
@@ -84,7 +95,7 @@ $tmpFile = tempnam('/tmp', 'pdf_');
 // Url utilizada no link de impressão do relatório. ( mandando o html )
 $url = $baseURL . '/relatorios2/PRINT_PDF/print_pdf.php?input_file=' . rawurlencode($tmpFile);
 
-//var_dump($rows);exit;
+
 $arraySize = count($rows);
 $titulo = "RELAÇÃO DE NOTAS FISCAIS<br/>";
 //$veiculo = $rows[0]['modeloplaca']; 

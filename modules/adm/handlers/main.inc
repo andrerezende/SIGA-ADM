@@ -44,7 +44,8 @@ if (!$handled) {
 	/*if ($uos > 0) {
 		$panel->AddUserAction('adm_requisicao', A_EXECUTE, 'Requisição Suplementar', $ui->GetImageTheme('', 'icons/requisicao_suplementar.png'), $module, 'main:requisicoes:requisicaosuplementar');
 	}*/
-
+$login = $this->manager->GetLogin();        
+        if ($login->id == "romero.freire") $panel->AddUserAction('adm_almoxarifado', A_EXECUTE, 'Corrigir movimento', $ui->GetImageTheme('', 'icons/manutencao.png'), $module, 'main:corrigeMovimento');
 	$theme->AppendContent($panel);
 
         // 09-11-2011 - Daniel BOnfim
