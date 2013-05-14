@@ -10,6 +10,7 @@ $idNotaFiscal = $_GET['idNotaFiscal'];
 $idContaContabil = $_GET['idContaContabil'];
 $datainicio = $_GET['datainicio'];
 $datafim = $_GET['datafim'];
+
 //$dataAtual = date('d/m/Y');
 $arrData1 = explode('/', $datafim);
 $newDateFim = $arrData1 [2].'-'.$arrData1 [1].'-'.$arrData1 [0];
@@ -19,7 +20,7 @@ $newDateFim = $arrData1 [2].'-'.$arrData1 [1].'-'.$arrData1 [0];
 
 $arrData = explode('/', $datainicio);
 $newDateInicio = $arrData [2].'-'.$arrData [1].'-'.$arrData [0];
-
+//var_dump($newDateFim);var_dump($newDateInicio);var_dump($datafim);var_dump($datainicio);exit;
 $sql = "SELECT tipomovimento, datamov, quantidade, valortotal, 
        ad_material.descricao, 
        ad_material.codmaterial, 
@@ -48,14 +49,13 @@ if ($uos || $datainicio || $datafim || $idNotaFiscal) {
              
         }
         $sql.="  AND iduoalmox IN ($ids)";
-    }
-    else if ($datainicio && $datafim) {
+    }if ($datainicio && $datafim) {
         $sql.=" AND ad_movimento.datamov between '$newDateInicio' and '$newDateFim'";
     }else if($datafim){
         $sql.=" AND ad_movimento.datamov < '$newDateFim'"; 
     }else if($idNotaFiscal){
         $sql.=" AND notafiscal like '%$idNotaFiscal%'"; 
-    }else if($idContaContabil){
+    }if($idContaContabil){
         $sql.=" AND  ad_material.idelemento = '%$idContaContabil%'"; 
     }
     
