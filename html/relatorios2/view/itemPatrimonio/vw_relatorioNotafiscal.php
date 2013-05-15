@@ -175,18 +175,18 @@ if($datainicio||$datafim){
             <table cellpadding="0" cellspacing="0" border="0" class="display" id="tabela" style="width: 960px">
                 <thead> 
                     <tr>                                
-                        <td style="width: 5%" class="data">N° da Nota</td>
+                        <td style="width: 5%" class="valores">N° da Nota</td>
                         <td style="width: 5%" class="descricao">CNPJ</td>
                         <td style="width: 5%"class="descricao">SUB ELE MEN TO</td>
                         <td style="width: 5%"class="descricao">LANÇA MENTO</td>
-                        <td  style="width:5%"class="descricao">DATA NOTA</td>
+                        <td  style="width:5%"class="data">DATA NOTA</td>
                         <td style="width: 5%" class="valores">MOVI MEN TAÇÃO</td>
-                        <td style="width: 5%" class="valores">DATA MOVIMEN TAÇÃO</td>
+                        <td style="width: 5%" class="data">DATA MOVIMEN TAÇÃO</td>
                         <td style="width: 5%" class="valores">QTD</td>
-                        <td style="width: 2%" class="valores">DESCRIÇÃO</td>
+                        <td style="width: 2%" class="descricao">DESCRIÇÃO</td>
                         <td style="width: 5%" class="valores">COD. MATE RIAL</td>
-                        <td style="width: 2%" class="valores">SETOR</td>
-                        <td style="width: 5%" class="valores">EMPENHO</td>
+                        <td style="width: 2%" class="descricao">SETOR</td>
+                        <td style="width: 5%" class="descricao">EMPENHO</td>
                         <td style="width: 5%" class="valores">Total</td>
                     </tr>
                 </thead>
@@ -197,23 +197,36 @@ for ($i = 0; $i < count($rows); $i++) {
     ?>                              
                         <tr>                                     
                             <td style="width: 5%"class="valores" style="text-align: center;"><?php echo $rows[$i]['notafiscal']; ?></td>
-                            <td style="width: 5%"class="valores" style="text-align: center;"><?php echo $rows[$i]['cnpj']; ?></td>
-                            <td style="width: 5%"class="valores" style="text-align: center;"><?php echo $rows[$i]['idsubelemento']; ?></td>
-                            <td style="width: 5%"class="valores" style="text-align: center;"><?php echo $rows[$i]['datahora']; ?></td>
-                            <td style="width: 5%"class="valores" style="text-align: center;"><?php echo $rows[$i]['datanotafiscal']; ?></td>
-                            <td style="width: 5%"class="valores" style="text-align: left;"><?php echo $rows[$i]['tipomovimento']; ?></td>
-                            <td style="width: 5%"class="valores" style="text-align: left;"><?php echo $rows[$i]['datamov']; ?></td>
-                            <td style="width: 5%"class="valores" style="text-align: left;"><?php echo $rows[$i]['quantidade']; ?></td>
-                            <td style="width: 2%"class="descricao" style="text-align: left;"><?php echo $rows[$i]['descricao']; ?></td>
-                            <td style="width: 5%"class="valores" style="text-align: left;"><?php echo $rows[$i]['codmaterial']; ?></td>
-                            <td style="width: 5%"class="descricao" style="text-align: left;"><?php echo $rows[$i]['sigla']; ?></td>
-                            <td style="width: 5%"class="valores" style="text-align: left;"><?php echo $rows[$i]['empenho']; ?></td>
-                            <td style="width: 5%"class="valores" style="text-align: left;"><?php echo $rows[$i]['valortotal']; ?></td>
+                            <td style="width: 5%"class="descricao" style="text-align: center;"><?php echo $rows[$i]['cnpj']; ?></td>
+                            <td style="width: 5%"class="descricao" style="text-align: center;"><?php echo $rows[$i]['idsubelemento']; ?></td>
+                            <td style="width: 5%"class="data" style="text-align: center;"><?php echo $rows[$i]['datahora']; ?></td>
+                            <td style="width: 5%"class="data" style="text-align: center;"><?php echo $rows[$i]['datanotafiscal']; ?></td>
+                            <td style="width: 5%"class="valores" style="text-align: center;"><?php echo $rows[$i]['tipomovimento']; ?></td>
+                            <td style="width: 5%"class="data" style="text-align: center;"><?php echo $rows[$i]['datamov']; ?></td>
+                            <td style="width: 5%"class="valores" style="text-align: center;"><?php echo $rows[$i]['quantidade']; ?></td>
+                            <td style="width: 2%"class="descricao" style="text-align: center;"><?php echo $rows[$i]['descricao']; ?></td>
+                            <td style="width: 5%"class="valores" style="text-align: center;"><?php echo $rows[$i]['codmaterial']; ?></td>
+                            <td style="width: 5%"class="descricao" style="text-align: center;"><?php echo $rows[$i]['sigla']; ?></td>
+                            <td style="width: 5%"class="descricao" style="text-align: center;"><?php echo $rows[$i]['empenho']; ?></td>
+                            <td style="width: 5%"class="valores" style="text-align: right;"><?php echo number_format($rows[$i]['valortotal'], 2, ',', '.'); ?></td>
                         </tr>                            
     <?php
 }
 ?>
-                    <tfoot style="background-color: #D1CFD0;">                                   
+                    <tfoot style="background-color: #D1CFD0;">
+                         <td class="valores" style="text-align: center;">--</td>
+                            <td class="descricao" style="text-align: center;">--</td>
+                            <td class="descricao" style="text-align: center;">--</td>
+                            <td class="data" style="text-align: center;">--</td>
+                            <td class="data" style="text-align: center;">--</td> 
+                             <td class="valores" style="text-align: center;">--</td>
+                            <td class="data" style="text-align: center;">--</td>
+                            <td class="valores" style="text-align: center;">--</td>
+                            <td class="descricao" style="text-align: center;">--</td>
+                            <td class="valores" style="text-align: center;">--</td>
+                            <td class="descricao" style="text-align: center;">--</td>
+                            <td class="descricao" style="text-align: center;">--</td>
+                            <td class="valores" style="text-align: right;">--</td>
                     </tfoot>                         
                 </tbody>    
             </table>                        
