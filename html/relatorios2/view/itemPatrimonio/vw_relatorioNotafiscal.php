@@ -187,6 +187,7 @@ if($datainicio||$datafim){
                         <td style="width: 5%" class="valores">COD. MATE RIAL</td>
                         <td style="width: 2%" class="valores">SETOR</td>
                         <td style="width: 5%" class="valores">EMPENHO</td>
+                        <td style="width: 5%" class="valores">Total</td>
                     </tr>
                 </thead>
                 <tbody>
@@ -207,6 +208,7 @@ for ($i = 0; $i < count($rows); $i++) {
                             <td style="width: 5%"class="valores" style="text-align: left;"><?php echo $rows[$i]['codmaterial']; ?></td>
                             <td style="width: 5%"class="descricao" style="text-align: left;"><?php echo $rows[$i]['sigla']; ?></td>
                             <td style="width: 5%"class="valores" style="text-align: left;"><?php echo $rows[$i]['empenho']; ?></td>
+                            <td style="width: 5%"class="valores" style="text-align: left;"><?php echo $rows[$i]['valortotal']; ?></td>
                         </tr>                            
     <?php
 }
