@@ -6,7 +6,10 @@
         if($e <= 1){
 	$theme->ClearContent();
 	$ui = $MIOLO->GetUI();
-	$form = $ui->GetForm('adm','frmInspecaoFind',NULL,'inspecao');
+        $uo = $this->manager->GetBusiness('adm','uo');
+        $result = $uo->listaUoExecutor($this->manager->GetLogin()->idkey);
+        $uo = $uo->GetById($result->result[0][0]);
+	$form = $ui->GetForm('adm','frmInspecaoFind',$uo,'inspecao');
 	$theme->InsertContent($form);
         }else{
             $theme->ClearContent();
