@@ -45,7 +45,6 @@ if (!$handled) {
 		$panel->AddUserAction('adm_requisicao', A_EXECUTE, 'Requisição Suplementar', $ui->GetImageTheme('', 'icons/requisicao_suplementar.png'), $module, 'main:requisicoes:requisicaosuplementar');
 	}*/
 
->>>>>>> 0e35cf5ce3fb0ce2ed2026a974bc6c0b3fe41796:modules/adm/handlers/main.inc
 	$theme->AppendContent($panel);
 
         // 09-11-2011 - Daniel BOnfim
