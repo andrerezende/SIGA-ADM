@@ -56,6 +56,7 @@ $panel3->AddUserAction('adm_patrimonio', A_EXECUTE, 'Depreciação por Item', $u
 
 
 $panel3->AddUserAction('adm_patrimonio', A_EXECUTE, 'RMB', $ui->GetImageTheme('', 'icons/MovPorSubelemento.png'), $module, 'main:patrimonio:repRMBConsolidado');
+$panel3->AddUserAction('adm_patrimonio', A_EXECUTE, 'RMB Analítico', $ui->GetImageTheme('', 'icons/MovPorSubelemento.png'), $module, 'main:patrimonio:repRMBAnalitico');
 // 13-11-2011 - Daniel Bonfim
 //$panel2->AddUserAction('adm_patrimonio', A_EXECUTE, 'Relatório de Movimentação por Subelemento', $ui->GetImageTheme('','icons/relatorio.png'),$module,'main:patrimonio:repMovimentacaoSubelemento');
 // 14-11-2011 - Daniel Bonfim
@@ -143,6 +144,9 @@ switch ($action) {
         break;
     case 'repRMBConsolidado';
         $MIOLO->InvokeHandler($module, 'patrimonio/repRMBConsolidado');
+        break;
+    case 'repRMBAnalitico';
+        $MIOLO->InvokeHandler($module, 'patrimonio/repRMBAnalitico');
         break;
     // 13-11-2011 - Daniel Bonfim
     case 'repMovimentacaoSubelemento';
