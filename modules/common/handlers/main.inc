@@ -28,7 +28,7 @@ if ($MIOLO->GetAuth()->isLogged())
     $login = $MIOLO->GetLogin();
     $user = $this->manager->GetBusinessMAD('user');
     $user->GetByLogin($login->id);
-    $plano = $MIOLO->getBusiness('common','planosaude',$login->id);
+    //$plano = $MIOLO->getBusiness('common','planosaude',$login->id);
 
     $session = $MIOLO->session;
 
