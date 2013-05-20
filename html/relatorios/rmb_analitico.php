@@ -140,7 +140,7 @@ $result = $rmbConsolidado->geraRelatorio(array('mesAnoRef' => $mesAnoRef, 'idsRe
 						<td class="valores"><?php echo number_format($total_vidautil_saida[$i], 2, ',', '.');?></td>
 						<td class="valores"><?php echo number_format($total_vidautil_saldo[$i], 2, ',', '.');?></td>
                                                 <td class="valores"><?php echo $item_patri_codigo[$i];?></td>
-                                                <td class="descricao"><?php echo $item_patri_descricao[$i];?></td>
+                                                <td class='descricao' style='text-align: center;'><?php echo $item_patri_descricao[$i];?></td>
                                                 <td class="data"><?php echo $item_patri_dataaquisicao[$i];?></td>
                                                 <td class="valores"><?php echo $nota_notafiscal[$i];?></td>
                                                 <td class="data"><?php echo $nota_data[$i];?></td>
