@@ -149,11 +149,15 @@ $result = $rmbConsolidado->geraRelatorio(array('mesAnoRef' => $mesAnoRef, 'idsRe
 					</tr>
 				<?php endfor;?>
 				<tr>
+                                    <table>
+                                        <tr>
 					<th class="descricao">Total</th>
 					<th class="totais valores"><?php echo number_format(array_sum($total_vidautil_saldo_anterior), 2, ',', '.');?></th>
 					<th class="totais valores"><?php echo number_format(array_sum($total_vidautil_entrada), 2, ',', '.');?></th>
 					<th class="totais valores"><?php echo number_format(array_sum($total_vidautil_saida), 2, ',', '.');?></th>
 					<th class="totais valores"><?php echo number_format(array_sum($total_vidautil_saldo), 2, ',', '.');?></th>
+                                        </tr>
+                                    </table>    
 				</tr>
 			</table>
 		</div>
