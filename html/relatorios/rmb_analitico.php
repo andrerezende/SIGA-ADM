@@ -77,40 +77,45 @@ $result = $rmbConsolidado->geraRelatorio(array('mesAnoRef' => $mesAnoRef, 'idsRe
 					<th class="valores">Saída (R$)</th>
 					<th class="valores">Saldo (R$)</th>
                                         <th class="valores">Cód. Item</th>
-                                        <th class="valores">Item</th>
-                                        <th class="valores">DATA DA NOTA FISCAL</th>
+                                        <th class="descricao">Item</th>
+                                        <th class="vdata">LANÇAMENTO</th>
                                         <th class="valores">Nº DA NOTA FISCAL</th>
+                                        <th class="data">DATA DA NOTA FISCAL</th>
                                         <th class="valores">CNPJ</th>
                                         <th class="valores">ATESTE</th>
-                                        <th class="valores">LANÇAMENTO</th>
+                                        
 				</tr>
 				<?php
 				$tamanho = count($result);
-                                //var_dump($result[0]);exit;
 				$j = 0;
 				for ($i = 0; $i <= $tamanho; $i++) {
+                                    
 					if ($i == 0 && $result[$i]->idvidautil == $result[$i+1]->idvidautil) {
 						$vidautil_descricao[$j] = '<b>' . $result[$i]->idvidautil . '</b> - ' . $result[$i]->descricao;
 						$total_vidautil_saldo_anterior[$j] += $result[$i]->saldo_anterior;
 						$total_vidautil_entrada[$j] += $result[$i]->entrada;
 						$total_vidautil_saida[$j] += $result[$i]->saida;
 						$total_vidautil_saldo[$j] += ($result[$i]->saldo_anterior + $result[$i]->entrada) - $result[$i]->saida;
-                                                $item_nota_codigo[$j] += $result[$i]->idItemPatrimonio;
-                                                $item_nota_descricao[$j] += $result[$i]->descricao;
-                                                /*$item_codigo[$j] = $result[$i]['iditempatrimonio'];
-                                                $item_descricao[$j] = $result[$i]['descricao'];*/
-                                                /*$nota_nota_fiscal;
-                                                $nota_cnpj;
-                                                $nota_ateste;
-                                                $nota_lancamento;*/
+                                                $item_patri_codigo[$j] = $result[$i]->iditempatrimonio;
+                                                $item_patri_descricao[$j] = $result[$i]->itemdescricao;
+                                                $item_patri_dataaquisicao[$j] = $result[$i]->dataaquisicao;
+                                                $nota_notafiscal[$j] = $result[$i]->notafiscal;
+                                                $nota_data[$j] = $result[$i]->datanotafiscal;
+                                                $nota_cnpj[$j] = $result[$i]->cnpj;
+                                                $nota_dataateste[$j] = $result[$i]->dataateste;
 					} else if ($i > 0 && $result[$i-1]->idvidautil == $result[$i]->idvidautil) {
 						$vidautil_descricao[$j] = '<b>' . $result[$i]->idvidautil . '</b> - ' . $result[$i]->descricao;
 						$total_vidautil_saldo_anterior[$j] += $result[$i]->saldo_anterior;
 						$total_vidautil_entrada[$j] += $result[$i]->entrada;
 						$total_vidautil_saida[$j] += $result[$i]->saida;
 						$total_vidautil_saldo[$j] += ($result[$i]->saldo_anterior + $result[$i]->entrada) - $result[$i]->saida;
-                                                $item_nota_codigo[$j] += $result[$i]->idItemPatrimonio;
-                                                $item_nota_descricao[$j] += $result[$i]->descricao;
+                                                $item_patri_codigo[$j] = $result[$i]->iditempatrimonio;
+                                                $item_patri_descricao[$j] = $result[$i]->itemdescricao;
+                                                $item_patri_dataaquisicao[$j] = $result[$i]->dataaquisicao;
+                                                $nota_notafiscal[$j] = $result[$i]->notafiscal;
+                                                $nota_data[$j] = $result[$i]->datanotafiscal;
+                                                $nota_cnpj[$j] = $result[$i]->cnpj;
+                                                $nota_dataateste[$j] = $result[$i]->dataateste;
 					} else {
 						$j++;
 						$vidautil_descricao[$j] = '<b>' . $result[$i]->idvidautil . '</b> - ' . $result[$i]->descricao;
@@ -118,14 +123,15 @@ $result = $rmbConsolidado->geraRelatorio(array('mesAnoRef' => $mesAnoRef, 'idsRe
 						$total_vidautil_entrada[$j] += $result[$i]->entrada;
 						$total_vidautil_saida[$j] += $result[$i]->saida;
 						$total_vidautil_saldo[$j] += ($result[$i]->saldo_anterior + $result[$i]->entrada) - $result[$i]->saida;
-                                                $item_nota_codigo[$j] += $result[$i]->idItemPatrimonio;
-                                                $item_nota_descricao[$j] += $result[$i]->descricao;
+                                                $item_patri_codigo[$j] = $result[$i]->iditempatrimonio;
+                                                $item_patri_descricao[$j] = $result[$i]->itemdescricao;
+                                                $item_patri_dataaquisicao[$j] = $result[$i]->dataaquisicao;
+                                                $nota_notafiscal[$j] = $result[$i]->notafiscal;
+                                                $nota_data[$j] = $result[$i]->datanotafiscal;
+                                                $nota_cnpj[$j] = $result[$i]->cnpj;
+                                                $nota_dataateste[$j] = $result[$i]->dataateste;
 					}
 				}
-                               // ["descricao"]=> string(23) "BALANÇA PESAGEM HUMANA" 
-                               // ["iditempatrimonio"]=> string(4) "8563" ["datanotafiscal"]=> string(10) "2010-03-23" 
-                               // ["notafiscal"]=> string(3) "741" ["cnpj"]=> string(14) "05747352000129" 
-                               // ["dataateste"]=> string(10) "2011-02-09"
 				for ($i = 1; $i < $j; $i++) :?>
 					<tr> 
 						<td class="descricao"><?php echo $vidautil_descricao[$i];?></td>
@@ -133,8 +139,13 @@ $result = $rmbConsolidado->geraRelatorio(array('mesAnoRef' => $mesAnoRef, 'idsRe
 						<td class="valores"><?php echo number_format($total_vidautil_entrada[$i], 2, ',', '.');?></td>
 						<td class="valores"><?php echo number_format($total_vidautil_saida[$i], 2, ',', '.');?></td>
 						<td class="valores"><?php echo number_format($total_vidautil_saldo[$i], 2, ',', '.');?></td>
-                                                <td class="valores"><?php echo $item_nota_codigo[$i];?></td>
-                                                <td class="valores"><?php echo $item_nota_descricao[$i];?></td>
+                                                <td class="valores"><?php echo $item_patri_codigo[$i];?></td>
+                                                <td class="descricao"><?php echo $item_patri_descricao[$i];?></td>
+                                                <td class="data"><?php echo $item_patri_dataaquisicao[$i];?></td>
+                                                <td class="valores"><?php echo $nota_notafiscal[$i];?></td>
+                                                <td class="data"><?php echo $nota_data[$i];?></td>
+                                                <td class="valores"><?php echo $nota_cnpj[$i];?></td>
+                                                <td class="data"><?php echo $nota_dataateste[$i];?></td>
 					</tr>
 				<?php endfor;?>
 				<tr>

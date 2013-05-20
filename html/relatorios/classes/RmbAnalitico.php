@@ -19,8 +19,9 @@ class RmbAnalitico extends Relatorio {
 
 	public function geraRelatorio($params = array()) {
 		return $this->dataSource->execute("
-		SELECT aip.idvidautil, ad_vidautil.descricao, aip.iditempatrimonio,aip.descricao,nt.datanotafiscal,nt.notafiscal,nt.cnpj,
-nt.dataateste,
+		SELECT aip.idvidautil, ad_vidautil.descricao, aip.iditempatrimonio,
+                aip.descricao as itemdescricao,dataaquisicao,nt.datanotafiscal,
+                nt.notafiscal,nt.cnpj,dataaquisicao,dataateste,
 		COALESCE((SELECT SUM(aip_ant.valor)
 		FROM ad_itempatrimonio aip_ant
 			INNER JOIN cm_setor ON aip_ant.idsetor = cm_setor.idsetor
@@ -90,7 +91,9 @@ nt.dataateste,
                         INNER JOIN ad_notafiscal nt ON nt.idnotafiscal = aip.idnotafiscal
 		WHERE cm_instituicao.idinstituicao IN {$params['idsRef']}
 		GROUP BY aip.idvidautil, ad_vidautil.descricao, 
-aip.iditempatrimonio,aip.descricao,nt.notafiscal,nt.datanotafiscal,nt.cnpj,nt.dataateste
+                aip.iditempatrimonio,aip.iditempatrimonio,itemdescricao,
+                dataaquisicao,nt.datanotafiscal,nt.notafiscal,nt.cnpj,
+                dataaquisicao,dataateste
 		ORDER BY aip.idvidautil;");
 	}
 
