@@ -131,7 +131,7 @@ $result = $rmbConsolidado->geraRelatorio(array('mesAnoRef' => $mesAnoRef, 'idsRe
                                                 $nota_cnpj[$j] = $result[$i]->cnpj;
                                                 $nota_dataateste[$j] = $result[$i]->dataateste;
 					}
-				}
+				} 
 				for ($i = 1; $i < $j; $i++) :?>
 					<tr> 
 						<td class="descricao"><?php echo $vidautil_descricao[$i];?></td>
