@@ -121,6 +121,15 @@ class frmRequisicaoAlmoxarifado extends MForm
                 $this->setFieldAttr('motivoRejeicao','readonly',true);
             break;
             case 8:
+                $this->AddField($ui->GetGrid('adm','gridRequisicaoAlmoxarifadoAutorizada',$this->objRequisicao));
+                $this->addField(new MSeparator('DADOS DE ENTREGA'));
+                $this->addField(new MMultiLineField('localEntrega',$this->objRequisicao->localEntrega,'Local',200,3,50));
+                $this->setFieldAttr('localEntrega','readonly',true);
+                $url = $this->manager->GetActionURL('adm','main:requisicoes:find');
+                $this->AddButton(new MButton('btnSair','Voltar',$url));
+                if($this->verificaAcesso())
+                $this->AddButton(new MButton('btnRecebido', 'Recebido'));
+            break;    
             case 9:
                 $this->AddField($ui->GetGrid('adm','gridRequisicaoAlmoxarifadoAutorizada',$this->objRequisicao));
                 $this->addField(new MSeparator('DADOS DE ENTREGA'));
@@ -128,7 +137,17 @@ class frmRequisicaoAlmoxarifado extends MForm
                 $this->setFieldAttr('localEntrega','readonly',true);
                 $url = $this->manager->GetActionURL('adm','main:requisicoes:find');
                 $this->AddButton(new MButton('btnSair','Voltar',$url));
+                if($this->verificaAcesso())
+                $this->AddButton(new MButton('btnRecebido', 'Recebido'));
             break;
+            case 'G':
+                $this->AddField($ui->GetGrid('adm','gridRequisicaoAlmoxarifadoAutorizada',$this->objRequisicao));
+                $this->addField(new MSeparator('DADOS DE ENTREGA'));
+                $this->addField(new MMultiLineField('localEntrega',$this->objRequisicao->localEntrega,'Local',200,3,50));
+                $this->setFieldAttr('localEntrega','readonly',true);
+                $url = $this->manager->GetActionURL('adm','main:requisicoes:find');
+                $this->AddButton(new MButton('btnSair','Voltar',$url));
+             break;
         }
 	}
     
@@ -368,5 +387,57 @@ HERE;
                 
         } 
     }
+    
+    // 22-05-2013 confirmara recebimento
+    function btnRecebido_click()
+    {   
+        $data = $this->getData();
+        if (!is_array($this->objRequisicao->materialAlmoxarifado))
+        {
+            $url = $this->manager->GetActionURL('adm','main:requisicoes',$this->objRequisicao->idRequisicao,array('form'=>'item'));
+            $this->manager->Error('Não há materiais em sua requisição.',$url);
+            return;
+        }                
+        $gestor = $this->getFormValue('gestor');
+        $msg = 'Deseja realmente confirmar recebido dos itens presentes na requisição '. $this->objRequisicao->idRequisicao .'?';
+        $url = $this->manager->GetActionURL('adm','main:requisicoes',$this->objRequisicao->idRequisicao,array('form'=>'item','tipoReq'=>$this->objRequisicao->idTipoReq,"localEntrega"=>$data->localEntrega,"gestor"=>$gestor));
+        $eventYes = "btnRecebimento:click";
+        $this->manager->Question($msg, $url, $url, $eventYes, $eventNo);     
+    }
+    function btnRecebimento_click(){
+        global $MIOLO;
+        $itemAlmox = $this->manager->GetBusiness('adm','itemreq');
+        
+        try {
+           $this->objRequisicao->setStatus('G');
+           $this->objRequisicao->dataHoraAut = date('d/m/Y');
+           $this->objRequisicao->update();
+           $itemAlmox->SetItemAlmoxarifado($this->objRequisicao->idRequisicao);
+           $url = $this->manager->GetActionURL('adm','main:requisicoes',$this->objRequisicao->idRequisicao,array('form'=>'item','tipoReq'=>$this->objRequisicao->idTipoReq));
+           $this->manager->information("Requisição ".$this->objRequisicao->idRequisicao." Finalizada com sucesso.",$url);
+        }catch (Exception $e) {$this->addError($e->getMessage());}
+    }
+    
+    function verificaAcesso(){
+        
+        global $MIOLO;
+        $acessoOK = false;
+        $usuario = $MIOLO->getBusiness('common','usuario');
+        $requisicao = $MIOLO->GetBusiness('adm', 'requisicao');
+        
+        $siglaUsu = $usuario->getIdSetorUser($MIOLO->GetLogin()->idkey);
+        
+        $idUserReq = $requisicao->getIdUsuarioReq($this->objRequisicao->idRequisicao);
+        $siglaUsuReq = $usuario->getIdSetorUser($idUserReq); 
+        
+        if($siglaUsu == $siglaUsuReq){
+            $acessoOK = true;
+        }else{
+            $acessoOK = false;
+        }
+        
+        return $acessoOK;
+    }
+    
 }
 ?>
