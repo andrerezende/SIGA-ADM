@@ -43,9 +43,9 @@ $tmpFile = tempnam('/tmp', 'pdf_');
 
 // Url utilizada no link de impressão do relatório. ( mandando o html )
 $url = $baseURL . '/relatorios2/PRINT_PDF/print_pdf.php?input_file=' . rawurlencode($tmpFile);
-
+$titulo = "RELATÓRIO ANALÍTICO DE MOVIMENTO DE BENS<br/>";
  if ($nomesInstituicoes) {
-    $titulo .= $nomesInstituicoes ." <br/>";
+    $titulo .= mb_strtoupper($nomesInstituicoes) ." <br/>";
  }if($mesAnoRef){
     $titulo .="ANO DE REFERÊNCIA ". $mesAnoRef; 
  }
