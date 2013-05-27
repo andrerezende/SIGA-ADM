@@ -44,6 +44,14 @@ $tmpFile = tempnam('/tmp', 'pdf_');
 // Url utilizada no link de impressão do relatório. ( mandando o html )
 $url = $baseURL . '/relatorios2/PRINT_PDF/print_pdf.php?input_file=' . rawurlencode($tmpFile);
 
+$titulo = "Relatório Analítico de Movimento de Bens<br/>";
+//$veiculo = $rows[0]['modeloplaca']; 
+
+ if ($nomesInstituicoes != "") {
+    $titulo .= "INSTITUIÇÕES: " . $nomesInstituicoes ." <br/>";
+ }if($mesAnoRef){
+    $titulo .="PERÍODO:". $mesAnoRef." <br/>"; 
+ }
 
 ?>
 
@@ -114,13 +122,13 @@ $url = $baseURL . '/relatorios2/PRINT_PDF/print_pdf.php?input_file=' . rawurlenc
             <table cellpadding="0" cellspacing="0" border="0" class="display" id="tabela" style="width: 100%">
                 <thead> 
                     <tr>                                
-                        <th class="descricao">Conta Contábil</th>
-			<th class="valores">Saldo Anterior (R$)</th>
-			<th class="valores">Entrada (R$)</th>
-			<th class="valores">Saída (R$)</th>
-			<th class="valores">Saldo (R$)</th>
-                        <th class="valores">Cód. Item</th>
-                        <th class="descricao">Item</th>
+                        <th class="descricao">CONTA CONTÁBIL</th>
+			<th class="valores">SALDO ANTERIOR (R$)</th>
+			<th class="valores">ENTRADA (R$)</th>
+			<th class="valores">SAÍDA (R$)</th>
+			<th class="valores">SALDO (R$)</th>
+                        <th class="valores">CÓD. ITEM</th>
+                        <th class="descricao">ITEM</th>
                         <th class="vdata">LANÇAMENTO</th>
                         <th class="valores">Nº DA NOTA FISCAL</th>
                         <th class="data">DATA DA NOTA FISCAL</th>
