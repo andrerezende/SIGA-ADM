@@ -102,8 +102,7 @@ $titulo = "<b>RELATÓRIO ANALÍTICO DE MOVIMENTO DE BENS</b><br/>";
                 } );
             } );
         </script>
-        </script>
-        <title><?php echo $titulo; ?></title>                    
+        </script>                  
     </head>
     <body align="center">
 
