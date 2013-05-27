@@ -22,7 +22,7 @@ $url = 'relatorios_pdf/print_pdf.php?input_file=' .
 		rawurlencode(pathinfo(basename(__FILE__), PATHINFO_FILENAME) . '.pdf') . '&base_path=http://' . $_SERVER['HTTP_HOST'] . '/relatorios_pdf';
 
 $baseURL = 'http://' . $_SERVER['HTTP_HOST'] . '/relatorios/statics/';
-//var_dump("teste");exit;
+
 $rmbConsolidado = new RmbAnalitico();
 
 $nomesInstituicoes = $rmbConsolidado->getNomesInstituicoes(array('mesAnoRef' => $mesAnoRef, 'idsRef' => $ids));
@@ -43,14 +43,11 @@ $tmpFile = tempnam('/tmp', 'pdf_');
 
 // Url utilizada no link de impressão do relatório. ( mandando o html )
 $url = $baseURL . '/relatorios2/PRINT_PDF/print_pdf.php?input_file=' . rawurlencode($tmpFile);
-
-$titulo = "Relatório Analítico de Movimento de Bens<br/>";
-//$veiculo = $rows[0]['modeloplaca']; 
-
- if ($nomesInstituicoes != "") {
-    $titulo .= "INSTITUIÇÕES: " . $nomesInstituicoes ." <br/>";
- }if($mesAnoRef){
-    $titulo .="PERÍODO:". $mesAnoRef." <br/>"; 
+$titulo1 = "RELATÓRIO ANALÍTICO DE MOVIMENTO DE BENS<br/>";
+$titulo = "RELATÓRIO ANALÍTICO DE MOVIMENTO DE BENS<br/>";
+ if ($nomesInstituicoes) {
+    $titulo .= mb_strtoupper($nomesInstituicoes) ." <br/>";
+    $titulo .="ANO DE REFERÊNCIA ". $mesAnoRef;
  }
 
 ?>
@@ -106,7 +103,7 @@ $titulo = "Relatório Analítico de Movimento de Bens<br/>";
             } );
         </script>
         </script>
-        <title><?php echo $titulo; ?></title>                    
+        <title><?php echo $titulo1; ?></title>                    
     </head>
     <body align="center">
 
@@ -114,10 +111,7 @@ $titulo = "Relatório Analítico de Movimento de Bens<br/>";
         <div id="conteudo">
 
 <?php require_once 'statics/cabecalho.php'; ?>
-<!--            <div id="menu">
-                <a onclick="javascript:history.go(-1);">Voltar&nbsp&nbsp&nbsp&nbsp&nbsp</a><br/>
-                <a href="<?php // echo $url; ?>">Imprimir Relatório <img src="../statics/img/action_print.gif" alt="Imprimir Relatório" /></a>
-            </div>-->
+
             <div id="menu"><br/></div>
             <table cellpadding="0" cellspacing="0" border="0" class="display" id="tabela" style="width: 100%">
                 <thead> 
@@ -142,6 +136,7 @@ $titulo = "Relatório Analítico de Movimento de Bens<br/>";
 				
                     $tamanho = count($result);
 				$j = 0;
+                                
 				for ($i = 0; $i <= $tamanho; $i++) {
                                    //var_dump($result[0]->entrada);exit;
 					if ($i == 0 && $result[$i]->idvidautil == $result[$i+1]->idvidautil) {
@@ -192,7 +187,8 @@ $titulo = "Relatório Analítico de Movimento de Bens<br/>";
 
 $tamanho = count($result);
 for ($i = 0; $i < $tamanho; $i++) :
-    ?>                              
+    ?>                   
+                    <?php if(($result[$i]->saldo_anterior != 0) || ($result[$i]->entrada != 0)|| ($result[$i]->saida != 0)){//verifica se os saldos são iguais a zero?>
                         <tr>                                     
                             <td class="valores" style="text-align: center;"><?php echo '<b>' . $result[$i]->idvidautil . '</b> - ' . $result[$i]->descricao; ?></td>
                             <td style="width: 7em" class="valores" style="text-align: center;"><?php echo number_format($result[$i]->saldo_anterior, 2, ',', '.');?></td>
@@ -206,7 +202,8 @@ for ($i = 0; $i < $tamanho; $i++) :
                             <td class="valores" style="text-align: left;"><?php echo $result[$i]->datanotafiscal;?></td>
                             <td class="valores" style="text-align: center;"><?php echo $result[$i]->cnpj;?></td>
                             <td class="valores" style="text-align: left;"><?php echo $result[$i]->dataateste;?></td>
-                        </tr>                            
+                        </tr> 
+                    <?php }?>
     <?php
 endfor;
 ?>
