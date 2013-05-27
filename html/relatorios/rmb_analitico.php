@@ -103,7 +103,7 @@ $titulo = "RELATÓRIO ANALÍTICO DE MOVIMENTO DE BENS<br/>";
             } );
         </script>
         </script>
-        <title><?php echo $titulo1; ?></title>                    
+        <title><?php echo $titulo; ?></title>                    
     </head>
     <body align="center">
 
@@ -112,6 +112,7 @@ $titulo = "RELATÓRIO ANALÍTICO DE MOVIMENTO DE BENS<br/>";
 
 <?php require_once 'statics/cabecalho.php'; ?>
 
+            <?php echo $titulo; ?>
             <div id="menu"><br/></div>
             <table cellpadding="0" cellspacing="0" border="0" class="display" id="tabela" style="width: 100%">
                 <thead> 
