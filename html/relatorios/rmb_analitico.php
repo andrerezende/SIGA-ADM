@@ -22,7 +22,7 @@ $url = 'relatorios_pdf/print_pdf.php?input_file=' .
 		rawurlencode(pathinfo(basename(__FILE__), PATHINFO_FILENAME) . '.pdf') . '&base_path=http://' . $_SERVER['HTTP_HOST'] . '/relatorios_pdf';
 
 $baseURL = 'http://' . $_SERVER['HTTP_HOST'] . '/relatorios/statics/';
-//var_dump("teste");exit;
+
 $rmbConsolidado = new RmbAnalitico();
 
 $nomesInstituicoes = $rmbConsolidado->getNomesInstituicoes(array('mesAnoRef' => $mesAnoRef, 'idsRef' => $ids));
@@ -43,7 +43,12 @@ $tmpFile = tempnam('/tmp', 'pdf_');
 
 // Url utilizada no link de impressão do relatório. ( mandando o html )
 $url = $baseURL . '/relatorios2/PRINT_PDF/print_pdf.php?input_file=' . rawurlencode($tmpFile);
-
+$titulo1 = "<b>RELATÓRIO ANALÍTICO DE MOVIMENTO DE BENS</b><br/>";
+$titulo = "<b>RELATÓRIO ANALÍTICO DE MOVIMENTO DE BENS</b><br/>";
+ if ($nomesInstituicoes) {
+    $titulo .="<b>". mb_strtoupper($nomesInstituicoes) ." </b><br/>";
+    $titulo .="<b>ANO DE REFERÊNCIA ". $mesAnoRef." </b><br/>";
+ }
 
 ?>
 
@@ -97,8 +102,7 @@ $url = $baseURL . '/relatorios2/PRINT_PDF/print_pdf.php?input_file=' . rawurlenc
                 } );
             } );
         </script>
-        </script>
-        <title><?php echo $titulo; ?></title>                    
+        </script>                  
     </head>
     <body align="center">
 
@@ -106,21 +110,19 @@ $url = $baseURL . '/relatorios2/PRINT_PDF/print_pdf.php?input_file=' . rawurlenc
         <div id="conteudo">
 
 <?php require_once 'statics/cabecalho.php'; ?>
-<!--            <div id="menu">
-                <a onclick="javascript:history.go(-1);">Voltar&nbsp&nbsp&nbsp&nbsp&nbsp</a><br/>
-                <a href="<?php // echo $url; ?>">Imprimir Relatório <img src="../statics/img/action_print.gif" alt="Imprimir Relatório" /></a>
-            </div>-->
+
+            <?php echo $titulo; ?>
             <div id="menu"><br/></div>
             <table cellpadding="0" cellspacing="0" border="0" class="display" id="tabela" style="width: 100%">
                 <thead> 
                     <tr>                                
-                        <th class="descricao">Conta Contábil</th>
-			<th class="valores">Saldo Anterior (R$)</th>
-			<th class="valores">Entrada (R$)</th>
-			<th class="valores">Saída (R$)</th>
-			<th class="valores">Saldo (R$)</th>
-                        <th class="valores">Cód. Item</th>
-                        <th class="descricao">Item</th>
+                        <th class="descricao">CONTA CONTÁBIL</th>
+			<th class="valores">SALDO ANTERIOR (R$)</th>
+			<th class="valores">ENTRADA (R$)</th>
+			<th class="valores">SAÍDA (R$)</th>
+			<th class="valores">SALDO (R$)</th>
+                        <th class="valores">CÓD. ITEM</th>
+                        <th class="descricao">ITEM</th>
                         <th class="vdata">LANÇAMENTO</th>
                         <th class="valores">Nº DA NOTA FISCAL</th>
                         <th class="data">DATA DA NOTA FISCAL</th>
@@ -134,6 +136,7 @@ $url = $baseURL . '/relatorios2/PRINT_PDF/print_pdf.php?input_file=' . rawurlenc
 				
                     $tamanho = count($result);
 				$j = 0;
+                                
 				for ($i = 0; $i <= $tamanho; $i++) {
                                    //var_dump($result[0]->entrada);exit;
 					if ($i == 0 && $result[$i]->idvidautil == $result[$i+1]->idvidautil) {
@@ -184,7 +187,8 @@ $url = $baseURL . '/relatorios2/PRINT_PDF/print_pdf.php?input_file=' . rawurlenc
 
 $tamanho = count($result);
 for ($i = 0; $i < $tamanho; $i++) :
-    ?>                              
+    ?>                   
+                    <?php if(($result[$i]->saldo_anterior != 0) || ($result[$i]->entrada != 0)|| ($result[$i]->saida != 0)){//verifica se os saldos são iguais a zero?>
                         <tr>                                     
                             <td class="valores" style="text-align: center;"><?php echo '<b>' . $result[$i]->idvidautil . '</b> - ' . $result[$i]->descricao; ?></td>
                             <td style="width: 7em" class="valores" style="text-align: center;"><?php echo number_format($result[$i]->saldo_anterior, 2, ',', '.');?></td>
@@ -198,7 +202,8 @@ for ($i = 0; $i < $tamanho; $i++) :
                             <td class="valores" style="text-align: left;"><?php echo $result[$i]->datanotafiscal;?></td>
                             <td class="valores" style="text-align: center;"><?php echo $result[$i]->cnpj;?></td>
                             <td class="valores" style="text-align: left;"><?php echo $result[$i]->dataateste;?></td>
-                        </tr>                            
+                        </tr> 
+                    <?php }?>
     <?php
 endfor;
 ?>
