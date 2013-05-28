@@ -12,7 +12,7 @@ $dataHelper = new DataHelper();
 
 $mesAnoRef = substr($_GET['ref'], 0, 10);
 $ids = substr($_GET['ref'], 11);
-
+$mesAno = substr($_GET['ref'], 3, 7);
 // Arquivo temporário que será utilizado para gerar o PDF.
 $tmpFile = tempnam('/tmp', 'dompdf_');
 
@@ -43,11 +43,11 @@ $tmpFile = tempnam('/tmp', 'pdf_');
 
 // Url utilizada no link de impressão do relatório. ( mandando o html )
 $url = $baseURL . '/relatorios2/PRINT_PDF/print_pdf.php?input_file=' . rawurlencode($tmpFile);
-$titulo1 = "RELATÓRIO ANALÍTICO DE MOVIMENTO DE BENS<br/>";
-$titulo = "RELATÓRIO ANALÍTICO DE MOVIMENTO DE BENS<br/>";
+$titulo1 = "<b>RELATÓRIO ANALÍTICO DE MOVIMENTO DE BENS</b><br/>";
+$titulo = "<b>RELATÓRIO ANALÍTICO DE MOVIMENTO DE BENS</b><br/>";
  if ($nomesInstituicoes) {
-    $titulo .= mb_strtoupper($nomesInstituicoes) ." <br/>";
-    $titulo .="ANO DE REFERÊNCIA ". $mesAnoRef;
+    $titulo .="<b>". mb_strtoupper($nomesInstituicoes) ." </b><br/>";
+    $titulo .="<b>ANO DE REFERÊNCIA ". $mesAno." </b><br/>";
  }
 
 ?>
@@ -102,8 +102,7 @@ $titulo = "RELATÓRIO ANALÍTICO DE MOVIMENTO DE BENS<br/>";
                 } );
             } );
         </script>
-        </script>
-        <title><?php echo $titulo1; ?></title>                    
+        </script>                  
     </head>
     <body align="center">
 
@@ -112,6 +111,7 @@ $titulo = "RELATÓRIO ANALÍTICO DE MOVIMENTO DE BENS<br/>";
 
 <?php require_once 'statics/cabecalho.php'; ?>
 
+            <?php echo $titulo; ?>
             <div id="menu"><br/></div>
             <table cellpadding="0" cellspacing="0" border="0" class="display" id="tabela" style="width: 100%">
                 <thead> 
