@@ -201,7 +201,13 @@ for ($i = 0; $i < count($rows); $i++) {
                             <td style="width: 5%"class="descricao" style="text-align: center;"><?php echo $rows[$i]['idsubelemento']; ?></td>
                             <td style="width: 5%"class="data" style="text-align: center;"><?php echo $rows[$i]['datahora']; ?></td>
                             <td style="width: 5%"class="data" style="text-align: center;"><?php echo $rows[$i]['datanotafiscal']; ?></td>
-                            <td style="width: 5%"class="valores" style="text-align: center;"><?php echo $rows[$i]['tipomovimento']; ?></td>
+                            <?php  if($rows[$i]['tipomovimento'] == 1)
+                                $movimento= "ENTRADA";?>
+                            <?php  if($rows[$i]['tipomovimento'] == 2)
+                                $movimento= "SAÍDA ";?>
+                            <?php  if($rows[$i]['tipomovimento'] == 9)
+                                $movimento= "BAIXA";?>
+                            <td style="width: 5%"class="valores" style="text-align: center;"><?php echo $movimento; ?></td>
                             <td style="width: 5%"class="data" style="text-align: center;"><?php echo $rows[$i]['datamov']; ?></td>
                             <td style="width: 5%"class="valores" style="text-align: center;"><?php echo $rows[$i]['quantidade']; ?></td>
                             <td style="width: 2%"class="descricao" style="text-align: center;"><?php echo $rows[$i]['descricao']; ?></td>
