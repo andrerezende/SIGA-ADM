@@ -47,7 +47,7 @@ $titulo1 = "<b>RELATÓRIO ANALÍTICO DE MOVIMENTO DE BENS</b><br/>";
 $titulo = "<b>RELATÓRIO ANALÍTICO DE MOVIMENTO DE BENS</b><br/>";
  if ($nomesInstituicoes) {
     $titulo .="<b>". mb_strtoupper($nomesInstituicoes) ." </b><br/>";
-    $titulo .="<b>ANO DE REFERÊNCIA ". $mesAno." </b><br/>";
+    $titulo .="<b>REFERÊNCIA ". $mesAno." </b><br/>";
  }
 
 ?>
