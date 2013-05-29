@@ -24,7 +24,9 @@ if (!$handled) {
 
 	$panel->adduseraction('adm_almoxarifado', a_execute, 'Almoxarifado', $ui->GetImageTheme('', 'icons/almoxarifado.png'), $module, 'main:uoalmoxarifado:find');
 	//$panel->AddAction('Consultas', $ui->GetImageTheme('', 'icons/consultas.png'), $module, 'main:consultas');
+        if (!$MIOLO->getPerms()->isAdmin())
 	$panel->AddUserAction('adm_financas', A_EXECUTE, 'Financeiro', $ui->GetImageTheme('', 'icons/financeiro.png'), $module, 'main:financeiro');
+        if (!$MIOLO->getPerms()->isAdmin())
 	$panel->AddUserAction('adm_compras', A_EXECUTE, 'Licitações', $ui->GetImageTheme('', 'icons/licitacoes.png'), $module, 'main:listarLicitacoes');
 	//$panel->AddUserAction('adm_requisicao', A_EXECUTE, 'Manuais', $ui->GetImageTheme('', 'icons/manuais.png'), $module, 'main:manual');
 	$panel->AddUserAction('adm_manutencao', A_EXECUTE, 'Manutenção', $ui->GetImageTheme('', 'icons/manutencao.png'), $module, 'main:manutencao');
@@ -40,6 +42,7 @@ if (!$handled) {
         $panel->AddUserAction('AD_INSPECAO_VEICULO', A_EXECUTE, 'Inspeção de Veículo', $ui->GetImageTheme('', 'icons/carroManutencao.png'), $module, 'main:inspecao:find');
 	
 	$panel->AddAction('Orçamento Termo', $ui->GetImageTheme('', 'icons/financeiro.png'), $module, 'main:pedidocompra:find');
+        if (!$MIOLO->getPerms()->isAdmin())
 	$panel->AddUserAction('adm_mv', A_EXECUTE, 'Manutenção de Veículos', $ui->GetImage('adm', 'kcontrol.png'), $module, 'main:manutencaoveiculo');
 	/*if ($uos > 0) {
 		$panel->AddUserAction('adm_requisicao', A_EXECUTE, 'Requisição Suplementar', $ui->GetImageTheme('', 'icons/requisicao_suplementar.png'), $module, 'main:requisicoes:requisicaosuplementar');

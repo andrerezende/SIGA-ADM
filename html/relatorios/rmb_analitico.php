@@ -12,7 +12,7 @@ $dataHelper = new DataHelper();
 
 $mesAnoRef = substr($_GET['ref'], 0, 10);
 $ids = substr($_GET['ref'], 11);
-
+$mesAno = substr($_GET['ref'], 3, 7);
 // Arquivo temporário que será utilizado para gerar o PDF.
 $tmpFile = tempnam('/tmp', 'dompdf_');
 
@@ -47,7 +47,7 @@ $titulo1 = "<b>RELATÓRIO ANALÍTICO DE MOVIMENTO DE BENS</b><br/>";
 $titulo = "<b>RELATÓRIO ANALÍTICO DE MOVIMENTO DE BENS</b><br/>";
  if ($nomesInstituicoes) {
     $titulo .="<b>". mb_strtoupper($nomesInstituicoes) ." </b><br/>";
-    $titulo .="<b>ANO DE REFERÊNCIA ". $mesAnoRef." </b><br/>";
+    $titulo .="<b>ANO DE REFERÊNCIA ". $mesAno." </b><br/>";
  }
 
 ?>
