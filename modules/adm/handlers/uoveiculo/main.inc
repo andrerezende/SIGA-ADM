@@ -14,10 +14,10 @@
     $theme->ClearContent();
     $ui = $MIOLO->GetUI();
 
-    $objAlmoxarifado = $MIOLO->GetBusiness('adm','uo', $item);
+    $objVeiculo = $MIOLO->GetBusiness('adm','uo', $item);
 
-    $navbar->AddOption(ucwords(strtolower($objAlmoxarifado->nome)), 'adm', 'main:uoalmoxarifado:main',$item);
-    $form = $MIOLO->GetUI()->GetForm($module,'frmUoVeiculo', $objAlmoxarifado, 'uoalmoxarifado');
+    $navbar->AddOption(ucwords(strtolower($objVeiculo->nome)), 'adm', 'main:uoveiculo:main',$item);
+    $form = $MIOLO->GetUI()->GetForm($module,'frmUoVeiculo', $objVeiculo, 'uoveiculo');
 
     $theme->InsertContent($form);
     $a = $context ? $context->ShiftAction() : 'main';

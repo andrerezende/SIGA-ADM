@@ -1,0 +1,144 @@
+<?
+/**
+ * Grid Uo
+ * Grid de uso geral para selecionar requisicoes
+ * @package br.org.miolo.ufjf.adm.grids
+ */
+/**
+ * Use Module Control
+ */
+global $MIOLO;
+$MIOLO->Uses('controls/linkreqveiculo.class','adm');
+
+class gridUoRequisicoeVeiculoRetorno extends DataGrid2
+{
+
+    /**
+     * Constructor
+     */
+    function __construct()
+    {
+        global $MIOLO, $self, $page,$item;
+        
+        $linkRequisicao = new LinkReqVeiculo('linkreqveiculo','%0%');
+        $idUsuario = $MIOLO->GetLogin()->idkey;
+	$uo = $MIOLO->GetBusiness('adm','uo');
+        $objTipoReq = $MIOLO->GetBusiness('adm','tiporeq');
+        $objTipoReq->GetById((int)$item);
+       
+        $session = $MIOLO->getSession();
+	$session->set('form',"reqabastecimento");
+        
+		$idUoGestor = Form::GetFormValue('idUoGestor');
+		$idUoExecutor = Form::GetFormValue('idUoExecutor');
+                $idUoRequisitante = Form::GetFormValue('idUoRequisitante');
+                $filter = Form::GetFormValue('requisicao');
+                $dataInicio = Form::GetFormValue('datainicio');
+                $dataSaida = Form::GetFormValue('datasaida');
+                $form = Form::GetFormValue('form');
+                $lista_iduo = $item;
+
+        $opcao = Form::GetFormValue('opcao');
+        $opcao2 = Form::GetFormValue('opcao2');
+        $opcao3 = Form::GetFormValue('opcao3');
+        
+        $btnPost = Form::GetFormValue('btnPost');
+        $btnPost2 = Form::GetFormValue('btnPost2');
+        $btnPost3 = Form::GetFormValue('btnPost3');
+
+        $idUsuario = $MIOLO->GetLogin()->idkey;
+        if ( $btnPost3) //Opções do Requisitante
+        { 
+         	if($dataInicio && $dataSaida){
+               $dataInicio = $this->formataData($dataInicio);
+               $dataSaida = $this->formataData($dataSaida);
+             }
+             
+                //var_dump($dataInicio);var_dump($dataSaida); var_dump($lista_iduo);var_dump($btnPost3);exit;
+                $objRequisicao = $MIOLO->GetBusiness('adm','requisicao');
+        	$columns = array(
+			new MDataGridControl($linkRequisicao,'requisicao','Número','center','10%'),
+			new MDataGridColumn('datahorareq','Data/Hora','center',false,'25%'),
+			new MDataGridColumn('login','Login','center',false,'20%'),
+			new MDataGridColumn('siglasetor','Setor','center',false,'20%'),
+			new MDataGridColumn('item2','Status','center',false,'25%)%'),
+			//new MDataGridColumn('descricao','Origem','center',false,'20%'),
+		);
+        	$this->SetFilter(false);
+        	$this->AddFilterText('requisicao','Requisição',$uo);
+	        $this->SetIndex(1);
+
+    		if($lista_iduo){
+                $query = $objRequisicao->listReqVeiculoRetorno($requisicao, $lista_iduo,$dataInicio,$dataSaida);
+                }
+		    $href_grid = $MIOLO->GetActionURL('adm',$self,'',array("opcaoGestor"=>$opcaoGestor,"idUoGestor"=>$idUoGestor,"idUoExecutor"=>$idUoExecutor,"requisicao"=>$filter,"opcao"=>$opcao,"opcao2"=>$opcao2,"opcao3"=>$opcao3,"btnPost"=>$btnPost,"btnPost2"=>$btnPost2,"btnPost3"=>$btnPost3));
+    	}
+    	else
+    	{
+        	$objRequisicao = $MIOLO->GetBusiness('adm','requisicao');
+        	$columns = array(
+			new MDataGridControl($linkRequisicao,'requisicao','Número','center','10%'),
+			new MDataGridColumn('datahorareq','Data/Hora','center',false,'25%'),
+			new MDataGridColumn('login','Login','center',false,'20%'),
+			new MDataGridColumn('siglasetor','Setor','center',false,'20%'),
+			new MDataGridColumn('item2','Status','center',false,'25%)%'),
+			//new MDataGridColumn('descricao','Origem','center',false,'20%'),
+		);
+        	$this->SetFilter(false);
+    		$requisicao = empty($filter) ? 0 : $filter;
+
+        	$this->AddFilterText('requisicao','Requisição',$uo);
+	        $this->SetIndex(1);
+
+     		$executor = $MIOLO->GetBusiness('adm','executor');
+	    	$uoExec = $executor->listUoByUsuario($idUsuario);
+
+
+
+
+		if((!is_numeric($requisicao)) and (!empty($requisicao)))
+		{
+			if($requisicao=='%')
+				$requisicao=0;
+			else
+			{
+				$go = $MIOLO->GetActionURL($module,$action);
+				$MIOLO->Error('Digite o "número" da requisição ou "%" para listar todas', $go );
+			}
+		}
+
+            // Se o usuário for executor de pelo menos uma UO então ele poder ver qualquer requisicao.
+            if ($uoExec->result)
+            {
+	    	    $query = $objRequisicao->listReqVeiculoRetorno($requisicao,$lista_iduo,$dataInicio,$dataSaida);
+            }
+            else
+            {
+		
+	    	    $query = $objRequisicao->ListByNumeroUsuarioVeiculo($requisicao, $idUsuario,$lista_iduo);
+		  
+            }
+
+		    $href_grid = $MIOLO->GetActionURL('adm',$self,'',array("opcaoGestor"=>$opcaoGestor,"idUoGestor"=>$idUoGestor,"idUoExecutor"=>$idUoExecutor,"requisicao"=>$filter,"opcao"=>$opcao,"opcao2"=>$opcao2,"opcao3"=>$opcao3,"btnPost"=>$btnPost,"btnPost2"=>$btnPost2,"btnPost3"=>$btnPost3));
+	    }
+        parent::__construct($query, $columns, $href_grid,100);
+        $this->SetLinkType('hyperlink');
+    }
+
+    function GenerateFooter()
+    {
+        if (!$this->data) 
+        $footer[] = $this->GenerateEmptyMsg();
+        $footer[] = new Separator();
+        $footer[] = $this->GenerateControls();
+        return $footer;
+    }
+    
+    public function formataData($dataInicio){
+        $arrData = explode('/', $dataInicio);
+        $newDate = $arrData [2].'-'.$arrData [1].'-'.$arrData [0];
+        return $newDate;
+    }
+
+}
+

@@ -34,7 +34,7 @@ if (!$handled) {
 	$panel->AddUserAction('adm_patrimonio', A_EXECUTE, 'Patrimônio', $ui->GetImageTheme('', 'icons/patrimonio.png'), $module, 'main:patrimonio');
 	//$panel->AddUserAction('adm_recursos', A_EXECUTE, 'Recursos', $ui->GetImageTheme('', 'icons/recursos.png'), $module, 'main:recursos');
 	$panel->AddUserAction('AD_REL_VEICULOS', A_EXECUTE, 'Relatórios de Veículos', $ui->GetImageTheme('', 'icons/relatorio.png'), $module, 'main:reports');
-	$panel->AddUserAction('adm_requisicao', A_EXECUTE, 'Requisições Veículos', $ui->GetImageTheme('', 'icons/requisicoes.png'), $module, 'main:requisicaoveiculo:findveiculo',$objTipoReqVei->idTipoReq,array("form"=>"item","tipoReq"=>$objTipoReqVei->idTipoReq));
+	$panel->AddUserAction('adm_requisicao', A_EXECUTE, 'Requisições Veículo', $ui->GetImageTheme('', 'icons/requisicoes.png'), $module, 'main:requisicaoveiculo:findveiculo',$objTipoReqVei->idTipoReq,array("form"=>"item","tipoReq"=>$objTipoReqVei->idTipoReq));
         $panel->AddUserAction('adm_requisicao', A_EXECUTE, 'Requisições Almoxarifado', $ui->GetImageTheme('', 'icons/requisicoes.png'), $module, 'main:requisicoes:find',$objTipoReqAlm->idTipoReq,array("form"=>"item","tipoReq"=>$objTipoReqAlm->idTipoReq));
 	//$panel->AddAction('Solicitar Cadastro de Material', $ui->GetImageTheme('', 'icons/novo_material.png'), $module, 'main:novomaterial:new');
         $executante= $this->manager->GetBusiness('adm', 'executor');

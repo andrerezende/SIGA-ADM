@@ -188,7 +188,7 @@ for ($i = 0; $i < count($rows); $i++) {
                         <tr>                                     
                             <td class="valores" style="text-align: center;"><?php echo $rows[$i]['datahorareq']; ?></td>
                             <td class="valores" style="text-align: center;"><?php echo $rows[$i]['nome']; ?></td>
-                            <td style="width: 7em" class="valores" style="text-align: center;"><?php echo $rows[$i]['idrequisicao']; ?></td>
+                            <td class="valores" style="text-align: center;"><?php echo $rows[$i]['idrequisicao']; ?></td>
                             <td class="valores" style="text-align: center;"><?php echo $rows[$i]['local']; ?></td>
                             <td class="valores" style="text-align: right;"><?php echo $rows[$i]['valorabastecimento']; ?></td>
                             <td class="valores" style="text-align: right;"><?php echo $rows[$i]['quantidade']; ?></td>
