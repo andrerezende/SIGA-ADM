@@ -9,7 +9,7 @@
      * Permissões necessárias
      *    ADM Manter Cadastro de Almoxarifado
      */
-    $perms->CheckAccess('adm',A_ACCESS,true);
+    //$perms->CheckAccess('adm',A_ACCESS,true);
     
     $theme->ClearContent();
     $ui = $MIOLO->GetUI();

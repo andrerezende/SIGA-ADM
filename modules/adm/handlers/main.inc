@@ -36,11 +36,12 @@ if (!$handled) {
 	$panel->AddUserAction('AD_REL_VEICULOS', A_EXECUTE, 'Relatórios de Veículos', $ui->GetImageTheme('', 'icons/relatorio.png'), $module, 'main:reports');
 	$panel->AddUserAction('adm_requisicao', A_EXECUTE, 'Requisições Veículo', $ui->GetImageTheme('', 'icons/requisicoes.png'), $module, 'main:requisicaoveiculo:findveiculo',$objTipoReqVei->idTipoReq,array("form"=>"item","tipoReq"=>$objTipoReqVei->idTipoReq));
         $panel->AddUserAction('adm_requisicao', A_EXECUTE, 'Requisições Almoxarifado', $ui->GetImageTheme('', 'icons/requisicoes.png'), $module, 'main:requisicoes:find',$objTipoReqAlm->idTipoReq,array("form"=>"item","tipoReq"=>$objTipoReqAlm->idTipoReq));
+        $panel->adduseraction('AD_GERENCIAR_VEICULO', a_execute, 'Gerenciar Veículos', $ui->GetImageTheme('', 'icons/almoxarifado.png'), $module, 'main:uoveiculo:find');
 	//$panel->AddAction('Solicitar Cadastro de Material', $ui->GetImageTheme('', 'icons/novo_material.png'), $module, 'main:novomaterial:new');
         $executante= $this->manager->GetBusiness('adm', 'executor');
         if($executante->isExecutorOf($this->manager->GetLogin()->idkey))
         $panel->AddUserAction('AD_INSPECAO_VEICULO', A_EXECUTE, 'Inspeção de Veículo', $ui->GetImageTheme('', 'icons/carroManutencao.png'), $module, 'main:inspecao:find');
-	$panel->adduseraction('AD_GERENCIAR_VEICULO', a_execute, 'Gerenciar Veículos', $ui->GetImageTheme('', 'icons/almoxarifado.png'), $module, 'main:uoveiculo:find');
+	
 	$panel->AddAction('Orçamento Termo', $ui->GetImageTheme('', 'icons/financeiro.png'), $module, 'main:pedidocompra:find');
         if (!$MIOLO->getPerms()->isAdmin())
 	$panel->AddUserAction('adm_mv', A_EXECUTE, 'Manutenção de Veículos', $ui->GetImage('adm', 'kcontrol.png'), $module, 'main:manutencaoveiculo');
