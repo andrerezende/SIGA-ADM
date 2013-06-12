@@ -1,4 +1,4 @@
-<?
+<?$perms->CheckAccess('adm',A_ACCESS,true);
     $action = $context->ShiftAction();
     $navbar->AddOption('Veículos', 'adm', 'main:uoveiculo:find');
     switch($action)
