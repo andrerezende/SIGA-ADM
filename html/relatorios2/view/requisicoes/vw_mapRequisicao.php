@@ -368,7 +368,7 @@ for ($i = 0; $i < count($rowsi); $i++) {
     //$saldoTotal += $rows[$i]['valor'];
     ?>                              
                         <tr> 
-                            <td style="width: 7em" class="valores" style="text-align: center;"><?php echo $rowsi[$i]['ordem']; ?></td>
+                            <td class="valores" style="text-align: center;"><?php echo $rowsi[$i]['ordem']; ?></td>
                             <td class="valores" style="text-align: center;"><?php echo $rowsi[$i]['datasaida']; ?></td>
                             <td class="valores" style="text-align: center;"><?php echo $rowsi[$i]['origem']; ?></td>
                             <td class="valores" style="text-align: center;"><?php echo $rowsi[$i]['destino']; ?></td>

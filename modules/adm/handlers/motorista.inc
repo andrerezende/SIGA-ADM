@@ -1,7 +1,7 @@
 <?
     $action = $context->ShiftAction();
-    $navbar->AddOption('Manutenção',$module,'main:manutencao');
-    $navbar->AddOption('Motorista', 'adm', 'main:motorista:find');
+    //$navbar->AddOption('Veículos', 'adm', 'main:uoveiculo:find');
+    $navbar->AddOption('U.O. Veículos', 'adm', 'main:uoveiculo:find');
     switch($action)
     {
         case 'find':

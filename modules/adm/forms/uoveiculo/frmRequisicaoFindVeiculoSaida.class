@@ -1,0 +1,242 @@
+<?php
+global $MIOLO;
+/**
+ * Use Module Control
+ */
+//$MIOLO->Uses('controls/linkrequisicaoveiculo.class','adm');
+
+/**
+ * Formulário básico para seleção de uos
+ * 
+ */
+class frmRequisicaoFindVeiculoSaida extends Form
+{
+    public  $objtipoReqVeiculo;
+    function __construct($objtipoReqVeiculo)
+    {
+        $this->objtipoReqVeiculo  = $objtipoReqVeiculo;
+        $this->Form('Saída de Veículo');
+		$this->SetClose($this->manager->GetActionURL('adm','main'));
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+		global $perms,$item;
+	
+		$idUsuario = $this->manager->GetLogin()->idkey;
+		$uo = $this->manager->GetBusiness('adm','uo');
+                $uoRequisitante = $uo->listByUsuarioTipoReqVei($idUsuario,$this->objtipoReqVeiculo->idTipoReq);
+                $optionsUo3 = $uoRequisitante->chunkResult();
+		$gestor = $this->manager->GetBusiness('adm','gestor');
+		$result = $gestor->listUoByUsuario($idUsuario);
+      
+		if ( $result )
+		{
+		    $options = $result->chunkResult();
+
+		    if (count($options) == 1)
+		    {
+			$uo = each($options);
+			$selectionUOs = new Selection('idUoGestor',$uo[key],'',$options);           
+		    }
+		    else
+		    {
+			$options['X'] = "TODAS";
+			$selectionUOs = new Selection('idUoGestor','','',$options);
+		    }
+
+			//array opcoes dos gestores
+                    
+			$opcoes = array(
+			    "1_solicitadas"=>"Pendentes",
+                            "2_solicitadas"=>"A serem autorizadas",
+			    "4_solicitadas"=>"Autorizadas pelo Gestor",
+			    "7_solicitadas"=>"Aguardando Execução",
+			    "A_solicitadas"=>"Recusadas pelo Executor",
+			    "8_solicitadas"=>"Parcialmente Executadas",
+			    "9_solicitadas"=>"Aguardando avaliação",
+			    "E_solicitadas"=>"Avaliadas pela sua UO",
+			    "D_solicitadas"=>"Não pagas pelo requisitante",
+			    "G_solicitadas"=>"Finalizadas"
+    			    );
+            
+			$controls = array(
+			    new Text('','Listar Requisições'),
+						new Selection('opcao','','',$opcoes),
+			    new Text('','para a UO:'),
+						$selectionUOs,
+						new FormButton('btnPost','Enviar'),
+			);
+			
+			// Só mostra o basegroup se tiver a transacao necessaria
+			/*if ($perms->CheckAccess('adm_gestoruo',A_EXECUTE))
+				$controlGroup = new BaseGroup('controlGroup','Opções do Gestor',$controls,'horizontal','css');*/
+		}
+        
+ 		$executor = $this->manager->GetBusiness('adm','executor');
+ 		$executorServInt = $this->manager->GetBusiness('adm','executorservint');
+        
+        // Execução + Serviços Prestados
+		$result2a = $executorServInt->listUoByUsuario($idUsuario);
+		$result2b = $executor->listUoByUsuario($idUsuario);
+        
+        if (!is_array($result2a->result) && is_array($result2b->result))
+            $result2 = $result2b->chunkResult();
+            
+        if (!is_array($result2b->result) && is_array($result2a->result))
+            $result2 = $result2a->chunkResult();
+        
+        if (is_array($result2a->result) && is_array($result2b->result))
+        {
+            foreach($result2a->result as $rs1)
+            {
+                $result2[] = array($rs1[0],$rs1[1]);
+            }
+            
+            foreach($result2b->result as $rs2)
+            {
+                $result2[] = array($rs2[0],$rs2[1]);
+            }
+        }
+		if ( $result2 )
+		{
+			//array opcoes dos executores
+            if (count($result2) == 1)
+            {
+                $uo = each($result2);
+                $selectionUOs2 = new Selection('idUoExecutor',$uo[key],'',$result2);           
+            }
+            else
+            {
+                $selectionUOs2 = new Selection('idUoExecutor','','',$result2);
+            }
+            
+			$opcoes2 = array(
+                            "4_autorizadas"=>"Autorizadas pelo Gestor",
+                            "7_autorizadas"=>"A serem executadas",
+                            "9_autorizadas"=>"Aguardando avaliação",
+                            "A_autorizadas"=>"Anuladas",
+                            "G_autorizadas"=>"Finalizadas"
+            			    );
+            
+			$controls2 = array(
+                    new Text('','Listar Requisições'),
+					new Selection('opcao2','','',$opcoes2),
+                    new Text('','para a UO:'),
+                    $selectionUOs2,
+
+					new FormButton('btnPost2','Enviar')
+			);
+			// Só mostra o basegroup se tiver a transacao necessaria
+			/*if ($perms->CheckAccess('adm_executoruo',A_EXECUTE))
+				$controlGroup2 = new BaseGroup('controlGroup2','Opções do Executor',$controls2,'horizontal','css');*/
+		}
+        
+  		$acessouoreq = $this->manager->GetBusiness('adm','acessouoreq');
+                $uo = each($options);
+			$selectionUOs3 = new Selection('idUoRequisitante','','',$optionsUo3);
+
+		$result3 = $acessouoreq->listUoByUsuario($idUsuario);      
+		if ( $result3 )
+		{
+		        $controls2 = array(
+            new Text('','De'),
+	    new CalendarField('datainicio', '', '', '10', 'Ex.: 01/01/2001'),
+            new Text('',' a :'),
+            new CalendarField('datasaida', '', '', '10', 'Ex.: 01/01/2001'), 
+            new FormButton('btnPost2','Enviar')
+			);
+                       //$controlGroup2 = new BaseGroup('controlGroup2','Listar por período',$controls2,'horizontal','css');       
+                        // Opções do requisitante
+		    	$opcoes3 = array(
+                               "1"=>"PENDENTE",
+                               "2"=>"SOLICITADA",
+                               "4"=>"AUTORIZADA PELO GESTOR",
+                               "5"=>"DEVOLVIDA PELO GESTOR",
+                               "6"=>"RECUSADA PELO GESTOR",
+                               "7"=>"LIBERADA PARA EXECUÇÃO",
+                               "A"=>"RECUSADA PELO EXECUTOR",
+                               "H"=>"ESTORNADA",
+                               "J"=>"EM EXECUÇÃO",
+                               "L"=>"PARCIALMENTE FINALIZADA",
+                               "G"=>"FINALIZADA",
+					  );
+         			$controls3 = array(
+                                    //new Text('','Requisições'),
+					//new Selection('opcao3','','',$opcoes3),
+                                    //new Text('','UO:'),
+						//$selectionUOs3,
+                                    new MSpacer(1),
+                                    new Text('','Iniciada em'),
+	    new CalendarField('datainicio', '', '', '10', 'Ex.: 01/01/2001'),
+            new Text('',' a :'),
+            new CalendarField('datasaida', '', '', '10', 'Ex.: 01/01/2001'),
+					new FormButton('btnPost3','Enviar')
+			);
+			$controlGroup3 = new BaseGroup('controlGroup3','Opções do Requisitante',$controls3,'horizontal','css');
+                
+            /*$lnkNew = new LinkRequisicaoVeiculo('lnkNew', FALSE,$item);
+            $lnkNew->setNew();*/
+ 		}
+        
+        $ui = $this->manager->GetUI();
+        $grid = $ui->GetGrid('adm','gridUoRequisicoeVeiculoSaida');
+        $grid->SetTitle(NULL);        
+        
+        $findButton = new ButtonFind('');
+        $findButton->SetName('btnFind');
+       /* 
+        if ($acessouoreq->isRequisitanteDaUo($idUsuario,181))
+    	{
+            $fields = array(
+                array(
+                    new Text('','Número da Requisição:'),
+                    new TextField('requisicao','','',15),
+                    $findButton,
+                    $lnkNew
+                ),
+            );
+    		$fields[] = $controlGroup3;
+    	}
+        else*/ if ( $controlGroup3 )
+    	{
+
+            $fields = array(
+                array(
+                    new Text('','Número da Requisição:'),
+                    new TextField('requisicao','','',15),
+                    $findButton,
+                    $lnkNew
+                ),
+            );
+    		$fields[] = $controlGroup3;
+    	}
+        else
+     	{
+            $fields = array(
+                array(
+                    new Text('','Número da Requisição:'),
+                    new TextField('requisicao','','',15),
+                    $findButton
+                ),
+            );
+    	}
+       
+        if ( $controlGroup )
+    	{
+    		$fields[] = $controlGroup;
+    	}
+        
+        if ( $controlGroup2 )
+    	{
+    		$fields[] = $controlGroup2;
+    	}       
+
+    	$fields[] = $grid;
+        $this->SetFields($fields);
+
+        $this->defaultButton = false;
+    }
+}
+?>
