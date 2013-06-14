@@ -1,11 +1,11 @@
 <?
     $action = $context->ShiftAction();
-    if($action == 'new' && $item == '4'){
+    /*if($action == 'new' && $item == '4'){
 	$navbar->AddOption('Requisição', 'adm', 'main:requisicoes:findveiculo');
     }elseif($action == 'new'){ 
         $navbar->AddOption('Requisição', 'adm', 'main:requisicoes:find');
-    }
-    
+    }*/
+    $navbar->AddOption('Requisição', 'adm', 'main:requisicoes:find',$item);
 	switch($action)
     {
         case 'find':

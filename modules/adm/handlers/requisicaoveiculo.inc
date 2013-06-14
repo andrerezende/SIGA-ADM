@@ -2,8 +2,8 @@
     $action = $context->ShiftAction();
     $theme->ClearContent();
     $ui = $MIOLO->GetUI();
-	$navbar->AddOption('Requisição', 'adm', 'main:requisicaoveiculo:findveiculo');
-    
+	//$navbar->AddOption('Requisição', 'adm', 'main:requisicaoveiculo:findveiculo');
+    $navbar->AddOption('Requisição', 'adm','main');
     
     
 	switch($action)
