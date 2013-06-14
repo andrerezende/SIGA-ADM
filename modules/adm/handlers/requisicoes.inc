@@ -5,7 +5,7 @@
     }elseif($action == 'new'){ 
         $navbar->AddOption('Requisição', 'adm', 'main:requisicoes:find');
     }*/
-    $navbar->AddOption('Requisição', 'adm', 'main:requisicoes:find',$item);
+    //$navbar->AddOption('Requisição', 'adm', 'main:requisicoes:find',$item);
 	switch($action)
     {
         case 'find':
