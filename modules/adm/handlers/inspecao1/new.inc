@@ -4,6 +4,6 @@
 	$theme->ClearContent();
 	$ui = $MIOLO->GetUI();
 	$navbar->AddOption('Veículos', 'adm', 'main:uoveiculo:main');
-	$form = $ui->GetForm('adm','frmInspecaoNew',$uo,'inspecao');
+	$form = $ui->GetForm('adm','frmInspecaoNew',$uo,'inspecao1');
 	$theme->InsertContent($form);
 ?>
