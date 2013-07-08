@@ -1,0 +1,751 @@
+<?php
+
+class frmInspecaoComponenteNew extends Form {
+
+    protected $objInspecao;
+    private $motorista;
+    private $veiculo;
+    public $flag = false;
+
+    function __construct($objInspecao) {
+        $this->objInspecao = $objInspecao;
+        $this->Form(null);
+        $this->EventHandler();
+        $this->page->AddJsCode(file_get_contents(dirname(__FILE__) . '/../../ui/js/mask.js'));
+    }
+
+    function CreateFields() {
+        global $MIOLO;
+        $session = $MIOLO->getSession();
+	$sidUo = $session->get('idUo');
+        $ui = $this->manager->getUi();
+        $componente = $this->manager->GetBusiness('adm', 'componente');
+        $numComponentes = $componente->listarInspecionados($this->objInspecao->idInspecao);
+        $numComponentesF = $componente->listarInspecaoFim($this->objInspecao->idInspecao);
+        switch ($this->objInspecao->idSituacaoInspecao) {
+            case 1:
+                if (count($numComponentes->result) < 22)
+                    if ($this->objInspecao->getNumeroInspecao($this->objInspecao->idVeiculo) == 1){
+                    $this->telaPrimeiraInspecao();
+                    }else{
+                        if ($this->objInspecao->verificaInicioInspecao($this->objInspecao->idVeiculo) && !$this->objInspecao->verificaInicioFim($this->objInspecao->idVeiculo)){
+                           $this->telaInspecaoSituacaoTres();
+                        }else if (!$this->objInspecao->verificaInicioInspecao($this->objInspecao->idVeiculo) && !$this->objInspecao->verificaInicioFim($this->objInspecao->idVeiculo)){
+                            if($this->objInspecao->verificaFinalAndamento($this->objInspecao->idVeiculo)){
+                                $this->telaInspecaoFinalAndamento();
+                            }
+                            else{
+                                $this->telaPrimeiraInspecao();
+                                
+                                }
+                        }else if (!$this->objInspecao->verificaInicioInspecao($this->objInspecao->idVeiculo) && $this->objInspecao->verificaInicioFim($this->objInspecao->idVeiculo)){
+                            $this->telaInspecaoSituacaoCinco();
+                        }
+                        else if ($this->objInspecao->verificaInicioInspecao($this->objInspecao->idVeiculo) && $this->objInspecao->verificaInicioFim($this->objInspecao->idVeiculo)){
+                            $this->telaInspecaoInicio();
+                        }
+                    }
+                break;
+            case 2:
+                if (count($numComponentes->result) < 22) {
+                    if ($this->objInspecao->getNumeroInspecao($this->objInspecao->idVeiculo) == 1){
+                    $this->telaPrimeiraInspecao();
+                    }else{
+                        if ($this->objInspecao->verificaInicioInspecao($this->objInspecao->idVeiculo) && !$this->objInspecao->verificaInicioFim($this->objInspecao->idVeiculo)){
+                           $this->telaInspecaoSituacaoTres();
+                        }else if (!$this->objInspecao->verificaInicioInspecao($this->objInspecao->idVeiculo) && !$this->objInspecao->verificaInicioFim($this->objInspecao->idVeiculo)){
+                            if($this->objInspecao->verificaFinalAndamento($this->objInspecao->idVeiculo)){
+                                $this->telaInspecaoFinalAndamento();
+                            }
+                            else{
+                                $this->telaPrimeiraInspecao();
+                                
+                                }
+                        }else if (!$this->objInspecao->verificaInicioInspecao($this->objInspecao->idVeiculo) && $this->objInspecao->verificaInicioFim($this->objInspecao->idVeiculo)){
+                            $this->telaInspecaoSituacaoCinco();
+                        }
+                        else if ($this->objInspecao->verificaInicioInspecao($this->objInspecao->idVeiculo) && $this->objInspecao->verificaInicioFim($this->objInspecao->idVeiculo)){
+                            $this->telaInspecaoInicio();
+                        }
+                    }
+                } else {
+                    $inspecao = $this->manager->getBusiness('adm', 'inspecao');
+                    $inspecao = $this->objInspecao->GetById($this->objInspecao->idInspecao);
+                    $inspecao->setStatus(3);
+                    $inspecao->update();
+                    $this->interacaoMotorista();
+                    $this->manager->information("Inspeção concluida com sucesso: " . $this->objInspecao->idInspecao, $this->manager->getActionUrl('adm', 'main:inspecao:final',$sidUo));
+                    $this->telaInspecaoFim();
+                    $this->inabilitaDadosMotorista(FALSE);
+                }
+                break;
+            case 3:
+                $this->telaInspecaoFim();
+                $this->inabilitaDadosMotorista(FALSE);
+                break;
+            case 4://Final em andamento
+                if (count($numComponentesF->result) < 22) {
+                    $this->telaInspecaoFim();
+                    $this->inabilitaDadosMotorista(FALSE);
+                } else {
+                        $inspecao = $this->manager->getBusiness('adm', 'inspecao');
+                    $inspecao = $this->objInspecao->GetById($this->objInspecao->idInspecao);
+                    $inspecao->dataHoraFim = date('d/m/Y H:i');
+                    $inspecao->setStatus(5);
+                    //$inspecao->confirmacao = 3;
+                    $inspecao->update();
+                    $this->interacaoMotorista();
+                    $this->manager->information("Inspeção FINAL concluida com sucesso: " . $this->objInspecao->idInspecao, $this->manager->getActionUrl('adm', 'main:inspecao:final',$sidUo));
+                    //}
+                }
+
+                break;
+            case 5:
+                $this->manager->information("Inspeção ". $this->objInspecao->idInspecao." FINALIZADA: " , $this->manager->getActionUrl('adm', 'main:inspecao:final',$sidUo));
+                /*$go = $this->manager->getActionUrl('adm', 'main:inspecao:inspecaoview', $this->objInspecao->idInspecao, array("form" => "item", "idInspecao" => $this->objInspecao->idInspecao));
+                $this->page->Redirect($go);*/
+                break;
+        }
+    }
+
+    public function telaInspecaoInicio() {
+        
+        $componente = $this->manager->GetBusiness('adm', 'componente');
+        //novo---------------//--------------------
+        $inspecaocomponente = $this->manager->GetBusiness('adm', 'inspecaocomponente');
+        $conformidade = $this->manager->GetBusiness('adm', 'conformidade');
+        
+        //-------------------------------------------------------------------
+        $listaComponentes = $componente->compara($this->objInspecao->idInspecao);
+        if (count($listaComponentes))
+            $componente = $componente->GetById(key($listaComponentes));
+
+
+
+        //$resultcomponente = $componente->ListAll();
+        //$optionscomponente = $resultcomponente->chunkResult();
+        $this->atualizaInspecao($this->objInspecao->idInspecao);
+        //$resultconformidade = $conformidade->ListAll();
+        //$optionsconformidade = $resultconformidade->chunkResult();
+        $opcoes2 = array(
+            1 => "OK",
+            2 => "NÃO CONFORME",
+            3 => "NÃO SE APLICA",
+        );
+       $idUltimaInspecao = $this->objInspecao->comparaUltima($this->objInspecao->veiculo->placa);
+       $objInspecao = $this->manager->GetBusiness('adm', 'inspecao');
+       $objInspecao = $objInspecao->GetById($idUltimaInspecao);
+       $objMotorista = $this->manager->GetBusiness('adm', 'motorista');
+       $objMotorista = $objMotorista->GetById($objInspecao->idMotorista);
+       $objVeiculo = $this->manager->GetBusiness('adm', 'veiculo');
+       $objVeiculo = $objVeiculo->GetById($objInspecao->idVeiculo);
+       $inspecaocomponente = $inspecaocomponente->GetById($objInspecao->idInspecao, key($listaComponentes));
+       $conformidadeUltima = $conformidade->GetById($inspecaocomponente->idConformidadeInicio);
+       switch ($conformidadeUltima->descricao){
+           case 'NÃO CONFORME':
+               $op = 2;
+               break;
+           case 'NÃO SE APLICA':
+               $op = 3;
+               break;
+           case 'OK':
+               $op = 1;
+               break;
+       }
+
+        $fields = array(
+            new MPanel('', 'Última Inspeção Realizada'),
+            new TextField('motorista1', $objMotorista->pessoa->nome, 'Motorista', 50),
+            //new TextField('veiculo1', "[" . $objVeiculo->placa . "] " . $objVeiculo->modelo, 'Veiculo', 50),
+            new TextField('nomComponente1', $componente->descricao, 'Componente', 50),
+            new TextField('conformidade1', $conformidadeUltima->descricao, 'Situação', 15),
+            new MMultiLineField('obsinicio1', $inspecaocomponente->obsInicio, 'Observação', '', 3, 60),
+            new MSpacer(1),
+            new MPanel('', 'Inspeção Início'),
+            new TextField('motorista', $this->motorista->pessoa->nome, 'Motorista', 50),
+            new TextField('veiculo', "[" . $this->veiculo->placa . "] " . $this->veiculo->modelo, 'Veiculo', 50),
+            new TextField('nomComponente', $componente->descricao, 'Componente', 50),
+            new hiddenfield('componente', $componente->idComponente),
+            new MSelection('conformidade', $op, 'Situação', $opcoes2),
+            new MultiLineField('obsinicio', $inspecaocomponente->obsInicio, 'Observação', '', 3, 65),
+        );
+
+        $this->inspecaoPosCriada();
+        $this->SetFields($fields);
+        $this->inspecaoPosCriada();
+        $this->inspecaoInicialPosCriada();
+        //$this->setFieldAttr('nomComponente', 'readonly', TRUE);
+
+        $this->SetValidators($validators);
+        $buttons = array(
+            new MButton('btnSalvar', 'Salvar'),
+            new MButton('btnCancelar', 'Voltar')
+        );
+        $this->SetButtons($buttons);
+    }
+    
+    
+    public function telaInspecaoSituacaoCinco() {
+        
+        $componente = $this->manager->GetBusiness('adm', 'componente');
+        //novo---------------//--------------------
+        $inspecaocomponente = $this->manager->GetBusiness('adm', 'inspecaocomponente');
+        $conformidade = $this->manager->GetBusiness('adm', 'conformidade');
+        
+        //-------------------------------------------------------------------
+        $listaComponentes = $componente->compara($this->objInspecao->idInspecao);
+        if (count($listaComponentes))
+            $componente = $componente->GetById(key($listaComponentes));
+
+
+
+        //$resultcomponente = $componente->ListAll();
+        //$optionscomponente = $resultcomponente->chunkResult();
+        $this->atualizaInspecao($this->objInspecao->idInspecao);
+        //$resultconformidade = $conformidade->ListAll();
+        //$optionsconformidade = $resultconformidade->chunkResult();
+        $opcoes2 = array(
+            1 => "OK",
+            2 => "NÃO CONFORME",
+            3 => "NÃO SE APLICA",
+        );
+       $idUltimaInspecao = $this->objInspecao->comparaUltimaFim($this->objInspecao->veiculo->placa);
+       $objInspecao = $this->manager->GetBusiness('adm', 'inspecao');
+       $objInspecao = $objInspecao->GetById($idUltimaInspecao);
+       $objMotorista = $this->manager->GetBusiness('adm', 'motorista');
+       $objMotorista = $objMotorista->GetById($objInspecao->idMotorista);
+       $objVeiculo = $this->manager->GetBusiness('adm', 'veiculo');
+       $objVeiculo = $objVeiculo->GetById($objInspecao->idVeiculo);
+       $inspecaocomponente = $inspecaocomponente->GetById($objInspecao->idInspecao, key($listaComponentes));
+       $conformidadeUltima = $conformidade->GetById($inspecaocomponente->idConformidadeInicio);
+       switch ($conformidadeUltima->descricao){
+           case 'NÃO CONFORME':
+               $op = 2;
+               break;
+           case 'NÃO SE APLICA':
+               $op = 3;
+               break;
+           case 'OK':
+               $op = 1;
+               break;
+       }
+
+        $fields = array(
+            new MPanel('', 'Última Inspeção Realizada'),
+            new TextField('motorista1', $objMotorista->pessoa->nome, 'Motorista', 50),
+            //new TextField('veiculo1', "[" . $objVeiculo->placa . "] " . $objVeiculo->modelo, 'Veiculo', 50),
+            new TextField('nomComponente1', $componente->descricao, 'Componente', 50),
+            new TextField('conformidade1', $conformidadeUltima->descricao, 'Situação', 15),
+            new MMultiLineField('obsinicio1', $inspecaocomponente->obsInicio, 'Observação', '', 3, 60),
+            new MSpacer(1),
+            new MPanel('', 'Inspeção Início'),
+            new TextField('motorista', $this->motorista->pessoa->nome, 'Motorista', 50),
+            new TextField('veiculo', "[" . $this->veiculo->placa . "] " . $this->veiculo->modelo, 'Veiculo', 50),
+            new TextField('nomComponente', $componente->descricao, 'Componente', 50),
+            new hiddenfield('componente', $componente->idComponente),
+            new MSelection('conformidade', $op, 'Situação', $opcoes2),
+            new MultiLineField('obsinicio', $inspecaocomponente->obsInicio, 'Observação', '', 3, 65),
+        );
+
+        $this->inspecaoPosCriada();
+        $this->SetFields($fields);
+        $this->inspecaoPosCriada();
+        $this->inspecaoInicialPosCriada();
+        //$this->setFieldAttr('nomComponente', 'readonly', TRUE);
+
+        $this->SetValidators($validators);
+        $buttons = array(
+            new MButton('btnSalvar', 'Salvar'),
+            new MButton('btnCancelar', 'Voltar')
+        );
+        $this->SetButtons($buttons);
+    }
+
+    public function telaInspecaoFinalAndamento() {
+        
+        $componente = $this->manager->GetBusiness('adm', 'componente');
+        //novo---------------//--------------------
+        $inspecaocomponente = $this->manager->GetBusiness('adm', 'inspecaocomponente');
+        $conformidade = $this->manager->GetBusiness('adm', 'conformidade');
+        
+        //-------------------------------------------------------------------
+        $listaComponentes = $componente->compara($this->objInspecao->idInspecao);
+        if (count($listaComponentes))
+            $componente = $componente->GetById(key($listaComponentes));
+
+
+
+        //$resultcomponente = $componente->ListAll();
+        //$optionscomponente = $resultcomponente->chunkResult();
+        $this->atualizaInspecao($this->objInspecao->idInspecao);
+        //$resultconformidade = $conformidade->ListAll();
+        //$optionsconformidade = $resultconformidade->chunkResult();
+        $opcoes2 = array(
+            1 => "OK",
+            2 => "NÃO CONFORME",
+            3 => "NÃO SE APLICA",
+        );
+       $idUltimaInspecao = $this->objInspecao->comparaFinalAndamento($this->objInspecao->veiculo->placa);
+       $objInspecao = $this->manager->GetBusiness('adm', 'inspecao');
+       $objInspecao = $objInspecao->GetById($idUltimaInspecao);
+       $objMotorista = $this->manager->GetBusiness('adm', 'motorista');
+       $objMotorista = $objMotorista->GetById($objInspecao->idMotorista);
+       $objVeiculo = $this->manager->GetBusiness('adm', 'veiculo');
+       $objVeiculo = $objVeiculo->GetById($objInspecao->idVeiculo);
+       $inspecaocomponente = $inspecaocomponente->GetById($objInspecao->idInspecao, key($listaComponentes));
+       $conformidadeUltima = $conformidade->GetById($inspecaocomponente->idConformidadeInicio);
+       switch ($conformidadeUltima->descricao){
+           case 'NÃO CONFORME':
+               $op = 2;
+               break;
+           case 'NÃO SE APLICA':
+               $op = 3;
+               break;
+           case 'OK':
+               $op = 1;
+               break;
+       }
+
+        $fields = array(
+            new MPanel('', 'Última Inspeção Realizada'),
+            new TextField('motorista1', $objMotorista->pessoa->nome, 'Motorista', 50),
+            //new TextField('veiculo1', "[" . $objVeiculo->placa . "] " . $objVeiculo->modelo, 'Veiculo', 50),
+            new TextField('nomComponente1', $componente->descricao, 'Componente', 50),
+            new TextField('conformidade1', $conformidadeUltima->descricao, 'Situação', 15),
+            new MMultiLineField('obsinicio1', $inspecaocomponente->obsInicio, 'Observação', '', 3, 60),
+            new MSpacer(1),
+            new MPanel('', 'Inspeção Início'),
+            new TextField('motorista', $this->motorista->pessoa->nome, 'Motorista', 50),
+            new TextField('veiculo', "[" . $this->veiculo->placa . "] " . $this->veiculo->modelo, 'Veiculo', 50),
+            new TextField('nomComponente', $componente->descricao, 'Componente', 50),
+            new hiddenfield('componente', $componente->idComponente),
+            new MSelection('conformidade', $op, 'Situação', $opcoes2),
+            new MultiLineField('obsinicio', $inspecaocomponente->obsInicio, 'Observação', '', 3, 65),
+        );
+
+        $this->inspecaoPosCriada();
+        $this->SetFields($fields);
+        $this->inspecaoPosCriada();
+        $this->inspecaoInicialPosCriada();
+        //$this->setFieldAttr('nomComponente', 'readonly', TRUE);
+
+        $this->SetValidators($validators);
+        $buttons = array(
+            new MButton('btnSalvar', 'Salvar'),
+            new MButton('btnCancelar', 'Voltar')
+        );
+        $this->SetButtons($buttons);
+    }
+
+    
+    public function telaInspecaoSituacaoTres() {
+        
+        $componente = $this->manager->GetBusiness('adm', 'componente');
+        //novo---------------//--------------------
+        $inspecaocomponente = $this->manager->GetBusiness('adm', 'inspecaocomponente');
+        $conformidade = $this->manager->GetBusiness('adm', 'conformidade');
+        
+        //-------------------------------------------------------------------
+        $listaComponentes = $componente->compara($this->objInspecao->idInspecao);
+        if (count($listaComponentes))
+            $componente = $componente->GetById(key($listaComponentes));
+
+
+
+        //$resultcomponente = $componente->ListAll();
+        //$optionscomponente = $resultcomponente->chunkResult();
+        $this->atualizaInspecao($this->objInspecao->idInspecao);
+        //$resultconformidade = $conformidade->ListAll();
+        //$optionsconformidade = $resultconformidade->chunkResult();
+        $opcoes2 = array(
+            1 => "OK",
+            2 => "NÃO CONFORME",
+            3 => "NÃO SE APLICA",
+        );
+       $idUltimaInspecao = $this->objInspecao->comparaUltimaInicio($this->objInspecao->veiculo->placa);
+       $objInspecao = $this->manager->GetBusiness('adm', 'inspecao');
+       $objInspecao = $objInspecao->GetById($idUltimaInspecao);
+       $objMotorista = $this->manager->GetBusiness('adm', 'motorista');
+       $objMotorista = $objMotorista->GetById($objInspecao->idMotorista);
+       $objVeiculo = $this->manager->GetBusiness('adm', 'veiculo');
+       $objVeiculo = $objVeiculo->GetById($objInspecao->idVeiculo);
+       $inspecaocomponente = $inspecaocomponente->GetById($objInspecao->idInspecao, key($listaComponentes));
+       $conformidadeUltima = $conformidade->GetById($inspecaocomponente->idConformidadeInicio);
+       switch ($conformidadeUltima->descricao){
+           case 'NÃO CONFORME':
+               $op = 2;
+               break;
+           case 'NÃO SE APLICA':
+               $op = 3;
+               break;
+           case 'OK':
+               $op = 1;
+               break;
+       }
+
+        $fields = array(
+            new MPanel('', 'Última Inspeção Realizada'),
+            new TextField('motorista1', $objMotorista->pessoa->nome, 'Motorista', 50),
+            //new TextField('veiculo1', "[" . $objVeiculo->placa . "] " . $objVeiculo->modelo, 'Veiculo', 50),
+            new TextField('nomComponente1', $componente->descricao, 'Componente', 50),
+            new TextField('conformidade1', $conformidadeUltima->descricao, 'Situação', 15),
+            new MMultiLineField('obsinicio1', $inspecaocomponente->obsInicio, 'Observação', '', 3, 60),
+            new MSpacer(1),
+            new MPanel('', 'Inspeção Início'),
+            new TextField('motorista', $this->motorista->pessoa->nome, 'Motorista', 50),
+            new TextField('veiculo', "[" . $this->veiculo->placa . "] " . $this->veiculo->modelo, 'Veiculo', 50),
+            new TextField('nomComponente', $componente->descricao, 'Componente', 50),
+            new hiddenfield('componente', $componente->idComponente),
+            new MSelection('conformidade', $op, 'Situação', $opcoes2),
+            new MultiLineField('obsinicio', $inspecaocomponente->obsInicio, 'Observação', '', 3, 65),
+        );
+
+        $this->inspecaoPosCriada();
+        $this->SetFields($fields);
+        $this->inspecaoPosCriada();
+        $this->inspecaoInicialPosCriada();
+        $this->setFieldAttr('nomComponente', 'readonly', TRUE);
+
+        $this->SetValidators($validators);
+        $buttons = array(
+            new MButton('btnSalvar', 'Salvar'),
+            new MButton('btnCancelar', 'Voltar')
+        );
+        $this->SetButtons($buttons);
+    }
+
+    public function telaInspecaoFim() {
+        $componente = $this->manager->GetBusiness('adm', 'componente');
+        $inspecaocomponente = $this->manager->GetBusiness('adm', 'inspecaocomponente');
+        $conformidade = $this->manager->GetBusiness('adm', 'conformidade');
+        $listaComponentes = $componente->comparaFim($this->objInspecao->idInspecao);
+        if (count($listaComponentes))
+            $componente = $componente->GetById(key($listaComponentes));
+        $inspecaocomponente = $inspecaocomponente->GetById($this->objInspecao->idInspecao, key($listaComponentes));
+        $conformidade = $conformidade->GetById($inspecaocomponente->idConformidadeInicio);
+
+        $this->atualizaInspecao($this->objInspecao->idInspecao);
+
+        $opcoes2 = array(
+            1 => "OK",
+            2 => "NÃO CONFORME",
+            3 => "NÃO SE APLICA",
+        );
+        $manter =  'Sim';
+        $options=array('Sim','Não');
+        switch ($conformidade->descricao){
+           case 'NÃO CONFORME':
+               $op = 2;
+               break;
+           case 'NÃO SE APLICA':
+               $op = 3;
+               break;
+           case 'OK':
+               $op = 1;
+               break;
+       }
+
+        $fields = array(
+            new MPanel('inspecaoInicial', 'Inspeção Inicial Realizada'),
+            new TextField('motorista1', $this->objInspecao->motorista->pessoa->nome, 'Motorista', 50),
+            new TextField('veiculo1', "[" . $this->objInspecao->veiculo->placa . "] " . $this->objInspecao->veiculo->modelo, 'Veiculo', 50),
+            new TextField('nomComponente1', $componente->descricao, 'Componente', 50),
+            new TextField('conformidade1', $conformidade->descricao, 'Situação', 15),
+            new MMultiLineField('obsinicio1', $inspecaocomponente->obsInicio, 'Observação', '', 3, 60),
+            new MSpacer(1),
+            new MPanel('inspecaoFinal', 'Inspeção Final'),
+            new TextField('nomComponente', $componente->descricao, 'Componente', 50),
+            new hiddenfield('componentef', $componente->idComponente),
+            new MSelection('conformidadef', $op, 'Situação', $opcoes2),
+            new MultiLineField('obsiniciof', $inspecaocomponente->obsInicio, 'Observação', '', 3, 60),
+            new MPanel('inspecaoMotorista', 'Confirmar Inspeção'),
+            new MTextHeader('header', 1,'Concorda com a inspeção realizada?'),
+	    new MRadioButtonGroup('confirmacao', '', $options,$manter), 
+        );
+
+        $this->SetFields($fields);
+        $this->inspecaoPosCriada();
+        $this->inspecaoInicialPosCriada();
+        $this->setFieldAttr('nomComponente', 'readonly', TRUE);
+        $this->setFieldAttr('motorista1', 'readonly', TRUE);
+        
+        $buttons = array(
+            new MButton('btnSalvarFinal', 'Salvar'),
+            new MButton('btnConfirmar', 'Confirmar'),
+            new MButton('btnCancelar', 'Voltar')
+        );
+        $this->SetButtons($buttons);
+        $this->setButtonAttr('btnConfirmar', 'visible', FALSE);
+    }
+    
+    function inabilitaComponentes($visibilidade) {
+        $this->setFieldAttr('inspecaoInicial', 'visible', $visibilidade);
+        $this->setFieldAttr('veiculo1', 'visible', $visibilidade);
+        $this->setFieldAttr('motorista1', 'visible', $visibilidade);
+        $this->setFieldAttr('nomComponente1', 'visible', $visibilidade);
+        $this->setFieldAttr('conformidade1', 'visible', $visibilidade);
+        $this->setFieldAttr('obsinicio1', 'visible', $visibilidade);
+        $this->setFieldAttr('motorista1', 'visible', $visibilidade);
+        $this->setFieldAttr('inspecaoFinal', 'visible', $visibilidade);
+        $this->setFieldAttr('nomComponente', 'visible', $visibilidade);
+        $this->setFieldAttr('componentef', 'visible', $visibilidade);
+        $this->setFieldAttr('conformidadef', 'visible', $visibilidade);
+        $this->setFieldAttr('obsiniciof', 'visible', $visibilidade);
+        $this->setButtonAttr('btnSalvarFinal', 'visible', $visibilidade);
+    }
+    
+    function inabilitaDadosMotorista($visibilidade) {
+        $this->setButtonAttr('btnConfirmar', 'visible', $visibilidade);
+        $this->setFieldAttr('inspecaoMotorista', 'visible', $visibilidade);
+        $this->setFieldAttr('confirmacao', 'visible', $visibilidade);
+        $this->setFieldAttr('header', 'visible', $visibilidade);
+    }
+
+    function btnSalvar_click() {
+        $data = $this->GetData();
+        $inspecao = $this->manager->getBusiness('adm', 'inspecao');
+        $inspecao = $this->objInspecao->GetById($this->objInspecao->idInspecao);
+        $inspecaoComponete = $this->manager->getBusiness('adm', 'inspecaocomponente');
+        $pree = $this->verificaPreencimento();
+        if ($pree) {
+            try {
+                $inspecaoComponete->beginTransaction();
+                $inspecao->setData($data);
+                $inspecao->setStatus(2);
+
+                $inspecaoComponete->idInspecao = $inspecao->idInspecao;
+                $inspecaoComponete->idComponente = Form::GetFormValue('componente');
+                $inspecaoComponete->idConformidadeInicio = Form::GetFormValue('conformidade');
+                $inspecaoComponete->obsInicio = Form::GetFormValue('obsinicio');
+                $inspecaoComponete->idInspetorInicio = $this->manager->GetLogin()->idkey;
+                $ret = $inspecaoComponete->getInspecao($inspecaoComponete->idComponente, $inspecaoComponete->idInspecao);
+
+                if (count($ret->result) > 0) {
+                    $this->retornaTela();
+                    $this->setButtonAttr('btnSalvar', 'visible', FALSE);
+                    $this->SetFieldValue('obsinicio', null);
+                } else {
+                    $inspecao->update();
+                    $inspecaoComponete->save();
+                    $inspecaoComponete->endTransaction();
+                    $this->retornaTela();
+                    $this->setButtonAttr('btnSalvar', 'visible', FALSE);
+                    $this->SetFieldValue('obsinicio', null);
+                }
+                //$inspecaoComponete->Log(OP_INS,'Componente inspecionado.');
+                //$this->manager->information("Componente inspecionado com sucesso: ");//.$inspecaoComponete->idInspecao,$this->manager->getActionUrl('adm','main:inspecao:find') );
+            } catch (Exception $e) {
+                $this->AddError($e->GetMessage());
+            }
+        }
+    }
+
+    function btnSalvarFinal_click() {
+        $data = $this->GetData();
+        $inspecao = $this->manager->getBusiness('adm', 'inspecao');
+        $inspecao = $this->objInspecao->GetById($this->objInspecao->idInspecao);
+        $inspecaoComponete = $this->manager->getBusiness('adm', 'inspecaocomponente');
+        $inspecaoComponete->GetById($this->objInspecao->idInspecao, Form::GetFormValue('componentef'));
+        $pree = $this->verificaPreencimentof();
+        if ($pree) {
+            try {
+                $inspecaoComponete->beginTransaction();
+                $inspecao->setData($data);
+                $inspecao->setStatus(4);
+                $inspecao->dataHoraFim = date('d/m/Y H:i');
+
+                $inspecaoComponete->idConformidadeFim = Form::GetFormValue('conformidadef');
+                $inspecaoComponete->obsFim = Form::GetFormValue('obsiniciof');
+                $inspecaoComponete->idInspetorFim = $this->manager->GetLogin()->idkey;
+                $inspecao->update();
+                $inspecaoComponete->update();
+                $inspecaoComponete->endTransaction();
+                $this->retornaTela();
+                $this->setButtonAttr('btnSalvarFinal', 'visible', FALSE);
+                $this->SetFieldValue('obsiniciof', null);
+                //$inspecaoComponete->Log(OP_INS,'Inspeção final do componente realizada.');
+                //$this->manager->information("Inspeção final do componente realizada com sucesso: ");//.$inspecaoComponete->idInspecao,$this->manager->getActionUrl('adm','main:inspecao:find') );
+            } catch (Exception $e) {
+                $this->AddError($e->GetMessage());
+            }
+        }
+    }
+
+    function atualizaInspecao($idInspecao) {
+        $inspecao = $this->objInspecao->GetById($idInspecao);
+        $this->veiculo = $inspecao->getItem(1, $inspecao->idVeiculo);
+        $this->motorista = $inspecao->getItem(2, $inspecao->idMotorista);
+    }
+
+    public function inspecaoPosCriada() {
+        $this->setFieldAttr('motorista', 'readonly', TRUE);
+        $this->setFieldAttr('veiculo', 'readonly', true);
+    }
+
+    public function inspecaoInicialPosCriada() {
+        $this->setFieldAttr('motorista1', 'readonly', TRUE);
+        $this->setFieldAttr('veiculo1', 'readonly', true);
+        $this->setFieldAttr('nomComponente1', 'readonly', true);
+        $this->setFieldAttr('conformidade1', 'readonly', true);
+        $this->setFieldAttr('obsinicio1', 'readonly', true);
+    }
+
+    public function componenteInspecionado() {
+        $inspecaoComponete = $this->manager->getBusiness('adm', 'inspecaocomponente');
+        $inspecaoComponete = $this->objInspecao->GetById($idInspecaoComponete);
+    }
+
+    public function numComponenteInspecionado() {
+        $componente = $this->manager->GetBusiness('adm', 'componente');
+        $numComponentes = $componente->listarInspecionados($this->objInspecao->idInspecao);
+        $tam = count($numComponentes);
+        return $tam;
+    }
+
+    function verificaPreencimento() {
+        $ok = true;
+        if ($this->GetFieldValue('componente') == '') {
+            $ok = false;
+            $this->addError("Preencha o componente!");
+        } else if ($this->GetFieldValue('conformidade') == '') {
+            $ok = false;
+            $this->addError("Preencha a conformidade!");
+        } else if ($this->GetFieldValue('conformidade') == 2 && $this->GetFieldValue('obsinicio') == '') {
+            $ok = false;
+            $this->addError("Preencha a observação!");
+        }
+        return $ok;
+    }
+
+    function verificaPreencimentof() {
+        $ok = true;
+        if ($this->GetFieldValue('componentef') == '') {
+            $ok = false;
+            $this->addError("Preencha o componente!");
+        }if ($this->GetFieldValue('conformidadef') == '') {
+            $ok = false;
+            $this->addError("Preencha a conformidade!");
+        } else if ($this->GetFieldValue('conformidadef') == 2 && $this->GetFieldValue('obsiniciof') == '') {
+            $ok = false;
+            $this->addError("Preencha a observação!");
+        }
+        return $ok;
+    }
+
+    function retornaTela() {
+        $go = $this->manager->getActionUrl('adm', 'main:inspecao', $this->objInspecao->idInspecao, array("form" => "item", "idInspecao" => $this->objInspecao->idInspecao));
+        $this->page->Redirect($go);
+    }
+
+    public function interacaoMotoristaNaoUso() {
+        $inspecaonao = '0_'.$this->objInspecao->idInspecao;
+        $action_sim = $this->manager->GetActionURL('adm', 'inspecao:loginmot', $this->objInspecao->idInspecao);//$this->manager->getActionUrl('adm', 'main:requisicoes', $this->objRequisicao->idRequisicao, array("form" => "item", "tipoReq" => $this->objRequisicao->idTipoReq));
+        $action_nao = $this->manager->getActionUrl('adm', 'main:inspecao:itemmotorista', $inspecaonao, array("form" => "item", "nao" => $inspecaonao));
+        $this->manager->Question("O MOTORISTA" . $this->objRequisicao->idRequisicao . " Deseja confirmar os dados verificados?", $action_sim, $action_nao);
+    }
+    
+    public function interacaoMotorista() {
+         global $MIOLO, $module, $item;
+         $session = $MIOLO->getSession();
+	 $session->set('idinspecao',$this->objInspecao->idInspecao);
+         $conformidade = 1;
+
+        $report = new MJasperReport('sigaept');
+        $parameters['SUBREPORT_DIR'] = $MIOLO->GetConf('home.modules');
+        $parameters['pURL'] = $MIOLO->GetConf('home.url');
+        $MIOLO->page->AddJsCode('window.open("http://'.$_SERVER['HTTP_HOST']
+        . '/relatorios2/repMapInspecaoVeiculo.php?idInspecao=' . $this->objInspecao->idInspecao . '&idSituacaoInspecao=' . $this->objInspecao->idSituacaoInspecao . '&conformidade=' . $conformidade . '", "_self");');
+        
+    }
+    
+    public function interacaoMotorista1() {
+        global $MIOLO;
+        $session = $MIOLO->getSession();
+	$sidUo = $session->get('idUo');
+        $inspecao = $this->manager->getBusiness('adm', 'inspecao');
+        $inspecao = $this->objInspecao->GetById($this->objInspecao->idInspecao);
+        $inspecaonao = '0_'.$this->objInspecao->idInspecao;
+        
+        $action_sim = $this->manager->getActionUrl('adm', 'main:inspecao:inspecaoview', $this->objInspecao->idInspecao, array("form" => "item", "idInspecao" => $this->objInspecao->idInspecao));
+        
+        $action_nao = $this->manager->getActionUrl('adm', 'main:inspecao:final',$sidUo);
+        $inspecao->confirmacao = 1;
+        $inspecao->update();
+        $this->manager->Question("O MOTORISTA" . $this->objRequisicao->idRequisicao . " Deseja confirmar os dados verificados?", $action_sim, $action_nao);
+        
+    }
+
+    public function btnConfirmar_click() {
+        global $MIOLO;
+        $session = $MIOLO->getSession();
+	$sidUo = $session->get('idUo');
+        $inspecao = $this->manager->getBusiness('adm', 'inspecao');
+                    $inspecao = $this->objInspecao->GetById($this->objInspecao->idInspecao);
+                    if(Form::GetFormValue('confirmacao') == 'Não'){
+                    $inspecao->dataHoraFim = date('d/m/Y H:i');
+                    $inspecao->setStatus(5);
+                    $inspecao->confirmacao = 1;
+                    $inspecao->update();
+                    $this->manager->information("Inspeção FINAL concluida com sucesso: " . $this->objInspecao->idInspecao, $this->manager->getActionUrl('adm', 'main:inspecao:final',$sidUo));
+                    }else if(Form::GetFormValue('confirmacao') == 'Não'){
+                    $inspecao->dataHoraFim = date('d/m/Y H:i');
+                    $inspecao->setStatus(5);
+                    $inspecao->confirmacao = 2;
+                    $inspecao->update();
+                    $this->manager->information("Inspeção FINAL concluida com sucesso: " . $this->objInspecao->idInspecao, $this->manager->getActionUrl('adm', 'main:inspecao:final',$sidUo));
+                    }
+        /*$go = $this->manager->GetActionURL('adm', 'inspecao:loginmot', $this->objInspecao->idInspecao);
+        $this->page->Redirect($go);*/
+    }
+   function btnCancelar_click(){
+       global $MIOLO;
+        $session = $MIOLO->getSession();
+	$sidUo = $session->get('idUo');
+            global $MIOLO, $page, $module, $context, $history;
+            //$go = $this->manager->getActionUrl('adm','main:inspecao:final',$sidUo);
+            $go = $this->manager->getActionUrl('adm','main:uoveiculo:main',$sidUo);
+            $this->page->Redirect($go); 
+    }
+    
+    public function telaPrimeiraInspecao() {
+        
+        $componente = $this->manager->GetBusiness('adm', 'componente');
+        
+        $listaComponentes = $componente->compara($this->objInspecao->idInspecao);
+        if (count($listaComponentes))
+            $componente = $componente->GetById(key($listaComponentes));
+        
+        $this->atualizaInspecao($this->objInspecao->idInspecao);
+        $opcoes2 = array(
+            1 => "OK",
+            2 => "NÃO CONFORME",
+            3 => "NÃO SE APLICA",
+        );
+      
+
+        $fields = array(
+            new MPanel('', 'Inspeção Início'),
+            new TextField('motorista', $this->motorista->pessoa->nome, 'Motorista', 50),
+            new TextField('veiculo', "[" . $this->veiculo->placa . "] " . $this->veiculo->modelo, 'Veiculo', 50),
+            new TextField('nomComponente', $componente->descricao, 'Componente', 50),
+            new hiddenfield('componente', $componente->idComponente),
+            new MSelection('conformidade', 1, 'Situação', $opcoes2),
+            new MultiLineField('obsinicio', '', 'Observação', '', 3, 65),
+        );
+
+        
+        $this->SetFields($fields);
+        $this->inspecaoPosCriada();
+        $this->setFieldAttr('nomComponente', 'readonly', TRUE);
+
+        $this->SetValidators($validators);
+        $buttons = array(
+            new MButton('btnSalvar', 'Salvar'),
+            new MButton('btnCancelar', 'Voltar')
+        );
+        $this->SetButtons($buttons);
+    }
+
+}
+
+?>

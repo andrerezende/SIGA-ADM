@@ -1,0 +1,104 @@
+<?php
+class frmInspecaoNew extends MForm
+{
+    public $objUo;
+	function __construct($objUo)
+	{
+                $this->objUo = $objUo;
+                
+		parent::__construct('Incluir Inspeção');
+		$this->EventHandler();
+	}
+
+
+	function CreateFields()
+	{
+            global $MIOLO;
+                $motorista = $this->manager->GetBusiness('adm','motorista');
+                $veiculo = $this->manager->GetBusiness('adm','veiculo');
+                
+                $resultveiculo = $veiculo->listModeloPlaca();
+                $optionsveiculo = $resultveiculo->chunkResult();
+                $result = $motorista->ListMotoristaNome();
+                $options = $result->chunkResult();
+                $SESSAO = $MIOLO->getSession();
+                $SESSAO->set('iduoreq',$this->objUo->idUo);
+		
+			$fields = array(
+                            new HiddenField('motorista', ''),
+                            new HiddenField('veiculo', ''),
+                            new MLookupFieldValue('lkpMotorista', '', 'Motorista', 50),
+                            new MLookupFieldValue('lkpVeiculo', '', 'Veículo', 50)
+			);
+                        $this->SetFields($fields);
+                        $this->SetFieldAttr('lkpMotorista', 'module', 'adm');
+			$this->SetFieldAttr('lkpMotorista', 'item', 'MotoristaUo');
+			$this->SetFieldAttr('lkpMotorista', 'event', 'filler');
+			$this->SetFieldAttr('lkpMotorista', 'related', 'motorista,lkpMotorista');
+                        
+                        $this->SetFieldAttr('lkpVeiculo', 'module', 'adm');
+			$this->SetFieldAttr('lkpVeiculo', 'item', 'veiculouo');
+			$this->SetFieldAttr('lkpVeiculo', 'event', 'filler');
+                        $this->SetFieldAttr('lkpVeiculo','related','veiculo,lkpVeiculo');
+		
+			
+                        /*$validators = array(
+                            new MRequiredValidator('motorista'),
+                            new MRequiredValidator('veiculo'),
+                            );*/
+			$this->SetValidators($validators);
+			$buttons = array(
+				new MButton('btnSalvar', 'Salvar'),
+                                new MButton('btnCancelar', 'Cancelar')
+			);
+			$this->SetButtons($buttons);
+	}
+
+
+	function btnSalvar_click()
+	{
+		$data = $this->GetData();
+		$inspecao = $this->manager->getBusiness('adm','inspecao');
+                $pree = $this->verificaPreencimenteo();
+                if($pree){
+		try
+		{
+			$inspecao->beginTransaction();
+			$inspecao->setData($data);
+			$inspecao->setStatus(1);
+			$inspecao->dataHoraInicio = date('d/m/Y H:i');
+			$inspecao->idVeiculo= Form::GetFormValue('veiculo');
+			$inspecao->idMotorista = Form::GetFormValue('motorista');
+			$inspecao->save();
+			$inspecao->endTransaction();
+			$inspecao->Log(OP_INS,'Nova inspeção agendada.');
+			$this->manager->information("Nova inspeção agendada, número: ".$inspecao->idInspecao,$this->manager->getActionUrl('adm','main:inspecao:final',$this->objUo->idUo) );
+		}
+		catch (Exception $e)
+		{
+			$this->AddError($e->GetMessage());
+		}
+                }
+	}
+        function verificaPreencimenteo(){
+           $ok = true;
+           if($this->GetFieldValue('motorista') == ''){
+               $ok = false;
+                    $this->addError("Preencha o componente!");
+           }if($this->GetFieldValue('veiculo')==''){
+                $ok = false;
+                    $this->addError("Preencha a conformidade!");
+           }
+           return $ok;
+       }
+       
+       function btnCancelar_click()
+	{
+            global $MIOLO, $page, $module, $context, $history;
+            $go = $this->manager->getActionUrl('adm','main:uoveiculo:main',$this->objUo->idUo);
+            $this->page->Redirect($go);
+            /*$go = $this->manager->getActionUrl('adm','main:inspecao:final',$this->objUo->idUo);
+            $this->page->Redirect($go); */
+	}
+}
+?>
