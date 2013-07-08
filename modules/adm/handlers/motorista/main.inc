@@ -3,7 +3,7 @@
     $theme->ClearContent();
     $motorista = $MIOLO->GetUI();
     $objMotorista = $MIOLO->GetBusiness('adm','motorista', $item);
-    $navbar->AddOption('Veículos', 'adm', 'main:uoveiculo:main');
+    //$navbar->AddOption('Veículos', 'adm', 'main:uoveiculo:main');
     $navbar->AddOption($objMotorista->pessoa->nome, 'adm', 'main:motorista:main');
     $form = $MIOLO->GetUI()->GetForm($module,'frmMotorista', $objMotorista, 'motorista');
     $theme->InsertContent($form);

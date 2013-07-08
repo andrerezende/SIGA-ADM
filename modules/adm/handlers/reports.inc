@@ -1,7 +1,7 @@
 <?php
     $ui = $MIOLO->GetUI();
-    $navbar->AddOption('U.O. Veículos', 'adm', 'main:uoveiculo:find');
-    //$navbar->AddOption('Relatórios',$module,'main:reports');
+    //$navbar->AddOption('U.O. Veículos', 'adm', 'main:uoveiculo:find');
+    $navbar->AddOption('Relatórios',$module,'main:reports');
     $close = $MIOLO->GetActionURL($module,'main');
 	$panel = new ActionPanel('pnlAdTables','Relatórios','',$close);
     $panel->SetIconType('large');
@@ -18,7 +18,7 @@
 	$panel->AddUserAction('AD_REL_VEICULOS',A_EXECUTE,'Mapa de Utilização de Veículo',$ui->GetImageTheme('','icons/relatorio.png'),$module, 'main:relatoriosvei:repMapUtilizacaoVeiculo');
 	
     // B
-	$panel->AddUserAction('AD_REL_VEICULOS',A_EXECUTE,'Mapa de Utilização de Motorista',$ui->GetImageTheme('','icons/relatorio.png'),$module, 'main:relatorios:repMapUtilizacaoMotorista');
+	$panel->AddUserAction('AD_REL_VEICULOS',A_EXECUTE,'Mapa de Utilização de Motorista',$ui->GetImageTheme('','icons/relatorio.png'),$module, 'main:relatoriosvei:repMapUtilizacaoMotorista');
 
     // C
         $panel->AddUserAction('AD_REL_VEICULOS',A_EXECUTE,'Abastecimentos',$ui->GetImageTheme('','icons/relatorio.png'),$module, 'main:relatoriosvei:repMapReqAbastecimento');

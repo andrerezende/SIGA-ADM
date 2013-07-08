@@ -1,9 +1,8 @@
 <?
     if($perms->CheckAccess('ADM_VEICULO',A_ACCESS,true))
     $action = $context->ShiftAction();
-    $navbar->AddOption('U.O. Veículos', 'adm', 'main:uoveiculo:find');
-    /*$navbar->AddOption('Manutenção',$module,'main:manutencao');
-    $navbar->AddOption('Veiculo', 'adm', 'main:veiculo:find');*/
+    $navbar->AddOption('Manutenção',$module,'main:manutencao');
+    $navbar->AddOption('Veiculo', 'adm', 'main:veiculo:find');
     switch($action)
     {
         case 'find':

@@ -1,6 +1,5 @@
 <?php
 $action = $context->ShiftAction();
-//$navbar->AddOption('U.O. Veículos', 'adm', 'main:uoveiculo:find');
 $navbar->AddOption('Endereço',$module,'main:endereco');
 switch($action) {
     case 'find':

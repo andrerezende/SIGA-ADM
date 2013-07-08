@@ -1,7 +1,7 @@
 <?
     $action = $context->ShiftAction();
-    $navbar->AddOption('U.O. Veículos', 'adm', 'main:uoveiculo:find');
-    //$navbar->AddOption('Relatorios',$module,'main:reports');
+    //$navbar->AddOption('U.O. Veículos', 'adm', 'main:uoveiculo:find');
+    $navbar->AddOption('Relatorios',$module,'main:reports');
     switch($action)
     {
             case 'repMapUtilizacaoVeiculo':
