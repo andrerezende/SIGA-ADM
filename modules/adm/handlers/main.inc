@@ -41,7 +41,7 @@ if (!$handled) {
         $executante= $this->manager->GetBusiness('adm', 'executor');
         if($executante->isExecutorOf($this->manager->GetLogin()->idkey))
         $panel->AddUserAction('AD_INSPECAO_VEICULO', A_EXECUTE, 'Inspeção de Veículo', $ui->GetImageTheme('', 'icons/carroManutencao.png'), $module, 'main:inspecao:find');
-	$panel->AddUserAction('AD_GERENCIAR_VEICULO', A_EXECUTE, 'Gerenciar Veículos', $ui->GetImageTheme('', 'icons/almoxarifado.png'), $module, 'main:uoveiculo:find');
+	$panel->AddUserAction('AD_GERENCIAR_VEICULO', A_EXECUTE, 'Gerenciar Veículos', $ui->GetImageTheme('', 'icons/gerenciar_carros.png'), $module, 'main:uoveiculo:find');
 	$panel->AddAction('Orçamento Termo', $ui->GetImageTheme('', 'icons/financeiro.png'), $module, 'main:pedidocompra:find');
         if (!$MIOLO->getPerms()->isAdmin())
 	$panel->AddUserAction('adm_mv', A_EXECUTE, 'Manutenção de Veículos', $ui->GetImage('adm', 'kcontrol.png'), $module, 'main:manutencaoveiculo');
