@@ -13,7 +13,7 @@
     $theme->ClearContent();
     $ui = $MIOLO->GetUI();
     $objRequisicao = $MIOLO->GetBusiness('adm','requisicao', $item);
-    $navbar->AddOption($objRequisicao->idRequisicao, 'adm', 'main:requisicaoveiculo:main');
+    //$navbar->AddOption($objRequisicao->idRequisicao, 'adm', 'main:requisicaoveiculo:main');
     
     $form = $MIOLO->GetUI()->GetForm($module,'frmRequisicao', $objRequisicao, 'requisicoes');
     $theme->InsertContent($form);

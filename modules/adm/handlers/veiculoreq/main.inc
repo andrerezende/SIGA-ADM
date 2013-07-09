@@ -13,7 +13,7 @@
     $theme->ClearContent();
     $ui = $MIOLO->GetUI();
     $objRequisicao = $MIOLO->GetBusiness('adm','requisicao', $item);
-    $navbar->AddOption('Veículos', 'adm', 'main:uoveiculo:main');
+    //$navbar->AddOption('Veículos', 'adm', 'main:uoveiculo:main');
     $navbar->AddOption($objRequisicao->idRequisicao, 'adm', 'main:veiculoreq:main');
     
     
