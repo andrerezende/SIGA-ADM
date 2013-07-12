@@ -1,0 +1,140 @@
+<?
+class frmVeiculoEditar extends MForm
+{
+
+    protected $objVeiculo;
+	
+    function __construct($objVeiculo)
+    {
+        $this->objVeiculo = $objVeiculo;
+        parent::__construct('Dados do Veiculo U.O.');
+        $this->EventHandler();
+    }
+
+    function CreateFields()
+    {
+
+        global $MIOLO;
+
+        $veiculo = $this->objVeiculo;
+        $tabelaGeral = $this->manager->getBusiness('common','tabelageral');
+        $tipoVeiculos = $tabelaGeral->listByTabela('AD_TIPOVEICULO')->result;
+        $tipoCombustiveis = $tabelaGeral->listByTabela('AD_TIPOCOMBUSTIVEL')->result;
+        $instituicao = $MIOLO->GetBusiness('common','instituicao');
+        $idinstituicao = $this->manager->GetBusiness('common','instituicao');
+        $instituicao = $idinstituicao->listAll();  	 
+        //$ativo = array(1 => "SIM", 0 => "NÃO");
+	$fields = array	(                                   
+                        new MTextField('placa', $veiculo->placa,'Placa','7','Máx. 7 caracteres'),
+			new MSelection('tipoVeiculo',$veiculo->tipoVeiculo,'Tipo Veiculo',$tipoVeiculos),
+                        new MTextField('cor', $veiculo->cor, 'Cor', '20', 'Máx. 20 caracteres'),                        
+			new MTextField('renavam', $veiculo->renavam,'Renavam','12','Máx. 12 caracteres'),
+			new MTextField('chassi', $veiculo->chassis,'Chassi','20','Máx. 17 caracteres'),			
+                        new MSelection('combustivel', $veiculo->combustivel,'Combustível',$tipoCombustiveis),
+			new MTextField('anoFab', $veiculo->anoFab,'Ano Fabricação','4','Máx. 4 números'),
+			new MTextField('anoMod', $veiculo->anoMod,'Ano Modelo','4','Máx. 4 números'),
+                        new MSelection('ativov', $veiculo->ativo, 'Ativo', array('0' => 'Não', '1' => 'Sim')),
+                        //new MSelection('ativo',$veiculo->ativo,'Ativo',$ativo),
+        );
+
+                $objinst = $MIOLO->GetBusiness('common','instituicao');
+		$query = $objinst->ListRange(NULL, 'instituicao');
+	
+	
+
+		while ( !$query->eof() )
+  		{	if(($query->fields('mesmoif')=='S') or ($query->fields('mesmoif')=='s')){
+			      $options[$query->fields('idinstituicao')] = $query->fields('instituicao');
+			}
+    			$query->moveNext();  
+   		}
+	        $this->SetFieldAttr('idinstituicao','options', $options);
+        
+//IFSP        
+		
+        $this->SetFields($fields);
+        $this->placa->addAttribute('maxlength','7');
+        $this->renavam->addAttribute('maxlength','12');
+        $this->chassi->addAttribute('maxlength','20');   
+        $this->anoFab->addAttribute('maxlength','4');
+        $this->anoMod->addAttribute('maxlength','4');
+        
+	   
+        $this->SetFieldAttr('placa','readonly',TRUE);
+        $this->SetFieldAttr('placa','hint',FALSE);
+		
+        $buttons = array (
+            new FormButton('btnSalvar', 'Salvar')
+        );
+        $this->SetButtons($buttons);
+        $validators = array (
+            new MRequiredValidator('placa'),
+            new MRequiredValidator('renavam'),
+            new MRequiredValidator('chassis'),
+            new MRequiredValidator('marca'),
+            new MRequiredValidator('modelo'),
+            new MRequiredValidator('anoFab'),
+            new MRequiredValidator('anoMod'),
+            new MIntegerValidator('capacidade','','required'),
+            new MRequiredValidator('valorKm'),
+            new MRequiredValidator('ativov'),
+        );
+        $objinst = $MIOLO->GetBusiness('common','instituicao');
+	$query = $objinst->ListRange(NULL, 'instituicao');  
+        while ( !$query->eof() )
+  		{
+   			 if(($query->fields('mesmoif')=='S') or ($query->fields('mesmoif')=='s')){
+			      $options[$query->fields('idinstituicao')] = $query->fields('instituicao');
+			 }
+    			 $query->moveNext();  
+   		}
+	$this->SetFieldAttr('idinstituicao','options', $options);
+	$this->SetValidators($validators);
+    }
+
+    public function btnSalvar_click()
+    {
+        global $MIOLO;
+        $veiculo = $this->objVeiculo;
+        $data = $this->GetData();
+        $session = $MIOLO->getSession();
+        $itemUo = $session->getValue('itemuov');
+        if ($data->tipoVeiculo)
+        {
+	    $veiculo->SetData($data);
+            $veiculo->ativo = Form::GetFormValue('ativov');
+            $cf = new MCurrencyFormatter();
+            $veiculo->valorKm = $cf->toDecimal($veiculo->valorKm);
+            if ( $veiculo->combustivel )
+            {
+                try
+                {
+                    $veiculo->renavan = strtoupper($veiculo->renavan); 
+                    $veiculo->chassis = strtoupper($veiculo->chassis);
+                    $veiculo->marca = strtoupper($veiculo->marca);
+                    $veiculo->modelo = strtoupper($veiculo->modelo);
+                    $veiculo->save();
+                    $veiculo->Log(OP_UPD,"Dados de veículo modificados");
+                    /*$go = $this->manager->GetActionURL('adm','main:veiculo',$veiculo->placa,array('form'=>'find'));
+                    $go = $this->manager->GetActionURL('adm','main:uoveiculo', $this->oid, array("form"=>"editar"));*/
+                    $session->setValue('itemuov','');
+                    $go = $this->manager->GetActionURL('adm','main:uoveiculo',$itemUo);
+                    $this->manager->Information('Veículo alterado com sucesso.',$go);
+                }
+                catch (Exception $e)
+                {
+                    $this->addError($e->getMessage());
+                }
+            }
+            else
+            {
+                $this->addError('Você deve selecionar um tipo de combustível');
+            }
+        }
+        else
+        {
+            $this->addError('Você deve selecionar um tipo de veículo.');
+        }
+    }
+}
+?>
