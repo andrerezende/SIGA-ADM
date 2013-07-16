@@ -19,5 +19,8 @@
             case 'repMapInspecaoVeiculo':
                 $MIOLO->InvokeHandler($module,'requisicoes/repMapInspecaoVeiculo');
             break;
+            case 'repMapUtilizacaoMotoristaLog':
+                $MIOLO->InvokeHandler($module, 'requisicoes/repMapUtilizacaoMotoristaLog');
+            break;
     }
 ?>
