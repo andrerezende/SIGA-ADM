@@ -15,6 +15,9 @@
         case 'newend':
             $MIOLO->InvokeHandler($module, 'uoveiculo/newend');
             break;
+        case 'loginmot':
+            $MIOLO->InvokeHandler($module, 'uoveiculo/loginmot');
+            break;
         default:
             $MIOLO->InvokeHandler($module, 'uoveiculo/main');
         }
