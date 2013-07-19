@@ -24,8 +24,9 @@ inner join vei_inspecao_componente ic on i.id_inspecao = ic.id_inspecao
 inner join vei_conformidade f on f.id_conformidade = ic.id_conformidade_inicio  
   inner join vei_conformidade f1 on f1.id_conformidade = ic.id_conformidade_fim 
 inner join ad_motorista m on i.id_motorista = m.idmotorista
-  inner join cm_pessoa p on p.idpessoa = m.idpessoa 
-inner join ad_veiculo v on i.id_veiculo = v.placa
+  inner join cm_usuario us on us.idusuario = m.idusuario   
+inner join cm_pessoa p on p.idpessoa = us.idpessoa 
+  inner join ad_veiculo v on i.id_veiculo = v.placa
 where i.id_inspecao = $idInspecao ";
 }else
 if($idSituacaoInspecao == 3) {
@@ -36,7 +37,8 @@ inner join vei_inspecao_componente ic on i.id_inspecao = ic.id_inspecao
   inner join vei_componente c on c.id_componente = ic.id_componente
 inner join vei_conformidade f on f.id_conformidade = ic.id_conformidade_inicio 
 inner join ad_motorista m on i.id_motorista = m.idmotorista
-  inner join cm_pessoa p on p.idpessoa = m.idpessoa 
+  inner join cm_usuario us on us.idusuario = m.idusuario   
+inner join cm_pessoa p on p.idpessoa = us.idpessoa  
 inner join ad_veiculo v on i.id_veiculo = v.placa
 where i.id_inspecao =$idInspecao ";
 }
@@ -45,7 +47,8 @@ $sqli = "
 SELECT p.nome
   FROM vei_inspecao i 
 inner join ad_motorista m on i.id_motorista = m.idmotorista
-  inner join cm_pessoa p on p.idpessoa = m.idpessoa 
+  inner join cm_usuario us on us.idusuario = m.idusuario   
+inner join cm_pessoa p on p.idpessoa = us.idpessoa  
 where i.id_inspecao = $idInspecao ";
 
 $sqla = "
