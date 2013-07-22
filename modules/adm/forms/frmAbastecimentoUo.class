@@ -1,0 +1,223 @@
+<?
+class frmAbastecimentoUo extends MForm
+{
+	protected $objRequisicao;
+	protected $grid;
+
+	function __construct($objRequisicao)
+    {
+        $this->objRequisicao = $objRequisicao;
+        //$this->Form("Cadastro de Abastecimento de veículo");
+        parent::__construct('Cadastro de Abastecimento de veículo U.O');
+        $this->EventHandler();
+        //$this->page->addJsCode(file_get_contents(dirname(__FILE__) . '/../../ui/js/mask.js'));
+	$this->page->addJsCode(file_get_contents(dirname(__FILE__) . '/../ui/js/maskMoney.js'));
+    }
+
+	Function CreateFields()
+	{
+	       	global $MIOLO, $module, $perms, $auth, $page, $ui, $action, $theme, $item , $self;
+                
+                $pos = strpos($item,"_");
+                if($pos == true){
+                  $ouReq =$item;
+                  $session = $MIOLO->getSession();
+                    $session->setValue('ouReq', $ouReq);
+                }
+		$abast=$_GET['abast'];
+		if($abast!=""){
+				$objAbastecimento=$MIOLO->GetBusiness('adm','abastecimento');
+				$objAbastecimento=$objAbastecimento->GetByRequisicaoAbastecimento($this->objRequisicao->idRequisicao, $abast);
+				try{
+				$objAbastecimento->delete();
+				$idRequisicao=$this->objRequisicao->idRequisicao;
+				$go= $MIOLO->GetActionURL('adm','main:abastecimentouo',"$idRequisicao");
+				$this->page->redirect($go);
+				}catch(Exception $ex){
+
+				}
+		}
+		$combustivel = array ("1"=>"GASOLINA",
+							"2"=>"ÁLCOOL",
+							"3"=>"DIESEL",
+							"4"=>"GNV");
+		$this->grid = $this->manager->GetUI()->GetGrid('adm','gridAbastecimento',$this->objRequisicao->idRequisicao);
+		$this->grid->SetTitle('Abastecimentos');
+
+		/*------------------------------Lookup de Endereço-------------------------------*/
+		$idEndereco=new MHiddenField('idEndereco','');
+                new HiddenField('item', $item);
+		$lookupEndereco = new MLookupTextField('endereco', '', 'Local', 35);
+		$lookupEndereco->module = 'adm';
+        $lookupEndereco->item = 'endereco';
+        $lookupEndereco->event = 'filler';
+        $lookupEndereco->related = 'idEndereco,endereco';
+        $odometro_field =new MTextField('odometro','','Odometro',10,'' );
+		$odometro_field->addAttribute('onKeyUp', 'makeMask(this, \'#################\');');
+		$odometro_field->addAttribute('maxlength',18);
+
+		/*--------------------------------------------------------------------------------------*/
+		$fields = Array(
+		new TextField('idRequisicao',$this->objRequisicao->idRequisicao,'Requisicao',4),
+		//new MTextField('posto','','Posto',30),
+		$idEndereco,
+		$lookupEndereco,
+		new MTextField('quantidade','','Litros'),
+		new MTextField('valorAbastecimento','','Valor'),
+		new MSelection('combustivel','','Combustível',$combustivel),
+		new MCalendarField('dataAbastecimento','','Data',10),
+		new MTextField('horaAbastecimento','','Hora'),
+                $odometro_field,
+		new MSeparator(''),
+		$this->grid
+
+		 );
+                 
+        	$this->SetFields($fields);
+                $this->valorAbastecimento->addAttribute('onKeyUp', 'amf2005_BecameCurrency(this,15)');
+                $this->valorAbastecimento->addAttribute('onBlur', 'amf2005_BecameCurrency(this,15)');
+                $this->quantidade->addAttribute('onKeyUp', 'amf2005_BecameCurrency(this,15)');
+                $this->quantidade->addAttribute('onBlur', 'amf2005_BecameCurrency(this,15)');
+                 
+        	$this->SetFieldAttr('idRequisicao','readonly',true);
+
+		$buttons = Array(
+	            new FormButton('btnPost','Enviar'),
+	            //new MButtonClose('btnVoltar','Fechar')
+		    new FormButton('btnPost2','Finalizar'),
+                    new FormButton('btnVoltar','Voltar'),
+	        );
+
+	        $this->SetButtons($buttons);
+	}
+	function btnPost_click()
+	{
+    		global $MIOLO, $module, $ui, $action, $item;
+
+		//Declarando objeto de Abastecimento
+		$objAbastecimento = $MIOLO->GetBusiness('adm','abastecimento');
+
+		//Pegando os valores para Preencher no Objeto de Abastecimento
+		$idRequisicao=$this->objRequisicao->idRequisicao;
+		$objAbastecimento->idRequisicao=$idRequisicao;
+		$idEndereco						=$this->GetFormValue('idEndereco');
+		$idAbastecimento				=$objAbastecimento->GetNovoAbastecimento();
+		//$posto								=$this->GetFormValue('posto');
+		$horaAbastecimento				=$this->GetFormValue('horaAbastecimento');
+		$dataAbastecimento				=$this->GetFormValue('dataAbastecimento');
+		$dataAbastecimento				=explode("/", $dataAbastecimento);
+		$dataHoraAbastecimento		= $dataAbastecimento[2] . "-" . $dataAbastecimento[1] . "-" . $dataAbastecimento[0]." ".$horaAbastecimento;
+		$valorAbastecimento			=$this->GetFormValue('valorAbastecimento');
+		$valorAbastecimento			=  str_replace(',', '.', $valorAbastecimento);//$notaFiscal->valor =str_replace(',','.',str_replace('.','',$data->valor)); 
+		$quantidadeCombustivel		=$this->GetFormValue('quantidade');
+                $quantidadeCombustivel			=  str_replace(',', '.', $quantidadeCombustivel);
+		$combustivel						=$this->GetFormValue('combustivel');
+                $odometro						=$this->GetFormValue('odometro');
+
+		//Atribuindo valores ao objeto 'objAbastecimento'
+		$objAbastecimento->idAbastecimento=$idAbastecimento;
+		$objAbastecimento->idEndereco=$idEndereco;
+		//$objAbastecimento->posto=$posto;
+		$objAbastecimento->dataHoraAbastecimento=$dataHoraAbastecimento;
+		$objAbastecimento->valorAbastecimento=$valorAbastecimento;
+		$objAbastecimento->quantidade=$quantidadeCombustivel;
+		$objAbastecimento->combustivel=$combustivel;
+                $objAbastecimento->odometro=$odometro;
+
+		//Tratamento de Erros
+		/* if($posto==null || $posto==""){
+                $this->AddError("Nome do Posto de Abastecimento não informado!");
+            }*/
+
+            if($dataAbastecimento == null || $dataAbastecimento[0] == ""){
+                $this->AddError("Data do Abastecimento não informada!");
+            }
+
+			if($valorAbastecimento == null || $valorAbastecimento == ""){
+                $this->AddError("Valor do Abastecimento não informado!");
+            }
+			if($quantidadeCombustivel == null || $quantidadeCombustivel == ""){
+                $this->AddError("Quantidade de Combustível não informada!");
+            }
+			if($combustivel == null || $combustivel == ""){
+                $this->AddError("Tipo do Combustível não informado!");
+            }
+            if ($this->errors != '') {
+                    $this->GenerateErrors();
+
+		}else{
+            try
+    		{
+    			$objAbastecimento->save();
+                        $valor .= $this->objRequisicao->idUoRequisitante."_".$this->objRequisicao->idRequisicao;
+			$go = $this->manager->GetActionURL('adm','main:abastecimentouo',$valor);
+			$this->manager->Information('Registro efetuado com sucesso!',$go);
+			}
+    		catch(Exception $e)
+    		{
+			echo $ex;
+    			$this->addError($e->getMessage());
+		}
+		}
+
+
+}
+	function btnPost2_click()
+	{
+		global $MIOLO ;
+                $session = $MIOLO->getSession();
+                $ouReq = $session->getValue('ouReq');
+                $pos = strpos($ouReq,"_");
+                if($pos == false){var_dump("_");exit;
+                    
+                   $go = $this->manager->GetActionURL('adm','main:veiculoreq',$this->objRequisicao->idRequisicao,array("form"=>"item","tipoReq"=>$this->objRequisicao->idTipoReq));
+                   $this->page->Redirect($go);
+                }else{//var_dump("sem");exit;
+                    /*$session = $MIOLO->getSession();
+                    $session->setValue('$pos', '');
+                    $session = $MIOLO->getSession();
+                    $session->setValue('form', '');*/
+                   //$go = $this->manager->getActionUrl('adm','main:uoveiculo:main',$this->objRequisicao->idUoRequisitante);
+                   $go = $this->manager->GetActionURL('adm','main:veiculoreq',$this->objRequisicao->idRequisicao,array("form"=>"item","tipoReq"=>$this->objRequisicao->idTipoReq));
+                    $this->page->Redirect($go);
+                }
+
+		$this->addInfo("Por Favor feche esta janela para finalizar");
+		$this->setFieldAttr('idRequisicao','visible',false);
+		//$this->setFieldAttr('posto','visible',false);
+		$this->setFieldAttr('enderecoPosto','visible',false);
+		$this->setFieldAttr('cidadePosto','visible',false);
+		$this->setFieldAttr('endereco','visible',false);
+		$this->setFieldAttr('valorAbastecimento','visible',false);
+		$this->setFieldAttr('dataAbastecimento','visible',false);
+		$this->setFieldAttr('horaAbastecimento','visible',false);
+		$this->setFieldAttr('quantidade','visible',false);
+		$this->setFieldAttr('combustivel','visible',false);
+		$this->setButtonAttr('btnPost','visible',false);
+		$this->setButtonAttr('btnPost2','visible',false);
+                $this->setButtonAttr('odometro','visible',false);
+
+	}
+        
+        function btnVoltar_click()
+	{
+		global $MIOLO,$item;
+                $pos = strpos($item,"_");
+                if($pos == false){
+                   $go = $this->manager->GetActionURL('adm','main:veiculoreq',$this->objRequisicao->idRequisicao,array("form"=>"item","tipoReq"=>$this->objRequisicao->idTipoReq));
+                   $this->page->Redirect($go);
+                }else{
+                    $arquivo = explode('_', $item);
+                    //$arquivo[0]
+                    $session = $MIOLO->getSession();
+                    $session->setValue('form', '');
+                    $session = $MIOLO->getSession();
+                    $session->setValue('$pos', '');
+                   //$go = $this->manager->getActionUrl('adm','main:uoveiculo:main',$this->objRequisicao->idUoRequisitante);
+                    $go = $this->manager->GetActionURL('adm','main:veiculoreq',$this->objRequisicao->idRequisicao,array("form"=>"item","tipoReq"=>$this->objRequisicao->idTipoReq));
+                   
+                    $this->page->Redirect($go);
+                }
+        }
+}
+?>
