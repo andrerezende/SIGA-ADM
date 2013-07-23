@@ -34,7 +34,7 @@
     $panel->AddUserAction('adm_financas',A_EXECUTE,'IRRF',$ui->GetImageTheme('','icons/irrf.png'),$module, 'main:irrf:find');
     }
     $panel->AddUserAction('adm',A_EXECUTE, 'Material',$ui->GetImageTheme('','icons/material_manutencao.png'),  $module,'main:material:find');
-    $panel->AddUserAction('ADM_ENDERECO',A_EXECUTE,'Endereços',$ui->GetImageTheme('','icons/altera_material_de_requisicao.png'),$module, 'main:endereco');
+    //$panel->AddUserAction('ADM_ENDERECO',A_EXECUTE,'Endereços',$ui->GetImageTheme('','icons/altera_material_de_requisicao.png'),$module, 'main:endereco');
     $panel->AddUserAction('adm_motorista',A_EXECUTE,'Motorista',$ui->GetImageTheme('','icons/motorista.png'),$module,'main:motorista:find');
     //$panel->AddUserAction('adm_adminorcamento',A_EXECUTE,'PTR',$ui->GetImageTheme('','icons/ptr.png'),$module,'main:ptr:find');
     if (!$MIOLO->getPerms()->isAdmin()){
