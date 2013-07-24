@@ -30,7 +30,8 @@ inner join ad_veiculouo uo on v.placa = uo.placa
   inner join ad_abastecimento a on a.idrequisicao = r.idrequisicao
 inner join ad_endereco e on e.idendereco = a.idendereco
   inner join ad_motorista m on m.idmotorista = it.idmotorista
-inner join cm_pessoa p on p.idpessoa = m.idpessoa
+inner join cm_usuario us on us.idusuario = m.idusuario
+  inner join cm_pessoa p on p.idpessoa = us.idpessoa
   where o.idtiporeq = 4 ";
 
 if ($idVeiculo || $datainicio) {
@@ -88,7 +89,7 @@ $titulo = "ABASTECIMENTOS<br/>";
 $titulo1 = "ABASTECIMENTOS";
 $veiculo = $rows[0]['modeloplaca'];
 if ($idVeiculo != "") {
-    $titulo .= "VEÍCULO: " . $veiculo."<br/>";
+    $titulo .= "VEÍCULO: " .'['.$idVeiculo.']'."<br/>";
 }if($datainicio && $datafim){
     $titulo .="PERÍODO: De ". $datainicio. " a ". $datafim; 
  }else if($datainicio){

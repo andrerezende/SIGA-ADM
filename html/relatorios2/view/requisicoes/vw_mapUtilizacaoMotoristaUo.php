@@ -1,5 +1,5 @@
 <?php
-ob_start();
+ob_start(); 
 //ini_set('display_errors', 1);
 require_once '../../model/DAO/Conexao.php';
 require_once '../../controller/DataHelper.php';
@@ -7,6 +7,8 @@ require_once '../../controller/DataHelper.php';
 $idMotorista = $_GET['idMotorista'];
 $datainicio = $_GET['datainicio'];
 $datafim = $_GET['datafim'];
+$iduo = $_GET['iduo'];
+
 $dataAtual = date('d/m/Y');
 $arrData1 = explode('/', $datafim);
 $newDateFim = $arrData1 [2].'-'.$arrData1 [1].'-'.$arrData1 [0];
@@ -15,8 +17,7 @@ $arrData2 = explode('/', $dataAtual);
 $newDateAtual = $arrData2 [2].'-'.$arrData2 [1].'-'.$arrData2 [0];
 
 $arrData = explode('/', $datainicio);
-$newDate = $arrData [2].'-'.$arrData [1].'-'.$arrData [0];
-
+$newDateInicio = $arrData [2].'-'.$arrData [1].'-'.$arrData [0];
 $sql = "
 SELECT distinct  TO_CHAR(i.datasaida, 'DD/MM/YY HH:MM:SS') 
   as datahorareq, r.idrequisicao, i.ordem, e.nomelocal 
@@ -31,21 +32,25 @@ inner join ad_itemreqveiculo it on r.idrequisicao = it.idrequisicao
   inner join ad_veiculo v on v.placa = it.placa
 inner join ad_veiculouo uo on v.placa = uo.placa
 inner join ad_motorista m on m.idmotorista = it.idmotorista
-        inner join cm_usuario us on us.idusuario = m.idusuario
+ inner join ad_motoristauo uom on m.idmotorista = uom.idmotorista
+inner join cm_usuario us on us.idusuario = m.idusuario
   inner join cm_pessoa p on p.idpessoa = us.idpessoa
   where o.idtiporeq = 4 and t.tabela = 'AD_ALMOXSTATUSREQ' ";
 
 
-if ($idMotorista || $datainicio || $datafim) {
+if ($idMotorista || $datainicio || $datafim || $iduo) {
     if ($idMotorista) {
         $sql.=" AND it.idmotorista = $idMotorista";
     }
+    if ($iduo) {
+        $sql.=" AND uom.iduo = $iduo";
+    }
     if ($datainicio && $datafim) {
         
-        $sql.=" AND i.datasaida between '$newDate' and '$newDateFim'";
-        $sql.=" AND r.datahorareq between '$newDate' and '$newDateFim'";
+        $sql.=" AND i.datasaida between '$newDateInicio' and '$newDateFim'";
+        //$sql.=" AND r.datahorareq between '$newDateInicio' and '$newDateFim'";
     }else if($datainicio){
-        $sql.=" AND i.datasaida between '$newDate' and '$newDateAtual'"; 
+        $sql.=" AND i.datasaida between '$newDateInicio' and '$newDateAtual'"; 
     }else if($datafim){
         $sql.=" AND i.datasaida < '$newDateFim'"; 
     }
@@ -63,7 +68,7 @@ try {
 
 
     $rows = $preparedStatment->fetchAll(PDO::FETCH_ASSOC);
-    //var_dump($rows);exit;
+    
     Conexao::getInstance()->disconnect();
 } catch (Exception $e) {
     $e->getMessage();
@@ -91,7 +96,7 @@ $url = $baseURL . '/relatorios2/PRINT_PDF/print_pdf.php?input_file=' . rawurlenc
 $arraySize = count($rows);
 $titulo = "MAPA DE UTILIZAÇÃO DE MOTORISTA<br/>";
 $titulo1 = "MAPA DE UTILIZAÇÃO DE MOTORISTA";
-$motorista = $rows[0]['nome']; 
+$motorista = $rows[0]['p.nome']; 
 
  if ($idMotorista != "") {
     $titulo .= "MOTORISTA: " . $motorista. "<br/>";
