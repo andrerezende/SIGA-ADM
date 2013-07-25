@@ -29,7 +29,8 @@ select
         ON i.idenderecodestino=e2.idendereco
         inner join ad_itemreqveiculo it on r.idrequisicao = it.idrequisicao
         inner join ad_motorista m on m.idmotorista = it.idmotorista
-        inner join cm_pessoa p on p.idpessoa = m.idpessoa 
+        inner join cm_usuario us on us.idusuario = m.idusuario
+        inner join cm_pessoa p on p.idpessoa = us.idpessoa 
         inner join ad_veiculo v on v.placa = it.placa
         inner join ad_veiculouo uo on v.placa = uo.placa
         where o.idtiporeq = 4 and t.tabela = 'AD_ALMOXSTATUSREQ' ";

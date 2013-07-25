@@ -101,7 +101,8 @@ inner join cm_usuario u2 on r.idusuariogestor = u2.idusuario
 inner join cm_pessoa p3 on p3.idpessoa = u2.idpessoa
   inner join ad_veiculo v on v.placa = i.placa 
 inner join ad_motorista m on m.idmotorista = i.idmotorista
-  inner join cm_pessoa p4 on p4.idpessoa = m.idpessoa
+  inner join cm_usuario us1 on us1.idusuario = m.idusuario 
+inner join cm_pessoa p4 on us1.idpessoa = p4.idpessoa
   where t.tabela = 'AD_ALMOXSTATUSREQ' and r.idrequisicao = $idRequisicao ";
         break;
     case A://RECUSADA UO EXEC igual ao caso 5
@@ -139,7 +140,8 @@ inner join cm_usuario u2 on r.idusuariogestor = u2.idusuario
 inner join cm_pessoa p3 on p3.idpessoa = u2.idpessoa
   inner join ad_veiculo v on v.placa = i.placa 
 inner join ad_motorista m on m.idmotorista = i.idmotorista
-  inner join cm_pessoa p4 on p4.idpessoa = m.idpessoa
+  inner join cm_usuario us1 on us1.idusuario = m.idusuario 
+inner join cm_pessoa p4 on us1.idpessoa = p4.idpessoa  
   where t.tabela = 'AD_ALMOXSTATUSREQ' and r.idrequisicao = $idRequisicao ";
         break;
     case J://EM EXECUÇÃO
@@ -160,7 +162,8 @@ inner join cm_usuario u2 on r.idusuariogestor = u2.idusuario
 inner join cm_pessoa p3 on p3.idpessoa = u2.idpessoa
   inner join ad_veiculo v on v.placa = i.placa 
 inner join ad_motorista m on m.idmotorista = i.idmotorista
-  inner join cm_pessoa p4 on p4.idpessoa = m.idpessoa
+  inner join cm_usuario us1 on us1.idusuario = m.idusuario 
+inner join cm_pessoa p4 on us1.idpessoa = p4.idpessoa
   where t.tabela = 'AD_ALMOXSTATUSREQ' and r.idrequisicao = $idRequisicao ";
         break;
 }
