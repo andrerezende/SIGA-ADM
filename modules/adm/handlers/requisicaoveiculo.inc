@@ -5,7 +5,8 @@
 	//$navbar->AddOption('Requisição', 'adm', 'main:requisicaoveiculo:findveiculo');
     $navbar->AddOption('Requisição', 'adm','main');
     
-    
+    $session = $MIOLO->getSession();
+   $session->setValue('form', '');
 	switch($action)
     {
         case 'find':

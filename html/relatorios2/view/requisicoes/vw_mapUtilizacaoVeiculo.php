@@ -90,7 +90,7 @@ $titulo1 = "MAPA DE UTILIZAÇÃO DE VEÍCULO";
 $veiculo = $rows[0]['modeloplaca']; 
 
  if ($idVeiculo != "") {
-    $titulo .= "VEÍCULO: " . $veiculo ." <br/>";
+    $titulo .= "VEÍCULO: " . $idVeiculo ." <br/>";
  }if($datainicio && $datafim){
     $titulo .="PERÍODO: De ". $datainicio. " a ". $datafim; 
  }else if($datainicio){
