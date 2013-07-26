@@ -112,7 +112,7 @@ $url = $baseURL . '/relatorios2/PRINT_PDF/print_pdf.php?input_file=' . rawurlenc
 //$exc = 'http://127.0.0.1//index.php?module=adm&action=inspecao:loginmot';
 if($conformidade == 1){
 $server = $_SERVER['SERVER_NAME']; 
-$exc = 'http://'.$server.'//index.php?module=adm&action=inspecao:loginmot';
+$exc = 'http://'.$server.'//index.php?module=adm&action=inspecao1:loginmot';
 }
 $arraySize = count($rows);
 
