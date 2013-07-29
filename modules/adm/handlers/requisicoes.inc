@@ -1,7 +1,5 @@
 <?
     $action = $context->ShiftAction();
-    $session = $MIOLO->getSession();
-   $session->setValue('form', '');
 	switch($action)
     {
         case 'find':

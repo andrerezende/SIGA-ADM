@@ -17,7 +17,8 @@
     $navbar->AddOption($objRequisicao->idRequisicao, 'adm', 'main:veiculoreq:main');
     
     
-    $form = $MIOLO->GetUI()->GetForm($module,'frmRequisicao', $objRequisicao, 'requisicoes');
+    //$form = $MIOLO->GetUI()->GetForm($module,'frmRequisicao', $objRequisicao, 'requisicoes');
+     $form = $MIOLO->GetUI()->GetForm($module,'frmRequisicao', $objRequisicao, 'requisicaoveiculo');
     $theme->InsertContent($form);
     $a = $context ? $context->ShiftAction() : 'main';
     $handled = $MIOLO->InvokeHandler($module,$a);

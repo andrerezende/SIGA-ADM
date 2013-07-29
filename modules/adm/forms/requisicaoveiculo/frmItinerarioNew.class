@@ -1,0 +1,228 @@
+<?ini_set( 'default_charset', 'utf-8');
+class frmItinerarioNew extends MForm
+{
+		protected $objRequisicao;
+    function __construct($objRequisicao)
+    {
+
+		$this->objRequisicao = $objRequisicao;
+        parent::__construct('Incluir Itinerario');
+        $this->eventHandler();
+
+    }
+    function CreateFields()
+    {
+//var_dump($this->objRequisicao->idRequisicao);exit;Itinerário Cadastrado com Sucesso
+
+        $lkpLocalOrigem = new MLookupTextField('origem', '', 'Origem', 50);
+        $this->AddField(new MHiddenField('idOrigem',''));
+        $this->AddField(new MHiddenField('idDestino',''));
+        $lkpLocalOrigem->module = 'adm';
+        $lkpLocalOrigem->item = 'endereco';
+        $lkpLocalOrigem->event = 'filler';
+        $lkpLocalOrigem->related = 'idOrigem,origem';
+
+
+        $this->page->AddJsCode(file_get_contents(dirname(__FILE__) . '/../../ui/js/mask.js'));
+        $lkpLocalDestino = new MLookupTextField('destino', '', 'Destino', 50);
+        $lkpLocalDestino->module = 'adm';
+        $lkpLocalDestino->item = 'endereco';
+        $lkpLocalDestino->event = 'filler';
+        $lkpLocalDestino->related = 'idDestino,destino';
+        $dataSaida = new CalendarField('dataSaida', '', 'Data de Saída', 10, 'Ex: 01/01/2001');
+        $horaSaida = new MTextField('horaSaida','','Hora de Saída', 5,'Ex: 12:50');
+        $horaSaida->AddAttribute('onBlur', 'makeMask(this, \'##:##\');');
+        $horaSaida->AddAttribute('onKeyUp', 'makeMask(this, \'##:##\');');
+        $horaSaida->AddAttribute('maxlength', '5');
+        $this->AddField($lkpLocalOrigem);
+        $this->AddField($lkpLocalDestino);
+        $this->AddField($dataSaida);
+        $this->AddField($horaSaida);
+       $arrayBotoes=   array(
+            new MButton('btnConfirmarSolicitar', 'Adicionar'),
+            new MButton('btnVoltar','Voltar'),
+        );
+        $this->SetButtons($arrayBotoes);
+	}
+
+    function btnConfirmarSolicitar_click()
+	{
+        global $MIOLO, $page;
+
+
+
+		$idOrigem = $this->GetFormValue('idOrigem');
+                $idDestino = $this->GetFormValue('idDestino');
+                $horaSaida = $this->GetFormValue('horaSaida');
+                $data = $this->GetFormValue('dataSaida');
+               //654987an
+                //123qwe
+
+              // $finalData = str_replace('/','-',$dataSaida);
+            $data=explode("/", $data);
+            $finalData = $data[2] . "-" . $data[1] . "-" . $data[0]." ".$horaSaida;
+            $objItinerario  = $MIOLO->GetBusiness('adm','itinerario');
+
+            $objItinerario->idRequisicao = $this->objRequisicao->idRequisicao;
+            $objItinerario->idEnderecoOrigem  = $idOrigem;
+            $objItinerario->idEnderecoDestino  = $idDestino;
+            $objItinerario->datasaida = $finalData;
+            $novaOrdem=$objItinerario->GetNovaOrdem();
+            $objItinerario->ordem=$novaOrdem;
+
+
+            if($idOrigem==null || $idOrigem==""){
+                $this->AddError("Selecione o Endereço de Origem.");
+
+            }
+            if($idDestino==null || $idDestino==""){
+                $this->AddError("Selecione o Endereço de Destino.");
+            }
+            if($horaSaida==null || $horaSaida==""){
+                $this->AddError("Selecione o Horário de Saída.");
+            }
+
+            if($data == null || $data[0] == ""){
+                $this->AddError("Selecione a Data de Saída.");
+            }
+            if ($this->errors != '') {
+                    $this->GenerateErrors();
+
+		}else{
+            try{
+                $this->objRequisicao->idTipoReq=4;
+
+                $objItinerario->save();
+				//$this->manager->Information('Itinerário Cadastrado com Sucesso', '');
+                                $this->manager->information("Itinerário para a requisição " . $this->objRequisicao->idRequisicao . ", Cadastrado com Sucesso.", $this->manager->GetActionURL('adm','main:requisicaoveiculo',$this->objRequisicao->idRequisicao,array("form"=>"item","tipoReq"=>$this->objRequisicao->idTipoReq)));
+                                
+            }catch(Exception $e){
+				$this->manager->Information('Erro', '');
+			   $this->AddError("Ocorreu um erro inesperado, o Itinerário não pôde ser incluído. Contate o Administrador do sistema.");
+                $this->GenerateErrors();
+
+            }
+                }
+
+    }
+		function btnExcluir_click(){
+
+				global $MIOLO;
+
+				//Pegando os valores dos Campos Preenchidos
+				$ordem			=	$this->GetFormValue('labelOrdem');
+				$idRequisicao	=	$this->GetFormValue('labelRequisicao');
+
+				//Declarando o objeto Itinerário
+				$objItinerario = $MIOLO->GetBusiness('adm', 'itinerario');
+				$objItinerario = $objItinerario->GetByRequisicaoOrdem($idRequisicao, $ordem);
+
+				try{
+						$quantidadeItinerario=$objItinerario->GetTotalItinerarioByRequisicao($idRequisicao);
+
+						$objItinerario->delete();
+
+						for ($i=$ordem+1; $i <= $quantidadeItinerario;$i++){
+
+
+										$objItinerario2 = $MIOLO->GetBusiness('adm', 'itinerario');
+										$objItinerario2 = $objItinerario2->GetByRequisicaoOrdem($idRequisicao, $i);
+										$objItinerario2->updateOrdem($objItinerario2->ordem-1);
+								}
+
+						$this->manager->Information('Itinerário excluído com Sucesso', '');
+				}catch (Exception $ex){
+						$this->manager->Information('Houve um erro ao excluir o itinerário', '');
+				}
+	}
+		function btnAtualizar_click(){
+				global $MIOLO, $page;
+
+				//Pegando os valores dos Campos Preenchidos
+				$idOrigem		= $this->GetFormValue('idOrigem');
+				$idDestino		= $this->GetFormValue('idDestino');
+				$horaSaida		= $this->GetFormValue('horaSaida');
+				$data				= $this->GetFormValue('dataSaida');
+				$ordem			=	$this->GetFormValue('labelOrdem');
+				$idRequisicao	=	$this->GetFormValue('labelRequisicao');
+
+				//Formatando Data para padrão no Banco de Dados
+				$data = explode("/", $data);
+				$finalData = $data[2] . "-" . $data[1] . "-" . $data[0] . " " . $horaSaida;
+
+				//Declarando o objeto Itinerário
+				$objItinerario = $MIOLO->GetBusiness('adm', 'itinerario');
+				$objItinerario = $objItinerario->GetByRequisicaoOrdem($idRequisicao, $ordem);
+
+				//Atribuindo Valores ao Objeto Itinerário
+				$objItinerario->idRequisicao = $idRequisicao;
+				$objItinerario->idEnderecoOrigem = $idOrigem;
+				$objItinerario->idEnderecoDestino = $idDestino;
+				$objItinerario->datasaida = $finalData;
+				$objItinerario->ordem = $ordem;
+
+
+				//Tratamento de Erros para valores nulos
+				if ($idOrigem == null || $idOrigem == "") {
+						$this->AddError("Selecione o Endereço de Origem.");
+				}
+				if ($idDestino == null || $idDestino == "") {
+						$this->AddError("Selecione o Endereço de Destino.");
+				}
+				if ($horaSaida == null || $horaSaida == "") {
+						$this->AddError("Selecione o Horário de Saída.");
+				}
+
+				if ($data == null || $data[0] == "") {
+						$this->AddError("Selecione a Data de Saída.");
+				}
+
+				if ($this->errors != '') {
+
+						$this->GenerateErrors();
+				} else {
+						//Caso não exista nenhum erro, atualiza os dados.
+						try {
+
+								$this->objRequisicao->idTipoReq = 4;
+								$objItinerario->update();
+								$this->manager->Information('Itinerário Atualizado com Sucesso', '');
+						} catch (Exception $e) {
+								//Exibe um erro caso ocorra algum problema com a inserção no banco de dados
+								$this->AddError("Ocorreu um erro inesperado, o Itinerário não pôde ser atualizado. Contate o Administrador do sistema.");
+								$this->GenerateErrors();
+						}
+				}
+		}
+    function btnSolicitar_click()
+    {
+//        $cf = new MCurrencyFormatter();
+//        $data = $this->getData();
+//        $this->setFieldAttr('valorTotalPedido','visible',true);
+//        $material = $this->objRequisicao->getMaterialCompra($data->idMaterial);
+//        $material->setData($data);
+//        $material->setStatus(0);
+//        try
+//        {
+//            $material->save();
+//            $idRequisicao = $this->objRequisicao->idRequisicao;
+//			$this->objRequisicao->Log(OP_INS,"Requisicão de compra número ".$idRequisicao." solicitada com sucesso.");
+//            $url = $this->manager->GetActionURL('adm','main:requisicoes',$idRequisicao,array('form'=>'item','tipoReq'=>$this->objRequisicao->idTipoReq,'refresh'=>1));
+//            $this->page->redirect($url);
+//        }
+//        catch (Exception $e) {$this->addError($e->getMessage());}
+    }
+    function btnVisualizar_click()
+    {
+//        $this->setTitle('Dados do material');
+//        $this->readOnly();
+//        $this->setButtonAttr('btnConfirmarSolicitar','visible',false);
+//        $this->setButtonAttr('btnConfirmarApagar','visible',false);
+    }
+    function btnVoltar_click()
+	{
+                   $go = $this->manager->GetActionURL('adm','main:requisicaoveiculo',$this->objRequisicao->idRequisicao,array("form"=>"item","tipoReq"=>$this->objRequisicao->idTipoReq));
+                   $this->page->Redirect($go);
+        }
+}
+?>
