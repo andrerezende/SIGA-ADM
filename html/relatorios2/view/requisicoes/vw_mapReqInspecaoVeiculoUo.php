@@ -161,13 +161,13 @@ window.open("http://www.w3schools.com")
           <table border="1" width="100%">
             <tr>
                 <?php switch($rows[5]['confirmacao']){
-                    case 1:
+                   /* case 1:
                         $con = 'INSPEÇÃO de saída NÃO AVALIADA pelo motorista';
-                        break;
-                    case 2:
+                        break;*/
+                    case 1:
                         $con = 'INSPEÇÃO de saída CONFIRMADA pelo motorista';
                         break;
-                    case 3:
+                    case 0:
                         $con = 'INSPEÇÃO de saída NÃO CONFIRMADA pelo motorista';
                         break;
                     default:
@@ -177,13 +177,13 @@ window.open("http://www.w3schools.com")
             <?php }?>
                 <?php if($rows[5]['confirmacaofinal']){
                     switch($rows[5]['confirmacaofinal']){
-                    case 1:
+                   /* case 1:
                         $conf = 'INSPEÇÃO de chegada NÃO AVALIADA pelo motorista';
-                        break;
-                    case 2:
+                        break;*/
+                    case 1:
                         $conf = 'INSPEÇÃO de chegada CONFIRMADA pelo motorista';
                         break;
-                    case 3:
+                    case 0:
                         $conf = 'INSPEÇÃO de chegada NÃO CONFIRMADA pelo motorista';
                         break;
                     default:
