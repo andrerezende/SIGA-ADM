@@ -1,4 +1,4 @@
-<?php
+<?phpexit;
 ob_start();
 //ini_set('display_errors', 1);
 require_once '../../model/DAO/Conexao.php';
@@ -20,7 +20,7 @@ $newDate = $arrData [2].'-'.$arrData [1].'-'.$arrData [0];
 $sql = "
 SELECT distinct  TO_CHAR(i.datasaida, 'DD/MM/YY HH:MM:SS') 
   as datahorareq, r.idrequisicao, i.ordem, e.nomelocal 
-  as origem,e2.nomelocal as destino, v.modelo||' - '||v.placa as modeloplaca, t.item2,p.nome 
+  as origem,e2.nomelocal as destino, '['||v.placa||'] '||ip.marcamodelo as modeloplaca, t.item2,p.nome 
 from ad_requisicao r 
   INNER JOIN cm_tabelageral t on r.status = t.item1 
 INNER JOIN ad_tiporeq o on o.idtiporeq = r.tiporequisicao
@@ -31,8 +31,10 @@ inner join ad_itemreqveiculo it on r.idrequisicao = it.idrequisicao
   inner join ad_veiculo v on v.placa = it.placa
 inner join ad_veiculouo uo on v.placa = uo.placa
 inner join ad_motorista m on m.idmotorista = it.idmotorista
-        inner join cm_usuario us on us.idusuario = m.idusuario
+ inner join ad_motoristauo uom on m.idmotorista = uom.idmotorista
+inner join cm_usuario us on us.idusuario = m.idusuario
   inner join cm_pessoa p on p.idpessoa = us.idpessoa
+  inner join  ad_itempatrimonio ip on (ip.iditempatrimonio = v.iditempatrimonio) 
   where o.idtiporeq = 4 and t.tabela = 'AD_ALMOXSTATUSREQ' ";
 
 
