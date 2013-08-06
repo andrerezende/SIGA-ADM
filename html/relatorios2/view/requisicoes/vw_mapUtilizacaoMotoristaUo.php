@@ -19,9 +19,9 @@ $newDateAtual = $arrData2 [2].'-'.$arrData2 [1].'-'.$arrData2 [0];
 $arrData = explode('/', $datainicio);
 $newDateInicio = $arrData [2].'-'.$arrData [1].'-'.$arrData [0];
 $sql = "
-SELECT distinct  TO_CHAR(i.datasaida, 'DD/MM/YY HH:MM:SS') 
-  as datahorareq, r.idrequisicao, i.ordem, e.nomelocal 
-  as origem,e2.nomelocal as destino, v.modelo||' - '||v.placa as modeloplaca, t.item2,p.nome 
+SELECT distinct  TO_CHAR(i.datasaida, 'dd/MM/yyyy HH24:MI:SS') 
+  as datasaida, r.idrequisicao, i.ordem, e.nomelocal 
+  as origem,e2.nomelocal as destino, '['||v.placa||'] '||ip.marcamodelo as modeloplaca, t.item2,p.nome 
 from ad_requisicao r 
   INNER JOIN cm_tabelageral t on r.status = t.item1 
 INNER JOIN ad_tiporeq o on o.idtiporeq = r.tiporequisicao
@@ -35,7 +35,8 @@ inner join ad_motorista m on m.idmotorista = it.idmotorista
  inner join ad_motoristauo uom on m.idmotorista = uom.idmotorista
 inner join cm_usuario us on us.idusuario = m.idusuario
   inner join cm_pessoa p on p.idpessoa = us.idpessoa
-  where o.idtiporeq = 4 and t.tabela = 'AD_ALMOXSTATUSREQ' ";
+  inner join  ad_itempatrimonio ip on (ip.iditempatrimonio = v.iditempatrimonio) 
+  where o.idtiporeq = 4 and t.tabela = 'AD_ALMOXSTATUSREQ'";
 
 
 if ($idMotorista || $datainicio || $datafim || $iduo) {
@@ -191,7 +192,7 @@ for ($i = 0; $i < count($rows); $i++) {
     //$saldoTotal += $rows[$i]['valor'];
     ?>                              
                         <tr>                                     
-                            <td class="valores" style="text-align: center;"><?php echo $rows[$i]['datahorareq']; ?></td>
+                            <td class="valores" style="text-align: center;"><?php echo $rows[$i]['datasaida']; ?></td>
                             <td  class="valores" style="text-align: center;"><?php echo $rows[$i]['idrequisicao']; ?></td>
                             <td class="valores" style="text-align: center;"><?php echo $rows[$i]['origem']; ?></td>
                             <td class="valores" style="text-align: center;"><?php echo $rows[$i]['destino']; ?></td>

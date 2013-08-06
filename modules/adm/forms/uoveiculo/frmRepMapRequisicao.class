@@ -1,51 +1,64 @@
-<?php
 
-class frmRepMapRequisicao extends Form {
+    <?ini_set( 'default_charset', 'utf-8');
+class frmRepMapRequisicao extends MForm
+{
+		
+     public function __construct() {
 
-    public function __construct() {
-
-        parent::__construct('Requisições');
+        parent::__construct('Requisição');
         $this->EventHandler();
         $this->defaultButton = false;
     }
+    function CreateFields()
+    {
+        global $MIOLO, $item;
 
-    public function CreateFields() {
-        global $MIOLO, $module, $action, $item, $theme;
-
-        $opcoes2 = array(
-                            "1"=>"PENDENTE",
-                            "2"=>"SOLICITADA",
-                            "4"=>"AUTORIZADA PELO GESTOR",
-                            "5"=>"DEVOLVIDA PELO GESTOR",
-                            "6"=>"RECUSADA UO REQ",
-                            "7"=>"LIBERADA PARA EXECUCAO",
-                            "J"=>"EM EXECUÇÃO",
-                            "H"=>"ESTORNADA",
-                            "G"=>"FINALIZADA",
-            			    );    
-        $fields = array(
-            new TextField('idRequisicao','','Requisição',15),
-	    //new Selection('status','','Status',$opcoes2)
-        );
-        
-        
-
-        $this->SetFields($fields);
+        $session = $MIOLO->getSession();
+        $session->setValue('listaIdUo',$item);
+        $lkpLocalOrigem = new MLookupTextField('requisicao', '', 'Requisição', 20);
+        $this->AddField(new MHiddenField('idRequisicao',''));
+        //$this->AddField(new MHiddenField('idDestino',''));
+        $lkpLocalOrigem->module = 'adm';
+        $lkpLocalOrigem->item = 'requisicaouo';
+        $lkpLocalOrigem->event = 'filler';
+        $lkpLocalOrigem->related = 'idRequisicao,requisicao';
 
 
+        $this->page->AddJsCode(file_get_contents(dirname(__FILE__) . '/../../ui/js/mask.js'));
+       /* $lkpLocalDestino = new MLookupTextField('destino', '', 'Destino', 50);
+        $lkpLocalDestino->module = 'adm';
+        $lkpLocalDestino->item = 'enderecouo';
+        $lkpLocalDestino->event = 'filler';
+        $lkpLocalDestino->related = 'idDestino,destino';
+        $dataSaida = new CalendarField('dataSaida', '', 'Data de Saída', 10, 'Ex: 01/01/2001');
+        $horaSaida = new MTextField('horaSaida','','Hora de Saída', 5,'Ex: 12:50');
+        $horaSaida->AddAttribute('onBlur', 'makeMask(this, \'##:##\');');
+        $horaSaida->AddAttribute('onKeyUp', 'makeMask(this, \'##:##\');');
+        $horaSaida->AddAttribute('maxlength', '5');*/
+        $this->AddField($lkpLocalOrigem);
+        /*$this->AddField($lkpLocalDestino);
+        $this->AddField($dataSaida);
+        $this->AddField($horaSaida);*/
         $buttons = array(
             new MButton('btnPost', 'Gerar Relatório'),
         );
         $this->SetButtons($buttons);
-    }
-
+	}
     public function btnPost_click() {
         global $MIOLO, $module, $item;
+        
+        if($this->GetFormValue('requisicao')!=''){
+        if($this->GetFormValue('idRequisicao') == '' && $this->GetFormValue('requisicao') !='')
+          $idRequisicao = $this->GetFormValue('requisicao');
+        else
+          $idRequisicao = $this->GetFormValue('idRequisicao');
+        
+        if($this->verificaRequisicao($idRequisicao)){
 
         $report = new MJasperReport('sigaept');
         $parameters['SUBREPORT_DIR'] = $MIOLO->GetConf('home.modules');
         $parameters['pURL'] = $MIOLO->GetConf('home.url');
-        $idRequisicao = $this->GetFormValue('idRequisicao');
+        
         $objRequisicao = $this->manager->GetBusiness('adm', 'requisicao');
 	$objRequisicao->GetById($idRequisicao);
         $status = $objRequisicao->status;
@@ -53,9 +66,24 @@ class frmRepMapRequisicao extends Form {
         $MIOLO->page->AddJsCode('window.open("http://'.$_SERVER['HTTP_HOST']
         . '/relatorios2/repMapRequisicao.php?idRequisicao=' . $idRequisicao . '&status=' . 
         $status . '");');
+        }else{
+             $this->manager->Error("Requisição não pertence a U.O ou não existe!", '');
+        }
+        }else{
+            $this->manager->Error("Digite uma Requisição!", '');
+        }
 
 
 	}
+        
+        public function verificaRequisicao($idRequisicao){
+            global $MIOLO, $module, $item;
+            $objRequisicao = $this->manager->GetBusiness('adm', 'requisicao');
+            $resultado = $objRequisicao->verificaRequisicaoUoImpressao($idRequisicao,$item);
+            
+            return $resultado;
+            
+        }
  
 }
 ?>

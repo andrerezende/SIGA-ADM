@@ -113,6 +113,8 @@ $url = $baseURL . '/relatorios2/PRINT_PDF/print_pdf.php?input_file=' . rawurlenc
 if($conformidade == 1){
 $server = $_SERVER['SERVER_NAME']; 
 $exc = 'http://'.$server.'//index.php?module=adm&action=inspecao1:loginmot';
+//$go = $this->manager->getActionUrl('adm','main:uoveiculo:main',$sidUo,array('form'=>'inspecao'));
+$retorno = "http://".$server."//index.php?module=adm&action=uoveiculo:main&item=$iduo&form=inspecao";
 }
 $arraySize = count($rows);
 
@@ -154,6 +156,7 @@ window.open("http://www.w3schools.com")
             <?php if($conformidade == 1){?>
             <div id="menu">
                 <a href="<?php echo $exc; ?>" target="_parent">Conformidade do Motorista <img src="../statics/img/action_print.gif" alt="Imprimir Relatório" /></a>
+                <a href="<?php echo $retorno; ?>" target="_parent">Voltar <img src="../statics/img/action_print.gif" alt="Imprimir Relatório" /></a>
             </div>
             <?php }?>
             <div id="menu">
@@ -161,13 +164,13 @@ window.open("http://www.w3schools.com")
           <table border="1" width="100%">
             <tr>
                 <?php switch($rows[5]['confirmacao']){
-                    case 1:
+                   /* case 1:
                         $con = 'INSPEÇÃO de saída NÃO AVALIADA pelo motorista';
-                        break;
-                    case 2:
+                        break;*/
+                    case 1:
                         $con = 'INSPEÇÃO de saída CONFIRMADA pelo motorista';
                         break;
-                    case 3:
+                    case 0:
                         $con = 'INSPEÇÃO de saída NÃO CONFIRMADA pelo motorista';
                         break;
                     default:
@@ -177,13 +180,13 @@ window.open("http://www.w3schools.com")
             <?php }?>
                 <?php if($rows[5]['confirmacaofinal']){
                     switch($rows[5]['confirmacaofinal']){
-                    case 1:
+                   /* case 1:
                         $conf = 'INSPEÇÃO de chegada NÃO AVALIADA pelo motorista';
-                        break;
-                    case 2:
+                        break;*/
+                    case 1:
                         $conf = 'INSPEÇÃO de chegada CONFIRMADA pelo motorista';
                         break;
-                    case 3:
+                    case 0:
                         $conf = 'INSPEÇÃO de chegada NÃO CONFIRMADA pelo motorista';
                         break;
                     default:
