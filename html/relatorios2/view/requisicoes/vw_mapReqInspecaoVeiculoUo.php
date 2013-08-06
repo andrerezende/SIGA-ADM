@@ -56,6 +56,21 @@ inner join ad_motorista m on i.id_motorista = m.idmotorista
 inner join cm_pessoa p on p.idpessoa = us.idpessoa 
   inner join ad_veiculo v on i.id_veiculo = v.placa
 where i.id_inspecao = $idInspecao and i.id_uo = $iduo";
+}elseif($idSituacaoInspecao == 2) {  
+
+        $sql = "
+SELECT distinct ds_componente, f.ds_conformidade 
+  as c_inicio,ob_inicio, ob_fim, p.nome, v.modelo||' - '||v.placa 
+as modeloplaca,confirmacao
+  FROM vei_inspecao i
+inner join vei_inspecao_componente ic on ic.id_inspecao = i.id_inspecao 
+  inner join vei_componente c on c.id_componente = ic.id_componente
+inner join vei_conformidade f on f.id_conformidade = ic.id_conformidade_inicio 
+inner join ad_motorista m on i.id_motorista = m.idmotorista
+  inner join cm_usuario us on us.idusuario = m.idusuario   
+inner join cm_pessoa p on p.idpessoa = us.idpessoa  
+inner join ad_veiculo v on i.id_veiculo = v.placa
+where i.id_inspecao = $idInspecao and i.id_uo = $iduo";
 }
 
 $sqli = "
