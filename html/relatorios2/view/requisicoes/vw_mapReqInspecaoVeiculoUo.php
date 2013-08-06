@@ -56,6 +56,21 @@ inner join ad_motorista m on i.id_motorista = m.idmotorista
 inner join cm_pessoa p on p.idpessoa = us.idpessoa 
   inner join ad_veiculo v on i.id_veiculo = v.placa
 where i.id_inspecao = $idInspecao and i.id_uo = $iduo";
+}elseif($idSituacaoInspecao == 2) {  
+
+        $sql = "
+SELECT distinct ds_componente, f.ds_conformidade 
+  as c_inicio,ob_inicio, ob_fim, p.nome, v.modelo||' - '||v.placa 
+as modeloplaca,confirmacao
+  FROM vei_inspecao i
+inner join vei_inspecao_componente ic on ic.id_inspecao = i.id_inspecao 
+  inner join vei_componente c on c.id_componente = ic.id_componente
+inner join vei_conformidade f on f.id_conformidade = ic.id_conformidade_inicio 
+inner join ad_motorista m on i.id_motorista = m.idmotorista
+  inner join cm_usuario us on us.idusuario = m.idusuario   
+inner join cm_pessoa p on p.idpessoa = us.idpessoa  
+inner join ad_veiculo v on i.id_veiculo = v.placa
+where i.id_inspecao = $idInspecao and i.id_uo = $iduo";
 }
 
 $sqli = "
@@ -113,6 +128,8 @@ $url = $baseURL . '/relatorios2/PRINT_PDF/print_pdf.php?input_file=' . rawurlenc
 if($conformidade == 1){
 $server = $_SERVER['SERVER_NAME']; 
 $exc = 'http://'.$server.'//index.php?module=adm&action=inspecao1:loginmot';
+//$go = $this->manager->getActionUrl('adm','main:uoveiculo:main',$sidUo,array('form'=>'inspecao'));
+$retorno = "http://".$server."//index.php?module=adm&action=uoveiculo:main&item=$iduo&form=inspecao";
 }
 $arraySize = count($rows);
 
@@ -154,6 +171,7 @@ window.open("http://www.w3schools.com")
             <?php if($conformidade == 1){?>
             <div id="menu">
                 <a href="<?php echo $exc; ?>" target="_parent">Conformidade do Motorista <img src="../statics/img/action_print.gif" alt="Imprimir Relatório" /></a>
+                <a href="<?php echo $retorno; ?>" target="_parent">Voltar <img src="../statics/img/action_print.gif" alt="Imprimir Relatório" /></a>
             </div>
             <?php }?>
             <div id="menu">
@@ -161,13 +179,13 @@ window.open("http://www.w3schools.com")
           <table border="1" width="100%">
             <tr>
                 <?php switch($rows[5]['confirmacao']){
-                    case 1:
+                   /* case 1:
                         $con = 'INSPEÇÃO de saída NÃO AVALIADA pelo motorista';
-                        break;
-                    case 2:
+                        break;*/
+                    case 1:
                         $con = 'INSPEÇÃO de saída CONFIRMADA pelo motorista';
                         break;
-                    case 3:
+                    case 0:
                         $con = 'INSPEÇÃO de saída NÃO CONFIRMADA pelo motorista';
                         break;
                     default:
@@ -177,13 +195,13 @@ window.open("http://www.w3schools.com")
             <?php }?>
                 <?php if($rows[5]['confirmacaofinal']){
                     switch($rows[5]['confirmacaofinal']){
-                    case 1:
+                   /* case 1:
                         $conf = 'INSPEÇÃO de chegada NÃO AVALIADA pelo motorista';
-                        break;
-                    case 2:
+                        break;*/
+                    case 1:
                         $conf = 'INSPEÇÃO de chegada CONFIRMADA pelo motorista';
                         break;
-                    case 3:
+                    case 0:
                         $conf = 'INSPEÇÃO de chegada NÃO CONFIRMADA pelo motorista';
                         break;
                     default:

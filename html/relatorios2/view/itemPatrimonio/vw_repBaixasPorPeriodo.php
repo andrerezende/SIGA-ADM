@@ -168,7 +168,7 @@ $titulo = "RELATÓRIO DE BAIXAS POR INSTITUIÇÃO"."<BR/>INSTITUIÇÕES: ". $ins
                         <?php
                         $saldoTotal = 0;
                         for ($i = 0; $i < count($rows); $i++) {
-                            $saldoTotal += $rows[$i]['itempat_valor'];
+                            $saldoTotal += $rows[$i]['valor'];
                             ?>                              
                             <tr>                                     
                                 <td class="valores" style="text-align: center;"><?php echo $rows[$i]['npat']; ?></td>
@@ -186,7 +186,7 @@ $titulo = "RELATÓRIO DE BAIXAS POR INSTITUIÇÃO"."<BR/>INSTITUIÇÕES: ". $ins
                         ?>
                         <tfoot style="background-color: #D1CFD0;"">                                    
 
-                            <td class="valores" style="text-align: left;">--</td>
+                            <td class="valores" style="text-align: left;">TOTAL</td>
                             <td class="valores" style="text-align: center;">--</td>
                             <td class="descricao" style="text-align: center;">--</td>
                             <td class="valores" style="text-align: center;">--</td>

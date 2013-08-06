@@ -1,59 +1,22 @@
-<?phpexit;
-ob_start();
+<?php
+ob_start(); 
 //ini_set('display_errors', 1);
 require_once '../../model/DAO/Conexao.php';
 require_once '../../controller/DataHelper.php';
 
 $idMotorista = $_GET['idMotorista'];
-$datainicio = $_GET['datainicio'];
-$datafim = $_GET['datafim'];
-$dataAtual = date('d/m/Y');
-$arrData1 = explode('/', $datafim);
-$newDateFim = $arrData1 [2].'-'.$arrData1 [1].'-'.$arrData1 [0];
+$iduo = $_GET['iduo'];
 
-$arrData2 = explode('/', $dataAtual);
-$newDateAtual = $arrData2 [2].'-'.$arrData2 [1].'-'.$arrData2 [0];
-
-$arrData = explode('/', $datainicio);
-$newDate = $arrData [2].'-'.$arrData [1].'-'.$arrData [0];
 
 $sql = "
-SELECT distinct  TO_CHAR(i.datasaida, 'dd/MM/yyyy HH24:MI:SS') 
-  as datasaida, r.idrequisicao, i.ordem, e.nomelocal 
-  as origem,e2.nomelocal as destino, '['||v.placa||'] '||ip.marcamodelo as modeloplaca, t.item2,p.nome 
-from ad_requisicao r 
-  INNER JOIN cm_tabelageral t on r.status = t.item1 
-INNER JOIN ad_tiporeq o on o.idtiporeq = r.tiporequisicao
-  inner join ad_itinerario i on i.idrequisicao = r.idrequisicao
-INNER JOIN ad_endereco e ON i.idenderecoorigem=e.idendereco INNER JOIN ad_endereco e2
-  ON i.idenderecodestino=e2.idendereco
-inner join ad_itemreqveiculo it on r.idrequisicao = it.idrequisicao
-  inner join ad_veiculo v on v.placa = it.placa
-inner join ad_veiculouo uo on v.placa = uo.placa
-inner join ad_motorista m on m.idmotorista = it.idmotorista
+select distinct  m.idmotorista,p.nome,carteirahab,TO_CHAR(datavalidade, 'DD/MM/YY') as datavalidade,  m.ativo from ad_motorista m 
  inner join ad_motoristauo uom on m.idmotorista = uom.idmotorista
 inner join cm_usuario us on us.idusuario = m.idusuario
-  inner join cm_pessoa p on p.idpessoa = us.idpessoa
-  inner join  ad_itempatrimonio ip on (ip.iditempatrimonio = v.iditempatrimonio) 
-  where o.idtiporeq = 4 and t.tabela = 'AD_ALMOXSTATUSREQ' ";
+  inner join cm_pessoa p on p.idpessoa = us.idpessoa 
+where uom.iduo = $iduo and m.ativo = 'S'";
 
 
-if ($idMotorista || $datainicio || $datafim) {
-    if ($idMotorista) {
-        $sql.=" AND it.idmotorista = $idMotorista";
-    }
-    if ($datainicio && $datafim) {
-        
-        $sql.=" AND i.datasaida between '$newDate' and '$newDateFim'";
-        $sql.=" AND r.datahorareq between '$newDate' and '$newDateFim'";
-    }else if($datainicio){
-        $sql.=" AND i.datasaida between '$newDate' and '$newDateAtual'"; 
-    }else if($datafim){
-        $sql.=" AND i.datasaida < '$newDateFim'"; 
-    }
-    
-}
-$sql.=" ORDER BY idrequisicao DESC ";
+$sql.=" ORDER BY datavalidade DESC ";
 
 try {
     $db = Conexao::getInstance()->getDB();
@@ -65,7 +28,7 @@ try {
 
 
     $rows = $preparedStatment->fetchAll(PDO::FETCH_ASSOC);
-    //var_dump($rows);exit;
+    
     Conexao::getInstance()->disconnect();
 } catch (Exception $e) {
     $e->getMessage();
@@ -91,19 +54,10 @@ $url = $baseURL . '/relatorios2/PRINT_PDF/print_pdf.php?input_file=' . rawurlenc
 
 
 $arraySize = count($rows);
-$titulo = "MAPA DE UTILIZAÇÃO DE MOTORISTA<br/>";
-$titulo1 = "MAPA DE UTILIZAÇÃO DE MOTORISTA";
-$motorista = $rows[0]['nome']; 
+$titulo = "VENCIMENTO DE CNH DO MOTORISTA<br/>";
+$titulo1 = "VENCIMENTO DE CNH DO MOTORISTA";
+$motorista = $rows[0]['p.nome']; 
 
- if ($idMotorista != "") {
-    $titulo .= "MOTORISTA: " . $motorista. "<br/>";
- }if($datainicio && $datafim){
-    $titulo .="PERÍODO: De ". $datainicio. " a ". $datafim;
- }else if($datainicio){
-    $titulo .="PERÍODO: A partir de ". $datainicio; 
- }else if($datafim){
-    $titulo .="PERÍODO: Até ". $datafim;
- }
 
 ?>
 
@@ -174,12 +128,12 @@ $motorista = $rows[0]['nome'];
             <table cellpadding="0" cellspacing="0" border="0" class="display" id="tabela" style="width: 100%">
                 <thead> 
                     <tr>                                
-                        <td class="data">DATA / HORA Requisição</td>
-                        <td class="descricao">REQUISIÇÃO</td>
-                        <td class="descricao">ORIGEM</td>
-                        <td class="descricao">DESTINO</td>
-                        <td class="descricao">VEÍCULO</td>
-                        <td class="valores">SITUAÇÃO</td>
+                        <td class="descricao">ID</td>
+                        <td class="descricao">Motorista</td>
+                        <td class="descricao">CNH</td>
+                        <td class="data">DATA / Vencimento</td>
+                        
+                        <td class="descricao">Ativo</td>
                     </tr>
                 </thead> 
                 <tbody>
@@ -187,13 +141,13 @@ $motorista = $rows[0]['nome'];
 for ($i = 0; $i < count($rows); $i++) {
     //$saldoTotal += $rows[$i]['valor'];
     ?>                              
-                        <tr>                                     
-                            <td class="valores" style="text-align: center;"><?php echo $rows[$i]['datasaida']; ?></td>
-                            <td  class="valores" style="text-align: center;"><?php echo $rows[$i]['idrequisicao']; ?></td>
-                            <td class="valores" style="text-align: center;"><?php echo $rows[$i]['origem']; ?></td>
-                            <td class="valores" style="text-align: center;"><?php echo $rows[$i]['destino']; ?></td>
-                            <td class="valores" style="text-align: center;"><?php echo $rows[$i]['modeloplaca']; ?></td>
-                            <td class="valores" style="text-align: left;"><?php echo $rows[$i]['item2']; ?></td>
+                        <tr>      
+                            <td class="valores" style="text-align: center;"><?php echo $rows[$i]['idmotorista']; ?></td>
+                            <td class="descricao" style="text-align: center;"><?php echo $rows[$i]['nome']; ?></td>
+                            <td  class="valores" style="text-align: center;"><?php echo $rows[$i]['carteirahab']; ?></td>
+                            <td class="date" style="text-align: center;"><?php echo $rows[$i]['datavalidade']; ?></td>
+                            
+                            <td class="valores" style="text-align: center;"><?php echo $rows[$i]['ativo']; ?></td>
                         </tr>                            
     <?php
 }
@@ -205,6 +159,7 @@ for ($i = 0; $i < count($rows); $i++) {
         </div>
     </body>
 </html>
+
 <?php file_put_contents($tmpFile, ob_get_contents()); ?>
 
 <?php 
