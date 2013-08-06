@@ -18,8 +18,8 @@ $arrData = explode('/', $datainicio);
 $newDate = $arrData [2].'-'.$arrData [1].'-'.$arrData [0];
 
 $sql = "
-SELECT distinct  TO_CHAR(i.datasaida, 'DD/MM/YY HH:MM:SS') 
-  as datahorareq, r.idrequisicao, i.ordem, e.nomelocal 
+SELECT distinct  TO_CHAR(i.datasaida, 'dd/MM/yyyy HH24:MI:SS') 
+  as datasaida, r.idrequisicao, i.ordem, e.nomelocal 
   as origem,e2.nomelocal as destino, '['||v.placa||'] '||ip.marcamodelo as modeloplaca, t.item2,p.nome 
 from ad_requisicao r 
   INNER JOIN cm_tabelageral t on r.status = t.item1 
@@ -188,7 +188,7 @@ for ($i = 0; $i < count($rows); $i++) {
     //$saldoTotal += $rows[$i]['valor'];
     ?>                              
                         <tr>                                     
-                            <td class="valores" style="text-align: center;"><?php echo $rows[$i]['datahorareq']; ?></td>
+                            <td class="valores" style="text-align: center;"><?php echo $rows[$i]['datasaida']; ?></td>
                             <td  class="valores" style="text-align: center;"><?php echo $rows[$i]['idrequisicao']; ?></td>
                             <td class="valores" style="text-align: center;"><?php echo $rows[$i]['origem']; ?></td>
                             <td class="valores" style="text-align: center;"><?php echo $rows[$i]['destino']; ?></td>
