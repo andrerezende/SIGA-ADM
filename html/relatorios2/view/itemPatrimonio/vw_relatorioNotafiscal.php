@@ -172,7 +172,7 @@ if($datainicio||$datafim){
                 <a href="<?php // echo $url; ?>">Imprimir Relatório <img src="../statics/img/action_print.gif" alt="Imprimir Relatório" /></a>
             </div>-->
             <div id="menu"><br/></div>
-            <table cellpadding="0" cellspacing="0" border="0" class="display" id="tabela" style="width: 960px">
+            <table cellpadding="0" cellspacing="0" border="0" class="display" id="tabela" style="width: 100%">
                 <thead> 
                     <tr>                                
                         <td style="width: 5%" class="valores">N° da Nota</td>
@@ -205,8 +205,13 @@ for ($i = 0; $i < count($rows); $i++) {
                                 $movimento= "ENTRADA";?>
                             <?php  if($rows[$i]['tipomovimento'] == 2)
                                 $movimento= "SAÍDA ";?>
+                            <?php  if($rows[$i]['tipomovimento'] == 3)
+                                $movimento= "ESTORNO DE ENTRADA";?>
+                            <?php  if($rows[$i]['tipomovimento'] == 1)
+                                $movimento= "ESTORNO DE SAÍDA";?>
                             <?php  if($rows[$i]['tipomovimento'] == 9)
                                 $movimento= "BAIXA";?>
+                            
                             <td style="width: 5%"class="valores" style="text-align: center;"><?php echo $movimento; ?></td>
                             <td style="width: 5%"class="data" style="text-align: center;"><?php echo $rows[$i]['datamov']; ?></td>
                             <td style="width: 5%"class="valores" style="text-align: center;"><?php echo $rows[$i]['quantidade']; ?></td>
