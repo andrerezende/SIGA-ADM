@@ -9,7 +9,7 @@ $iduo = $_GET['iduo'];
 
 
 $sql = "
-select distinct  m.idmotorista,p.nome,carteirahab,TO_CHAR(datavalidade, 'DD/MM/YY') as datavalidade,  m.ativo from ad_motorista m 
+select distinct  m.idmotorista,p.nome,carteirahab,datavalidade,  m.ativo from ad_motorista m 
  inner join ad_motoristauo uom on m.idmotorista = uom.idmotorista
 inner join cm_usuario us on us.idusuario = m.idusuario
   inner join cm_pessoa p on p.idpessoa = us.idpessoa 
@@ -145,7 +145,7 @@ for ($i = 0; $i < count($rows); $i++) {
                             <td class="valores" style="text-align: center;"><?php echo $rows[$i]['idmotorista']; ?></td>
                             <td class="descricao" style="text-align: center;"><?php echo $rows[$i]['nome']; ?></td>
                             <td  class="valores" style="text-align: center;"><?php echo $rows[$i]['carteirahab']; ?></td>
-                            <td class="date" style="text-align: center;"><?php echo $rows[$i]['datavalidade']; ?></td>
+                            <td class="date" style="text-align: center;"><?php echo strftime("%d/%m/%Y", strtotime($rows[$i]['datavalidade'])); ?></td>
                             
                             <td class="valores" style="text-align: center;"><?php echo $rows[$i]['ativo']; ?></td>
                         </tr>                            
