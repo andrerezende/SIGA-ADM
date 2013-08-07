@@ -49,6 +49,7 @@ if ($uos || $datainicio || $datafim || $idNotaFiscal) {
              
         }
         $sql.="  AND iduoalmox IN ($ids)";
+        $sql.="  and tipomovimento IN ('1','2','9')";
     }if ($datainicio && $datafim) {
         $sql.=" AND ad_movimento.datamov between '$newDateInicio' and '$newDateFim'";
     }else if($datafim){
@@ -207,7 +208,7 @@ for ($i = 0; $i < count($rows); $i++) {
                                 $movimento= "SAÍDA ";?>
                             <?php  if($rows[$i]['tipomovimento'] == 3)
                                 $movimento= "ESTORNO DE ENTRADA";?>
-                            <?php  if($rows[$i]['tipomovimento'] == 1)
+                            <?php  if($rows[$i]['tipomovimento'] == 4)
                                 $movimento= "ESTORNO DE SAÍDA";?>
                             <?php  if($rows[$i]['tipomovimento'] == 9)
                                 $movimento= "BAIXA";?>
