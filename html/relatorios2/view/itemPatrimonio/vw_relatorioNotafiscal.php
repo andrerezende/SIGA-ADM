@@ -36,7 +36,7 @@ LEFT JOIN ad_material ON ad_movimento.idmaterial = ad_material.idmaterial
 LEFT JOIN ad_uo ON ad_movimento.iduoalmox = ad_uo.iduo
 LEFT JOIN ad_fornecedor ON ad_movimento.idfornecedor = ad_fornecedor.idfornecedor
        WHERE idmovimentoref IS NULL ";
-
+//var_dump($idContaContabil);exit;
 if ($uos || $datainicio || $datafim || $idNotaFiscal) {
     if ($uos) {
         $tam = count($uos);
@@ -51,7 +51,9 @@ if ($uos || $datainicio || $datafim || $idNotaFiscal) {
         $sql.="  AND iduoalmox IN ($ids)";
         $sql.="  and tipomovimento IN ('1','2','9')";
     }if ($datainicio && $datafim) {
-        $sql.=" AND ad_movimento.datamov between '$newDateInicio' and '$newDateFim'";
+        //$sql.=" AND ad_movimento.datamov between '$newDateInicio' and '$newDateFim'";
+        $sql.=" AND ad_movimento.datamov >='$newDateInicio'";
+        $sql.=" AND ad_movimento.datamov <'$newDateFim'";
     }else if($datafim){
         $sql.=" AND ad_movimento.datamov < '$newDateFim'"; 
     }else if($idNotaFiscal){
@@ -61,7 +63,7 @@ if ($uos || $datainicio || $datafim || $idNotaFiscal) {
     }
     
 }
-//$sql.=" ORDER BY idrequisicao DESC ";
+$sql.=" ORDER BY ad_uo.sigla, ad_material.descricao, datamov DESC ";
 
 try {
     $db = Conexao::getInstance()->getDB();
