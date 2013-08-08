@@ -21,21 +21,30 @@ $newDateFim = $arrData1 [2].'-'.$arrData1 [1].'-'.$arrData1 [0];
 $arrData = explode('/', $datainicio);
 $newDateInicio = $arrData [2].'-'.$arrData [1].'-'.$arrData [0];
 //var_dump($newDateFim);var_dump($newDateInicio);var_dump($datafim);var_dump($datainicio);exit;
-$sql = "SELECT tipomovimento, datamov, quantidade, valortotal, 
-       ad_material.descricao, 
+$sql = "SELECT notafiscal,
+       ad_fornecedor.cnpj,
+       ad_material.idsubelemento,
+        datahora,
+       datanotafiscal,
+       CASE WHEN tipomovimento= '1' THEN 'ENTRADA'
+            WHEN tipomovimento= '2' THEN 'ESTORNO ENTRADA'
+            WHEN tipomovimento= '3' THEN 'SAIDA'
+            WHEN tipomovimento= '4' THEN 'ESTORNO SAIDA'
+            WHEN tipomovimento= '5' THEN 'BAIXA'
+       END AS tipomovimento,
+       datamov,
+       quantidade, 
+       ad_material.descricao,
        ad_material.codmaterial, 
        ad_uo.sigla, 
-       notafiscal, 
        empenho, 
-       datahora, 
-       datanotafiscal,
-       ad_fornecedor.cnpj,
-       ad_material.idsubelemento
+       valortotal
 FROM ad_movimento 
 LEFT JOIN ad_material ON ad_movimento.idmaterial = ad_material.idmaterial
 LEFT JOIN ad_uo ON ad_movimento.iduoalmox = ad_uo.iduo
 LEFT JOIN ad_fornecedor ON ad_movimento.idfornecedor = ad_fornecedor.idfornecedor
-       WHERE idmovimentoref IS NULL ";
+
+WHERE idmovimentoref IS NULL";
 //var_dump($idContaContabil);exit;
 if ($uos || $datainicio || $datafim || $idNotaFiscal) {
     if ($uos) {
@@ -49,7 +58,6 @@ if ($uos || $datainicio || $datafim || $idNotaFiscal) {
              
         }
         $sql.="  AND iduoalmox IN ($ids)";
-        $sql.="  and tipomovimento IN ('1','2','9')";
     }if ($datainicio && $datafim) {
         //$sql.=" AND ad_movimento.datamov between '$newDateInicio' and '$newDateFim'";
         $sql.=" AND ad_movimento.datamov >='$newDateInicio'";
@@ -204,18 +212,8 @@ for ($i = 0; $i < count($rows); $i++) {
                             <td style="width: 5%"class="descricao" style="text-align: center;"><?php echo $rows[$i]['idsubelemento']; ?></td>
                             <td style="width: 5%"class="data" style="text-align: center;"><?php echo $rows[$i]['datahora']; ?></td>
                             <td style="width: 5%"class="data" style="text-align: center;"><?php echo $rows[$i]['datanotafiscal']; ?></td>
-                            <?php  if($rows[$i]['tipomovimento'] == 1)
-                                $movimento= "ENTRADA";?>
-                            <?php  if($rows[$i]['tipomovimento'] == 2)
-                                $movimento= "SAÍDA ";?>
-                            <?php  if($rows[$i]['tipomovimento'] == 3)
-                                $movimento= "ESTORNO DE ENTRADA";?>
-                            <?php  if($rows[$i]['tipomovimento'] == 4)
-                                $movimento= "ESTORNO DE SAÍDA";?>
-                            <?php  if($rows[$i]['tipomovimento'] == 9)
-                                $movimento= "BAIXA";?>
                             
-                            <td style="width: 5%"class="valores" style="text-align: center;"><?php echo $movimento; ?></td>
+                            <td style="width: 5%"class="valores" style="text-align: center;"><?php echo $rows[$i]['tipomovimento']; ?></td>
                             <td style="width: 5%"class="data" style="text-align: center;"><?php echo $rows[$i]['datamov']; ?></td>
                             <td style="width: 5%"class="valores" style="text-align: center;"><?php echo $rows[$i]['quantidade']; ?></td>
                             <td style="width: 2%"class="descricao" style="text-align: center;"><?php echo $rows[$i]['descricao']; ?></td>
