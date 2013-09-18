@@ -50,7 +50,7 @@ class DAOAlmoxerifado {
                         INNER JOIN ad_subelemento sub_mov_ant
                                 ON ((ad_material.idelemento=sub_mov_ant.idelemento) AND (ad_material.idsubelemento=sub_mov_ant.idsubelemento))
 
-                        WHERE ad_movimento.tipomovimento = '3'
+                        WHERE (ad_movimento.tipomovimento = '3' OR ad_movimento.tipomovimento = '9')
                         AND ad_movimento.idmovimentoref IS NULL
                         AND ad_movimento.datamov < '$dataReferencia'
                         AND ad_movimento.iduoalmox = '$IdUoAlmoxerifado'
@@ -99,7 +99,7 @@ class DAOAlmoxerifado {
                         INNER JOIN ad_subelemento sub_mov_ant
                                 ON ((ad_material.idelemento=sub_mov_ant.idelemento) AND (ad_material.idsubelemento=sub_mov_ant.idsubelemento))
 
-                        WHERE ad_movimento.tipomovimento = '3'
+                        WHERE (ad_movimento.tipomovimento = '3' OR ad_movimento.tipomovimento = '9')
                         AND ad_movimento.idmovimentoref IS NULL
                         AND ad_movimento.datamov >= '$dataReferencia'
                         AND ad_movimento.datamov < '$dataReferencia_add1mes'
@@ -161,7 +161,7 @@ class DAOAlmoxerifado {
                                 ON ad_movimento.idmaterial=mat_in.idmaterial
 
 
-                        WHERE ad_movimento.tipomovimento = '3'
+                        WHERE (ad_movimento.tipomovimento = '3' OR ad_movimento.tipomovimento = '9')
                         AND ad_movimento.idmovimentoref IS NULL
                         AND ad_movimento.datamov < '$dataReferencia'
                         AND ad_movimento.iduoalmox = '$IdUoAlmoxerifado'
@@ -207,7 +207,7 @@ class DAOAlmoxerifado {
                                 ON ad_movimento.idmaterial=mat_in.idmaterial
 
 
-                        WHERE ad_movimento.tipomovimento = '3'
+                        WHERE (ad_movimento.tipomovimento = '3' OR ad_movimento.tipomovimento = '9')
                         AND ad_movimento.idmovimentoref IS NULL
                         AND ad_movimento.datamov >= '$dataReferencia'
                         AND ad_movimento.datamov < '$dataReferencia_add1mes'

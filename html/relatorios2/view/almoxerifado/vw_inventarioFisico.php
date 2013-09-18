@@ -72,7 +72,7 @@ COALESCE((SELECT SUM(movto_sdl_ant_SAI_qtd.quantidade)
           WHERE movto_sdl_ant_SAI_qtd.idmovimentoref IS NULL
             AND movto_sdl_ant_SAI_qtd.iduoalmox = ad_movimento.iduoalmox
             AND movto_sdl_ant_SAI_qtd.idmaterial = ad_movimento.idmaterial
-            AND movto_sdl_ant_SAI_qtd.tipomovimento = '3'
+            AND (movto_sdl_ant_SAI_qtd.tipomovimento = '3' OR movto_sdl_ant_SAI_qtd.tipomovimento = '9')
             AND movto_sdl_ant_SAI_qtd.datamov < '$dataInicio'
 
           ), 0) as qtd_sld_ant,
@@ -92,7 +92,7 @@ COALESCE((SELECT SUM(movto_sdl_ant_SAI_val.valortotal)
           WHERE movto_sdl_ant_SAI_val.idmovimentoref IS NULL
             AND movto_sdl_ant_SAI_val.iduoalmox = ad_movimento.iduoalmox
             AND movto_sdl_ant_SAI_val.idmaterial = ad_movimento.idmaterial
-            AND movto_sdl_ant_SAI_val.tipomovimento = '3'
+            AND (movto_sdl_ant_SAI_val.tipomovimento = '3' OR movto_sdl_ant_SAI_val.tipomovimento = '9')
             AND movto_sdl_ant_SAI_val.datamov < '$dataInicio'
 
           ), 0) as val_sld_ant,
@@ -129,7 +129,7 @@ COALESCE((SELECT SUM(movto_SAI_qtd.quantidade)
           WHERE movto_SAI_qtd.idmovimentoref IS NULL
             AND movto_SAI_qtd.iduoalmox = ad_movimento.iduoalmox
             AND movto_SAI_qtd.idmaterial = ad_movimento.idmaterial
-            AND movto_SAI_qtd.tipomovimento = '3'
+            AND (movto_SAI_qtd.tipomovimento = '3' OR movto_SAI_qtd.tipomovimento = '9')
             AND movto_SAI_qtd.datamov >= '$dataInicio'
             AND movto_SAI_qtd.datamov < '$dataFim'
 
@@ -140,7 +140,7 @@ COALESCE((SELECT SUM(movto_SAI_val.valortotal)
           WHERE movto_SAI_val.idmovimentoref IS NULL
             AND movto_SAI_val.iduoalmox = ad_movimento.iduoalmox
             AND movto_SAI_val.idmaterial = ad_movimento.idmaterial
-            AND movto_SAI_val.tipomovimento = '3'
+            AND (movto_SAI_val.tipomovimento = '3' OR movto_SAI_val.tipomovimento = '9')
             AND movto_SAI_val.datamov >= '$dataInicio'
             AND movto_SAI_val.datamov < '$dataFim'
 
@@ -181,7 +181,7 @@ COALESCE((SELECT SUM(movto_sdl_ant_SAI_qtd.quantidade)
           WHERE movto_sdl_ant_SAI_qtd.idmovimentoref IS NULL
             AND movto_sdl_ant_SAI_qtd.iduoalmox = ad_movimento.iduoalmox
             AND movto_sdl_ant_SAI_qtd.idmaterial = ad_movimento.idmaterial
-            AND movto_sdl_ant_SAI_qtd.tipomovimento = '3'
+            AND (movto_sdl_ant_SAI_qtd.tipomovimento = '3' OR movto_sdl_ant_SAI_qtd.tipomovimento = '9')
             AND movto_sdl_ant_SAI_qtd.datamov < '$dataInicio'
           ), 0))
 
@@ -203,7 +203,7 @@ COALESCE((SELECT SUM(movto_sdl_ant_SAI_val.valortotal)
           WHERE movto_sdl_ant_SAI_val.idmovimentoref IS NULL
             AND movto_sdl_ant_SAI_val.iduoalmox = ad_movimento.iduoalmox
             AND movto_sdl_ant_SAI_val.idmaterial = ad_movimento.idmaterial
-            AND movto_sdl_ant_SAI_val.tipomovimento = '3'
+            AND (movto_sdl_ant_SAI_val.tipomovimento = '3' OR movto_sdl_ant_SAI_val.tipomovimento = '9')
             AND movto_sdl_ant_SAI_val.datamov < '$dataInicio'
           ), 0)))
 
@@ -238,7 +238,7 @@ COALESCE((SELECT SUM(movto_SAI_qtd.quantidade)
           WHERE movto_SAI_qtd.idmovimentoref IS NULL
             AND movto_SAI_qtd.iduoalmox = ad_movimento.iduoalmox
             AND movto_SAI_qtd.idmaterial = ad_movimento.idmaterial
-            AND movto_SAI_qtd.tipomovimento = '3'
+            AND (movto_SAI_qtd.tipomovimento = '3' OR movto_SAI_qtd.tipomovimento = '9')
             AND movto_SAI_qtd.datamov >= '$dataInicio'
             AND movto_SAI_qtd.datamov < '$dataFim'
           ), 0)
@@ -250,7 +250,7 @@ COALESCE((SELECT SUM(movto_SAI_val.valortotal)
           WHERE movto_SAI_val.idmovimentoref IS NULL
             AND movto_SAI_val.iduoalmox = ad_movimento.iduoalmox
             AND movto_SAI_val.idmaterial = ad_movimento.idmaterial
-            AND movto_SAI_val.tipomovimento = '3'
+            AND (movto_SAI_val.tipomovimento = '3' OR movto_SAI_val.tipomovimento = '9')
             AND movto_SAI_val.datamov >= '$dataInicio'
             AND movto_SAI_val.datamov < '$dataFim'
           ), 0) <> 0
