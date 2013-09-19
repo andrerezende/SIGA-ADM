@@ -69,7 +69,7 @@ class Almoxerifado {
         for($i=0; $i<count($rows); $i++) {
             
             // saldo atual: saldo_anterior + entrada - saida
-            $rows[$i]['saldo_atual'] = $rows[$i]['saldo_anterior'] + $rows[$i]['entrada'] + $rows[$i]['entrada_extra'] - $rows[$i]['saida'];
+            $rows[$i]['saldo_atual'] = (($rows[$i]['saldo_anterior'] + $rows[$i]['entrada'] + $rows[$i]['entrada_extra']) - $rows[$i]['saida']);
         }
     }
     
