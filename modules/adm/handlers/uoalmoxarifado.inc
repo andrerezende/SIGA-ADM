@@ -1,6 +1,6 @@
 <?
     $action = $context->ShiftAction();
-    $navbar->AddOption('Almoxarifados', 'adm', 'main:uoalmoxarifado:find');
+    $navbar->AddOption('Almoxarifado', 'adm', 'main:uoalmoxarifado:find');
     switch($action)
     {
         case 'find':
