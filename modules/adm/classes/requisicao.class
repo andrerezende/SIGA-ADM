@@ -2720,5 +2720,39 @@ class BusinessAdmRequisicao extends Business
         else
             return false;
     }
+    
+    function ListRequisicoesForAlmoxarifadoSaida($idRequisicao=null,$requisitante=null,$idUo)
+    {
+        global $MIOLO;
+        $requisitante = strtoupper($requisitante);
+        $requisicao = $MIOLO->getBusiness('adm','requisicao');
+        
+        $criteria = $this->getCriteria();
+        $this->retrieveAssociation('movimento');
+        $criteria->setDistinct(true);
+        $criteria->addCriteria('idTipoReq','=', "8");
+        $criteria->addCriteria('idUoExecutante','=',"{$idUo}");
+        $criteria->addCriteria('dataHora','>=',"uoExecutante.dataBloqueio");
+        $criteria->addCriteria('movimento.idMovimentoRef','IS', "null");
+        $criteria->addOrderAttribute('idRequisicao', false);
+        $cc = new CriteriaCondition();
+        if ( $idRequisicao and is_numeric($idRequisicao) )
+        {
+            $cc->addCriteria($criteria->getCriteria('idRequisicao','=',$idRequisicao));
+            if ($requisitante) $cc->addOrCriteria($criteria->getCriteria('usuario.pessoa.nome','like',"'%{$requisitante}%'"));
+        }
+        elseif ($requisitante)
+        {
+            if ($requisitante) $cc->addCriteria($criteria->getCriteria('usuario.pessoa.nome','like',"'%{$requisitante}%'"));
+        }
+        if ($idRequisicao || $requisitante) $criteria->addCriteria($cc);        
+        $cursor = $criteria->retrieveAsCursor();
+        while ($requisicao = $cursor->getObject())
+        {
+            $requisicao->retrieveAssociation('usuario');
+            $objects[] = $requisicao;
+        }        
+        return $objects;
+    }
 }
 ?>
