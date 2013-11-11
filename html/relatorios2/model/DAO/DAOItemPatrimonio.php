@@ -18,7 +18,6 @@ class DAOItemPatrimonio {
      */
     public function getNomesInstituicoes($params = array()) {
         $params1= $params['idInstituicao'];
-//                var_dump($params1);exit;
 //                $nomesInstituicoes = $this->dataSource->execute("
 			$sql="SELECT instituicao AS nome
 			FROM cm_instituicao

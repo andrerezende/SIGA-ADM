@@ -1,7 +1,11 @@
 <?php
 ini_set('memory_limit', '1024M');
 ob_start();
-
+session_start();
+$IDuos = $_SESSION['IDInst'];
+$cont = 0;
+$tam = 0;
+$ids = '';
 ini_set('display_errors', 1);
 require_once '../../controller/ItemPatrimonio.php';
 require_once '../../controller/DataHelper.php';
@@ -21,6 +25,18 @@ $js3 = $baseURL . '/relatorios2/view/statics/js/formatted-currency-asc.js';
 // Arquivo temporário que será utilizado para gerar o PDF.
 $tmpFile = tempnam('/tmp', 'pdf_');
 
+if ($IDuos) {
+        $tam = count($IDuos) - 1;
+        
+        for ($i = 0; $i < $tam; $i++) {
+            $cont ++;
+            if($cont == $tam)
+                $ids .= $IDuos[$i];
+                else
+            $ids .= $IDuos[$i].',';
+         }       
+             
+ }
 // Url utilizada no link de impressão do relatório. ( mandando o html )
 $url = $baseURL . '/relatorios2/PRINT_PDF/print_pdf.php?input_file=' . rawurlencode($tmpFile);
 $siglaSetor = $_GET['siglasetor'];
@@ -33,8 +49,10 @@ $cnpj = $_GET['cnpj'];
 $orderby = $_GET['orderby'];
 $itemPatrimonio = new DAOItemPatrimonio();
 //var_dump($idSetor,$idInstituicao,$idVidautil, $numeroEmpenho, $cnpj, $orderby);exit;
-$nomesInstituicoes = $itemPatrimonio->getNomesInstituicoes(array('idInstituicao' => $idInstituicao));
-$rows = ItemPatrimonio::ItemPatrimonioBy($idSetor, $idInstituicao, $idVidautil, $numeroEmpenho, $cnpj, $orderby);
+//$nomesInstituicoes = $itemPatrimonio->getNomesInstituicoes(array('idInstituicao' => $idInstituicao));
+//$rows = ItemPatrimonio::ItemPatrimonioBy($idSetor, $idInstituicao, $idVidautil, $numeroEmpenho, $cnpj, $orderby);
+$nomesInstituicoes = $itemPatrimonio->getNomesInstituicoes(array('idInstituicao' => $ids));
+$rows = ItemPatrimonio::ItemPatrimonioBy($idSetor, $ids, $idVidautil, $numeroEmpenho, $cnpj, $orderby);
 
 //var_dump($nomesInstituicoes);exit;
 $nomes = 0;
