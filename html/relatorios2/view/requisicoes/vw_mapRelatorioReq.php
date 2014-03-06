@@ -10,7 +10,7 @@ switch ($status){
     
     case 1://SOLICITADA igual a case 6 + (motivo)
         $sql = "
-SELECT r.idrequisicao, TO_CHAR(r.datahorareq, 'DD/MM/YY HH:MM:SS') 
+SELECT r.idrequisicao, TO_CHAR(r.datahorareq, 'DD/MM/YY HH24:MI') 
   as datahorareq, t.item2 as status, p.nome 
 as realizada 
   FROM ad_requisicao r inner join ad_itemreqveiculo i
@@ -22,7 +22,7 @@ inner join cm_usuario u on r.idusuarioreq = u.idusuario
         break;
     case 2://SOLICITADA igual a case 6 + (motivo)
         $sql = "
-SELECT r.idrequisicao, TO_CHAR(r.datahorareq, 'DD/MM/YY HH:MM:SS') 
+SELECT r.idrequisicao, TO_CHAR(r.datahorareq, 'DD/MM/YY HH24:MI') 
   as datahorareq, t.item2 as status, p.nome 
 as realizada, p2.nome as responsavel, p3.nome 
 as gestor, i.justificativa, qtdvolume, qtdpassageiros, outrospassageiros,i.obs 
@@ -38,7 +38,7 @@ inner join cm_pessoa p3 on p3.idpessoa = u2.idpessoa
         break;
     case 4://AUTORIZADA PELO GESTOR
         $sql = "
-SELECT r.idrequisicao, TO_CHAR(r.datahorareq, 'DD/MM/YY HH:MM:SS') 
+SELECT r.idrequisicao, TO_CHAR(r.datahorareq, 'DD/MM/YY HH24:MI') 
   as datahorareq, t.item2 as status, p.nome 
 as realizada, p2.nome as responsavel, p3.nome 
 as gestor, i.justificativa, qtdvolume, qtdpassageiros, outrospassageiros,i.obs
@@ -54,7 +54,7 @@ inner join cm_pessoa p3 on p3.idpessoa = u2.idpessoa
         break;
     case 5://DEVOLVIDA PELO GESTOR
         $sql = "
-SELECT r.idrequisicao, TO_CHAR(r.datahorareq, 'DD/MM/YY HH:MM:SS') 
+SELECT r.idrequisicao, TO_CHAR(r.datahorareq, 'DD/MM/YY HH24:MI') 
   as datahorareq, t.item2 as status, p.nome 
 as realizada, p2.nome as responsavel, p3.nome 
 as gestor, motivorejeicao, i.justificativa, qtdvolume, qtdpassageiros, outrospassageiros, i.obs 
@@ -70,7 +70,7 @@ inner join cm_pessoa p3 on p3.idpessoa = u2.idpessoa
         break;
     case 6:
         $sql = "
-SELECT r.idrequisicao, TO_CHAR(r.datahorareq, 'DD/MM/YY HH:MM:SS') 
+SELECT r.idrequisicao, TO_CHAR(r.datahorareq, 'DD/MM/YY HH24:MI') 
   as datahorareq, t.item2 as status, p.nome 
 as realizada, p2.nome as responsavel, p3.nome 
 as gestor, motivorejeicao,i.justificativa, qtdvolume, qtdpassageiros, outrospassageiros, i.obs 
@@ -86,7 +86,7 @@ inner join cm_pessoa p3 on p3.idpessoa = u2.idpessoa
         break;
     case 7://LIBERADA PARA EXECUCAO
         $sql = "
-SELECT r.idrequisicao, TO_CHAR(r.datahorareq, 'DD/MM/YY HH:MM:SS') 
+SELECT r.idrequisicao, TO_CHAR(r.datahorareq, 'DD/MM/YY HH24:MI') 
   as datahorareq, t.item2 as status, p.nome 
 as realizada, p2.nome as responsavel, p3.nome 
 as gestor, v.modelo||' - '||v.placa as modeloplaca, p4.nome as motorista, 
@@ -107,7 +107,7 @@ inner join cm_pessoa p4 on us1.idpessoa = p4.idpessoa
         break;
     case A://RECUSADA UO EXEC igual ao caso 5
         $sql = "
-SELECT r.idrequisicao, TO_CHAR(r.datahorareq, 'DD/MM/YY HH:MM:SS') 
+SELECT r.idrequisicao, TO_CHAR(r.datahorareq, 'DD/MM/YY HH24:MI') 
   as datahorareq, t.item2 as status, p.nome 
 as realizada, p2.nome as responsavel, p3.nome 
 as gestor, motivorejeicao, i.justificativa, qtdvolume, qtdpassageiros, outrospassageiros, i.obs 
@@ -123,12 +123,12 @@ inner join cm_pessoa p3 on p3.idpessoa = u2.idpessoa
         break;
     case G:
         $sql = "
-SELECT r.idrequisicao, TO_CHAR(r.datahorareq, 'DD/MM/YY HH:MM:SS') 
+SELECT r.idrequisicao, TO_CHAR(r.datahorareq, 'DD/MM/YY HH24:MI') 
   as datahorareq, t.item2 as status, p.nome 
 as realizada, p2.nome as responsavel, p3.nome 
 as gestor, v.modelo||' - '||v.placa as modeloplaca, p4.nome as motorista, 
-i.odometrosaida,TO_CHAR(i.datahorasaidagar, 'DD/MM/YY HH:MM:SS') 
-as datahorasaidagar,i.odometrocheg,TO_CHAR(i.datahoracheggar, 'DD/MM/YY HH:MM:SS') 
+i.odometrosaida,TO_CHAR(i.datahorasaidagar, 'DD/MM/YY HH24:MI') 
+as datahorasaidagar,i.odometrocheg,TO_CHAR(i.datahoracheggar, 'DD/MM/YY HH24:MI') 
   as datahoracheggar,i.justificativa, qtdvolume, qtdpassageiros, outrospassageiros, i.obs 
   FROM ad_requisicao r inner join ad_itemreqveiculo i
 on r.idrequisicao = i.idrequisicao
@@ -146,11 +146,11 @@ inner join cm_pessoa p4 on us1.idpessoa = p4.idpessoa
         break;
     case J://EM EXECUÇÃO
         $sql = "
-SELECT r.idrequisicao, TO_CHAR(r.datahorareq, 'DD/MM/YY HH:MM:SS') 
+SELECT r.idrequisicao, TO_CHAR(r.datahorareq, 'DD/MM/YY HH24:MI') 
   as datahorareq, t.item2 as status, p.nome 
 as realizada, p2.nome as responsavel, p3.nome 
 as gestor, v.modelo||' - '||v.placa as modeloplaca, p4.nome as motorista, 
-i.odometrosaida,TO_CHAR(i.datahorasaidagar, 'DD/MM/YY HH:MM:SS') 
+i.odometrosaida,TO_CHAR(i.datahorasaidagar, 'DD/MM/YY HH24:MI') 
 as datahorasaidagar,i.justificativa, qtdvolume, qtdpassageiros, outrospassageiros, i.obs 
   FROM ad_requisicao r inner join ad_itemreqveiculo i
 on r.idrequisicao = i.idrequisicao
@@ -171,7 +171,7 @@ inner join cm_pessoa p4 on us1.idpessoa = p4.idpessoa
 $sql.=" ORDER BY idrequisicao DESC ";
 
 $sqli = "
-SELECT ordem,TO_CHAR(datasaida, 'DD/MM/YY HH:MM:SS') 
+SELECT ordem,TO_CHAR(datasaida, 'DD/MM/YY HH24:MI') 
   as datasaida, e.nomelocal as origem, e1.nomelocal as destino
   FROM ad_requisicao r inner join ad_itemreqveiculo i
 on r.idrequisicao = i.idrequisicao 
@@ -181,7 +181,7 @@ inner join ad_endereco e on e.idendereco = it.idenderecoorigem
 where r.idrequisicao =  $idRequisicao ";
 
 $sqla = "
-SELECT TO_CHAR(a.datahoraabastecimento, 'DD/MM/YY HH:MM:SS') 
+SELECT TO_CHAR(a.datahoraabastecimento, 'DD/MM/YY HH24:MI') 
 as datahoraabastecimento, e.nomelocal as local,combustivel, valorabastecimento, odometro
   FROM ad_abastecimento a INNER JOIN ad_requisicao r on r.idrequisicao = a.idrequisicao
   inner join ad_endereco e on e.idendereco = a.idendereco
